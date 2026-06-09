@@ -66,6 +66,12 @@ try:
 except ImportError:
     register_panda_loaders = None  # type: ignore[assignment,misc]
 
+try:
+    from torn_apart.world.geometry_bridge import to_geom, to_geom_node
+except ImportError:
+    to_geom = None  # type: ignore[assignment,misc]
+    to_geom_node = None  # type: ignore[assignment,misc]
+
 __all__ = [
     # Transform hierarchy
     "Transform",
@@ -85,5 +91,6 @@ __all__ = [
     # --- bridges (panda3d-backed; may be None when panda3d not installed) ---
     "to_panda_texture",        # Phase 2: procedural RGBA → Panda3D Texture
     "register_panda_loaders",  # Phase 5: inject panda3d asset loaders into ResourceManager
-    # "geometry_bridge" — added by Phase 3 (numpy mesh arrays → Panda3D Geom)
+    "to_geom",                 # Phase 3: MeshArrays → Panda3D Geom (bulk writes)
+    "to_geom_node",            # Phase 3: MeshArrays → Panda3D GeomNode
 ]

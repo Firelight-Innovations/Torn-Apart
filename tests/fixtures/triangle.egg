@@ -1,0 +1,18 @@
+<CoordinateSystem> { Z-up }
+
+<Group> triangle {
+  <VertexPool> vpool {
+    <Vertex> 0 {
+      0.0 0.0 0.0
+    }
+    <Vertex> 1 {
+      1.0 0.0 0.0
+    }
+    <Vertex> 2 {
+      0.5 1.0 0.0
+    }
+  }
+  <Polygon> {
+    <VertexRef> { 0 1 2 <Ref> { vpool } }
+  }
+}

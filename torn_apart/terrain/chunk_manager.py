@@ -285,6 +285,52 @@ class ChunkManager:
             self.bus.publish(ChunkUnloadedEvent(coord=coord))
 
     # ------------------------------------------------------------------
+    # Baseline reset (revert edits before re-applying a save delta)
+    # ------------------------------------------------------------------
+
+    def reset_to_baseline(self) -> None:
+        """
+        Revert every edited loaded chunk to its procedural (seed) baseline.
+
+        Regenerates ``materials`` from ``generate_chunk(coord, config)`` for each
+        loaded chunk whose ``edited`` flag is set, clears ``edited``, marks the
+        chunk ``dirty`` (so the next ``stream_frame`` remeshes it), and drops any
+        stale entry in ``pending_meshes`` so the World layer re-uploads the fresh
+        geometry.
+
+        Why this exists
+        ---------------
+        ``apply_delta`` only touches chunks present in the saved delta.  After a
+        save, the player may dig *more* craters; loading the save must undo those
+        extra craters too.  ``reset_to_baseline()`` wipes ALL edits back to the
+        deterministic baseline first, then ``SaveManager.load`` re-applies only
+        the saved craters via ``apply_delta``.  The canonical F9 flow is therefore:
+
+            cm.reset_to_baseline()
+            sm.load("saves/quick.ta")   # apply_delta re-adds saved craters
+
+        Both passes mark touched chunks ``dirty``; subsequent ``stream_frame``
+        calls remesh them (light recomputes via the SunlightComputer's event
+        subscriptions) and the App re-uploads their Geoms.
+
+        Notes
+        -----
+        Only *loaded* chunks are reset.  Unloaded chunks already hold no edits in
+        RAM — they regenerate from seed (baseline) on their next
+        ``get_or_create``, so they need no explicit reset.
+
+        No window / GPU required; headless-testable.
+        """
+        for coord, chunk in self.chunks.items():
+            if not chunk.edited:
+                continue
+            chunk.materials[...] = generate_chunk(coord, self.config)
+            chunk.edited = False
+            chunk.dirty = True
+            # Drop stale mesh so the world re-uploads after the remesh.
+            self.pending_meshes.pop(coord, None)
+
+    # ------------------------------------------------------------------
     # Saveable protocol
     # ------------------------------------------------------------------
 

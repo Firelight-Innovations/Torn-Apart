@@ -120,6 +120,13 @@ build_mesh(
 `ChunkManager` implements `Saveable` with `save_key = "terrain"`:
 - `get_delta() -> {coord_tuple: materials_uint8_array}` — **edited chunks only** (`chunk.edited == True`).  Values are copies of the `uint8 (32,32,32)` arrays — plain numpy, **no live object refs, no pickle** (Hard Rule 3).
 - `apply_delta(delta)` — after baseline regen from seed, for each `coord -> materials`: ensure the chunk exists (generate baseline if needed), overwrite its materials with the saved array, and mark it `edited=True` (re-saves) + `dirty=True` (remeshes next `stream_frame`).
+- `reset_to_baseline()` — revert **every loaded edited chunk** to its procedural baseline: regenerate `materials` from `generate_chunk(coord, config)`, clear `edited`, set `dirty=True`, and drop the chunk's `pending_meshes` entry.  This is the **F9 revert prelude**: `apply_delta` only touches chunks in the saved delta, so to truly revert to a save (undoing craters dug *after* the save) you must wipe all edits first, then load.  Canonical F9 flow:
+  ```python
+  cm.reset_to_baseline()        # all edits → baseline, chunks marked dirty
+  sm.load("saves/quick.ta")     # apply_delta re-adds ONLY the saved craters
+  # subsequent stream_frame()s remesh the dirty chunks; world/ re-uploads Geoms
+  ```
+  Only *loaded* chunks are reset; unloaded chunks already hold no edits in RAM and regenerate from seed on their next `get_or_create`.
 
 ### Streaming invariants
 - `desired_set(camera_pos)` is a **pure function**: chunks within `view_distance_chunks` (square XY radius) of the camera chunk, Z in `[-2, +4]` relative to it.  Count = `(2r+1)² * 7`.

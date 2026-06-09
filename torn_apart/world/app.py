@@ -25,6 +25,26 @@ Injected Dependencies
   clock     : Clock     — frame dt + fixed-step accumulator
   event_bus : EventBus  — deferred event queue
 
+Terrain-render injection (set by main.py AFTER construction)
+------------------------------------------------------------
+The orchestrator (main.py) wires terrain rendering by setting these optional
+attributes on the App instance after ``App(...)`` returns (App is allowed to
+import terrain/lighting per ARCHITECTURE §4a.2; we use injection so the engine
+shell never *requires* terrain to exist — headless tooling can run App bare):
+
+  app.chunk_manager : ChunkManager | None
+      Drained each frame: ``stream_frame`` is called, then ``pending_meshes`` are
+      converted to Geoms and ``unloaded_this_frame`` Geoms are removed.
+  app.light_sampler : Callable | None
+      Forwarded to ``stream_frame`` so remeshed chunks bake fresh sunlight.
+  app.terrain_root  : NodePath
+      Created in ``__init__``; parent of every chunk NodePath.  The procedural
+      ground texture is applied here ONCE and lighting is turned off (vertex
+      colours already carry baked sunlight).
+
+Call ``app.setup_terrain_rendering(ground_texture)`` once after injecting
+``chunk_manager`` to apply the texture and configure the render state.
+
 Example
 -------
     from torn_apart.core import load_config, Clock, EventBus
@@ -49,6 +69,7 @@ from panda3d.core import (  # type: ignore[import]
     LPoint3f,
     LQuaternionf,
     AntialiasAttrib,
+    NodePath,
 )
 
 from torn_apart.world.registry import ComponentRegistry, instantiate
@@ -148,6 +169,15 @@ class App(ShowBase):
         self._escape_was_down = False
 
         # ------------------------------------------------------------------
+        # Terrain-render injection slots (set by main.py after construction).
+        # Left None so the engine shell can run without terrain (tooling).
+        # ------------------------------------------------------------------
+        self.chunk_manager = None          # ChunkManager | None
+        self.light_sampler = None          # Callable | None
+        # Per-chunk NodePath bookkeeping: coord -> NodePath under terrain_root.
+        self._chunk_nodes: dict[tuple[int, int, int], NodePath] = {}
+
+        # ------------------------------------------------------------------
         # Window setup
         # ------------------------------------------------------------------
         props = WindowProperties()
@@ -173,10 +203,21 @@ class App(ShowBase):
         # ------------------------------------------------------------------
         # Camera GameObject
         # ------------------------------------------------------------------
-        self.camera_go = instantiate(name="MainCamera")
+        self.camera_go = instantiate()
+        self.camera_go.name = "MainCamera"
         from torn_apart.core.math3d import Vec3
         self.camera_go.transform.local_position = Vec3(0.0, -20.0, 10.0)
         self.camera_comp = self.camera_go.add_component(CameraComponent, base=self)
+
+        # ------------------------------------------------------------------
+        # Terrain root NodePath
+        # ------------------------------------------------------------------
+        # Every streamed chunk's GeomNode is parented under this single node.
+        # Chunk mesh positions are ABSOLUTE WORLD METERS (see meshing.py:
+        # MeshArrays.positions doc — "vertex positions in world meters"), so
+        # terrain_root stays at the origin and each chunk NodePath is added with
+        # NO per-chunk offset.  Offsetting here would double the world position.
+        self.terrain_root: NodePath = self.render.attach_new_node("terrain_root")
 
         # ------------------------------------------------------------------
         # Key bindings (Panda3D event strings)
@@ -290,18 +331,19 @@ class App(ShowBase):
         # 4. Registry (awake / start / update / fixed / late)
         ComponentRegistry.run_frame(self._clock)
 
-        # 5. integration hook: chunk streaming
-        #    ChunkManager.stream_frame(camera_position) will go here in Phase 3.
-        #    Leave as a clearly-named placeholder so the orchestrator can fill it.
-        # --- integration hook: chunk streaming (Phase 3) ---
-        # if hasattr(self, '_chunk_manager'):
-        #     self._chunk_manager.stream_frame(self.camera_go.transform.position)
+        # 5. integration hook: chunk streaming (Phase 3)
+        #    Stream chunks around the camera, then drain the manager's
+        #    pending_meshes / unloaded_this_frame into the scene graph.
+        self._stream_and_upload_terrain()
 
-        # 6. integration hook: lighting dirty work
-        #    LightGrid.update_dirty() will go here in Phase 4.
-        # --- integration hook: lighting dirty work (Phase 4) ---
-        # if hasattr(self, '_light_grid'):
-        #     self._light_grid.update_dirty()
+        # 6. integration hook: lighting dirty work (Phase 4)
+        #    No-op: sunlight is event-driven.  SunlightComputer subscribes to
+        #    TerrainEditedEvent / ChunkLoadedEvent on the bus and recomputes the
+        #    affected columns, marking chunks dirty.  The NEXT stream_frame (step
+        #    5 above) remeshes those dirty chunks through the light_sampler, so
+        #    fresh light reaches the GPU as baked vertex colours without any
+        #    per-frame work here.  Intentionally left as a pass.
+        pass
 
         # 7. EventBus drain
         self._event_bus.drain()
@@ -328,3 +370,86 @@ class App(ShowBase):
         bucket = _STATE.buckets.get(FlyController, [])
         for ctrl in bucket:
             ctrl.set_input_state(self.input_state)
+
+    # ------------------------------------------------------------------
+    # Terrain rendering (Phase 3 integration)
+    # ------------------------------------------------------------------
+
+    def setup_terrain_rendering(self, ground_texture=None) -> None:
+        """
+        Configure the terrain render state once at boot.
+
+        Call after injecting ``self.chunk_manager``.  Applies the procedural
+        ground texture to ``terrain_root`` and turns Panda3D lighting OFF so the
+        default fixed-function pipeline renders **texture × vertex colour**.  The
+        mesher has already baked sunlight into the vertex colours (greyscale ×
+        light), so adding a Panda3D light would double-light the scene.
+
+        Parameters
+        ----------
+        ground_texture : panda3d.core.Texture | None
+            The ``wasteland_ground`` texture (from
+            ``world.texture_bridge.to_panda_texture``).  If None, only the
+            light-off state is configured (untextured grey terrain).
+
+        Notes
+        -----
+        - ``set_light_off()`` ensures no ambient/directional light multiplies the
+          vertex colours; the baked-light look is preserved exactly.
+        - The geom vertex format (geometry_bridge.make_vertex_format) includes a
+          C4 colour column, so vertex colours are active by default — no
+          ``set_color_off`` is issued.
+        """
+        if ground_texture is not None:
+            self.terrain_root.set_texture(ground_texture)
+        # Baked light lives in vertex colours — disable scene lighting so the
+        # pipeline renders texture × vertex-colour (no extra light term).
+        self.terrain_root.set_light_off()
+
+    def _stream_and_upload_terrain(self) -> None:
+        """
+        Drive chunk streaming and sync produced meshes to the scene graph.
+
+        Per frame (when a ``chunk_manager`` is injected):
+          1. ``stream_frame(camera_pos, light_sampler)`` — loads/meshes ≤2 chunks
+             near the camera and remeshes dirty (edited/relit) chunks, populating
+             ``pending_meshes`` and ``unloaded_this_frame``.
+          2. Drain ``pending_meshes``: convert each ``MeshArrays`` to a GeomNode
+             (bulk-write Geom) and parent it under ``terrain_root``.  Mesh
+             positions are absolute world meters, so the NodePath is placed at the
+             origin (no offset).  Any existing NodePath for that coord is detached
+             first (remesh replaces stale geometry).
+          3. Drain ``unloaded_this_frame``: detach + forget those coords' Geoms.
+
+        All scene-graph writes are bulk Geom uploads (Hard Rule 7); no per-vertex
+        Python loops (those live in the headless mesher / geometry_bridge).
+        """
+        cm = self.chunk_manager
+        if cm is None:
+            return
+
+        # Lazy import: terrain → world is an allowed downward dependency, but we
+        # import here to keep the module importable when panda3d-only tooling
+        # constructs a bare App.
+        from torn_apart.world.geometry_bridge import to_geom_node
+
+        # 1. Stream around the camera (light_sampler may be None → full-bright).
+        cm.stream_frame(self.camera_go.transform.position, self.light_sampler)
+
+        # 2. Upload freshly produced meshes.  Copy keys first: we mutate the dict.
+        for coord in list(cm.pending_meshes.keys()):
+            mesh = cm.pending_meshes.pop(coord)
+            # Replace any stale NodePath for this coord (remesh after a brush edit).
+            old = self._chunk_nodes.pop(coord, None)
+            if old is not None:
+                old.remove_node()
+            geom_node = to_geom_node(mesh, name=f"chunk_{coord[0]}_{coord[1]}_{coord[2]}")
+            np_node = self.terrain_root.attach_new_node(geom_node)
+            # Positions are absolute world meters — no per-chunk offset.
+            self._chunk_nodes[coord] = np_node
+
+        # 3. Remove Geoms for chunks unloaded this frame.
+        for coord in cm.unloaded_this_frame:
+            node = self._chunk_nodes.pop(coord, None)
+            if node is not None:
+                node.remove_node()

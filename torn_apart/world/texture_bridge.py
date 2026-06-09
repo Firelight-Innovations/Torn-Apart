@@ -103,11 +103,14 @@ def to_panda_texture(rgba: np.ndarray) -> Texture:
     tex.setup_2d_texture(W, H, Texture.T_unsigned_byte, Texture.F_rgba)
 
     # Panda3D UV origin is bottom-left (OpenGL convention); flip vertically
-    # so the image appears right-side-up.
-    flipped = np.ascontiguousarray(rgba[::-1])  # (H, W, 4) uint8, contiguous
+    # so the image appears right-side-up.  Panda3D RAM images for F_rgba are
+    # stored **BGRA** byte order (its native component order), so reorder the
+    # channels R<->B on the way in or every texture renders blue-for-brown.
+    flipped = rgba[::-1]                       # vertical flip (view)
+    bgra = np.ascontiguousarray(flipped[..., [2, 1, 0, 3]])  # RGBA -> BGRA
 
     # Bulk RAM upload — one memoryview write, no per-pixel loop.
-    tex.set_ram_image(bytes(flipped))
+    tex.set_ram_image(bytes(bgra))
 
     # Nearest-neighbour filters for the retro hard-pixel look.
     tex.set_minfilter(SamplerState.FT_nearest)

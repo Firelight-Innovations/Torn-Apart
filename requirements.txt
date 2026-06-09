@@ -1,0 +1,5 @@
+panda3d==1.10.16
+numpy==2.4.6
+msgpack==1.1.2
+pytest==9.0.3
+pillow==12.2.0

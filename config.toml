@@ -1,0 +1,15 @@
+# Torn Apart — runtime configuration.
+# Values here override the defaults in core/config.py (Config frozen dataclass).
+# Units: meters, seconds, voxels. See docs/systems/core.md.
+
+world_seed = 1337
+voxel_size = 0.5            # meters per voxel edge
+chunk_size = 32            # voxels per chunk edge (16 m cube)
+light_grid_scale = 2       # terrain voxels per light cell edge (1 m cells)
+view_distance_chunks = 6   # XY streaming radius in chunks
+fixed_dt = 0.02            # fixed-update timestep (50 Hz)
+
+[debug]
+show_fps = true
+show_chunk_borders = false
+show_light_grid = false

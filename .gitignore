@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.pyc
+saves/
+tools/out/*.png
+.pytest_cache/

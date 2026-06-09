@@ -1,5 +1,5 @@
 # world — System Doc
-keywords: gameobject, game object, transform, component, registry, lifecycle, awake, start, update, late_update, fixed_update, on_enable, on_disable, on_destroy, instantiate, destroy, find_with_tag, find_objects_with_tag, space, camera, app, showbase, panda3d, input, inputstate, unity, clone, hierarchy, parent, children, world matrix, dirty flag, position, rotation, forward, right, up, look_at, transform_point, inverse_transform_point, active_in_hierarchy, set_active, add_component, get_component, get_components, get_component_in_children, remove_component, compare_tag, layer, tag, uuid, batched, bucket, run_frame, fixed_steps, spiral of death, quaternion, z-up, meters, radians
+keywords: gameobject, game object, transform, component, registry, lifecycle, awake, start, update, late_update, fixed_update, on_enable, on_disable, on_destroy, instantiate, destroy, find_with_tag, find_objects_with_tag, space, camera, app, showbase, panda3d, input, inputstate, unity, clone, hierarchy, parent, children, world matrix, dirty flag, position, rotation, forward, right, up, look_at, transform_point, inverse_transform_point, active_in_hierarchy, set_active, add_component, get_component, get_components, get_component_in_children, remove_component, compare_tag, layer, tag, uuid, batched, bucket, run_frame, fixed_steps, spiral of death, quaternion, z-up, meters, radians, texture_bridge, to_panda_texture, geometry_bridge, to_geom, to_geom_node, resource_adapter, register_panda_loaders, bridge, bgra, f_rgba, ram_image, world meters, terrain_root, chunk_manager, light_sampler, setup_terrain_rendering, stream_and_upload_terrain, nodepath, geom, vertex color
 
 > One doc per code package; filename matches the package exactly (`docs/systems/world.md` ↔ `torn_apart/world/`).
 
@@ -9,12 +9,16 @@ keywords: gameobject, game object, transform, component, registry, lifecycle, aw
 
 - **Unity-clone object model** (`GameObject`, `Component`, `Transform`): same API shape as Unity (snake_case), Z-up coordinates, quaternion-only rotations.  All authoring uses these types.
 - **ComponentRegistry**: the batched frame executor that drives Unity lifecycle order across all components.
-- **App** (`world/app.py`): the Panda3D ShowBase wrapper, window, frame loop, input collection, and integration hooks for Phase 3 (chunk streaming) and Phase 4 (lighting).
+- **App** (`world/app.py`): the Panda3D ShowBase wrapper, window, frame loop, input collection, and the **terrain render path** (chunk streaming → Geom upload, baked-light render state).
 - **CameraComponent** (`world/camera.py`): one-way sync from a `Transform` to the Panda3D camera NodePath.
+- **Bridges** — the (small) set of files that translate engine data into Panda3D objects, so every layer below stays panda3d-free:
+  - `texture_bridge.to_panda_texture` (Phase 2): numpy RGBA → Panda3D `Texture`.
+  - `geometry_bridge.to_geom` / `to_geom_node` (Phase 3): `MeshArrays` → Panda3D `Geom` / `GeomNode` (bulk writes).
+  - `resource_adapter.register_panda_loaders` (Phase 5): injects Panda3D asset loaders into the `resources.ResourceManager` (inversion of control).
 
 `world/` deliberately does NOT: implement game logic, generate terrain, simulate NPCs, or own any voxel data.  It is the scene-graph boundary: everything above uses the object model; everything below is contacted through direct API calls.
 
-Only `world/app.py` and `world/camera.py` may import panda3d.  `transform.py`, `component.py`, `gameobject.py`, `registry.py`, and `player/fly_controller.py` are pure Python/numpy and fully headless-testable.
+The **object-model modules import ZERO panda3d** — `transform.py`, `component.py`, `gameobject.py`, `registry.py` (and `player/fly_controller.py`) are pure Python/numpy and fully headless-testable.  Only the **shell + bridges** import panda3d: `app.py`, `camera.py`, `texture_bridge.py`, `geometry_bridge.py`, `resource_adapter.py`.  The package `__init__.py` imports each bridge inside a `try/except ImportError`, so `import torn_apart.world` works headless (the panda3d-backed symbols are then `None`).
 
 ## Public API
 
@@ -112,13 +116,24 @@ All symbols below are re-exported from `torn_apart.world` (`__init__.py`).
 |---|---|
 | `App(config, clock, event_bus)` | Panda3D ShowBase wrapper. 1280×720, vsync, FPS meter. |
 | `app.input_state: InputState` | Read each frame by FlyController. |
-| `app.camera_go: GameObject` | The camera entity. |
+| `app.camera_go: GameObject` | The camera entity (spawns at `(0, -20, 10)`). |
 | `app.camera_comp: CameraComponent` | Camera sync component. |
+| `app.terrain_root: NodePath` | Created in `__init__`; parent of every chunk NodePath. The ground texture + baked-light render state are applied here once. |
+| `app.chunk_manager: ChunkManager \| None` | **Injection slot** (set by `main.py` after construction). When present, drained each frame: `stream_frame` → upload `pending_meshes`, remove `unloaded_this_frame`. |
+| `app.light_sampler: Callable \| None` | **Injection slot**. Forwarded to `stream_frame` so remeshed chunks bake fresh sunlight. |
+| `app.setup_terrain_rendering(ground_texture=None)` | Call once after injecting `chunk_manager`: applies the texture to `terrain_root` and `set_light_off()` (vertex colours already carry baked sunlight — a Panda3D light would double-light). |
 | `InputState` | Dataclass: move_forward/backward/left/right/up/down, sprint, mouse_dx/dy, mouse_captured, escape_pressed. |
 
-**Integration hooks** in `_frame_task` (search for `# integration hook`):
-- `# --- integration hook: chunk streaming (Phase 3) ---` — after `run_frame`, before `event_bus.drain()`.
-- `# --- integration hook: lighting dirty work (Phase 4) ---` — after chunk streaming.
+**Terrain-render injection (not engine-coupled).** `App` does not *require* terrain — headless tooling can construct a bare `App`.  `main.py` wires rendering by setting `app.chunk_manager` / `app.light_sampler` after construction, then calling `app.setup_terrain_rendering(tex)`.  The per-frame `App._stream_and_upload_terrain()` (called from `_frame_task` after `run_frame`, before `event_bus.drain()`) streams chunks, converts each `MeshArrays` to a `GeomNode` via `geometry_bridge.to_geom_node`, and parents it under `terrain_root` with **no offset** (mesh positions are absolute world meters).  Lighting needs no per-frame hook: `SunlightComputer` is event-driven (subscribed to the bus), so the lighting step in `_frame_task` is intentionally a `pass`.
+
+### Bridges (panda3d-backed; `None` when panda3d is absent)
+
+| Symbol | File | Description |
+|---|---|---|
+| `to_panda_texture(rgba) -> Texture` | `texture_bridge.py` | `(H,W,4) uint8` RGBA numpy → Panda3D `Texture` (nearest-neighbour, vertical flip, **RGBA→BGRA reorder**). |
+| `to_geom(mesh) -> Geom` | `geometry_bridge.py` | `MeshArrays` → Panda3D `Geom` (one bulk memoryview write per array). |
+| `to_geom_node(mesh, name) -> GeomNode` | `geometry_bridge.py` | `to_geom` wrapped in a named `GeomNode`. |
+| `register_panda_loaders(manager)` | `resource_adapter.py` | Register `.egg`/`.bam`/`.gltf`/`.glb`/`.ogg`/`.wav`/`.png`/`.jpg` loaders into a `ResourceManager` (IoC; keeps `resources/` panda3d-free). |
 
 ### CameraComponent (`world/camera.py`)
 
@@ -134,10 +149,10 @@ All symbols below are re-exported from `torn_apart.world` (`__init__.py`).
 - Python standard library, `numpy`
 - **No panda3d imports**
 
-`world/app.py`, `world/camera.py`:
+`world/app.py`, `world/camera.py`, `world/texture_bridge.py`, `world/geometry_bridge.py`, `world/resource_adapter.py`:
 - All of the above PLUS `panda3d.*`, `direct.*`
 
-Per ARCHITECTURE.md §4a.2, `world/` may also import: `resources/`, `terrain/`, `lighting/`, `procedural/`, `core/`.
+Per ARCHITECTURE.md §4a.2, `world/` may also import: `resources/`, `terrain/`, `lighting/`, `procedural/`, `core/`.  (`app.py` imports `terrain`/`lighting` lazily inside methods so the module stays importable for panda3d-only tooling.)
 
 ## Events
 
@@ -254,6 +269,10 @@ app.run()
 
 5. **`active_in_hierarchy` walks the parent chain.** It's O(depth), called per-component per-frame for the `_is_active` guard.  Keep hierarchies shallow for performance.
 
-6. **App integration hooks are comments, not callbacks.** The chunk streaming and lighting hooks in `app._frame_task` are comment placeholders guarded by `if hasattr(self, '_chunk_manager')` patterns.  Phase 3 and 4 agents assign `self._chunk_manager` and `self._light_grid` directly on the App instance.
+6. **Terrain render is injection, not a hard dependency.** `App.__init__` sets `self.chunk_manager = None` / `self.light_sampler = None`; `main.py` assigns the real objects after construction and calls `setup_terrain_rendering(tex)`.  `App._stream_and_upload_terrain()` no-ops when `chunk_manager is None`, so a bare `App` (headless tooling) runs fine.  There is no `_chunk_manager`/`_light_grid` attribute — those were the pre-integration placeholder names; the shipped attributes are `chunk_manager` / `light_sampler`.
 
 7. **Mouse delta is in pixels (normalised by half-window-size).** The FlyController uses `mouse_sensitivity` in radians/pixel.  At 1280×720, a full-screen drag is ±640px/±360px — calibrate sensitivity accordingly.
+
+8. **Panda3D `F_rgba` RAM images are BGRA byte order.** `texture_bridge.to_panda_texture` reorders RGBA→BGRA (`flipped[..., [2,1,0,3]]`) before `set_ram_image`, AND flips vertically (OpenGL UV origin is bottom-left).  Both transforms are deliberate — "fix" either back and every texture renders blue-for-brown or upside-down.
+
+9. **Chunk mesh vertex positions are ABSOLUTE WORLD METERS.** The mesher emits world-space positions (not chunk-local), so each chunk's NodePath is attached under `terrain_root` at the origin with **no per-chunk offset**.  Adding `chunk_coord * 16 m` here would double the world position.  `terrain_root` itself stays at the origin.

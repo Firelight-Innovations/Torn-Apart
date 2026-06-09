@@ -1,0 +1,70 @@
+# DECISIONS — Torn Apart
+
+A dated log of implementation decisions that `docs/ARCHITECTURE.md` did **not** already pin.
+Per CLAUDE.md, prefer the smallest decision that doesn't close doors, and record it here
+(date · question · choice · one-line why). ARCHITECTURE.md remains the design authority; this
+file captures the choices made *underneath* it during implementation.
+
+---
+
+## 2026-06-09 — Session 1 implementation
+
+### Quaternion storage order
+- **Q:** How is a `Quat` laid out in memory?
+- **Choice:** Scalar-first `[w, x, y, z]` float32 numpy array (`core/math3d.py`).
+- **Why:** Matches scipy `Rotation` / common quaternion literature; one unambiguous convention spelled out once so no module guesses x-first.
+
+### Quaternion multiplication semantics
+- **Q:** What does `q1 * q2` mean?
+- **Choice:** Hamilton product where `q1 * q2` **applies `q2` first, then `q1`** (so `yaw * pitch` yaws in world space, then pitches in the yawed frame).
+- **Why:** Matches Unity's `Quaternion.*` and scipy; lets the mouse-look composition read naturally and stay roll-free.
+
+### Euler (HPR) convention
+- **Q:** What do the three Euler angles mean and in what order do they compose?
+- **Choice:** `from_euler(h, p, r)` / `as_euler()` use **H = heading about world +Z, P = pitch about +X, R = roll about +Y**, composed **H then P then R** (`qH * qP * qR`, applied R-first). Euler is a presentation view only — never stored state.
+- **Why:** Z-up Panda3D-native axes; quaternion-only storage avoids gimbal lock (ARCHITECTURE §5.4), so Euler exists purely as a convenience at the API edge.
+
+### RNG key digest
+- **Q:** How are `for_domain(*keys)` keys hashed into a deterministic seed?
+- **Choice:** `hashlib.blake2b` (digest_size=8) over the canonical repr of the keys, mixed into `np.random.SeedSequence` as a `spawn_key`. Never Python's built-in `hash()`.
+- **Why:** `hash()` is salted per process since Python 3.3 and would silently break cross-run/cross-machine determinism — the foundation of delta saves and bug repro.
+
+### Save envelope encoding
+- **Q:** How are delta saves serialised without pickle?
+- **Choice:** A single **msgpack** outer envelope (`{header, systems}`); each per-system delta blob is **zlib-compressed msgpack**. The outer dict is uncompressed so the header stays cheaply readable. Numpy arrays are encoded as `["__ndarray__", dtype_str, shape_list, raw_bytes]` triples; dicts with non-string keys (e.g. terrain's `(cx,cy,cz)` keys) are wrapped as `{"__delta_type__": "kv_pairs", "pairs": [...]}` and reconstructed to int tuples on decode.
+- **Why:** No pickle anywhere (Hard Rule 3) — msgpack+zlib is compact, inspectable (`tools/dump_save.py`), and refactor-safe (no live object refs).
+
+### Config digest fields
+- **Q:** Which config fields go into the save's `config_digest` (the load-compatibility hash)?
+- **Choice:** blake2b (16-byte) of `f"{world_seed}:{voxel_size}:{chunk_size}:{light_grid_scale}"`. Debug flags and `view_distance_chunks` are deliberately excluded.
+- **Why:** Only fields whose change makes a save *geometrically* invalid belong in the digest; changing debug flags or view distance must not refuse a valid save.
+
+### Sunlight light levels
+- **Q:** What are the discrete sunlight values before blur?
+- **Choice:** `LIGHT_FULL = 255` (no solid above in the column), `LIGHT_AMBIENT = 40` (shadowed). The 3×3×3 box blur produces intermediate penumbra values but preserves the [40, 255] range.
+- **Why:** A non-zero ambient floor keeps shadowed undersides readable rather than pure black; 255 ceiling keeps lit tops at full brightness. Cheap, vectorised, GPU-portable.
+
+### texture_bridge channel order (BGRA)
+- **Q:** What byte order does a Panda3D `F_rgba` RAM image expect?
+- **Choice:** `to_panda_texture` reorders **RGBA → BGRA** (`arr[..., [2,1,0,3]]`) and vertically flips before `set_ram_image`.
+- **Why:** Panda3D's native `F_rgba` RAM layout is BGRA and its UV origin is bottom-left; without both transforms every texture renders blue-for-brown and/or upside-down. Documented so nobody "fixes" it back.
+
+### Mesher emits world-space vertices
+- **Q:** Are mesher vertex positions chunk-local or world-space?
+- **Choice:** `MeshArrays.positions` are **absolute world meters**. Consequently each chunk's NodePath is attached under `terrain_root` at the origin with **no per-chunk offset**.
+- **Why:** One coordinate space end-to-end (lighting samples the same world positions); offsetting the NodePath as well would double the world position.
+
+### ResourceManager.load refcount
+- **Q:** What refcount does `load(path)` return a handle at?
+- **Choice:** `load()` returns a `Handle` at **refcount 0**; callers must `acquire()` to claim ownership. `unload_unreferenced()` evicts zero-ref handles (called explicitly, no auto-eviction).
+- **Why:** "You requested it; you must claim it." Makes ownership explicit and lets `load()` double as a warm-cache probe without forcing a lifetime.
+
+### reset_to_baseline() for F9 revert
+- **Q:** How does F9 undo craters dug *after* the save?
+- **Choice:** Added `ChunkManager.reset_to_baseline()` — regenerate every loaded edited chunk from seed, clear `edited`, mark `dirty`. F9 calls it *before* `SaveManager.load()`, which then re-applies only the saved craters.
+- **Why:** `apply_delta` only touches chunks present in the saved delta; without a baseline wipe first, post-save edits would survive a load. This restores true "revert to save" semantics.
+
+### World-floor padding is SOLID
+- **Q:** How does the mesher pad the −Z world boundary when the chunk below is absent?
+- **Choice:** Absent neighbours pad **AIR** (open/visible edge), **except the −Z world floor**, which pads **SOLID** via the `WORLD_FLOOR_SOLID` sentinel (`ChunkManager` supplies it for `cz <= -2` when the below-chunk is unloaded).
+- **Why:** Air padding everywhere would leave the bottom of the world see-through; a solid floor closes it without generating an infinite column of chunks downward.

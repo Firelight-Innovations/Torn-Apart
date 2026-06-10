@@ -1,6 +1,6 @@
 {
   "$comment": "SINGLE SOURCE OF TRUTH for the Fire Editor wire protocol. Both editor/fire_editor/_generated.py and editor/extension/src/protocol/generated.ts are produced from this file by codegen.py. Never hand-edit the generated files. Bump protocol_version on ANY incompatible change and regenerate both bindings in the same commit (EDITOR_PRD hard rule 6).",
-  "protocol_version": 1,
+  "protocol_version": 2,
   "daemon_version": "0.1.0",
   "binary": {
     "magic_hex": "0x46495245",
@@ -29,12 +29,49 @@
       "doc": "Liveness probe.",
       "params": {},
       "result": { "pong": "bool" }
+    },
+    "world.open": {
+      "doc": "Open a world by seed or save file. Resets the editor session. Exactly one of seed/save_path.",
+      "params": { "seed?": "int", "save_path?": "str" },
+      "result": { "ok": "bool", "seed": "int", "config": "any", "edited_chunks": "int" }
+    },
+    "world.save": {
+      "doc": "Save the current editor session to a .ta save file (terrain deltas).",
+      "params": { "path": "str" },
+      "result": { "ok": "bool", "path": "str", "edited_chunks": "int" }
+    },
+    "chunks.set_center": {
+      "doc": "Set the editor camera center; daemon streams chunk meshes (binary MESH frames) for the surrounding region and unloads far chunks.",
+      "params": { "x": "float", "y": "float", "z": "float", "radius?": "int" },
+      "result": { "ok": "bool", "requested": "int" }
+    },
+    "scene.stats": {
+      "doc": "Aggregate counters for overlays.",
+      "params": {},
+      "result": { "chunks_loaded": "int", "meshed": "int", "vertices": "int", "triangles": "int" }
+    },
+    "terrain.raycast": {
+      "doc": "Cast a ray through the voxel field; returns the first solid hit or null.",
+      "params": { "ox": "float", "oy": "float", "oz": "float", "dx": "float", "dy": "float", "dz": "float", "max_distance?": "float" },
+      "result": { "hit": "any" }
     }
   },
   "notifications": {
     "log": {
       "doc": "Daemon -> client log line, surfaced in the extension output channel.",
       "params": { "level": "str", "message": "str" }
+    },
+    "chunk.ready": {
+      "doc": "A MESH binary frame (payload_id) for chunk (cx,cy,cz) is being sent.",
+      "params": { "cx": "int", "cy": "int", "cz": "int", "payload_id": "int", "vertices": "int", "triangles": "int" }
+    },
+    "chunk.unload": {
+      "doc": "Chunk (cx,cy,cz) left the streamed region; client should drop its geometry.",
+      "params": { "cx": "int", "cy": "int", "cz": "int" }
+    },
+    "stream.done": {
+      "doc": "A set_center streaming pass finished.",
+      "params": { "sent": "int", "removed": "int" }
     }
   }
 }

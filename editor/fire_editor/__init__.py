@@ -16,15 +16,20 @@ from __future__ import annotations
 from ._generated import DAEMON_VERSION, PROTOCOL_VERSION
 from .binary import BinaryFrameError, decode_frame, encode_frame
 from .daemon import Daemon
+from .meshcodec import decode_mesh_payload, encode_mesh_payload
 from .rpc import Dispatcher, RpcError
+from .session import EditorSession
 
 __all__ = [
     "Daemon",
     "Dispatcher",
     "RpcError",
+    "EditorSession",
     "encode_frame",
     "decode_frame",
     "BinaryFrameError",
+    "encode_mesh_payload",
+    "decode_mesh_payload",
     "PROTOCOL_VERSION",
     "DAEMON_VERSION",
 ]

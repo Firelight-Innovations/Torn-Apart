@@ -31,7 +31,12 @@ class Daemon:
     def __init__(self, host: str = "127.0.0.1") -> None:
         self.dispatcher = Dispatcher()
         self.server = EditorServer(self.dispatcher, host=host)
+        self.session = None  # type: ignore[assignment]  # EditorSession | None
         self._register_core_methods()
+        # Services register their own RPC methods onto the shared dispatcher.
+        from .services.chunks import ChunkService
+
+        self.chunks = ChunkService(self)
 
     def _register_core_methods(self) -> None:
         self.dispatcher.register(Method.HELLO, self._hello)

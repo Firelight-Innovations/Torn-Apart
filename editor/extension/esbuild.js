@@ -30,6 +30,19 @@ function listTestEntries() {
     .map((f) => path.join(dir, f));
 }
 
+// Webview bundle runs in the browser context: bundle three.js, no node externals.
+const webviewConfig = {
+  bundle: true,
+  platform: "browser",
+  target: "es2020",
+  format: "iife",
+  sourcemap: true,
+  logLevel: "info",
+  entryPoints: ["src/webview/sceneView.ts"],
+  outfile: "media/sceneView.js",
+  minify: production,
+};
+
 async function main() {
   const ctx = await esbuild.context({
     ...base,
@@ -37,6 +50,7 @@ async function main() {
     outfile: "dist/extension.js",
     minify: production,
   });
+  const webviewCtx = await esbuild.context(webviewConfig);
 
   if (tests) {
     await esbuild.build({
@@ -49,10 +63,13 @@ async function main() {
 
   if (watch) {
     await ctx.watch();
+    await webviewCtx.watch();
     console.log("[esbuild] watching…");
   } else {
     await ctx.rebuild();
+    await webviewCtx.rebuild();
     await ctx.dispose();
+    await webviewCtx.dispose();
   }
 }
 

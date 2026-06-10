@@ -96,7 +96,54 @@ file captures the choices made *underneath* it during implementation.
 - **Choice:** **Little-endian** throughout (Python `struct '<III'`, JS `DataView(..., true)`); magic = `0x46495245` ("FIRE"). `schema_id` ∈ `SchemaId` (MESH=1, TEXTURE=2); `payload_id` correlates a frame with the JSON-RPC message that announced it.
 - **Why:** Little-endian matches x86 and typed-array native order, so mesh buffers map straight into three.js `BufferGeometry` with no byte swapping.
 
+### MESH payload layout + world-space positions (E1)
+- **Q:** How is a chunk mesh serialised, and where does the viewport place it?
+- **Choice:** A self-describing MESH payload (`i32 cx,cy,cz`, `u32 N`, `u32 M`, then `f32` positions/normals/colors(RGBA)/uvs and `u32` indices). Positions are **absolute world meters** (engine mesher already emits world-space verts), so the webview attaches every chunk mesh at the origin with no per-chunk offset. Codec: `meshcodec.py` ↔ `meshPayload.ts`.
+- **Why:** Self-describing frames let the client route by coord without depending on notification ordering; world-space positions keep one coordinate space end-to-end and match the game's `geometry_bridge` behaviour.
+
+### Viewport shades with baked vertex colours (MeshBasicMaterial)
+- **Q:** How does the three.js viewport light chunks?
+- **Choice:** `MeshBasicMaterial({ vertexColors: true })`. The engine's CPU sunlight pass is already baked into the mesh's RGBA vertex colours (greyscale × light), so the viewport must **not** re-light — a basic (unlit) material shows the engine's lighting faithfully. A full-strength `AmbientLight` is added only so any future lit materials are visible.
+- **Why:** Re-lighting with a Lambert/standard material would double-shade and diverge from the game. Parity comes from reusing the engine's baked light, not from re-deriving it client-side.
+
+### Chunk streaming is cooperative-async, not threaded (E1)
+- **Q:** How does the daemon stream a region without blocking the control channel?
+- **Choice:** `chunks.set_center` cancels any in-flight stream and launches an `asyncio` task that generates → relights → meshes coords nearest-first, `await asyncio.sleep(0)` every 8 chunks, broadcasting MESH frames as it goes. No worker threads.
+- **Why:** Chunk gen/mesh are small numpy ops (sub-ms each); cooperative yielding keeps `hello`/`ping`/`raycast` responsive within the §8 budget without the complexity of cross-thread sharing of the engine session. Revisit (worker process) only if profiling shows meshing starving RPC.
+
+### Protocol version bumps every schema change (E0→E1: v1→v2)
+- **Q:** When does `protocol_version` increment?
+- **Choice:** On **any** `schema.json` change, even additive ones (E1 added methods → bumped 1→2). The `hello` handshake requires exact equality; daemon and extension always regenerate from the same commit, so exact-match + per-change bump is the honest, drift-proof contract (hard rule 6).
+- **Why:** Exact-match handshake means an old extension against a new daemon must fail fast with a clear "rebuild" message rather than silently calling absent methods.
+
 ### Mouse-look uses relative mode + raw pixel deltas; auto-captured at boot
 - **Q:** Why did free-look feel locked to one axis and require hunting for ESC?
 - **Choice:** `App` now captures the mouse on startup and uses **relative** mouse mode (`M_relative`) with the cursor hidden, reading raw pixel deltas from `win.get_pointer(0)` relative to window centre and recentring each frame (first post-capture delta skipped). ESC toggles capture off (cursor shown, absolute mode).
 - **Why:** The old path used confined mode + normalised `mouseWatcher` deltas, which clamped the pointer at a screen edge and could freeze an axis. Raw-pixel + relative mode keeps both yaw and pitch symmetric and never edge-clamps. Auto-capture removes the "press ESC to look" surprise.
+
+## 2026-06-09 — In-game developer overlay (devtools)
+
+### In-game dev overlay is a separate system from the Fire Editor
+- **Q:** The owner described an in-game debug menu (noclip cam, perf stats, click-to-select + outline, live value editing, spawn/fire-event buttons) — is that the `EDITOR_PRD.md` Fire Editor?
+- **Choice:** No — it is a **new, distinct in-game system** (`torn_apart/devtools/` + `world/devtools_overlay.py`), toggled with **F1**, that runs *inside the live Panda3D window*. The Fire Editor (`editor/`) is the *external* VS Code/Cursor tool that runs with the game *closed*. Both coexist; ARCHITECTURE.md §6 explicitly anticipates in-game debug overlays for Session 1.
+- **Why:** They serve different workflows (live in-engine tweaking vs. offline content authoring). Conflating them would have forced the daemon/webview architecture onto something that just needs to draw over the running game.
+
+### Renderer: Panda3D DirectGUI now, not Dear ImGui (but swappable)
+- **Q:** The "common debug-menu UI" the owner named is Dear ImGui. Build a real ImGui-in-Panda3D integration, or use Panda3D's native GUI?
+- **Choice:** **DirectGUI** for v1 (owner-approved). The dev-tools *logic* is fully decoupled behind a declarative `Panel`/`Section`/`Field`/`Button` model (`devtools/fields.py`); the renderer only consumes that model. A real Dear ImGui backend can replace `world/devtools_overlay.py` later without touching `torn_apart/devtools/`.
+- **Why:** ImGui has no first-class Panda3D binding — a custom draw-list backend is a fragile native dependency and slow to a first working version. DirectGUI is zero-dependency, solid on Windows/Panda3D, and ships a working stats/inspector/spawn overlay today. The panel-model indirection keeps the ImGui door open.
+
+### New headless `devtools/` package (logic) + renderer in `world/`
+- **Q:** Where does the dev-overlay code live given hard rule 1 (panda3d only in `world/`/`lighting/`)?
+- **Choice:** A new **headless** package `torn_apart/devtools/` (selection, CPU picking, GameObject introspection, tools, manager) imports **`core` only** — never panda3d, never `world` at runtime (TYPE_CHECKING duck-typing). The single panda3d-touching file is `world/devtools_overlay.py` (DirectGUI + mouse→ray + outline + spawn visuals). `tests/test_devtools.py` runs in the headless suite.
+- **Why:** Keeps the editor logic unit-testable without a window and obeys the import rule; the renderer is a thin, replaceable presentation layer.
+
+### Object picking via CPU ray/AABB, not a Panda3D collision graph
+- **Q:** How does click-to-select find the object under the cursor?
+- **Choice:** The overlay extrudes a world-space ray from the mouse through the camera lens and hands it to a **headless ray/AABB slab test** (`devtools/picking.py`) over registered `Selectable` boxes (world-axis-aligned, derived from transform position ± half-extents × scale; rotation ignored for v1). Nearest hit wins.
+- **Why:** Standing up a `CollisionTraverser`/`CollisionRay` graph just to click a few dev props is overkill; CPU ray/AABB is deterministic, unit-testable, and keeps the picking math headless.
+
+### Environment (day/night + weather) controls live in the overlay
+- **Q:** Where do the day/night-cycle / weather controls the owner wants go?
+- **Choice:** An **Environment** panel registered in the overlay (`CallbackTool`) that edits `clock.game_time_of_day` / `game_time_scale` and cycles `sky_system.weather.force_weather(...)`, reading the live `SkyState`. It is registered only when `app.sky_system` is present and is bound defensively (`getattr`/`try`) against the concurrent sky feature.
+- **Why:** The owner explicitly wanted day/night editable "in the game world with the same system." A generic `CallbackTool` surfaces it without coupling `devtools/` to the in-flight `sky` API.

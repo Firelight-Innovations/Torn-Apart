@@ -21,18 +21,33 @@ parity. Geometry/lighting/textures come from the same engine code, so parity is
 high; shader-level differences are accepted.
 
 **Phase status:** E0 complete (scaffold + protocol + handshake + lifecycle).
-E1–E6 (scene view, hierarchy/inspector, world editing, texture lab, model
+E1 complete (scene view: chunk streaming + CPU sunlight + three.js viewport +
+save loading). E2–E6 (hierarchy/inspector, world editing, texture lab, model
 workspace, verification) per EDITOR_PRD §7.
 
 ## Public API
 The editor is a standalone tool, not an importable engine package. Its surfaces:
 
 **Daemon — `fire_editor` (importable for tests):**
-- `Daemon` — builds the JSON-RPC dispatcher + WebSocket server, registers core methods, `run(port)`.
+- `Daemon` — builds the JSON-RPC dispatcher + WebSocket server, registers core + service methods, holds the open `EditorSession`, `run(port)`.
 - `Dispatcher` / `RpcError` — transport-agnostic JSON-RPC 2.0 dispatch; handlers are `async (params) -> result`.
-- `encode_frame(schema_id, payload_id, payload) -> bytes` / `decode_frame(bytes) -> (schema_id, payload_id, payload)` — binary framing.
+- `EditorSession` — one open world: terrain `ChunkManager`, `LightGrid` + `SunlightComputer`, `SaveManager`. `from_seed`, `from_save`, `region_coords`, `ensure_loaded`, `relight`, `mesh`, `raycast`, `save`.
+- `encode_frame` / `decode_frame` — protocol binary framing.
+- `encode_mesh_payload(coord, mesh)` / `decode_mesh_payload(bytes)` — MESH payload codec.
 - `EditorServer` — `websockets` transport; `broadcast_binary`, `broadcast_notification`.
+- `services.chunks.ChunkService` — registers `world.open/save`, `chunks.set_center`, `scene.stats`, `terrain.raycast`; streams MESH frames.
 - Generated constants in `fire_editor._generated` (`PROTOCOL_VERSION`, `BINARY_MAGIC`, `SchemaId`, `ErrorCode`, `Method`, `Notification`, typed param/result `TypedDict`s).
+
+**Methods (protocol_version 2):** `hello`, `ping`, `world.open {seed|save_path}`,
+`world.save {path}`, `chunks.set_center {x,y,z,radius?}`, `scene.stats`,
+`terrain.raycast {o*,d*,max_distance?}`. Notifications: `log`, `chunk.ready`,
+`chunk.unload`, `stream.done`. Full table in `editor/protocol/SCHEMA.md`.
+
+**Extension webview (Scene View, F1):** `editor/extension/src/webview/sceneView.ts`
+— three.js viewport, Z-up, fly camera (WASD/QE, mouse-look, Shift 5×), builds a
+`BufferGeometry` per chunk from MESH frames, `MeshBasicMaterial` with vertex
+colours (baked sunlight), overlays (wireframe `G`, chunk borders `B`, stats).
+Host side: `sceneViewPanel.ts` relays MESH frames down and camera moves up.
 
 **CLI:** `python -m fire_editor --port <p> [--host 127.0.0.1] [--log-level info]`
 — announces `{"event":"listening","port":N}` on stdout; logs to stderr.

@@ -8,4 +8,5 @@ tools/out/*.png
 # Fire Editor (VS Code / Cursor extension)
 editor/extension/node_modules/
 editor/extension/dist/
+editor/extension/media/
 editor/extension/*.vsix

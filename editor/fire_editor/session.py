@@ -1,0 +1,131 @@
+"""EditorSession — a headless engine world the daemon edits and renders.
+
+Wires the engine's terrain + lighting + save systems into one object the
+services drive. Imports only headless ``torn_apart`` APIs (never ``torn_apart``
+``world``'s panda3d-bound package init; the object model arrives in Phase E2 once
+the engine split lands). Determinism is preserved: the session sets the world
+seed via ``core.rng`` and adds no unseeded randomness (EDITOR_PRD hard rule 4),
+so editor preview of seed N matches the game world of seed N.
+"""
+from __future__ import annotations
+
+import dataclasses
+
+from torn_apart.core import Clock, EventBus, load_config
+from torn_apart.core.config import Config
+from torn_apart.core.math3d import Vec3
+from torn_apart.core.rng import set_world_seed
+from torn_apart.lighting import LightGrid, SunlightComputer, make_light_sampler
+from torn_apart.save import SaveManager
+from torn_apart.terrain import ChunkManager, raycast_voxel
+
+# Z band of streamed chunks relative to the camera chunk. Mirrors the private
+# band in torn_apart.terrain.chunk_manager (_Z_MIN/_Z_MAX); guarded against
+# drift by tests/editor/test_session.py::test_region_matches_engine_desired_set.
+_Z_MIN: int = -2
+_Z_MAX: int = 4
+
+
+class EditorSession:
+    """One open world: terrain chunks, sunlight, and delta saves.
+
+    Construct via :meth:`from_seed` or :meth:`from_save`; the bare constructor
+    takes a fully-resolved :class:`~torn_apart.core.config.Config`.
+
+    Attributes:
+        config: The frozen engine config for this session.
+        seed: ``config.world_seed`` (the active world seed).
+        cm: ``ChunkManager`` — chunk store, provider, terrain ``Saveable``.
+        lg / sc / sampler: light grid, sunlight computer, mesher light sampler.
+        save_manager: ``SaveManager`` with the terrain system registered.
+    """
+
+    def __init__(self, config: Config) -> None:
+        self.config = config
+        self.seed = int(config.world_seed)
+        set_world_seed(self.seed)
+        self.bus = EventBus()
+        self.clock = Clock(fixed_dt=config.fixed_dt, bus=self.bus)
+        self.cm = ChunkManager(config, self.bus)
+        self.lg = LightGrid()
+        self.sc = SunlightComputer(config, self.cm, self.lg, self.bus)
+        self.sampler = make_light_sampler(self.lg, config)
+        self.save_manager = SaveManager(config, self.clock)
+        self.save_manager.register(self.cm)
+
+    # ------------------------------------------------------------------ #
+    # Construction
+    # ------------------------------------------------------------------ #
+    @classmethod
+    def from_seed(cls, seed: int, base_config: Config | None = None) -> "EditorSession":
+        """Generate a fresh world from ``seed`` (overrides ``config.world_seed``)."""
+        base = base_config or load_config()
+        cfg = dataclasses.replace(base, world_seed=int(seed))
+        return cls(cfg)
+
+    @classmethod
+    def from_save(cls, path: str, base_config: Config | None = None) -> "EditorSession":
+        """Open a ``.ta`` save: regen baseline from seed, then apply terrain deltas.
+
+        The save's header seed must match ``base_config.world_seed`` (game saves
+        use the ``config.toml`` seed, so this matches by default); otherwise the
+        engine raises ``SaveIncompatibleError``, surfaced to the client.
+        """
+        base = base_config or load_config()
+        session = cls(base)
+        session.save_manager.load(path)  # validates header; applies terrain delta
+        return session
+
+    # ------------------------------------------------------------------ #
+    # Region / meshing
+    # ------------------------------------------------------------------ #
+    def region_coords(self, center: Vec3, radius: int) -> list[tuple[int, int, int]]:
+        """Chunk coords for the editor region around ``center`` (distance-sorted).
+
+        XY square radius ``radius`` about the camera chunk, Z band ``[-2, +4]``
+        relative to it — the same shape the game streams. Sorted nearest-first so
+        the viewport fills in from the camera outward.
+        """
+        ccx, ccy, ccz = self.cm.camera_chunk(center)
+        coords: list[tuple[int, int, int]] = []
+        for dx in range(-radius, radius + 1):
+            for dy in range(-radius, radius + 1):
+                for dz in range(_Z_MIN, _Z_MAX + 1):
+                    coords.append((ccx + dx, ccy + dy, ccz + dz))
+        coords.sort(key=lambda c: (c[0] - ccx) ** 2 + (c[1] - ccy) ** 2 + (c[2] - ccz) ** 2)
+        return coords
+
+    def ensure_loaded(self, coords) -> None:
+        """Generate (from seed) any not-yet-loaded chunks in ``coords``."""
+        for c in coords:
+            self.cm.get_or_create(c)
+
+    def relight(self) -> None:
+        """Recompute sunlight for all loaded columns (call before meshing)."""
+        self.sc.recompute_all_loaded()
+
+    def mesh(self, coord: tuple[int, int, int]):
+        """Build (and cache) the lit mesh for ``coord`` via the engine mesher."""
+        return self.cm.mesh_chunk(coord, self.sampler)
+
+    # ------------------------------------------------------------------ #
+    # Queries / persistence
+    # ------------------------------------------------------------------ #
+    def raycast(self, origin: Vec3, direction: Vec3, max_distance_m: float = 100.0):
+        """First solid voxel hit along a ray, or ``None``."""
+        return raycast_voxel(
+            origin,
+            direction,
+            self.cm,
+            max_distance_m=max_distance_m,
+            chunk_size=int(self.config.chunk_size),
+            voxel_size=float(self.config.voxel_size),
+        )
+
+    def edited_chunk_count(self) -> int:
+        """Number of loaded chunks deviating from the procedural baseline."""
+        return sum(1 for ch in self.cm.chunks.values() if ch.edited)
+
+    def save(self, path: str) -> None:
+        """Write a delta save (terrain edits) through the engine SaveManager."""
+        self.save_manager.save(path)

@@ -29,6 +29,21 @@
         "command": "fireEditor.showStatus",
         "title": "Fire Editor: Show Status",
         "category": "Fire Editor"
+      },
+      {
+        "command": "fireEditor.openSceneView",
+        "title": "Fire Editor: Open Scene View",
+        "category": "Fire Editor"
+      },
+      {
+        "command": "fireEditor.openWorldSeed",
+        "title": "Fire Editor: Open World by Seed",
+        "category": "Fire Editor"
+      },
+      {
+        "command": "fireEditor.openWorldSave",
+        "title": "Fire Editor: Open World from Save",
+        "category": "Fire Editor"
       }
     ],
     "configuration": {
@@ -56,16 +71,18 @@
   "scripts": {
     "compile": "node esbuild.js",
     "watch": "node esbuild.js --watch",
-    "check": "tsc --noEmit -p ./",
+    "check": "tsc --noEmit -p ./ && tsc -p tsconfig.webview.json",
     "build:tests": "node esbuild.js --tests",
     "test": "node esbuild.js --tests && node --test \"dist/test/**/*.test.js\"",
     "vscode:prepublish": "npm run check && node esbuild.js --production"
   },
   "dependencies": {
+    "three": "^0.165.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
+    "@types/three": "^0.165.0",
     "@types/vscode": "^1.85.0",
     "@types/ws": "^8.5.10",
     "esbuild": "^0.21.5",

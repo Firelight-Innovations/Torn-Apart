@@ -4,3 +4,8 @@ __pycache__/
 saves/
 tools/out/*.png
 .pytest_cache/
+
+# Fire Editor (VS Code / Cursor extension)
+editor/extension/node_modules/
+editor/extension/dist/
+editor/extension/*.vsix

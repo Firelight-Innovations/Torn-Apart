@@ -1,0 +1,40 @@
+{
+  "$comment": "SINGLE SOURCE OF TRUTH for the Fire Editor wire protocol. Both editor/fire_editor/_generated.py and editor/extension/src/protocol/generated.ts are produced from this file by codegen.py. Never hand-edit the generated files. Bump protocol_version on ANY incompatible change and regenerate both bindings in the same commit (EDITOR_PRD hard rule 6).",
+  "protocol_version": 1,
+  "daemon_version": "0.1.0",
+  "binary": {
+    "magic_hex": "0x46495245",
+    "header_size": 12,
+    "schemas": {
+      "MESH": 1,
+      "TEXTURE": 2
+    }
+  },
+  "errors": {
+    "PARSE_ERROR": -32700,
+    "INVALID_REQUEST": -32600,
+    "METHOD_NOT_FOUND": -32601,
+    "INVALID_PARAMS": -32602,
+    "INTERNAL_ERROR": -32603,
+    "VERSION_MISMATCH": -32000,
+    "APP_ERROR": -32001
+  },
+  "methods": {
+    "hello": {
+      "doc": "Handshake. Client announces its protocol_version; daemon rejects on mismatch.",
+      "params": { "protocol_version": "int", "client": "str" },
+      "result": { "ok": "bool", "protocol_version": "int", "engine_version": "str", "daemon_version": "str" }
+    },
+    "ping": {
+      "doc": "Liveness probe.",
+      "params": {},
+      "result": { "pong": "bool" }
+    }
+  },
+  "notifications": {
+    "log": {
+      "doc": "Daemon -> client log line, surfaced in the extension output channel.",
+      "params": { "level": "str", "message": "str" }
+    }
+  }
+}

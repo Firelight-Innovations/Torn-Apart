@@ -1,0 +1,74 @@
+{
+  "name": "fire-editor",
+  "displayName": "Fire Editor",
+  "description": "Unity-Editor-style visual editor for the Torn Apart (Fire) engine, running inside VS Code / Cursor.",
+  "version": "0.1.0",
+  "publisher": "firelight",
+  "private": true,
+  "license": "SEE LICENSE IN ../../LICENSE",
+  "engines": {
+    "vscode": "^1.85.0",
+    "node": ">=18"
+  },
+  "categories": ["Other"],
+  "main": "./dist/extension.js",
+  "activationEvents": ["onStartupFinished"],
+  "contributes": {
+    "commands": [
+      {
+        "command": "fireEditor.restartDaemon",
+        "title": "Fire Editor: Restart Daemon",
+        "category": "Fire Editor"
+      },
+      {
+        "command": "fireEditor.showLog",
+        "title": "Fire Editor: Show Daemon Log",
+        "category": "Fire Editor"
+      },
+      {
+        "command": "fireEditor.showStatus",
+        "title": "Fire Editor: Show Status",
+        "category": "Fire Editor"
+      }
+    ],
+    "configuration": {
+      "title": "Fire Editor",
+      "properties": {
+        "fireEditor.pythonPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the Python interpreter for the daemon. Empty = autodetect the repo .venv."
+        },
+        "fireEditor.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "Spawn the Fire Editor daemon automatically when a Torn Apart workspace opens."
+        },
+        "fireEditor.logLevel": {
+          "type": "string",
+          "enum": ["debug", "info", "warning", "error"],
+          "default": "info",
+          "description": "Daemon log verbosity."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "check": "tsc --noEmit -p ./",
+    "build:tests": "node esbuild.js --tests",
+    "test": "node esbuild.js --tests && node --test \"dist/test/**/*.test.js\"",
+    "vscode:prepublish": "npm run check && node esbuild.js --production"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@types/ws": "^8.5.10",
+    "esbuild": "^0.21.5",
+    "typescript": "^5.4.0"
+  }
+}

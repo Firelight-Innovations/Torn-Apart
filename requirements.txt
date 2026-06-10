@@ -3,3 +3,7 @@ numpy==2.4.6
 msgpack==1.1.2
 pytest==9.0.3
 pillow==12.2.0
+
+# Fire Editor daemon (editor/fire_editor) — WebSocket transport. Headless;
+# never imports panda3d (EDITOR_PRD hard rule 1).
+websockets==13.1

@@ -32,6 +32,8 @@ Built-in registrations
 ----------------------
 Importing this package automatically registers:
   * ``"wasteland_ground"``  (256×256 RGBA dirt/dead-grass ground texture)
+  * ``"night_sky"``         (1024×512 RGBA equirect star field + galaxy band)
+  * ``"rain_streak"``       (128×512 RGBA tiling rain streaks, U+V tileable)
 
 Quick-start example
 -------------------

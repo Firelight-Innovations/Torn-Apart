@@ -16,6 +16,7 @@ Events
     ChunkUnloadedEvent      — terrain chunk evicted
     TerrainEditedEvent      — brush edit applied to terrain
     GameDayTickEvent        — in-game day elapsed
+    WeatherChangedEvent     — discrete weather state changed (sky package)
 
 RNG
     set_world_seed          — set the global world seed at boot
@@ -42,6 +43,7 @@ from torn_apart.core.event_bus import (
     ChunkUnloadedEvent,
     TerrainEditedEvent,
     GameDayTickEvent,
+    WeatherChangedEvent,
 )
 from torn_apart.core.rng import set_world_seed, for_domain
 from torn_apart.core.config import Config, load_config
@@ -59,6 +61,7 @@ __all__ = [
     "ChunkUnloadedEvent",
     "TerrainEditedEvent",
     "GameDayTickEvent",
+    "WeatherChangedEvent",
     # RNG
     "set_world_seed",
     "for_domain",

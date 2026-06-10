@@ -1,5 +1,5 @@
 # procedural — System Doc
-keywords: procedural, ProceduralDef, ProceduralTextureDef, register, get, clear_cache, reset_registry, value_noise, wasteland_ground, texture, noise, registry, cache, determinism, world_seed, params_digest, for_domain, biome, building, content, authoring, RGBA, uint8, octaves, persistence, lacunarity, base_freq, layered, heightmap
+keywords: procedural, ProceduralDef, ProceduralTextureDef, register, get, clear_cache, reset_registry, value_noise, wasteland_ground, night_sky, rain_streak, stars, star field, galaxy, equirect, equirectangular, sky texture, rain texture, tileable, seamless, texture, noise, registry, cache, determinism, world_seed, params_digest, for_domain, biome, building, content, authoring, RGBA, uint8, octaves, persistence, lacunarity, base_freq, layered, heightmap
 
 > One doc per code package; filename matches the package exactly (`docs/systems/procedural.md` ↔ `torn_apart/procedural/`).
 
@@ -11,7 +11,7 @@ keywords: procedural, ProceduralDef, ProceduralTextureDef, register, get, clear_
 - A **`ProceduralTextureDef` domain subclass** that generates `(H, W, 4) uint8` RGBA arrays.
 - A **shared layered value-noise helper** (`value_noise`) used by textures and reusable by Phase 3 terrain.
 - A **deterministic cache** keyed by `(def_name, world_seed, sorted_params_digest)` so identical calls always return the same object.
-- Auto-registration of built-in content at import time (currently: `"wasteland_ground"`).
+- Auto-registration of built-in content at import time (currently: `"wasteland_ground"`, `"night_sky"`, `"rain_streak"`).
 
 `procedural/` deliberately does NOT: render anything, touch the Panda3D scene graph, store game-world state, or do any per-pixel Python loops.
 
@@ -49,6 +49,8 @@ All symbols below are re-exported from `torn_apart.procedural` (`__init__.py`).
 | Registered name | File | Output |
 |---|---|---|
 | `"wasteland_ground"` | `procedural/textures/wasteland_ground.py` | `(256,256,4) uint8` RGBA dirt/dead-grass |
+| `"night_sky"` | `procedural/textures/night_sky.py` | `(512,1024,4) uint8` equirect star field + galaxy band (+Z pole at v=1, U-seamless, alpha = luminance for additive blending).  Params: `width`, `height`, `star_count` (pass `Config.sky_star_count`). |
+| `"rain_streak"` | `procedural/textures/rain_streak.py` | `(512,128,4) uint8` sparse vertical rain streaks, tileable in U and V, alpha = streak intensity.  Params: `width`, `height`, `streak_count`. |
 
 ## Imports Allowed
 
@@ -87,7 +89,7 @@ If `set_world_seed()` is called with a new seed between two `get()` calls, the c
 All `ProceduralTextureDef.generate()` implementations must produce:
 - Shape `(H, W, 4)`, dtype `uint8`.
 - Channel order: RGBA (red=0, green=1, blue=2, alpha=3).
-- Alpha channel = 255 (fully opaque) unless the definition explicitly documents partial transparency.
+- Alpha channel = 255 (fully opaque) unless the definition explicitly documents partial transparency.  Documented exceptions: `"night_sky"` (alpha = luminance — additive-blend mask) and `"rain_streak"` (alpha = streak intensity).
 
 ### No Per-Pixel Python Loops
 `value_noise` and all built-in texture defs use only numpy array expressions.  A Python loop over individual pixels is a correctness violation (performance cliff at 256² = 65 k iterations, much worse at 512²).

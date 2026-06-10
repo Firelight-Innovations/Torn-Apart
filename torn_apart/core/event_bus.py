@@ -23,6 +23,7 @@ events exported from this module are:
     ChunkUnloadedEvent(coord)     — terrain chunk evicted from memory
     TerrainEditedEvent(chunk_coords, brush) — brush edit completed
     GameDayTickEvent(day)         — one in-game day has elapsed
+    WeatherChangedEvent(previous, current, day) — discrete weather state changed
 
 Example
 -------
@@ -91,6 +92,32 @@ class TerrainEditedEvent:
     """
     chunk_coords: tuple
     brush: object
+
+
+@dataclass(frozen=True)
+class WeatherChangedEvent:
+    """
+    Published by the WeatherSystem (``torn_apart.sky``) whenever the discrete
+    weather state changes — at most once per 2-game-hour segment boundary,
+    or when a dev override is applied/cleared.  Published via
+    ``bus.publish_deferred`` (state-change notification; never per-frame).
+
+    Subscribers: ambience/audio, AI behaviour (seek shelter), render layer
+    (particle systems), gameplay (crop growth, fire spread).
+
+    Attributes
+    ----------
+    previous : str
+        The ``WeatherType.value`` string of the outgoing state
+        (e.g. ``"clear"``, ``"rain"``).
+    current : str
+        The ``WeatherType.value`` string of the incoming state.
+    day : int
+        In-game day number on which the change occurred.
+    """
+    previous: str
+    current: str
+    day: int
 
 
 @dataclass(frozen=True)

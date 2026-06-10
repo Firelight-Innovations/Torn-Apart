@@ -1,0 +1,53 @@
+"""
+torn_apart.sky — Procedural sky + weather (Layer 1 — Services).
+
+Headless peer of ``lighting/``: computes the per-frame :class:`SkyState`
+(sun/moon directions, sky gradient colors, blended weather parameters, and
+the terrain light scale) that the render layer (``world/``) consumes.  This
+package never imports panda3d — everything is testable without a window.
+
+Public API summary
+------------------
+SkyState
+    Frozen per-frame snapshot: celestial directions, colors, weather, fog,
+    wind, ``terrain_light_scale``.
+SkySystem
+    Composer.  ``update()`` once per frame; ``state`` property for the last
+    snapshot; ``weather`` attribute is the owned WeatherSystem.
+WeatherType, WeatherParams, WeatherSystem
+    Deterministic Markov weather schedule (Saveable, ``save_key="weather"``)
+    with 20-game-minute parameter blending and a ``force_weather`` override.
+sun_direction, moon_direction
+    Pure time-of-day → unit Vec3 celestial geometry (Z-up).
+
+Quick-start example
+-------------------
+::
+
+    from torn_apart.core import Clock, EventBus, load_config, set_world_seed
+    from torn_apart.sky import SkySystem, WeatherType
+
+    cfg = load_config()
+    set_world_seed(cfg.world_seed)
+    bus = EventBus()
+    clock = Clock(fixed_dt=cfg.fixed_dt, bus=bus)
+
+    sky = SkySystem(cfg, clock, bus)
+    state = sky.update()                       # once per frame
+    sky.weather.force_weather(WeatherType.STORM)   # dev override
+    sky.weather.force_weather(None)                # back to the schedule
+"""
+
+from torn_apart.sky.celestial import moon_direction, sun_direction
+from torn_apart.sky.sky_state import SkyState, SkySystem
+from torn_apart.sky.weather import WeatherParams, WeatherSystem, WeatherType
+
+__all__ = [
+    "SkyState",
+    "SkySystem",
+    "WeatherType",
+    "WeatherParams",
+    "WeatherSystem",
+    "sun_direction",
+    "moon_direction",
+]

@@ -103,6 +103,29 @@ class Clock:
         """Fixed timestep in seconds (50 Hz = 0.02 s by default)."""
         return self._fixed_dt
 
+    @property
+    def game_time_scale(self) -> float:
+        """
+        Real→game time multiplier: 1 real second = ``game_time_scale`` in-game
+        seconds (default 60.0 → 1 real minute = 1 game hour).
+
+        Read/write.  Dev tooling (time-of-day scrubbers, fast-forward keys,
+        sky/weather debugging) may change this at runtime; the new scale takes
+        effect from the next ``update()`` call.  Setting it does NOT rewind or
+        jump the calendar — only the rate of future game-time accrual changes.
+
+        Example
+        -------
+        >>> clock.game_time_scale          # 60.0 — normal speed
+        >>> clock.game_time_scale = 3600.0 # 1 real second = 1 game hour (dev)
+        >>> clock.update(1.0)              # advances the day by one game hour
+        """
+        return self._game_time_scale
+
+    @game_time_scale.setter
+    def game_time_scale(self, value: float) -> None:
+        self._game_time_scale = float(value)
+
     def update(self, real_dt: float) -> None:
         """
         Advance the clock by one real frame.

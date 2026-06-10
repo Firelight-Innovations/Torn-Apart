@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 saves/
 tools/out/*.png
+tools/out/sky/
 .pytest_cache/
 
 # Fire Editor (VS Code / Cursor extension)

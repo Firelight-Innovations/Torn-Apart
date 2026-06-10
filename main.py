@@ -79,6 +79,8 @@ _SAVE_PATH = "saves/quick.ta"
 _EXPLOSION_RADIUS_M = 2.5      # SphereBrush radius for left-click explosions
 _RAY_MAX_DISTANCE_M = 100.0    # how far the click ray probes for terrain
 _PREWARM_STREAM_FRAMES = 80    # stream_frame iterations to pre-load spawn area
+_BOOT_TIME_OF_DAY_H = 10.0     # boot the demo mid-morning (game clock starts at
+                               # 00:00 otherwise and the sky dims terrain to night)
 
 
 def _prewarm_terrain(app, chunk_manager, sunlight, light_sampler) -> None:
@@ -153,9 +155,10 @@ def build_demo():
     set_world_seed(cfg.world_seed)
     _log.info("Booting Torn Apart (seed=%d)", cfg.world_seed)
 
-    # 2. Event bus + clock.
+    # 2. Event bus + clock.  Start mid-morning so the demo opens in daylight.
     bus = EventBus()
     clock = Clock(fixed_dt=cfg.fixed_dt, bus=bus)
+    clock.game_time_of_day = _BOOT_TIME_OF_DAY_H * 3600.0
 
     # 3. Procedural content is already registered (import side-effect above).
 
@@ -179,9 +182,18 @@ def build_demo():
     sunlight = SunlightComputer(cfg, chunk_manager, light_grid, bus)
     light_sampler = make_light_sampler(light_grid, cfg)
 
-    # 8. Save manager — register terrain first (registration order matters).
+    # 6b. Sky + weather (Layer 1 service, headless) — constructed after lighting;
+    #     the SkyRendererComponent (added below) drives sky_system.update() once
+    #     per frame from its update() and reads the SkyState in late_update().
+    from torn_apart.sky import SkySystem, WeatherType
+    sky_system = SkySystem(cfg, clock, bus)
+    app.sky_system = sky_system   # exposed for tooling (tools/screenshot.py)
+
+    # 8. Save manager — register terrain first (registration order matters),
+    #    then the weather schedule (Saveable, save_key="weather").
     save_manager = SaveManager(cfg, clock)
     save_manager.register(chunk_manager)
+    save_manager.register(sky_system.weather)
 
     # 9. Player — attach a FlyController to the camera GameObject.  The App
     #    forwards InputState to all FlyControllers each frame.
@@ -196,21 +208,38 @@ def build_demo():
     # 10. Pre-stream spawn area + seed sunlight + upload initial meshes.
     _prewarm_terrain(app, chunk_manager, sunlight, light_sampler)
 
+    # 10b. Sky renderer — a GameObject with the render half of the sky system.
+    #      SkyRendererComponent.update() calls sky_system.update() (registry
+    #      runs update before late_update), so no App changes are needed.
+    from torn_apart.world import instantiate
+    from torn_apart.world.sky_renderer import SkyRendererComponent
+    sky_go = instantiate()
+    sky_go.name = "Sky"
+    sky_go.add_component(
+        SkyRendererComponent,
+        base=app,
+        sky_system=sky_system,
+        terrain_root=app.terrain_root,
+        clock=clock,
+    )
+    app.sky_go = sky_go
+
     # 11. Resource-manager proof model (non-fatal).
     _load_proof_model(app)
 
     # --- Demo key bindings (DEV tooling per §5.5) -------------------------
     Path("saves").mkdir(parents=True, exist_ok=True)
 
-    def on_click() -> None:
+    def fire_explosion() -> None:
         """
-        Left-click → fire an explosion at the terrain under the camera ray.
+        Carve a SphereBrush(REMOVE) crater at the terrain under the camera ray.
 
         Builds the camera ray (origin = camera position, direction = camera
-        forward), raycasts the voxel field, and on a hit carves a SphereBrush
-        REMOVE crater at the hit point.  apply_brush flags touched chunks dirty +
-        edited and publishes TerrainEditedEvent; the SunlightComputer relights
-        the column; the next stream_frame remeshes → crater + relight appear.
+        forward), raycasts the voxel field, and on a hit carves a crater at the
+        hit point.  apply_brush flags touched chunks dirty + edited and publishes
+        TerrainEditedEvent; the SunlightComputer relights the column; the next
+        stream_frame remeshes → crater + relight appear.  Bound to left-click
+        (while flying) and to the dev overlay's "Fire Explosion" action button.
         """
         origin = app.camera_go.transform.position
         direction = app.camera_go.transform.forward
@@ -234,6 +263,19 @@ def build_demo():
             bus=bus,
         )
         _log.info("Explosion at %s — %d chunk(s) cratered", hit.point, len(touched))
+
+    def on_click() -> None:
+        """
+        Left-click dispatch.
+
+        When the dev overlay is open with a free cursor, the click is a dev
+        *selection* (handled by the overlay) — picking the object under the
+        cursor and outlining it.  Otherwise (flying, cursor captured, or overlay
+        closed) it keeps its in-game meaning and fires the demo explosion.
+        """
+        if overlay is not None and overlay.handle_world_click():
+            return
+        fire_explosion()
 
     def on_save() -> None:
         """F5 → save the world (edited chunks only) to saves/quick.ta."""
@@ -262,12 +304,69 @@ def build_demo():
         except SaveIncompatibleError as exc:
             _log.error("Save incompatible: %s", exc)
 
+    # --- Sky/weather dev bindings (F6/F7/F8) — dev tooling per §5.5 ---------
+    # F6 cycles a forced weather type (None = back to the natural schedule),
+    # F7 toggles the game-time scale for day-cycle fast-forward, F8 jumps the
+    # game clock forward 6 game-hours to snap to interesting skies.
+    weather_cycle: list = [
+        WeatherType.CLEAR, WeatherType.CLOUDY, WeatherType.OVERCAST,
+        WeatherType.FOG, WeatherType.RAIN, WeatherType.STORM, None,
+    ]
+    weather_index = [len(weather_cycle) - 1]   # starts at None (natural)
+
+    def on_cycle_weather() -> None:
+        """F6 → force the next weather type in the cycle (None = natural)."""
+        weather_index[0] = (weather_index[0] + 1) % len(weather_cycle)
+        forced = weather_cycle[weather_index[0]]
+        sky_system.weather.force_weather(forced)
+        st = sky_system.state
+        _log.info(
+            "Weather forced to %s (current=%s, coverage=%.2f, fog=%.4f /m, "
+            "rain=%.2f)",
+            forced.name if forced is not None else "None (natural schedule)",
+            sky_system.weather.current.name,
+            st.cloud_coverage, st.fog_density, st.rain_intensity,
+        )
+
+    def on_toggle_time_scale() -> None:
+        """F7 → toggle clock.game_time_scale between 60 (normal) and 1800 (fast)."""
+        clock.game_time_scale = 1800.0 if clock.game_time_scale <= 60.0 else 60.0
+        _log.info("game_time_scale = %.0f (1 real s = %.0f game s)",
+                  clock.game_time_scale, clock.game_time_scale)
+
+    def on_jump_time() -> None:
+        """F8 → jump the game clock forward 6 game-hours (wraps the day)."""
+        new_tod = clock.game_time_of_day + 6.0 * 3600.0
+        if new_tod >= 24.0 * 3600.0:
+            new_tod -= 24.0 * 3600.0
+            clock.game_day += 1
+        clock.game_time_of_day = new_tod
+        _log.info("Game time jumped to day %d, %02d:%02d", clock.game_day,
+                  int(new_tod // 3600), int(new_tod % 3600 // 60))
+
+    app.accept("f6", on_cycle_weather)
+    app.accept("f7", on_toggle_time_scale)
+    app.accept("f8", on_jump_time)
+
+    # --- Developer overlay (F1) — in-game debug menu / inspector / spawn -----
+    # DirectGUI overlay rendered in world/ (the only place panda3d is allowed).
+    # The headless DevToolsManager underneath holds the tools, selection, and
+    # picking; see docs/systems/devtools.md.  Expose the demo explosion as an
+    # action button too so it can be triggered from the menu.
+    from torn_apart.world import DevOverlay
+    overlay = DevOverlay(app) if DevOverlay is not None else None
+    if overlay is not None:
+        overlay.actions.add_action("Fire Explosion", fire_explosion)
+        app.accept("f1", overlay.toggle)
+        app.dev_overlay = overlay   # exposed for tooling (tools/screenshot.py)
+
     app.accept("mouse1", on_click)
     app.accept("f5", on_save)
     app.accept("f9", on_load)
 
     _log.info("Demo ready — WASD+mouse to fly, ESC to capture mouse, "
-              "left-click to explode, F5 save, F9 load.")
+              "left-click to explode, F1 dev overlay, F5 save, F9 load, "
+              "F6 cycle weather, F7 time scale, F8 +6h.")
 
     return app
 

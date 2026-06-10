@@ -72,6 +72,16 @@ except ImportError:
     to_geom = None  # type: ignore[assignment,misc]
     to_geom_node = None  # type: ignore[assignment,misc]
 
+try:
+    from torn_apart.world.devtools_overlay import DevOverlay
+except ImportError:
+    DevOverlay = None  # type: ignore[assignment,misc]
+
+try:
+    from torn_apart.world.sky_renderer import SkyRendererComponent
+except ImportError:
+    SkyRendererComponent = None  # type: ignore[assignment,misc]
+
 __all__ = [
     # Transform hierarchy
     "Transform",
@@ -93,4 +103,6 @@ __all__ = [
     "register_panda_loaders",  # Phase 5: inject panda3d asset loaders into ResourceManager
     "to_geom",                 # Phase 3: MeshArrays → Panda3D Geom (bulk writes)
     "to_geom_node",            # Phase 3: MeshArrays → Panda3D GeomNode
+    "DevOverlay",              # Dev tools: in-game DirectGUI debug overlay renderer
+    "SkyRendererComponent",    # Sky/weather: dome + boxy clouds + rain + fog renderer
 ]

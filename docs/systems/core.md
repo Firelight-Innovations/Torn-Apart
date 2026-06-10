@@ -1,5 +1,5 @@
 # core — System Doc
-keywords: vec3, quat, quaternion, math3d, event bus, eventbus, publish, subscribe, drain, rng, seed, for_domain, config, clock, fixed_update, lod, lodpolicy, logging, math, rotation, euler, hpr, slerp, chunk loaded, game day, terrain edited, world seed, determinism, blake2b, float32, z-up, forward, right, up, meters, radians, fixed_dt, spiral of death, saveable, get_state, set_state
+keywords: vec3, quat, quaternion, math3d, event bus, eventbus, publish, subscribe, drain, rng, seed, for_domain, config, clock, fixed_update, lod, lodpolicy, logging, math, rotation, euler, hpr, slerp, chunk loaded, game day, terrain edited, weather changed, world seed, determinism, blake2b, float32, z-up, forward, right, up, meters, radians, fixed_dt, spiral of death, saveable, get_state, set_state, game_time_scale, time scale, sky config, cloud altitude, star count
 
 > One doc per code package; filename matches the package exactly (`docs/systems/core.md` ↔ `torn_apart/core/`).
 
@@ -71,6 +71,7 @@ All symbols below are re-exported from `torn_apart.core` (`__init__.py`).
 | `ChunkUnloadedEvent(coord)` | Terrain chunk evicted from memory. |
 | `TerrainEditedEvent(chunk_coords, brush)` | Brush edit applied to terrain voxel data. |
 | `GameDayTickEvent(day)` | In-game day counter incremented. |
+| `WeatherChangedEvent(previous, current, day)` | Discrete weather state changed (`WeatherType.value` strings, e.g. `"clear"` → `"rain"`).  Published by `torn_apart.sky.WeatherSystem` via `publish_deferred`. |
 
 ### RNG (`core/rng.py`)
 
@@ -95,9 +96,13 @@ All symbols below are re-exported from `torn_apart.core` (`__init__.py`).
 | `Config.show_fps` | `bool` |
 | `Config.show_chunk_borders` | `bool` |
 | `Config.show_light_grid` | `bool` |
+| `Config.sky_cloud_altitude_m` | `float` — cloud layer base altitude, world Z meters (96.0). From the `[sky]` TOML table (flattened like `[debug]`). |
+| `Config.sky_cloud_thickness_m` | `float` — cloud layer vertical thickness in meters (8.0). |
+| `Config.sky_cloud_cell_m` | `float` — horizontal edge of one cloud cell in meters (12.0); the renderer fills `cloud_coverage` fraction of cells. |
+| `Config.sky_star_count` | `int` — star count for the `"night_sky"` procedural texture (2500). |
 | `Config.chunk_meters` | property — `chunk_size * voxel_size` (16.0 m) |
 | `Config.light_cell_meters` | property — `voxel_size * light_grid_scale` (1.0 m) |
-| `load_config(path="config.toml") -> Config` | Load from TOML; returns defaults if file missing. |
+| `load_config(path="config.toml") -> Config` | Load from TOML; returns defaults if file missing.  Flattens the `[debug]` and `[sky]` tables. |
 
 ### Clock (`core/clock.py`)
 
@@ -108,6 +113,7 @@ All symbols below are re-exported from `torn_apart.core` (`__init__.py`).
 | `clock.fixed_steps() -> Iterator[float]` | Yield up to 5 fixed-dt intervals (spiral-of-death guard). |
 | `clock.dt` | Last real frame duration in seconds. |
 | `clock.fixed_dt` | Fixed timestep in seconds (from Config). |
+| `clock.game_time_scale` | Read/**write** property — real→game seconds multiplier (default 60.0).  Dev tooling (time-of-day scrubbers, fast-forward) may change it at runtime; takes effect from the next `update()`. |
 | `clock.game_day` | Current in-game day number (int, starts at 0). |
 | `clock.game_time_of_day` | Seconds elapsed within the current in-game day. |
 | `clock.total_real_time` | Total real seconds since boot. |
@@ -178,7 +184,7 @@ The subprocess test in `tests/test_rng.py::TestCrossProcessDeterminism` verifies
 `clock.fixed_steps()` yields **at most 5** fixed-dt intervals per frame regardless of how long the real frame took.  Excess accumulation is silently dropped to prevent the spiral-of-death (see DEVELOPMENT_PLAN.md Known Traps).  Default `MAX_FIXED_STEPS = 5`.
 
 ### Game Time Scale
-Default: 1 real second = 60 in-game seconds → 1 real minute = 1 game hour → 1 game day ≈ 24 real minutes.
+Default: 1 real second = 60 in-game seconds → 1 real minute = 1 game hour → 1 game day ≈ 24 real minutes.  Adjustable at runtime via the `clock.game_time_scale` read/write property (dev tooling only; gameplay systems should not change it).  Changing the scale never rewinds or jumps the calendar — only the rate of future accrual.
 
 ## Examples
 

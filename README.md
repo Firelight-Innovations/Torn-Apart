@@ -40,6 +40,9 @@ python main.py
 | `ESC` | Toggle mouse capture |
 | **Left-click** | **Fire an explosion** — raycasts the voxel field and carves a `SphereBrush(REMOVE)` crater |
 | **F5** | **Quick save** to `saves/quick.ta` (delta = edited chunks only) |
+| **F6** | **Cycle forced weather** — CLEAR → CLOUDY → OVERCAST → FOG → RAIN → STORM → natural schedule (`force_weather(None)`) |
+| **F7** | **Toggle time scale** — `clock.game_time_scale` 60 ↔ 1800 (fast-forward to watch the day cycle) |
+| **F8** | **Jump game clock +6 hours** (snap to dawn/noon/dusk/night skies quickly) |
 | **F9** | **Quick load** — reverts all edits to baseline, then re-applies the saved craters |
 
 The crater appears and relights within a frame or two: the brush marks chunks dirty + edited and

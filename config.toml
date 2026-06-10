@@ -15,3 +15,9 @@ fixed_dt = 0.02            # fixed-update timestep (50 Hz)
 show_fps = true
 show_chunk_borders = false
 show_light_grid = false
+
+[sky]
+sky_cloud_altitude_m = 96.0    # cloud layer base altitude (world Z, meters)
+sky_cloud_thickness_m = 8.0    # cloud layer vertical thickness (meters)
+sky_cloud_cell_m = 12.0        # horizontal size of one cloud cell (meters)
+sky_star_count = 2500          # stars baked into the "night_sky" texture

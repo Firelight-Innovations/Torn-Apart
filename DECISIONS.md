@@ -180,6 +180,11 @@ file captures the choices made *underneath* it during implementation.
 - **Choice:** A single registered `ProceduralTextureDef` `"night_sky"` (1024×512 equirect): galaxy band on a tilted great circle (noise filaments + subtractive dust lanes + warm core ramp) and the full star field, alpha = luminance. The dome shader samples it by view direction, additively by `star_visibility`, and adds per-pixel hash twinkle; shooting stars are shader streaks driven by uniforms scheduled via `for_domain("sky", "shooting_stars", day, slot)`.
 - **Why:** Fits "100% procedural environment textures", costs one texture fetch instead of thousands of points, and keeps the whole night sky deterministic from the world seed.
 
+### Clouds are GPU-raymarched boxes, not geometry
+- **Q:** How are the Minecraft-style boxy clouds rendered — instanced box meshes or a shader?
+- **Choice:** Two static quads bracketing the cloud slab (`sky_cloud_altitude_m` … `+sky_cloud_thickness_m`); the fragment shader **2-D-DDA raymarches** the slab through a grid of `sky_cloud_cell_m` cells (≤48 steps, early-out), occupancy from hash-noise seeded by `for_domain("sky", "clouds")`, per-cell height variation, flat-face shading (lit tops / dark bottoms), wind-offset uniform. Coverage is mapped through a CPU-computed **noise quantile table** so `cloud_coverage` is the actual fill fraction, not a raw threshold.
+- **Why:** Zero per-frame geometry churn (the camera-follow quad is one `set_pos`), works from below/inside/above the layer, and the raw-threshold alternative produced almost no clouds below coverage 0.3 because the noise is bell-distributed.
+
 ### Environment (day/night + weather) controls live in the overlay
 - **Q:** Where do the day/night-cycle / weather controls the owner wants go?
 - **Choice:** An **Environment** panel registered in the overlay (`CallbackTool`) that edits `clock.game_time_of_day` / `game_time_scale` and cycles `sky_system.weather.force_weather(...)`, reading the live `SkyState`. It is registered only when `app.sky_system` is present and is bound defensively (`getattr`/`try`) against the concurrent sky feature.

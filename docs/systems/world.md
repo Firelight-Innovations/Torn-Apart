@@ -1,5 +1,5 @@
 # world — System Doc
-keywords: gameobject, game object, transform, component, registry, lifecycle, awake, start, update, late_update, fixed_update, on_enable, on_disable, on_destroy, instantiate, destroy, find_with_tag, find_objects_with_tag, space, camera, app, showbase, panda3d, input, inputstate, unity, clone, hierarchy, parent, children, world matrix, dirty flag, position, rotation, forward, right, up, look_at, transform_point, inverse_transform_point, active_in_hierarchy, set_active, add_component, get_component, get_components, get_component_in_children, remove_component, compare_tag, layer, tag, uuid, batched, bucket, run_frame, fixed_steps, spiral of death, quaternion, z-up, meters, radians, texture_bridge, to_panda_texture, geometry_bridge, to_geom, to_geom_node, resource_adapter, register_panda_loaders, bridge, bgra, f_rgba, ram_image, world meters, terrain_root, chunk_manager, light_sampler, setup_terrain_rendering, stream_and_upload_terrain, nodepath, geom, vertex color
+keywords: gameobject, game object, transform, component, registry, lifecycle, awake, start, update, late_update, fixed_update, on_enable, on_disable, on_destroy, instantiate, destroy, find_with_tag, find_objects_with_tag, space, camera, app, showbase, panda3d, input, inputstate, unity, clone, hierarchy, parent, children, world matrix, dirty flag, position, rotation, forward, right, up, look_at, transform_point, inverse_transform_point, active_in_hierarchy, set_active, add_component, get_component, get_components, get_component_in_children, remove_component, compare_tag, layer, tag, uuid, batched, bucket, run_frame, fixed_steps, spiral of death, quaternion, z-up, meters, radians, texture_bridge, to_panda_texture, geometry_bridge, to_geom, to_geom_node, resource_adapter, register_panda_loaders, bridge, bgra, f_rgba, ram_image, world meters, terrain_root, chunk_manager, light_sampler, setup_terrain_rendering, stream_and_upload_terrain, nodepath, geom, vertex color, sky, sky_renderer, SkyRendererComponent, sky_shaders, sky dome, skydome, clouds, cloud layer, boxy clouds, raymarch, dda, rain, rain_streak, night_sky, galaxy, stars, twinkle, shooting star, sun disc, moon, moon phase, fog, exponential fog, set_color_scale, terrain_light_scale, background bin, set_shader_input, weather render, day night cycle render, equirect
 
 > One doc per code package; filename matches the package exactly (`docs/systems/world.md` ↔ `torn_apart/world/`).
 
@@ -15,10 +15,12 @@ keywords: gameobject, game object, transform, component, registry, lifecycle, aw
   - `texture_bridge.to_panda_texture` (Phase 2): numpy RGBA → Panda3D `Texture`.
   - `geometry_bridge.to_geom` / `to_geom_node` (Phase 3): `MeshArrays` → Panda3D `Geom` / `GeomNode` (bulk writes).
   - `resource_adapter.register_panda_loaders` (Phase 5): injects Panda3D asset loaders into the `resources.ResourceManager` (inversion of control).
+- **DevOverlay** (`world/devtools_overlay.py`): the DirectGUI renderer for the in-game developer overlay (F1). It is the Panda3D half of the `devtools` system — see `docs/systems/devtools.md`; the headless brain lives in `torn_apart/devtools/`.
+- **SkyRendererComponent** (`world/sky_renderer.py`) + GLSL sources (`world/sky_shaders.py`): the render half of the sky/weather system. The headless simulation lives in `torn_apart/sky/`; this component drives `sky_system.update()` each frame and draws the sky dome (gradient, sun disc, moon with phase terminator, `"night_sky"` galaxy + twinkle, shooting stars), boxy raymarched clouds, rain cylinders, exponential fog, and the global terrain light scale.
 
 `world/` deliberately does NOT: implement game logic, generate terrain, simulate NPCs, or own any voxel data.  It is the scene-graph boundary: everything above uses the object model; everything below is contacted through direct API calls.
 
-The **object-model modules import ZERO panda3d** — `transform.py`, `component.py`, `gameobject.py`, `registry.py` (and `player/fly_controller.py`) are pure Python/numpy and fully headless-testable.  Only the **shell + bridges** import panda3d: `app.py`, `camera.py`, `texture_bridge.py`, `geometry_bridge.py`, `resource_adapter.py`.  The package `__init__.py` imports each bridge inside a `try/except ImportError`, so `import torn_apart.world` works headless (the panda3d-backed symbols are then `None`).
+The **object-model modules import ZERO panda3d** — `transform.py`, `component.py`, `gameobject.py`, `registry.py` (and `player/fly_controller.py`) are pure Python/numpy and fully headless-testable.  Only the **shell + bridges** import panda3d: `app.py`, `camera.py`, `texture_bridge.py`, `geometry_bridge.py`, `resource_adapter.py`, `sky_renderer.py`, `devtools_overlay.py` (`sky_shaders.py` is pure GLSL string constants — importable headless).  The package `__init__.py` imports each bridge inside a `try/except ImportError`, so `import torn_apart.world` works headless (the panda3d-backed symbols are then `None`).
 
 ## Public API
 
@@ -134,6 +136,7 @@ All symbols below are re-exported from `torn_apart.world` (`__init__.py`).
 | `to_geom(mesh) -> Geom` | `geometry_bridge.py` | `MeshArrays` → Panda3D `Geom` (one bulk memoryview write per array). |
 | `to_geom_node(mesh, name) -> GeomNode` | `geometry_bridge.py` | `to_geom` wrapped in a named `GeomNode`. |
 | `register_panda_loaders(manager)` | `resource_adapter.py` | Register `.egg`/`.bam`/`.gltf`/`.glb`/`.ogg`/`.wav`/`.png`/`.jpg` loaders into a `ResourceManager` (IoC; keeps `resources/` panda3d-free). |
+| `DevOverlay(app, manager=None)` | `devtools_overlay.py` | DirectGUI renderer for the in-game dev overlay (F1): stats, click-to-select + outline, live inspector/edit, spawn/actions, day-night/weather. Headless brain in `torn_apart/devtools/` — see `docs/systems/devtools.md`. |
 
 ### CameraComponent (`world/camera.py`)
 
@@ -141,6 +144,31 @@ All symbols below are re-exported from `torn_apart.world` (`__init__.py`).
 |---|---|
 | `CameraComponent(base)` | Syncs owning Transform → `base.camera` NodePath each frame. |
 | `cam.sync_to_panda()` | Called by App after all components updated. Math3d → Panda3D conversion happens here only. |
+
+### SkyRendererComponent (`world/sky_renderer.py`, shaders in `world/sky_shaders.py`)
+
+The render half of the sky/weather system (`None` when panda3d is absent).  The headless half is `torn_apart.sky.SkySystem` (Layer 1).
+
+| Symbol | Description |
+|---|---|
+| `SkyRendererComponent(base, sky_system, terrain_root, clock=None)` | Add to a GameObject via `add_component`. `base` = the `App`; `sky_system` = `torn_apart.sky.SkySystem` (or any duck-typed object with the `SkyState` fields — see `tools/screenshot.py --stub-sky`); `terrain_root` receives fog + light scale; `clock` enables star rotation + the deterministic shooting-star schedule. |
+
+**Lifecycle split:** `start()` builds ALL geometry once (bulk numpy → memoryview writes, mirroring `geometry_bridge`); `update(dt)` calls `sky_system.update()` (registry runs every `update` before any `late_update`, so the frame's `SkyState` is fresh without App changes); `late_update(dt)` writes the per-frame render state — a fixed handful of `set_shader_input` / `set_pos` / `set_color_scale` calls.
+
+**Sub-systems and render bins** (drawn in bin/sort order; terrain's opaque bin draws after `background`):
+
+| Node | Bin | Depth | Notes |
+|---|---|---|---|
+| Sky dome (inverted UV-sphere, r = 800 m) | `background` 10 | test+write OFF | Camera-followed by **translation only** (never parented under the camera — it must stay world-oriented). Model-space vertex position = view direction in the shader. |
+| Cloud quads (2 × 2400 m horizontal quads at slab bottom + top) | `background` 20 | test+write OFF | `M_alpha`, two-sided. XY follow snapped to `sky_cloud_cell_m` multiples so the grid never swims. Fragment shader 2D-DDA raymarches the slab `[sky_cloud_altitude_m, +sky_cloud_thickness_m]` (≤48 cell steps, early-out at α>0.98); correct from below / inside / above (duplicate plane coverage discarded by camera-height test). |
+| Rain (3 nested open cylinders, r = 4/7/11 m, h = 14 m) | transparent (default) | write OFF | `"rain_streak"` texture, additive `ColorBlendAttrib` (`O_incoming_alpha`, `O_one`), per-layer UV scroll rates for parallax, wind tilt; `hide()` when `rain_intensity < 0.05`. |
+
+**Dome shader uniforms** (per frame unless noted): `u_sun_dir`, `u_sun_color`, `u_sun_intensity`, `u_moon_dir`, `u_moon_phase`, `u_zenith_color`, `u_horizon_color`, `u_star_visibility`, `u_star_rotation` (radians about +Z; one revolution per game day), `u_time` (real s, twinkle hash), `u_fog_color`, `u_fog_blend`, shooting star `u_ss_active`/`u_ss_start`/`u_ss_travel`/`u_ss_progress`; `p3d_Texture0` = `"night_sky"` equirect.
+**Cloud shader uniforms**: static `u_seed` (from `for_domain("sky", "clouds")`), `u_altitude`, `u_thickness`, `u_cell`, `u_fade_dist`; per frame `u_cam_pos`, `u_coverage` (a noise-threshold QUANTILE, see gotcha 12), `u_opacity`, `u_wind_offset` (CPU-integrated `wind_dir * wind_speed * dt`, meters), `u_top_color`/`u_side_color`/`u_bottom_color` (flat-face lighting computed CPU-side: sunlit tops, medium sides, density-darkened bottoms).
+
+**Lighting integration (fog + global light):** each `late_update` the component sets the exponential `panda3d.core.Fog` on `terrain_root` to `SkyState.fog_density` (1/m) and `fog_color`, sets the window clear colour to horizon-blended-with-fog, and calls `terrain_root.set_color_scale(*terrain_light_scale, 1.0)` — the **baked vertex sunlight × global day/night scale** product is the whole day-night terrain lighting story (no Panda3D lights involved).
+
+**Shooting stars are deterministic:** game time is split into 30-game-minute slots; `for_domain("sky", "shooting_stars", game_day, slot)` decides spawn (p≈0.5) + start/travel directions; the streak animates over ~1.2 real seconds and only spawns while `star_visibility > 0.5`.
 
 ## Imports Allowed
 
@@ -276,3 +304,15 @@ app.run()
 8. **Panda3D `F_rgba` RAM images are BGRA byte order.** `texture_bridge.to_panda_texture` reorders RGBA→BGRA (`flipped[..., [2,1,0,3]]`) before `set_ram_image`, AND flips vertically (OpenGL UV origin is bottom-left).  Both transforms are deliberate — "fix" either back and every texture renders blue-for-brown or upside-down.
 
 9. **Chunk mesh vertex positions are ABSOLUTE WORLD METERS.** The mesher emits world-space positions (not chunk-local), so each chunk's NodePath is attached under `terrain_root` at the origin with **no per-chunk offset**.  Adding `chunk_coord * 16 m` here would double the world position.  `terrain_root` itself stays at the origin.
+
+10. **Background-bin sky nodes still need `set_depth_test(False)`.** Putting the dome/cloud quads in the `background` bin only changes draw ORDER; with depth testing on they would still occlude (or be occluded by) terrain incorrectly.  Both depth test AND depth write are off on the dome and cloud quads.
+
+11. **The rain streak V axis is deliberately mirrored.** `to_panda_texture` vertically flips every upload (gotcha 8), and the `"rain_streak"` def paints each streak's motion-blur tail at higher array rows — post-flip the tail sits at LOWER texture v.  `_build_rain_cylinder` therefore maps `v = v_tiles` at the cylinder BOTTOM and `v = 0` at the top, and `_update_rain` scrolls the V offset DOWN (decreasing) — together the bright heads lead toward the ground and the pattern falls.  "Fixing" either half alone makes the rain fall upward or flips the streaks.
+
+12. **`u_coverage` is a quantile threshold, not the coverage value.** The cloud shader's per-cell noise is bell-shaped around ~0.5; thresholding it with raw `cloud_coverage` would render almost no clouds below ~0.3.  `_cloud_value_quantiles` (a numpy float32 port of the same GLSL noise) is sampled once at start; per frame the renderer passes `quantiles[coverage * (n-1)]` so coverage is the ACTUAL fill fraction.  If you change the GLSL `cell_value`, change the numpy port in the same commit.
+
+13. **Adjacent occupied cloud boxes share interior faces.** The DDA shades each box's ENTRY face independently; without the `prev_hit`/`carry_col` continuity in `CLOUD_FRAGMENT`, every cell seam draws a side-coloured grid line across distant cloud ceilings (and float32 precision adds dark gap slivers — hence the small ±0.05 m interval overlap).
+
+14. **The `"night_sky"` equirect needs no flip handling in the dome shader.** The def is authored with array row 0 = zenith specifically so that after `to_panda_texture`'s vertical flip the natural mapping `v = asin(d.z)/π + 0.5` lands the zenith at v = 1.  Don't add a `1 - v`.
+
+15. **`tools/screenshot.py` releases mouse capture before stepping frames.** The window starts in relative-mouse capture; physical mouse movement during an unattended capture would otherwise feed deltas into `FlyController` and swing the camera mid-warmup.

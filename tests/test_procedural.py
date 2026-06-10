@@ -31,11 +31,15 @@ def _fresh_registry():
     """
     # We need to reset first, then re-trigger auto-registration.
     # The cleanest way without module-reload tricks is to call reset_registry
-    # and then re-import the textures sub-package.
+    # and then re-register the built-in defs directly.
     from torn_apart.procedural.registry import reset_registry, register
     from torn_apart.procedural.textures.wasteland_ground import WastelandGroundDef
+    from torn_apart.procedural.textures.night_sky import NightSkyDef
+    from torn_apart.procedural.textures.rain_streak import RainStreakDef
     reset_registry()
     register(WastelandGroundDef())
+    register(NightSkyDef())
+    register(RainStreakDef())
 
 
 # ---------------------------------------------------------------------------
@@ -310,3 +314,121 @@ class TestValueNoise:
         set_world_seed(2)
         h2 = value_noise(for_domain("test","diff"), (32, 32))
         assert not np.array_equal(h1, h2)
+
+
+# ---------------------------------------------------------------------------
+# "night_sky" texture (sky feature)
+# ---------------------------------------------------------------------------
+
+class TestNightSkyTexture:
+    def setup_method(self):
+        from torn_apart.core.rng import set_world_seed
+        set_world_seed(1337)
+        _fresh_registry()
+
+    def test_shape_and_dtype(self):
+        from torn_apart.procedural.registry import get
+        arr = get("night_sky")
+        assert arr.shape == (512, 1024, 4), f"Expected (512,1024,4), got {arr.shape}"
+        assert arr.dtype == np.uint8
+
+    def test_alpha_is_luminance_mask(self):
+        """Alpha varies (additive-blend mask): dark sky → low, stars → high."""
+        from torn_apart.procedural.registry import get
+        arr = get("night_sky")
+        assert arr[..., 3].max() > 128, "bright stars should give high alpha"
+        assert arr[..., 3].min() < 64, "empty sky should give low alpha"
+
+    def test_same_seed_byte_identical(self):
+        from torn_apart.core.rng import set_world_seed
+        from torn_apart.procedural.registry import get
+
+        set_world_seed(42)
+        _fresh_registry()
+        arr1 = get("night_sky").copy()
+
+        set_world_seed(42)
+        _fresh_registry()
+        arr2 = get("night_sky")
+
+        assert np.array_equal(arr1, arr2), (
+            "Same seed must regenerate night_sky byte-identically"
+        )
+
+    def test_different_seeds_differ(self):
+        from torn_apart.core.rng import set_world_seed
+        from torn_apart.procedural.registry import get
+
+        set_world_seed(1)
+        _fresh_registry()
+        arr_a = get("night_sky").copy()
+
+        set_world_seed(2)
+        _fresh_registry()
+        arr_b = get("night_sky")
+
+        assert not np.array_equal(arr_a, arr_b)
+
+    def test_star_count_param(self):
+        """star_count is accepted and changes the output (separate cache slot)."""
+        from torn_apart.procedural.registry import get
+        default = get("night_sky")
+        custom = get("night_sky", star_count=500)
+        assert custom is not default
+        assert custom.shape == default.shape
+        assert not np.array_equal(custom, default)
+
+
+# ---------------------------------------------------------------------------
+# "rain_streak" texture (sky feature)
+# ---------------------------------------------------------------------------
+
+class TestRainStreakTexture:
+    def setup_method(self):
+        from torn_apart.core.rng import set_world_seed
+        set_world_seed(1337)
+        _fresh_registry()
+
+    def test_shape_and_dtype(self):
+        from torn_apart.procedural.registry import get
+        arr = get("rain_streak")
+        assert arr.shape == (512, 128, 4), f"Expected (512,128,4), got {arr.shape}"
+        assert arr.dtype == np.uint8
+
+    def test_sparse_streaks(self):
+        """Alpha = streak intensity: mostly empty with some bright streaks."""
+        from torn_apart.procedural.registry import get
+        arr = get("rain_streak")
+        lit = (arr[..., 3] > 0).mean()
+        assert 0.0 < lit < 0.5, f"streaks should be sparse, got {lit:.0%} lit"
+        assert arr[..., 3].max() > 200, "the brightest tier should be near-opaque"
+
+    def test_same_seed_byte_identical(self):
+        from torn_apart.core.rng import set_world_seed
+        from torn_apart.procedural.registry import get
+
+        set_world_seed(42)
+        _fresh_registry()
+        arr1 = get("rain_streak").copy()
+
+        set_world_seed(42)
+        _fresh_registry()
+        arr2 = get("rain_streak")
+
+        assert np.array_equal(arr1, arr2), (
+            "Same seed must regenerate rain_streak byte-identically"
+        )
+
+    def test_different_seeds_differ(self):
+        from torn_apart.core.rng import set_world_seed
+        from torn_apart.procedural.registry import get
+
+        set_world_seed(1)
+        _fresh_registry()
+        arr_a = get("rain_streak").copy()
+
+        set_world_seed(2)
+        _fresh_registry()
+        arr_b = get("rain_streak")
+
+        assert not np.array_equal(arr_a, arr_b)

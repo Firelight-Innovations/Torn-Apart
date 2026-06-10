@@ -11,13 +11,24 @@ from __future__ import annotations
 
 import dataclasses
 
+import numpy as np
+
 from torn_apart.core import Clock, EventBus, load_config
 from torn_apart.core.config import Config
 from torn_apart.core.math3d import Vec3
 from torn_apart.core.rng import set_world_seed
 from torn_apart.lighting import LightGrid, SunlightComputer, make_light_sampler
 from torn_apart.save import SaveManager
-from torn_apart.terrain import ChunkManager, raycast_voxel
+from torn_apart.terrain import (
+    BoxBrush,
+    BrushMode,
+    ChunkManager,
+    CylinderBrush,
+    SphereBrush,
+    apply_brush,
+    generate_chunk,
+    raycast_voxel,
+)
 
 # Z band of streamed chunks relative to the camera chunk. Mirrors the private
 # band in torn_apart.terrain.chunk_manager (_Z_MIN/_Z_MAX); guarded against
@@ -125,6 +136,60 @@ class EditorSession:
     def edited_chunk_count(self) -> int:
         """Number of loaded chunks deviating from the procedural baseline."""
         return sum(1 for ch in self.cm.chunks.values() if ch.edited)
+
+    # ------------------------------------------------------------------ #
+    # Brush editing (Phase E3)
+    # ------------------------------------------------------------------ #
+    def make_brush(self, shape: str, *, radius: float = 2.0, hx: float = 1.0,
+                   hy: float = 1.0, hz: float = 1.0, height: float = 2.0):
+        """Build a brush instance from a shape name and parameters."""
+        s = shape.lower()
+        if s == "sphere":
+            return SphereBrush(radius_m=float(radius))
+        if s == "box":
+            return BoxBrush(half_extents_m=Vec3(float(hx), float(hy), float(hz)))
+        if s == "cylinder":
+            return CylinderBrush(radius_m=float(radius), height_m=float(height))
+        raise ValueError(f"unknown brush shape: {shape!r}")
+
+    def chunk_coords_for_aabb(self, mn, mx) -> list[tuple[int, int, int]]:
+        """Chunk coords overlapping a world-space AABB (brush footprint)."""
+        cm = float(self.config.chunk_meters)
+        lo = np.floor(np.asarray(mn, dtype=float) / cm).astype(int)
+        hi = np.floor(np.asarray(mx, dtype=float) / cm).astype(int)
+        return [
+            (cx, cy, cz)
+            for cx in range(int(lo[0]), int(hi[0]) + 1)
+            for cy in range(int(lo[1]), int(hi[1]) + 1)
+            for cz in range(int(lo[2]), int(hi[2]) + 1)
+        ]
+
+    def snapshot(self, coords) -> dict[tuple[int, int, int], np.ndarray]:
+        """Copy the material arrays of ``coords`` (generating any missing)."""
+        return {c: self.cm.get_or_create(c).materials.copy() for c in coords}
+
+    def apply_brush_edit(self, brush, center: Vec3, mode: BrushMode, material: int):
+        """Apply a brush; return ``(coords, touched, before, after)`` for undo.
+
+        ``before``/``after`` are material snapshots over the brush's AABB chunks,
+        taken either side of the engine ``apply_brush`` call. ``touched`` is the
+        set the engine actually modified (a subset of ``coords``).
+        """
+        mn, mx = brush.aabb(center.to_numpy())
+        coords = self.chunk_coords_for_aabb(mn, mx)
+        before = self.snapshot(coords)
+        touched = apply_brush(brush, center, mode, material, chunk_provider=self.cm, bus=self.bus)
+        after = self.snapshot(coords)
+        return coords, touched, before, after
+
+    def restore(self, snapshot: dict) -> None:
+        """Write material snapshots back (undo/redo) and fix edited/dirty flags."""
+        for coord, mats in snapshot.items():
+            chunk = self.cm.get_or_create(coord)
+            chunk.materials[...] = mats
+            chunk.edited = not np.array_equal(mats, generate_chunk(coord, self.config))
+            chunk.dirty = True
+            self.cm.pending_meshes.pop(coord, None)
 
     def save(self, path: str) -> None:
         """Write a delta save (terrain edits) through the engine SaveManager."""

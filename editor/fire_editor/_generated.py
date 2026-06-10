@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import NotRequired, TypedDict
 
-PROTOCOL_VERSION = 2
+PROTOCOL_VERSION = 3
 DAEMON_VERSION = "0.1.0"
 
 # Binary framing: [u32 magic][u32 schema_id][u32 payload_id][payload], little-endian.
@@ -31,12 +31,16 @@ class Method:
     CHUNKS_SET_CENTER = "chunks.set_center"
     SCENE_STATS = "scene.stats"
     TERRAIN_RAYCAST = "terrain.raycast"
+    TERRAIN_BRUSH = "terrain.brush"
+    EDIT_UNDO = "edit.undo"
+    EDIT_REDO = "edit.redo"
 
 class Notification:
     LOG = "log"
     CHUNK_READY = "chunk.ready"
     CHUNK_UNLOAD = "chunk.unload"
     STREAM_DONE = "stream.done"
+    EDIT_STATE = "edit.state"
 
 class HelloParams(TypedDict):
     protocol_version: int
@@ -102,4 +106,43 @@ class TerrainRaycastParams(TypedDict):
 
 class TerrainRaycastResult(TypedDict):
     hit: object
+
+class TerrainBrushParams(TypedDict):
+    shape: str
+    x: float
+    y: float
+    z: float
+    mode: str
+    material: NotRequired[int]
+    radius: NotRequired[float]
+    hx: NotRequired[float]
+    hy: NotRequired[float]
+    hz: NotRequired[float]
+    height: NotRequired[float]
+
+class TerrainBrushResult(TypedDict):
+    ok: bool
+    touched: int
+    can_undo: bool
+    can_redo: bool
+
+class EditUndoParams(TypedDict):
+    pass
+
+class EditUndoResult(TypedDict):
+    ok: bool
+    touched: int
+    label: str
+    can_undo: bool
+    can_redo: bool
+
+class EditRedoParams(TypedDict):
+    pass
+
+class EditRedoResult(TypedDict):
+    ok: bool
+    touched: int
+    label: str
+    can_undo: bool
+    can_redo: bool
 

@@ -116,6 +116,21 @@ file captures the choices made *underneath* it during implementation.
 - **Choice:** On **any** `schema.json` change, even additive ones (E1 added methods → bumped 1→2). The `hello` handshake requires exact equality; daemon and extension always regenerate from the same commit, so exact-match + per-change bump is the honest, drift-proof contract (hard rule 6).
 - **Why:** Exact-match handshake means an old extension against a new daemon must fail fast with a clear "rebuild" message rather than silently calling absent methods.
 
+### Brush undo via before/after material snapshots over the AABB (E3)
+- **Q:** How does editor undo/redo restore exact voxels for a brush edit?
+- **Choice:** Each `terrain.brush` snapshots the `uint8` material arrays of every chunk overlapping the brush's AABB **before** and **after** the engine `apply_brush` call (`commands.EditCommand` / `UndoStack`, bounded to 200 entries, LRU-drop). Undo writes `before`, redo writes `after`; `restore()` recomputes each chunk's `edited` flag by comparing to `generate_chunk` so save deltas stay correct. Affected chunks **and their loaded neighbours** remesh+relight and restream.
+- **Why:** AABB snapshots are local and cheap (a few 32 KB arrays), give byte-exact restore (the E3 acceptance), and keep undo entirely editor-side (no engine change). Neighbours must remesh because a boundary edit exposes faces on the adjacent chunk.
+
+### Brush aimed at the viewport crosshair (E3)
+- **Q:** How does the user aim a brush while the fly camera owns the mouse?
+- **Choice:** Pointer-lock = look mode; a left-click **while locked** casts a ray from the camera through screen-centre (the crosshair) — the webview sends the ray, the host `terrain.raycast`s it and `terrain.brush`es at the hit point. First click (unlocked) just captures the mouse.
+- **Why:** Avoids a cursor-vs-pointer-lock conflict; FPS-style "look at it, click to carve" needs no separate cursor and reuses the existing fly controls.
+
+### Crater round-trip is the headline integration test (E3)
+- **Q:** How is "edit in editor → game shows it" verified without a window?
+- **Choice:** `tests/editor/test_edit.py::TestCraterRoundTrip` carves via the daemon, `world.save`s, then loads the file through the **engine's own** `SaveManager`+`ChunkManager` (the `python main.py --load` path) and asserts the loaded chunk materials equal the editor's and deviate from `generate_chunk` baseline.
+- **Why:** Proves the editor produces standard engine saves (terrain deltas), not an editor-only format — the whole point of binding to the engine's `Saveable` path.
+
 ### Mouse-look uses relative mode + raw pixel deltas; auto-captured at boot
 - **Q:** Why did free-look feel locked to one axis and require hunting for ESC?
 - **Choice:** `App` now captures the mouse on startup and uses **relative** mouse mode (`M_relative`) with the cursor hidden, reading raw pixel deltas from `win.get_pointer(0)` relative to window centre and recentring each frame (first post-capture delta skipped). ESC toggles capture off (cursor shown, absolute mode).
@@ -142,6 +157,28 @@ file captures the choices made *underneath* it during implementation.
 - **Q:** How does click-to-select find the object under the cursor?
 - **Choice:** The overlay extrudes a world-space ray from the mouse through the camera lens and hands it to a **headless ray/AABB slab test** (`devtools/picking.py`) over registered `Selectable` boxes (world-axis-aligned, derived from transform position ± half-extents × scale; rotation ignored for v1). Nearest hit wins.
 - **Why:** Standing up a `CollisionTraverser`/`CollisionRay` graph just to click a few dev props is overkill; CPU ray/AABB is deterministic, unit-testable, and keeps the picking math headless.
+
+## 2026-06-09 — Procedural sky + weather (session 2)
+
+### Sky lives in a new headless Layer-1 package; rendering stays in world/
+- **Q:** Where does the sky/weather system live given hard rule 1 (panda3d only in `world/`/`lighting/`)?
+- **Choice:** A new **headless** package `torn_apart/sky/` (Layer 1 — Services, peer of `lighting/`): celestial math (`celestial.py`), the weather state machine (`weather.py`), and the per-frame `SkyState` aggregate (`sky_state.py`). All panda3d rendering (dome shader, clouds, rain, fog) lives in `world/sky_renderer.py` + `world/sky_shaders.py`, driven by a `SkyRendererComponent` on a "Sky" GameObject — so the system is authored through the World API object model, per the owner's request.
+- **Why:** Same split as lighting and devtools: simulation is headless-testable and deterministic; `world/` only reads a frozen `SkyState` dataclass and writes uniforms/scene state in bulk.
+
+### Day/night + weather lighting integration is a global colour-scale (v0)
+- **Q:** "The lighting system should also be affected" — relight the voxel grid per time-of-day?
+- **Choice:** No relight. `SkyState.terrain_light_scale` (RGB ≈ (1,1,1) clear noon → (0.16,0.19,0.30) night, warm-tinted at dawn/dusk, dimmed by overcast/storm) is applied as **one `terrain_root.set_color_scale(...)` write per frame** on top of the baked vertex sunlight.
+- **Why:** The baked sun/shadow contrast already lives in vertex colours; modulating it globally gives a convincing day/night/weather response for one scene-graph write — no per-voxel work, no light-grid recompute. A real sun-angle-aware relight is a later upgrade (would need directional column passes per sun elevation).
+
+### Weather is a day-anchored Markov chain; the save delta is ~0 bytes
+- **Q:** How is weather made deterministic and saveable without storing a schedule?
+- **Choice:** Time is divided into 2-game-hour segments (12/day). Each segment's state is sampled via `rng.for_domain("weather", game_day, segment_index)`; **each day's segment 0 draws from a fixed (≈stationary) initial distribution** instead of chaining across midnight, so any segment is recomputable from `(world_seed, day, segment)` in ≤12 steps. Parameters blend over 20 game-minutes at transitions. `WeatherSystem.get_delta()` returns `{}` unless a `force_weather` override is active — the natural schedule is pure function of seed + clock and costs nothing to save.
+- **Why:** Matches the engine's delta-save philosophy (baseline regenerates from seed); the midnight hand-off discontinuity is hidden by the standard parameter blend.
+
+### Night sky is ONE baked equirect procedural texture
+- **Q:** Stars/galaxy as point geometry, or baked?
+- **Choice:** A single registered `ProceduralTextureDef` `"night_sky"` (1024×512 equirect): galaxy band on a tilted great circle (noise filaments + subtractive dust lanes + warm core ramp) and the full star field, alpha = luminance. The dome shader samples it by view direction, additively by `star_visibility`, and adds per-pixel hash twinkle; shooting stars are shader streaks driven by uniforms scheduled via `for_domain("sky", "shooting_stars", day, slot)`.
+- **Why:** Fits "100% procedural environment textures", costs one texture fetch instead of thousands of points, and keeps the whole night sky deterministic from the world seed.
 
 ### Environment (day/night + weather) controls live in the overlay
 - **Q:** Where do the day/night-cycle / weather controls the owner wants go?

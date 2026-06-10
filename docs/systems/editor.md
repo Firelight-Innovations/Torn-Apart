@@ -22,8 +22,10 @@ high; shader-level differences are accepted.
 
 **Phase status:** E0 complete (scaffold + protocol + handshake + lifecycle).
 E1 complete (scene view: chunk streaming + CPU sunlight + three.js viewport +
-save loading). E2–E6 (hierarchy/inspector, world editing, texture lab, model
-workspace, verification) per EDITOR_PRD §7.
+save loading). E3 complete (brush editing + undo/redo + crater round-trip +
+delta saves). E2 (hierarchy/inspector — blocked on an engine `world/` panda3d
+split), E4 (texture lab), E5 (model workspace), E6 (verification) remain per
+EDITOR_PRD §7.
 
 ## Public API
 The editor is a standalone tool, not an importable engine package. Its surfaces:
@@ -35,19 +37,25 @@ The editor is a standalone tool, not an importable engine package. Its surfaces:
 - `encode_frame` / `decode_frame` — protocol binary framing.
 - `encode_mesh_payload(coord, mesh)` / `decode_mesh_payload(bytes)` — MESH payload codec.
 - `EditorServer` — `websockets` transport; `broadcast_binary`, `broadcast_notification`.
-- `services.chunks.ChunkService` — registers `world.open/save`, `chunks.set_center`, `scene.stats`, `terrain.raycast`; streams MESH frames.
+- `services.chunks.ChunkService` — registers `world.open/save`, `chunks.set_center`, `scene.stats`, `terrain.raycast`, `terrain.brush`, `edit.undo/redo`; streams MESH frames and drives the undo stack.
+- `commands.UndoStack` / `EditCommand` — editor-side undo/redo: per-edit before/after material snapshots over the brush AABB chunks (EDITOR_PRD §5.4).
 - Generated constants in `fire_editor._generated` (`PROTOCOL_VERSION`, `BINARY_MAGIC`, `SchemaId`, `ErrorCode`, `Method`, `Notification`, typed param/result `TypedDict`s).
 
-**Methods (protocol_version 2):** `hello`, `ping`, `world.open {seed|save_path}`,
+**Methods (protocol_version 3):** `hello`, `ping`, `world.open {seed|save_path}`,
 `world.save {path}`, `chunks.set_center {x,y,z,radius?}`, `scene.stats`,
-`terrain.raycast {o*,d*,max_distance?}`. Notifications: `log`, `chunk.ready`,
-`chunk.unload`, `stream.done`. Full table in `editor/protocol/SCHEMA.md`.
+`terrain.raycast {o*,d*,max_distance?}`, `terrain.brush {shape,x,y,z,mode,…}`,
+`edit.undo`, `edit.redo`. Notifications: `log`, `chunk.ready`, `chunk.unload`,
+`stream.done`, `edit.state`. Full table in `editor/protocol/SCHEMA.md`.
 
 **Extension webview (Scene View, F1):** `editor/extension/src/webview/sceneView.ts`
 — three.js viewport, Z-up, fly camera (WASD/QE, mouse-look, Shift 5×), builds a
 `BufferGeometry` per chunk from MESH frames, `MeshBasicMaterial` with vertex
 colours (baked sunlight), overlays (wireframe `G`, chunk borders `B`, stats).
-Host side: `sceneViewPanel.ts` relays MESH frames down and camera moves up.
+Brush palette (shape/mode/size/material) + crosshair; left-click while in
+look-mode carves at the crosshair (`terrain.raycast` → `terrain.brush`),
+`Ctrl+Z`/`Ctrl+Y` undo/redo, dirty indicator from `edit.state`.
+Host side: `sceneViewPanel.ts` relays MESH frames down and camera/edit/undo
+messages up.
 
 **CLI:** `python -m fire_editor --port <p> [--host 127.0.0.1] [--log-level info]`
 — announces `{"event":"listening","port":N}` on stdout; logs to stderr.

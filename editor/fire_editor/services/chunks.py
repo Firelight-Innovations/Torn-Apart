@@ -12,9 +12,11 @@ import logging
 
 from torn_apart.core.math3d import Vec3
 from torn_apart.save import SaveIncompatibleError
+from torn_apart.terrain import BrushMode
 
 from .._generated import ErrorCode, Method, Notification, SchemaId
 from ..binary import encode_frame
+from ..commands import EditCommand, UndoStack
 from ..meshcodec import encode_mesh_payload
 from ..rpc import RpcError
 from ..session import EditorSession
@@ -22,6 +24,7 @@ from ..session import EditorSession
 log = logging.getLogger("fire_editor.chunks")
 
 _STREAM_YIELD_EVERY = 8  # mesh this many chunks, then yield to the event loop
+_NEIGHBORS = ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1))
 
 
 class ChunkService:
@@ -32,6 +35,7 @@ class ChunkService:
         self._payload_seq = 0
         self._client_chunks: set[tuple[int, int, int]] = set()
         self._stream_task: asyncio.Task | None = None
+        self.history = UndoStack()
         self._register()
 
     def _register(self) -> None:
@@ -41,6 +45,9 @@ class ChunkService:
         d.register(Method.CHUNKS_SET_CENTER, self.set_center)
         d.register(Method.SCENE_STATS, self.scene_stats)
         d.register(Method.TERRAIN_RAYCAST, self.raycast)
+        d.register(Method.TERRAIN_BRUSH, self.brush)
+        d.register(Method.EDIT_UNDO, self.undo)
+        d.register(Method.EDIT_REDO, self.redo)
 
     # ------------------------------------------------------------------ #
     # World lifecycle
@@ -63,6 +70,7 @@ class ChunkService:
 
         self.daemon.session = session
         self._client_chunks.clear()
+        self.history.clear()
         cfg = session.config
         return {
             "ok": True,
@@ -122,20 +130,7 @@ class ChunkService:
                 mesh = session.mesh(coord)
                 if mesh.is_empty:
                     continue
-                self._payload_seq += 1
-                pid = self._payload_seq
-                await self.daemon.server.broadcast_notification(
-                    Notification.CHUNK_READY,
-                    {
-                        "cx": coord[0], "cy": coord[1], "cz": coord[2],
-                        "payload_id": pid,
-                        "vertices": mesh.vertex_count, "triangles": mesh.tri_count,
-                    },
-                )
-                await self.daemon.server.broadcast_binary(
-                    encode_frame(SchemaId.MESH, pid, encode_mesh_payload(coord, mesh))
-                )
-                self._client_chunks.add(coord)
+                await self._push_mesh(coord, mesh)
                 sent += 1
                 if i % _STREAM_YIELD_EVERY == 0:
                     await asyncio.sleep(0)
@@ -180,6 +175,124 @@ class ChunkService:
                 "distance": hit.distance,
             }
         }
+
+    # ------------------------------------------------------------------ #
+    # Editing (Phase E3)
+    # ------------------------------------------------------------------ #
+    async def brush(self, params: dict) -> dict:
+        session = self._require_session()
+        shape = str(params["shape"])
+        mode_s = str(params["mode"]).lower()
+        if mode_s not in ("add", "remove"):
+            raise RpcError(ErrorCode.INVALID_PARAMS, "mode must be 'add' or 'remove'")
+        mode = BrushMode.ADD if mode_s == "add" else BrushMode.REMOVE
+        material = params.get("material")
+        if material is None:
+            material = 1 if mode is BrushMode.ADD else 0
+        center = Vec3(float(params["x"]), float(params["y"]), float(params["z"]))
+        try:
+            brush = session.make_brush(
+                shape,
+                radius=float(params.get("radius") or 2.0),
+                hx=float(params.get("hx") or 1.0),
+                hy=float(params.get("hy") or 1.0),
+                hz=float(params.get("hz") or 1.0),
+                height=float(params.get("height") or 2.0),
+            )
+        except ValueError as e:
+            raise RpcError(ErrorCode.INVALID_PARAMS, str(e))
+
+        coords, touched, before, after = session.apply_brush_edit(brush, center, mode, int(material))
+        self.history.push(EditCommand(f"{shape} {mode_s}", before, after))
+        await self._remesh_and_push(session, coords)
+        await self._emit_edit_state(session)
+        return {
+            "ok": True,
+            "touched": len(touched),
+            "can_undo": self.history.can_undo,
+            "can_redo": self.history.can_redo,
+        }
+
+    async def undo(self, params: dict) -> dict:
+        session = self._require_session()
+        cmd = self.history.undo()
+        if cmd is None:
+            return {"ok": False, "touched": 0, "label": "",
+                    "can_undo": False, "can_redo": self.history.can_redo}
+        session.restore(cmd.before)
+        await self._remesh_and_push(session, cmd.coords)
+        await self._emit_edit_state(session)
+        return {"ok": True, "touched": len(cmd.coords), "label": cmd.label,
+                "can_undo": self.history.can_undo, "can_redo": self.history.can_redo}
+
+    async def redo(self, params: dict) -> dict:
+        session = self._require_session()
+        cmd = self.history.redo()
+        if cmd is None:
+            return {"ok": False, "touched": 0, "label": "",
+                    "can_undo": self.history.can_undo, "can_redo": False}
+        session.restore(cmd.after)
+        await self._remesh_and_push(session, cmd.coords)
+        await self._emit_edit_state(session)
+        return {"ok": True, "touched": len(cmd.coords), "label": cmd.label,
+                "can_undo": self.history.can_undo, "can_redo": self.history.can_redo}
+
+    # ------------------------------------------------------------------ #
+    # Push helpers
+    # ------------------------------------------------------------------ #
+    async def _push_mesh(self, coord: tuple[int, int, int], mesh) -> None:
+        """Announce + send one chunk's MESH frame, recording it as client-visible."""
+        self._payload_seq += 1
+        pid = self._payload_seq
+        await self.daemon.server.broadcast_notification(
+            Notification.CHUNK_READY,
+            {"cx": coord[0], "cy": coord[1], "cz": coord[2], "payload_id": pid,
+             "vertices": mesh.vertex_count, "triangles": mesh.tri_count},
+        )
+        await self.daemon.server.broadcast_binary(
+            encode_frame(SchemaId.MESH, pid, encode_mesh_payload(coord, mesh))
+        )
+        self._client_chunks.add(coord)
+
+    async def _push_unload(self, coord: tuple[int, int, int]) -> None:
+        await self.daemon.server.broadcast_notification(
+            Notification.CHUNK_UNLOAD, {"cx": coord[0], "cy": coord[1], "cz": coord[2]}
+        )
+        self._client_chunks.discard(coord)
+
+    async def _remesh_and_push(self, session: EditorSession, coords) -> int:
+        """Relight + remesh edited chunks (and loaded neighbours) and stream them.
+
+        A neighbour must remesh too: removing a boundary voxel exposes a face on
+        the adjacent chunk. Chunks that became empty are unloaded on the client.
+        """
+        affected: set[tuple[int, int, int]] = set()
+        for c in coords:
+            affected.add(c)
+            for d in _NEIGHBORS:
+                n = (c[0] + d[0], c[1] + d[1], c[2] + d[2])
+                if n in session.cm.chunks:
+                    affected.add(n)
+        session.relight()
+        sent = 0
+        for coord in affected:
+            if coord not in session.cm.chunks:
+                continue
+            mesh = session.mesh(coord)
+            if mesh.is_empty:
+                if coord in self._client_chunks:
+                    await self._push_unload(coord)
+                continue
+            await self._push_mesh(coord, mesh)
+            sent += 1
+        return sent
+
+    async def _emit_edit_state(self, session: EditorSession) -> None:
+        await self.daemon.server.broadcast_notification(
+            Notification.EDIT_STATE,
+            {"can_undo": self.history.can_undo, "can_redo": self.history.can_redo,
+             "edited_chunks": session.edited_chunk_count()},
+        )
 
     # ------------------------------------------------------------------ #
     # Internals

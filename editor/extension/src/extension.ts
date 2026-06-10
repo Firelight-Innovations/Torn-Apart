@@ -92,6 +92,8 @@ async function connectClient(port: number): Promise<void> {
       sceneView.postUnload([Number(p.cx), Number(p.cy), Number(p.cz)]);
     } else if (method === "stream.done") {
       output.appendLine(`[extension] stream done: sent ${p.sent}, removed ${p.removed}`);
+    } else if (method === "edit.state" && sceneView) {
+      sceneView.postEditState(p);
     }
   };
 
@@ -119,17 +121,56 @@ function openSceneView(): void {
     vscode.window.showWarningMessage("Fire Editor: daemon not connected yet.");
     return;
   }
-  const onCamera = (x: number, y: number, z: number) => {
+  const setCenter = (x: number, y: number, z: number) => {
     client?.request(Method.CHUNKS_SET_CENTER, { x, y, z }).catch((e) =>
       output.appendLine(`[extension] set_center failed: ${(e as Error).message}`)
     );
   };
+  const onMessage = (msg: Record<string, unknown>) => {
+    switch (msg.type) {
+      case "camera":
+        setCenter(Number(msg.x), Number(msg.y), Number(msg.z));
+        break;
+      case "edit":
+        void handleEdit(msg);
+        break;
+      case "undo":
+        client?.request(Method.EDIT_UNDO, {}).catch(() => undefined);
+        break;
+      case "redo":
+        client?.request(Method.EDIT_REDO, {}).catch(() => undefined);
+        break;
+    }
+  };
   const onReady = async () => {
     if (!worldOpen) await openWorldBySeed(1337);
     if (currentConfig) sceneView?.postConfig(currentConfig);
-    onCamera(20, -20, 24); // initial camera spot above the flat ground
+    setCenter(20, -20, 24); // initial camera spot above the flat ground
   };
-  sceneView = SceneViewPanel.createOrShow(extensionUri, onCamera, onReady);
+  sceneView = SceneViewPanel.createOrShow(extensionUri, onMessage, onReady);
+}
+
+async function handleEdit(msg: Record<string, unknown>): Promise<void> {
+  if (!client) return;
+  const b = (msg.brush ?? {}) as { shape?: string; mode?: string; radius?: number; material?: number };
+  try {
+    const res = (await client.request(Method.TERRAIN_RAYCAST, {
+      ox: msg.ox, oy: msg.oy, oz: msg.oz,
+      dx: msg.dx, dy: msg.dy, dz: msg.dz,
+      max_distance: 250,
+    })) as { hit: { point: [number, number, number] } | null };
+    if (!res.hit) return;
+    const [x, y, z] = res.hit.point;
+    await client.request(Method.TERRAIN_BRUSH, {
+      shape: b.shape ?? "sphere",
+      x, y, z,
+      mode: b.mode ?? "remove",
+      radius: b.radius ?? 2,
+      material: b.material ?? (b.mode === "add" ? 1 : 0),
+    });
+  } catch (e) {
+    output.appendLine(`[extension] edit failed: ${(e as Error).message}`);
+  }
 }
 
 async function openWorldBySeed(defaultSeed?: number): Promise<void> {

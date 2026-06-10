@@ -1,6 +1,6 @@
 {
   "$comment": "SINGLE SOURCE OF TRUTH for the Fire Editor wire protocol. Both editor/fire_editor/_generated.py and editor/extension/src/protocol/generated.ts are produced from this file by codegen.py. Never hand-edit the generated files. Bump protocol_version on ANY incompatible change and regenerate both bindings in the same commit (EDITOR_PRD hard rule 6).",
-  "protocol_version": 2,
+  "protocol_version": 3,
   "daemon_version": "0.1.0",
   "binary": {
     "magic_hex": "0x46495245",
@@ -54,6 +54,21 @@
       "doc": "Cast a ray through the voxel field; returns the first solid hit or null.",
       "params": { "ox": "float", "oy": "float", "oz": "float", "dx": "float", "dy": "float", "dz": "float", "max_distance?": "float" },
       "result": { "hit": "any" }
+    },
+    "terrain.brush": {
+      "doc": "Apply a brush edit at a world point. shape: sphere|box|cylinder; mode: add|remove. Dirty chunks remesh+relight and stream back as MESH frames. Pushed onto the undo stack.",
+      "params": { "shape": "str", "x": "float", "y": "float", "z": "float", "mode": "str", "material?": "int", "radius?": "float", "hx?": "float", "hy?": "float", "hz?": "float", "height?": "float" },
+      "result": { "ok": "bool", "touched": "int", "can_undo": "bool", "can_redo": "bool" }
+    },
+    "edit.undo": {
+      "doc": "Undo the most recent edit; affected chunks remesh and stream back.",
+      "params": {},
+      "result": { "ok": "bool", "touched": "int", "label": "str", "can_undo": "bool", "can_redo": "bool" }
+    },
+    "edit.redo": {
+      "doc": "Redo the most recently undone edit.",
+      "params": {},
+      "result": { "ok": "bool", "touched": "int", "label": "str", "can_undo": "bool", "can_redo": "bool" }
     }
   },
   "notifications": {
@@ -72,6 +87,10 @@
     "stream.done": {
       "doc": "A set_center streaming pass finished.",
       "params": { "sent": "int", "removed": "int" }
+    },
+    "edit.state": {
+      "doc": "Editor dirty/undo state changed (drives the dirty indicator + undo/redo enablement).",
+      "params": { "can_undo": "bool", "can_redo": "bool", "edited_chunks": "int" }
     }
   }
 }

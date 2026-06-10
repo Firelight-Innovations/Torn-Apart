@@ -124,7 +124,31 @@ let yaw = Math.PI * 0.75; // facing toward origin-ish
 let pitch = -0.5;
 let pointerLocked = false;
 
-renderer.domElement.addEventListener("click", () => renderer.domElement.requestPointerLock());
+function brushSettings(): { shape: string; mode: string; radius: number; material: number } {
+  const val = (id: string) => (document.getElementById(id) as HTMLInputElement | HTMLSelectElement).value;
+  return {
+    shape: val("brushShape"),
+    mode: val("brushMode"),
+    radius: parseFloat(val("brushSize")),
+    material: parseInt(val("brushMaterial"), 10),
+  };
+}
+
+renderer.domElement.addEventListener("mousedown", (e) => {
+  if (!pointerLocked) {
+    renderer.domElement.requestPointerLock();
+    return;
+  }
+  if (e.button !== 0) return; // left click = carve at the crosshair
+  const o = camera.position;
+  const d = forwardVector();
+  vscode.postMessage({
+    type: "edit",
+    ox: o.x, oy: o.y, oz: o.z,
+    dx: d.x, dy: d.y, dz: d.z,
+    brush: brushSettings(),
+  });
+});
 document.addEventListener("pointerlockchange", () => {
   pointerLocked = document.pointerLockElement === renderer.domElement;
 });
@@ -135,6 +159,16 @@ document.addEventListener("mousemove", (e) => {
   pitch = Math.max(-1.5, Math.min(1.5, pitch));
 });
 window.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.code === "KeyZ") {
+    vscode.postMessage({ type: "undo" });
+    e.preventDefault();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && (e.code === "KeyY" || (e.shiftKey && e.code === "KeyZ"))) {
+    vscode.postMessage({ type: "redo" });
+    e.preventDefault();
+    return;
+  }
   keys.add(e.code);
   if (e.code === "KeyG") {
     showWireframe = !showWireframe;
@@ -222,6 +256,14 @@ window.addEventListener("message", (event) => {
     case "reset":
       clearAll();
       break;
+    case "editState": {
+      const st = (msg.state ?? {}) as { edited_chunks?: number };
+      const dirtyEl = document.getElementById("dirty");
+      if (dirtyEl) {
+        dirtyEl.textContent = st.edited_chunks ? `● ${st.edited_chunks} edited` : "";
+      }
+      break;
+    }
   }
 });
 

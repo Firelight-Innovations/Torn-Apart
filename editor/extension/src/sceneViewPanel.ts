@@ -3,7 +3,7 @@
 // relays mesh/unload/config down to the webview and camera moves back up.
 import * as vscode from "vscode";
 
-export type CameraHandler = (x: number, y: number, z: number) => void;
+export type MessageHandler = (msg: Record<string, unknown>) => void;
 
 export class SceneViewPanel {
   static current: SceneViewPanel | undefined;
@@ -13,17 +13,18 @@ export class SceneViewPanel {
   private constructor(
     private readonly panel: vscode.WebviewPanel,
     private readonly extensionUri: vscode.Uri,
-    private readonly onCamera: CameraHandler,
+    private readonly onMessage: MessageHandler,
     private readonly onReady: () => void
   ) {
     this.panel.webview.html = this.html();
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
     this.panel.webview.onDidReceiveMessage(
       (msg) => {
-        if (msg?.type === "camera") this.onCamera(msg.x, msg.y, msg.z);
-        else if (msg?.type === "ready" && !this.readyResolved) {
+        if (msg?.type === "ready" && !this.readyResolved) {
           this.readyResolved = true;
           this.onReady();
+        } else if (msg) {
+          this.onMessage(msg);
         }
       },
       null,
@@ -33,7 +34,7 @@ export class SceneViewPanel {
 
   static createOrShow(
     extensionUri: vscode.Uri,
-    onCamera: CameraHandler,
+    onMessage: MessageHandler,
     onReady: () => void
   ): SceneViewPanel {
     if (SceneViewPanel.current) {
@@ -50,8 +51,12 @@ export class SceneViewPanel {
         localResourceRoots: [vscode.Uri.joinPath(extensionUri, "media")],
       }
     );
-    SceneViewPanel.current = new SceneViewPanel(panel, extensionUri, onCamera, onReady);
+    SceneViewPanel.current = new SceneViewPanel(panel, extensionUri, onMessage, onReady);
     return SceneViewPanel.current;
+  }
+
+  postEditState(state: unknown): void {
+    this.panel.webview.postMessage({ type: "editState", state });
   }
 
   postMesh(payload: Uint8Array): void {
@@ -91,11 +96,44 @@ export class SceneViewPanel {
     position: fixed; bottom: 8px; left: 10px; z-index: 10;
     font: 11px var(--vscode-editor-font-family, monospace); color: #7da3ba;
   }
+  #palette {
+    position: fixed; top: 8px; right: 10px; z-index: 10;
+    background: rgba(16,20,24,0.85); border: 1px solid #2a3a48; border-radius: 6px;
+    padding: 8px 10px; color: #cfe3f2;
+    font: 12px var(--vscode-editor-font-family, monospace); display: flex; flex-direction: column; gap: 6px;
+  }
+  #palette label { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  #palette select, #palette input { background: #1a2430; color: #cfe3f2; border: 1px solid #2a3a48; }
+  #dirty { color: #e0b341; }
+  #crosshair {
+    position: fixed; top: 50%; left: 50%; width: 10px; height: 10px;
+    transform: translate(-50%, -50%); z-index: 9; pointer-events: none;
+    border: 1px solid #cfe3f2aa; border-radius: 50%; box-shadow: 0 0 2px #000;
+  }
 </style>
 </head>
 <body>
   <div id="stats">waiting for daemon…</div>
-  <div id="hint">click to capture mouse · WASD move · Q/E down/up · Shift fast · G wireframe · B borders</div>
+  <div id="crosshair"></div>
+  <div id="palette">
+    <strong>Brush <span id="dirty"></span></strong>
+    <label>shape
+      <select id="brushShape">
+        <option value="sphere">sphere</option>
+        <option value="box">box</option>
+        <option value="cylinder">cylinder</option>
+      </select>
+    </label>
+    <label>mode
+      <select id="brushMode">
+        <option value="remove">remove</option>
+        <option value="add">add</option>
+      </select>
+    </label>
+    <label>size <input id="brushSize" type="range" min="0.5" max="8" step="0.5" value="2" /></label>
+    <label>material <input id="brushMaterial" type="number" min="0" max="255" value="1" style="width:48px" /></label>
+  </div>
+  <div id="hint">click to look · WASD/QE move · Shift fast · click(while looking)=carve at crosshair · Ctrl+Z/Y undo · G wire · B borders</div>
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;

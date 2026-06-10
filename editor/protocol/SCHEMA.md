@@ -56,7 +56,7 @@ Codec: `editor/fire_editor/meshcodec.py` (encode) ↔
 `editor/extension/src/protocol/meshPayload.ts` (decode). Positions are absolute
 world meters, so the viewport attaches every chunk at the origin.
 
-## Methods (protocol_version 2)
+## Methods (protocol_version 3)
 | Method | Params | Result |
 |---|---|---|
 | `hello` | `protocol_version:int, client:str` | `ok:bool, protocol_version:int, engine_version:str, daemon_version:str` |
@@ -66,6 +66,9 @@ world meters, so the viewport attaches every chunk at the origin.
 | `chunks.set_center` | `x:float, y:float, z:float, radius?:int` | `ok:bool, requested:int` |
 | `scene.stats` | — | `chunks_loaded:int, meshed:int, vertices:int, triangles:int` |
 | `terrain.raycast` | `ox,oy,oz,dx,dy,dz:float, max_distance?:float` | `hit:any` (null or `{point,normal,voxel,chunk,distance}`) |
+| `terrain.brush` | `shape:str, x,y,z:float, mode:str, material?,radius?,hx?,hy?,hz?,height?` | `ok:bool, touched:int, can_undo:bool, can_redo:bool` |
+| `edit.undo` | — | `ok:bool, touched:int, label:str, can_undo:bool, can_redo:bool` |
+| `edit.redo` | — | `ok:bool, touched:int, label:str, can_undo:bool, can_redo:bool` |
 
 `hello` must be the first call; on `protocol_version` mismatch the daemon returns
 `VERSION_MISMATCH` and the extension prompts a rebuild.
@@ -77,5 +80,6 @@ world meters, so the viewport attaches every chunk at the origin.
 | `chunk.ready` | `cx,cy,cz,payload_id,vertices,triangles:int` | a MESH binary frame (`payload_id`) follows for this chunk |
 | `chunk.unload` | `cx,cy,cz:int` | chunk left the region; client drops its geometry |
 | `stream.done` | `sent:int, removed:int` | a `set_center` streaming pass finished |
+| `edit.state` | `can_undo:bool, can_redo:bool, edited_chunks:int` | dirty/undo state changed |
 
 *(Method/notification tables grow per phase; keep them in sync with `schema.json`.)*

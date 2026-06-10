@@ -84,7 +84,9 @@ All symbols below are re-exported from `torn_apart.core` (`__init__.py`).
 | Symbol | Description |
 |---|---|
 | `Config` | Frozen dataclass with all engine settings. |
-| `Config.world_seed` | `int` |
+| `Config.world_seed` | `int` — RNG seed for procedural systems (textures, noise, NPC). **Not** used by terrain (flat/authored). |
+| `Config.world_size_m` | `float` — square world footprint side in meters, centred on origin (1000 m = 1 km area). |
+| `Config.ground_height_m` | `float` — flat baseline ground surface height (world Z, meters). |
 | `Config.voxel_size` | `float` — meters per voxel edge (0.5 m) |
 | `Config.chunk_size` | `int` — voxels per chunk edge (32) |
 | `Config.light_grid_scale` | `int` — terrain voxels per light cell (2) |

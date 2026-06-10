@@ -2,7 +2,9 @@
 # Values here override the defaults in core/config.py (Config frozen dataclass).
 # Units: meters, seconds, voxels. See docs/systems/core.md.
 
-world_seed = 1337
+world_seed = 1337          # RNG seed for procedural systems (textures, noise, NPC) — NOT terrain
+world_size_m = 1000.0      # square world footprint side (meters), centred on origin → 1 km × 1 km area
+ground_height_m = 8.0      # flat baseline ground surface height (world Z, meters)
 voxel_size = 0.5            # meters per voxel edge
 chunk_size = 32            # voxels per chunk edge (16 m cube)
 light_grid_scale = 2       # terrain voxels per light cell edge (1 m cells)

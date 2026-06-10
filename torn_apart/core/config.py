@@ -7,7 +7,11 @@ through this module — no magic numbers.
 
 Flat fields
 -----------
-    world_seed           : int   — RNG seed for all procedural generation
+    world_seed           : int   — RNG seed for procedural systems (textures,
+                                   ambient noise, NPC behaviour) — NOT terrain
+    world_size_m         : float — square world footprint side length, meters,
+                                   centred on origin (1000 m = 1 km)
+    ground_height_m      : float — flat baseline ground surface height (world Z)
     voxel_size           : float — meters per voxel edge (0.5 m)
     chunk_size           : int   — voxels per chunk edge (32 → 16 m cube)
     light_grid_scale     : int   — terrain voxels per light cell (2 → 1 m cells)
@@ -50,7 +54,14 @@ class Config:
 
     Fields
     ------
-    world_seed           : int   — RNG seed; same seed → same world always.
+    world_seed           : int   — RNG seed for procedural systems (textures,
+                                   ambient noise, NPC behaviour).  Terrain is
+                                   flat/authored and does NOT use the seed.
+    world_size_m         : float — square world footprint side length in meters,
+                                   centred on the origin (1000 m = a 1 km × 1 km
+                                   area spanning [-500, +500] on X and Y).
+    ground_height_m      : float — flat baseline ground surface height (world Z,
+                                   meters); solid below it, air above.
     voxel_size           : float — meters per voxel edge (locked at 0.5 m).
     chunk_size           : int   — voxels per chunk edge (locked at 32).
     light_grid_scale     : int   — terrain voxels per light cell edge (2).
@@ -62,6 +73,8 @@ class Config:
     """
 
     world_seed:           int   = 1337
+    world_size_m:         float = 1000.0
+    ground_height_m:      float = 8.0
     voxel_size:           float = 0.5
     chunk_size:           int   = 32
     light_grid_scale:     int   = 2

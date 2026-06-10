@@ -1,5 +1,5 @@
 # terrain — System Doc
-keywords: voxel, chunk, mesh, mesher, build_mesh, brush, apply_brush, SphereBrush, BoxBrush, CylinderBrush, BrushMode, crater, heightmap, surface_height, carve, cave, overhang, raycast, raycast_voxel, DDA, Hit, streaming, ChunkManager, desired_set, stream_frame, get_or_create, chunk_provider, Saveable, delta, get_delta, apply_delta, generate_chunk, MeshArrays, light_sampler, neighbor_solids, WORLD_FLOOR_SOLID, padding, world_origin, materials, dirty, edited, determinism, geometry_bridge, to_geom
+keywords: voxel, chunk, mesh, mesher, build_mesh, brush, apply_brush, SphereBrush, BoxBrush, CylinderBrush, BrushMode, crater, flat, flat terrain, world_size_m, ground_height_m, world footprint, world bounds, world size, seed-independent, authored terrain, heightmap, surface_height, carve, cave, overhang, raycast, raycast_voxel, DDA, Hit, streaming, ChunkManager, desired_set, stream_frame, get_or_create, chunk_provider, Saveable, delta, get_delta, apply_delta, generate_chunk, MeshArrays, light_sampler, neighbor_solids, WORLD_FLOOR_SOLID, padding, world_origin, materials, dirty, edited, determinism, geometry_bridge, to_geom
 
 > One doc per code package; filename matches the package exactly (`docs/systems/terrain.md` ↔ `torn_apart/terrain/`).
 
@@ -8,7 +8,7 @@ keywords: voxel, chunk, mesh, mesher, build_mesh, brush, apply_brush, SphereBrus
 `terrain/` is the **voxel terrain** package (Layer 2 — Structure).  It owns:
 
 - **Chunk storage** — `Chunk`, a 32³ `uint8` material array (0 = air, ≥1 = solid material id) with `dirty`/`edited` flags and a world-space origin.
-- **Generation** — `generate_chunk`, a *pure function of (world_seed, chunk coord)*: a continuous world-coordinate value-noise heightmap plus a 3-D carve pass for overhangs / shallow caves.
+- **Generation** — `generate_chunk`, a *pure function of (coord, config)* producing **flat, seed-independent baseline terrain**: solid below `config.ground_height_m`, clamped to the square `config.world_size_m` footprint (centred on origin), no hills/noise/caves. The terrain is authored semi-procedurally on top of this blank canvas; `world_seed` drives other systems, not terrain.
 - **Meshing** — `build_mesh`, a fully-vectorised culled-face mesher emitting flat-shaded quads only where a voxel is exposed (the retro hard-edge look).
 - **Brush editing** — `apply_brush` with `SphereBrush`/`BoxBrush`/`CylinderBrush`, the *only* terrain mutation path (ARCHITECTURE.md §5.5).
 - **Raycasting** — `raycast_voxel`, a voxel DDA that turns a click ray into a `Hit` (used to place a brush centre).
@@ -28,8 +28,8 @@ All symbols below are re-exported from `torn_apart.terrain` (`__init__.py`).
 | `Chunk.edited` | Deviates from generated baseline → goes in the save delta. |
 | `Chunk.world_origin -> Vec3` | Min-corner world position = `coord * 16 m`. |
 | `Chunk.is_solid_mask() -> bool[32,32,32]` | `materials > 0`. |
-| `generate_chunk(coord, config) -> uint8[32,32,32]` | Pure-function chunk generation. |
-| `surface_height(world_x, world_y) -> float32` | Continuous terrain height (world Z, meters) at world XY. |
+| `generate_chunk(coord, config) -> uint8[32,32,32]` | Flat baseline chunk: solid below `ground_height_m` within the `world_size_m` footprint (centred on origin), else air. Seed-independent. |
+| `surface_height(world_x, world_y, config=None) -> float32` | Flat ground height (world Z, meters); constant `config.ground_height_m` (or 8.0 m default) for all XY. |
 | `build_mesh(chunk, neighbor_solids=None, light_sampler=None) -> MeshArrays` | Culled-face vectorised mesher. |
 | `MeshArrays` | Dataclass: `positions`, `normals`, `uvs`, `colors`, `indices` (+ `face_count`/`tri_count`/`vertex_count`/`is_empty`). |
 | `WORLD_FLOOR_SOLID` | Sentinel for `neighbor_solids` meaning "pad this face SOLID". |
@@ -78,10 +78,10 @@ None.  Terrain is mutated by direct `apply_brush` calls, not events.  (Lighting,
   - Voxel `(x,y,z)` centre world position = `world_origin + (x+0.5, y+0.5, z+0.5) * 0.5 m`.
 
 ### Determinism Guarantee
-`generate_chunk(coord, config)` is a **pure function of (world_seed, coord)** and is **byte-identical** across processes/machines (verified: same SHA-256 in two separate interpreters).  All noise is drawn from `core.rng.for_domain("terrain", ...)` (blake2b key digest, never `hash()`).  No `random.*`, no unseeded `np.random.*`.
+`generate_chunk(coord, config)` is a **pure function of (coord, config)** and is **byte-identical** across processes/machines.  It is **seed-independent** — baseline terrain is flat/authored, so `world_seed` does not affect it (the seed drives textures, ambient noise, NPC behaviour, etc.).  No `random.*`, no `np.random.*`.
 
-### Seamlessness
-Both the heightmap and the carve field are sampled in **continuous WORLD coordinates** from global coarse-noise grids (not per-chunk noise), wrapped to a fixed global period.  Neighbouring chunks index the *same* field, so terrain meets seamlessly at chunk borders (no cliffs/gaps; a column straddling two vertically-adjacent chunks is continuous).
+### Flat baseline + world footprint
+A voxel is solid iff its centre world Z is below `config.ground_height_m` **and** its centre world X and Y both lie within the square footprint `[-world_size_m/2, +world_size_m/2)` (centred on the origin).  No hills, no caves/overhangs.  Chunks entirely below the ground are fully solid; chunks entirely above it (or entirely outside the footprint) are empty air.  Seamlessness is trivial — solidity is a pure function of world position, so chunk borders always agree.
 
 ### Mesher: edge padding rule (critical)
 `build_mesh` builds a `(34, 34, 34)` padded solidity array and computes face masks by **padded-array slicing**, never `np.roll` (roll wraps → face leaks).  Face exposed ⇔ `solid & ~neighbor_solid`.  The 6 one-voxel boundary slabs are filled as follows:
@@ -196,10 +196,10 @@ mesh = build_mesh(chunk, cm._neighbor_solids(coord), light_sampler=sun_sampler)
 
 1. **Padding, not `np.roll`.** Face masks use padded-array slicing; `np.roll` wraps and leaks faces across the chunk. Never substitute it.
 2. **World-floor sentinel.** Absent neighbours pad AIR except −Z at the world floor (`WORLD_FLOOR_SOLID`). Forget it and the map's bottom is see-through. `ChunkManager` supplies it only for `cz <= -2` when the below-chunk is unloaded.
-3. **Generation samples WORLD coordinates, never per-chunk noise.** Per-chunk `value_noise` would NOT tile — seams would crack. The global-grid samplers in `generation.py` are what make borders seamless; keep new noise terms world-coordinate.
+3. **Baseline terrain is flat + seed-independent** (DECISIONS.md 2026-06-09). `generate_chunk` ignores `world_seed`; it only reads `ground_height_m` and `world_size_m` from config. Detail/structure is authored on top (brushes, future content agents) — don't reintroduce procedural heightmap noise into the baseline. If you ever sample world-position noise for terrain, sample in **continuous WORLD coordinates** (per-chunk noise won't tile → cracked seams).
 4. **`materials[x,y,z]` index order is load-bearing.** The mesher, brush, raycast, lighting, and saves all assume `[x,y,z]` (x=east, y=north, z=up). Don't transpose.
 5. **`apply_brush` is the ONLY mutation path** (ARCHITECTURE.md §5.5). Don't write `chunk.materials` directly outside it/generation/`apply_delta` — you'd skip the `dirty`/`edited` flags and the `TerrainEditedEvent`, breaking remesh and saves.
 6. **Brush only flags/publishes for chunks it actually changed.** A brush whose mask misses a chunk (or changes no voxel, e.g. REMOVE over air) leaves that chunk untouched — no flags, no event, not in the returned set.
 7. **The DDA loop is the one allowed Python loop** (≤200 steps, once per click). Everything else — generation, meshing, brush rasterisation, index/vertex assembly — is vectorised numpy (Hard Rule 4).
 8. **`get_delta` copies arrays.** It returns copies, so mutating a chunk after `get_delta` doesn't corrupt an in-flight save. `apply_delta` overwrites in place into a generated baseline.
-9. **Generation cost is the 3-D carve grid.** ~21 ms/chunk (gen) + ~3.5 ms (mesh) at seed 1337 — under the 30 ms budget. If you add octaves to the carve field, re-check the budget; the 3-D coarse grid dominates.
+9. **Generation is cheap now.** Flat generation is a couple of vectorised comparisons (sub-millisecond/chunk); meshing (~3.5 ms) dominates. The old 3-D carve-noise cost is gone. If you add authored detail back into the baseline, re-check the per-chunk budget (30 ms).

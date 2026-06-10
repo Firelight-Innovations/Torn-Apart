@@ -167,6 +167,9 @@ class App(ShowBase):
 
         self.input_state = InputState()
         self._escape_was_down = False
+        # Skip the first mouse-delta sample after capture is (re)enabled so the
+        # cursor's pre-capture position doesn't snap the view on frame 1.
+        self._skip_mouse_delta = True
 
         # ------------------------------------------------------------------
         # Terrain-render injection slots (set by main.py after construction).
@@ -199,6 +202,13 @@ class App(ShowBase):
         # Disable Panda3D's default camera controller
         # ------------------------------------------------------------------
         self.disableMouse()
+
+        # Capture the mouse immediately so free-look works the moment the window
+        # opens (no need to hunt for ESC first).  ESC toggles capture off again
+        # to free the cursor.  The actual cursor lock is requested in
+        # _set_mouse_capture; the first delta is skipped via _skip_mouse_delta.
+        self.input_state.mouse_captured = True
+        self._set_mouse_capture(True)
 
         # ------------------------------------------------------------------
         # Camera GameObject
@@ -273,29 +283,49 @@ class App(ShowBase):
             self._set_mouse_capture(inp.mouse_captured)
             inp.escape_pressed = False
 
-        # Mouse delta (only when captured)
+        # Mouse delta (only when captured).
+        #
+        # We read the RAW pixel pointer position (``win.get_pointer``) relative
+        # to the window centre, then recentre the pointer every frame.  Reading
+        # raw pixels (not the normalised mouseWatcher value) keeps BOTH axes
+        # symmetric and avoids the edge-clamping that froze one axis under the
+        # old confined-cursor + normalised-delta path.  The cursor is in
+        # relative mode (see _set_mouse_capture) so the OS never clamps it at a
+        # screen edge.  Note: get_pointer Y is pixels-from-TOP (Y-down).
         inp.mouse_dx = 0.0
         inp.mouse_dy = 0.0
-        if inp.mouse_captured and self.mouseWatcherNode.hasMouse():
-            mx = self.mouseWatcherNode.getMouseX()
-            my = self.mouseWatcherNode.getMouseY()
-            # Convert from Panda3D's [-1,1] normalised range to pixels
-            # (approximate: multiply by half window size)
+        if inp.mouse_captured:
             win_w = self.win.get_x_size()
             win_h = self.win.get_y_size()
-            inp.mouse_dx = mx * (win_w * 0.5)
-            inp.mouse_dy = my * (win_h * 0.5)
-            # Recentre cursor
-            self.win.move_pointer(0, win_w // 2, win_h // 2)
+            cx = win_w // 2
+            cy = win_h // 2
+            ptr = self.win.get_pointer(0)
+            if ptr.get_in_window() and not self._skip_mouse_delta:
+                inp.mouse_dx = float(ptr.get_x() - cx)
+                inp.mouse_dy = float(ptr.get_y() - cy)
+            # Always recentre so the next frame's delta is measured from centre.
+            self.win.move_pointer(0, cx, cy)
+            self._skip_mouse_delta = False
 
     def _set_mouse_capture(self, captured: bool) -> None:
-        """Lock/unlock the cursor."""
+        """
+        Lock/unlock the cursor for free-look.
+
+        Captured → cursor hidden + **relative** mouse mode (the OS stops
+        clamping the pointer at screen edges, so look never freezes on an axis).
+        Released → cursor shown + absolute mode (normal desktop pointer).
+
+        Re-enabling capture arms ``_skip_mouse_delta`` so the first post-capture
+        frame doesn't snap the view by the pre-capture pointer offset.
+        """
         props = WindowProperties()
         props.set_cursor_hidden(captured)
         props.set_mouse_mode(
-            WindowProperties.M_confined if captured else WindowProperties.M_absolute
+            WindowProperties.M_relative if captured else WindowProperties.M_absolute
         )
         self.win.request_properties(props)
+        if captured:
+            self._skip_mouse_delta = True
 
     # ------------------------------------------------------------------
     # Frame task

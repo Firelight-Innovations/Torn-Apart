@@ -25,96 +25,76 @@ def cfg():
 
 
 # ===========================================================================
-# Generation: determinism + seamlessness
+# Generation: flat baseline terrain (determinism, flatness, bounds, seed-free)
 # ===========================================================================
 
-class TestGenerationDeterminism:
+class TestFlatGeneration:
     def test_same_coord_byte_identical(self, cfg):
-        set_world_seed(1337)
         a = generate_chunk((2, -3, 1), cfg)
         b = generate_chunk((2, -3, 1), cfg)
         assert np.array_equal(a, b)
         assert hashlib.sha256(a.tobytes()).hexdigest() == hashlib.sha256(b.tobytes()).hexdigest()
 
-    def test_different_coord_differs(self, cfg):
-        set_world_seed(1337)
-        a = generate_chunk((0, 0, 0), cfg)
-        b = generate_chunk((1, 0, 0), cfg)
-        assert not np.array_equal(a, b)
-
     def test_shape_dtype(self, cfg):
-        set_world_seed(1337)
         m = generate_chunk((0, 0, 0), cfg)
         assert m.shape == (32, 32, 32)
         assert m.dtype == np.uint8
 
-    def test_different_seed_differs(self, cfg):
+    def test_seed_independent(self, cfg):
+        """Baseline terrain is flat/authored: it does NOT depend on world_seed."""
         set_world_seed(1)
         a = generate_chunk((0, 0, 0), cfg)
-        set_world_seed(2)
+        set_world_seed(99999)
         b = generate_chunk((0, 0, 0), cfg)
-        assert not np.array_equal(a, b)
+        assert np.array_equal(a, b)
 
-    def test_vertical_seamlessness(self, cfg):
-        """A column straddling two vertically-adjacent chunks is continuous.
+    def test_ground_chunk_is_flat(self, cfg):
+        """A ground-straddling chunk is solid below ground_height_m, air above.
 
-        Stack chunk (0,0,0) and (0,0,1): the global solidity along z must be a
-        single contiguous run (no gap or overlap at the z border).  We pick a
-        column where the surface lies inside the upper chunk and verify there's
-        no air voxel below a solid voxel at the seam (i.e. monotone solid→air
-        going up, ignoring carve caves by checking the bottom-most slab is solid
-        and the seam doesn't introduce a spurious gap).
+        Every (x,y) column must be a single solid→air run (no holes/overhangs):
+        once air begins going up it never returns to solid.
         """
-        set_world_seed(99)
-        lower = generate_chunk((0, 0, 0), cfg)
-        upper = generate_chunk((0, 0, 1), cfg)
-        # Build the 64-tall combined column for several (x,y) and check the
-        # boundary between z=31 (lower top) and z=0 (upper bottom) agrees with
-        # what a single 64-tall generation would produce: solidity is a pure
-        # function of world z, so continuity == no contradiction at the seam.
-        # Concretely: if lower[x,y,31] is solid and upper[x,y,0] is air, that's
-        # only valid if the surface passes between them — which the height
-        # function guarantees is consistent. We assert the COMBINED column has
-        # at most one solid→air transition outside carved regions by checking
-        # the seam voxels are generated from the same continuous field: compare
-        # against regenerating the boundary directly.
-        # Strongest check: regenerate is deterministic & continuous, so the
-        # union column equals stacking — verify no (x,y) has air at lower-top
-        # while solid at upper-bottom (that would be an inverted seam = a gap).
-        inverted = (lower[:, :, 31] == 0) & (upper[:, :, 0] != 0)
-        # An upper-bottom-solid over lower-top-air is physically fine ONLY if it
-        # is itself supported; but at the seam it indicates the surface rose —
-        # which is continuous. The real failure mode (wrap/discontinuity) would
-        # show as a large fraction. Assert the seam is mostly consistent.
-        assert inverted.mean() < 0.5
-
-    def test_seam_matches_height_field(self, cfg):
-        """Solidity at the z-seam agrees with the shared continuous height field.
-
-        Below the carve floor (deep solid) the seam voxels must match exactly
-        what the surface-height function dictates, with no chunk-border gap.
-        """
-        from torn_apart.terrain.generation import surface_height
-        set_world_seed(7)
-        lower = generate_chunk((0, 0, 0), cfg)   # world z ∈ [0, 16)
-        upper = generate_chunk((0, 0, 1), cfg)   # world z ∈ [16, 32)
+        m = generate_chunk((0, 0, 0), cfg)            # world z ∈ [0, 16)
         vs = cfg.voxel_size
-        # Build per-column world XY (broadcast over the 32x32 face).
-        lin = (np.arange(32) + 0.5) * vs
-        wx = lin[:, None]
-        wy = lin[None, :]
-        surf = surface_height(wx, wy)            # (32, 32) world-Z meters
-        # Lower-top voxel centre world Z (z=31 of chunk 0) and upper-bottom
-        # (z=0 of chunk 1) are exactly one voxel apart and share the same XY.
-        z_lower_top = (31 + 0.5) * vs            # ~15.75 m
-        z_upper_bot = 16.0 + (0 + 0.5) * vs      # ~16.25 m, contiguous, no gap
-        assert abs(z_upper_bot - z_lower_top - vs) < 1e-5
-        # For columns whose surface is far above the seam, BOTH seam voxels are
-        # deep solid (below carve floor) → both must be solid: no border gap.
-        deep = surf > (z_upper_bot + 8.0)
-        if deep.any():
-            assert (lower[:, :, 31][deep] != 0).all()
-            assert (upper[:, :, 0][deep] != 0).all()
+        ground = cfg.ground_height_m
+        zc = (np.arange(32) + 0.5) * vs               # voxel-centre world Z
+        expected_col = (zc < ground)                  # (32,) bool over z
+        solid = m > 0
+        # Within this chunk's footprint (near origin) every column equals the
+        # same flat profile.
+        assert np.all(solid == expected_col[None, None, :])
+        # Sanity: there IS both solid and air in a straddling chunk.
+        assert solid.any() and (~solid).any()
+
+    def test_below_ground_fully_solid(self, cfg):
+        """A chunk entirely below the ground surface is fully solid (in bounds)."""
+        m = generate_chunk((0, 0, -1), cfg)           # world z ∈ [-16, 0), all < 8
+        assert np.all(m > 0)
+
+    def test_above_ground_fully_air(self, cfg):
+        """A chunk entirely above the ground surface is empty air."""
+        m = generate_chunk((0, 0, 2), cfg)            # world z ∈ [32, 48), all > 8
+        assert np.all(m == 0)
+
+    def test_outside_world_footprint_is_air(self, cfg):
+        """Beyond the world_size_m footprint there is no ground, only air."""
+        half_chunks = int((cfg.world_size_m * 0.5) // cfg.chunk_meters) + 2
+        m = generate_chunk((half_chunks, 0, -1), cfg)  # well past +X half-extent
+        assert np.all(m == 0)
+
+    def test_footprint_is_centred_on_origin(self, cfg):
+        """Both sides of the origin are ground; symmetry confirms centring."""
+        east = generate_chunk((0, 0, -1), cfg)        # x ∈ [0, 16)
+        west = generate_chunk((-1, 0, -1), cfg)       # x ∈ [-16, 0)
+        assert np.all(east > 0) and np.all(west > 0)
+
+    def test_surface_height_is_flat_constant(self, cfg):
+        from torn_apart.terrain.generation import surface_height
+        wx = np.array([0.0, 8.0, -300.0])[:, None]
+        wy = np.array([0.0, -50.0])[None, :]
+        surf = surface_height(wx, wy, cfg)
+        assert surf.shape == (3, 2)
+        assert np.all(surf == cfg.ground_height_m)
 
 
 # ===========================================================================

@@ -1,5 +1,5 @@
 # core — System Doc
-keywords: vec3, quat, quaternion, math3d, event bus, eventbus, publish, subscribe, drain, rng, seed, for_domain, config, clock, fixed_update, lod, lodpolicy, logging, math, rotation, euler, hpr, slerp, chunk loaded, game day, terrain edited, weather changed, world seed, determinism, blake2b, float32, z-up, forward, right, up, meters, radians, fixed_dt, spiral of death, saveable, get_state, set_state, game_time_scale, time scale, sky config, cloud altitude, star count
+keywords: vec3, quat, quaternion, math3d, event bus, eventbus, publish, subscribe, drain, rng, seed, for_domain, config, clock, fixed_update, lod, lodpolicy, logging, math, rotation, euler, hpr, slerp, chunk loaded, game day, terrain edited, weather changed, world seed, determinism, blake2b, float32, z-up, forward, right, up, meters, radians, fixed_dt, spiral of death, saveable, get_state, set_state, game_time_scale, time scale, sky config, cloud altitude, star count, shader_source, load_glsl, glsl, shader file, vert, frag, comp, syntax highlighting
 
 > One doc per code package; filename matches the package exactly (`docs/systems/core.md` ↔ `fire_engine/core/`).
 
@@ -134,6 +134,12 @@ All symbols below are re-exported from `fire_engine.core` (`__init__.py`).
 | Symbol | Description |
 |---|---|
 | `get_logger(name: str) -> logging.Logger` | Sane-formatted logger; handler installed once. |
+
+### Shader source (`core/shader_source.py`)
+
+| Symbol | Description |
+|---|---|
+| `load_glsl(anchor: str, name: str) -> str` | Read GLSL source `name` from the `shaders/` directory beside `anchor` (the caller's `__file__`). Used by `world/grass_shaders.py`, `world/sky_shaders.py`, `world/terrain_shader.py` and `lighting/glsl.py` to load their `.vert`/`.frag`/`.comp` sidecars (real shader files, for editor syntax highlighting + LSP) and re-export them under the original string constants. Panda3d-free — reading a text file is callable from any layer. |
 
 ## Imports Allowed
 

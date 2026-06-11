@@ -1,0 +1,107 @@
+#version 430
+layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout (rgba16f) uniform writeonly image3D u_froxels; // rgb inscatterÂ·Ïƒ, a Ïƒ (extinction 1/m)
+
+uniform ivec3 u_froxel_dim;       // (W, H, Z slices)
+uniform vec3  u_cam_pos;          // world meters
+uniform vec3  u_cam_fwd;          // unit basis (world)
+uniform vec3  u_cam_right;
+uniform vec3  u_cam_up;
+uniform vec2  u_tan_half_fov;     // tan(fovx/2), tan(fovy/2)
+uniform float u_fog_near;         // first-slice distance (m)
+uniform float u_fog_far;          // last-slice distance (m)
+uniform float u_fog_density;      // base extinction at ground level (1/m)
+uniform float u_ground_z;         // height-falloff reference (m)
+uniform float u_anisotropy;       // Henyey-Greenstein g
+uniform vec3  u_sun_dir;
+uniform vec3  u_sun_radiance;
+uniform vec3  u_moon_dir;
+uniform vec3  u_moon_radiance;
+uniform vec3  u_sky_ambient;
+// Cascade-1 lookups (largest range) for shadowing + GI ambient in the fog.
+uniform sampler3D u_c1_vis;       // r sun, g moon, b sky visibility
+uniform sampler3D u_c1_radiance;
+uniform vec3  u_c1_origin_m;
+uniform float u_c1_cell_m;
+uniform float u_c1_cells;
+uniform int   u_num_boxes;        // dynamic occluder AABBs (cut god rays)
+uniform vec4  u_box_min[16];
+uniform vec4  u_box_max[16];
+
+// Same analytic ray-vs-AABB test as INJECT: dynamic objects shadow the fog.
+float boxVis(vec3 ro, vec3 rd, float tmax) {
+    for (int i = 0; i < u_num_boxes; i++) {
+        vec3 inv = 1.0 / (rd + vec3(1e-7));
+        vec3 ta = (u_box_min[i].xyz - ro) * inv;
+        vec3 tb = (u_box_max[i].xyz - ro) * inv;
+        vec3 tlo = min(ta, tb);
+        vec3 thi = max(ta, tb);
+        float tn = max(max(tlo.x, tlo.y), tlo.z);
+        float tf = min(min(thi.x, thi.y), thi.z);
+        if (tf >= max(tn, 0.05) && tn < tmax) return 0.0;
+    }
+    return 1.0;
+}
+
+float sliceDist(float s) {
+    // Exponential slice distribution: equal screen-space fog detail near.
+    return u_fog_near * pow(u_fog_far / u_fog_near,
+                            s / float(u_froxel_dim.z));
+}
+
+float phaseHG(float cosT, float g) {
+    float g2 = g * g;
+    return (1.0 - g2) / (4.0 * 3.14159265 *
+           pow(1.0 + g2 - 2.0 * g * cosT, 1.5));
+}
+
+vec3 c1uv(vec3 wp) {
+    return (wp - u_c1_origin_m) / (u_c1_cell_m * u_c1_cells);
+}
+
+bool inC1(vec3 uv) {
+    return all(greaterThan(uv, vec3(0.01))) && all(lessThan(uv, vec3(0.99)));
+}
+
+void main() {
+    ivec3 f = ivec3(gl_GlobalInvocationID.xyz);
+    if (any(greaterThanEqual(f, u_froxel_dim))) return;
+
+    // Reconstruct the world-space sample point at this froxel's centre.
+    vec2 ndc = (vec2(f.xy) + 0.5) / vec2(u_froxel_dim.xy) * 2.0 - 1.0;
+    vec3 ray = normalize(u_cam_fwd +
+                         u_cam_right * (ndc.x * u_tan_half_fov.x) +
+                         u_cam_up    * (ndc.y * u_tan_half_fov.y));
+    float d0 = sliceDist(float(f.z));
+    float d1 = sliceDist(float(f.z) + 1.0);
+    vec3 wp = u_cam_pos + ray * (0.5 * (d0 + d1));
+
+    // Height-falloff exponential fog density.
+    float h = max(wp.z - u_ground_z, 0.0);
+    float sigma = u_fog_density * exp(-h / 28.0);
+
+    // Visibility from the cascade (god rays: sun shafts cut by occupancy).
+    vec3 uv = c1uv(wp);
+    float sunVis = 1.0, moonVis = 1.0, skyVis = 1.0;
+    vec3 gi = vec3(0.0);
+    if (inC1(uv)) {
+        vec3 vis = texture(u_c1_vis, uv).rgb;
+        sunVis = vis.r; moonVis = vis.g; skyVis = vis.b;
+        gi = texture(u_c1_radiance, uv).rgb;
+    }
+    // Dynamic occluders cut the celestial shafts (boxy god rays).
+    if (u_num_boxes > 0) {
+        sunVis  *= boxVis(wp, u_sun_dir, 1e3);
+        moonVis *= boxVis(wp, u_moon_dir, 1e3);
+    }
+
+    float cosS = dot(ray, u_sun_dir);
+    float cosM = dot(ray, u_moon_dir);
+    vec3 inscatter =
+        u_sun_radiance  * (sunVis  * phaseHG(cosS, u_anisotropy)) +
+        u_moon_radiance * (moonVis * phaseHG(cosM, u_anisotropy * 0.8)) +
+        (u_sky_ambient * skyVis + gi) * (0.25 / 3.14159265);
+
+    imageStore(u_froxels, f, vec4(inscatter * sigma, sigma));
+}

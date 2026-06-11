@@ -1,0 +1,50 @@
+#version 430
+layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
+
+layout (rgba16f) uniform readonly  image3D u_prev;    // radiance, last iter
+layout (rgba16f) uniform readonly  image3D u_direct;  // injected sources
+layout (rgba8)   uniform readonly  image3D u_geom;    // albedo + occupancy
+layout (rgba16f) uniform writeonly image3D u_next;
+
+uniform int   u_cells;
+uniform float u_decay;    // diffusion weight [0,1): higher = light travels farther
+uniform float u_bounce;   // wall-reflection gain [0,1]
+
+const ivec3 NEIGHBORS[6] = ivec3[6](
+    ivec3( 1, 0, 0), ivec3(-1, 0, 0),
+    ivec3( 0, 1, 0), ivec3( 0,-1, 0),
+    ivec3( 0, 0, 1), ivec3( 0, 0,-1));
+
+void main() {
+    ivec3 c = ivec3(gl_GlobalInvocationID.xyz);
+    if (any(greaterThanEqual(c, ivec3(u_cells)))) return;
+
+    vec3 direct = imageLoad(u_direct, c).rgb;
+    vec4 g = imageLoad(u_geom, c);
+    if (g.a > 0.5) {
+        // Solid cells hold their own emission only; light flows around them.
+        imageStore(u_next, c, vec4(direct, 1.0));
+        return;
+    }
+
+    vec3 own = imageLoad(u_prev, c).rgb;
+    vec3 sum = vec3(0.0);
+    for (int i = 0; i < 6; i++) {
+        ivec3 nc = c + NEIGHBORS[i];
+        if (any(lessThan(nc, ivec3(0))) ||
+            any(greaterThanEqual(nc, ivec3(u_cells)))) {
+            sum += own;                      // open boundary: no gradient
+            continue;
+        }
+        vec4 ng = imageLoad(u_geom, nc);
+        if (ng.a > 0.5)
+            sum += own * ng.rgb * u_bounce;  // wall bounces our light back, tinted
+        else
+            sum += imageLoad(u_prev, nc).rgb;
+    }
+
+    // next = directÂ·(1âˆ’decay) + decayÂ·avg â€” converges to a diffusion of the
+    // injected sources with reach â‰ˆ 1/(1âˆ’decay) cells; always bounded.
+    vec3 next = direct * (1.0 - u_decay) + (u_decay / 6.0) * sum;
+    imageStore(u_next, c, vec4(next, 1.0));
+}

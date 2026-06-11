@@ -1,0 +1,34 @@
+#version 430
+layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout (rgba16f) uniform readonly  image3D u_froxels;    // from FOG_SCATTER
+layout (rgba16f) uniform writeonly image3D u_integrated; // rgb light, a transmittance
+
+uniform ivec3 u_froxel_dim;
+uniform float u_fog_near;
+uniform float u_fog_far;
+
+float sliceDist(float s) {
+    return u_fog_near * pow(u_fog_far / u_fog_near,
+                            s / float(u_froxel_dim.z));
+}
+
+void main() {
+    ivec2 xy = ivec2(gl_GlobalInvocationID.xy);
+    if (any(greaterThanEqual(xy, u_froxel_dim.xy))) return;
+
+    vec3 accum = vec3(0.0);
+    float trans = 1.0;
+    for (int z = 0; z < u_froxel_dim.z; z++) {
+        vec4 s = imageLoad(u_froxels, ivec3(xy, z));
+        float dz = sliceDist(float(z) + 1.0) - sliceDist(float(z));
+        float stepTrans = exp(-s.a * dz);
+        // Energy-conserving slice integration (Frostbite):
+        vec3 sliceLight = (s.a > 1e-6)
+            ? s.rgb * (1.0 - stepTrans) / s.a
+            : vec3(0.0);
+        accum += trans * sliceLight;
+        trans *= stepTrans;
+        imageStore(u_integrated, ivec3(xy, z), vec4(accum, trans));
+    }
+}

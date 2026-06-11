@@ -57,10 +57,17 @@ from fire_engine.lighting import glsl
 from fire_engine.lighting.exposure import ExposureMeter
 from fire_engine.lighting.lights import LightSet, OccluderSet
 from fire_engine.lighting.palette import MaterialPalette, build_default_palette
+from fire_engine.lighting.assembly_worker import (
+    AssemblyJob,
+    CascadeAssemblyWorker,
+    assemble_packed,
+)
 from fire_engine.lighting.volume import (
     EMISSION_SCALE,
     VolumeWindow,
     assemble_geometry,
+    pack_volume,
+    window_chunk_span,
 )
 
 if TYPE_CHECKING:
@@ -118,12 +125,12 @@ def _upload_volume(tex: Texture, arr: np.ndarray) -> None:
     Upload a ``uint8 (N, N, N, 4)`` ``[x, y, z]``-indexed block to a 3-D texture.
 
     Panda3D RAM layout for 3-D textures is page-major ``(z, y, x)`` with BGRA
-    channel order, so the block is transposed and channel-swapped here — one
-    bulk ``set_ram_image`` write, no loops.
+    channel order, so the block is transposed and channel-swapped (in
+    ``volume.pack_volume``) — one bulk ``set_ram_image`` write, no loops.  Used
+    by the synchronous boot path; the steady-state async path packs on the
+    worker thread and calls ``set_ram_image`` with the bytes directly.
     """
-    data = np.ascontiguousarray(
-        np.transpose(arr, (2, 1, 0, 3))[..., [2, 1, 0, 3]])
-    tex.set_ram_image(data.tobytes())
+    tex.set_ram_image(pack_volume(arr))
 
 
 class _Cascade:
@@ -154,6 +161,12 @@ class _Cascade:
         ]
         self.ping = 0   # index of the radiance texture holding current light
         self.needs_inject = True   # re-run the injection pass next update
+        # Async assembly bookkeeping (main thread only): one job in flight per
+        # cascade at a time; ``window.origin_cell`` is the COMMITTED origin (the
+        # one the uploaded geom + shader uniforms use) and only advances when a
+        # result lands.  ``_pending_seq`` matches the in-flight job.
+        self._assembly_inflight = False
+        self._pending_seq = -1
 
         # Injection node (inputs refreshed before each dirty dispatch).
         self.inject_np = NodePath(f"lit_inject_{index}")
@@ -236,12 +249,23 @@ class GpuLightingPipeline:
         chunk_provider,
         bus: EventBus,
         palette: MaterialPalette | None = None,
+        *,
+        threaded: bool = True,
     ) -> None:
         self._config = config
         self._base = base
         self._provider = chunk_provider
         self._palette = palette if palette is not None \
             else build_default_palette()
+        # Background cascade-volume assembly: the CPU gather+pack (~90 ms p99 on
+        # a fly-around) runs off the main thread so flying stays smooth.  Set
+        # ``threaded=False`` for deterministic tooling/tests (assembles inline).
+        self._threaded = bool(threaded)
+        self._assembly_seq = 0
+        self._assembly_worker = CascadeAssemblyWorker() if self._threaded \
+            else None
+        if self._assembly_worker is not None:
+            self._assembly_worker.start()
         self.lights = LightSet()
         self._lights_version_seen = -1
         self.occluders = OccluderSet()
@@ -258,7 +282,14 @@ class GpuLightingPipeline:
         propagate_shader = Shader.make_compute(
             Shader.SL_GLSL, glsl.PROPAGATE_COMPUTE)
 
-        # Diffusion reach ≈ 1/(1−decay) cells; aim ~6 m on both cascades.
+        # Diffusion reach ≈ 1/(1−decay) cells; aim a few metres on each cascade.
+        # Cascade 2 is the coarse FAR cascade (8 m cells, 512 m box): it keeps
+        # distant terrain lit with low-resolution shadows + GI once a surface
+        # leaves cascade 1, instead of the old hard fall-back to flat sky
+        # ambient.  It rides the exact same off-thread assembly + inject +
+        # propagate machinery as the others (the per-frame loops iterate
+        # ``self.cascades``), so "bake far chunks on a separate thread at a
+        # lower resolution" needs no new subsystem.
         self.cascades = [
             _Cascade(0, config.light_c0_cells, config.light_c0_cell_m,
                      inject_shader, propagate_shader,
@@ -267,6 +298,10 @@ class GpuLightingPipeline:
             _Cascade(1, config.light_c1_cells, config.light_c1_cell_m,
                      inject_shader, propagate_shader,
                      decay=math.exp(-config.light_c1_cell_m / 10.0),
+                     bounce=float(config.light_bounce_strength)),
+            _Cascade(2, config.light_c2_cells, config.light_c2_cell_m,
+                     inject_shader, propagate_shader,
+                     decay=math.exp(-config.light_c2_cell_m / 24.0),
                      bounce=float(config.light_bounce_strength)),
         ]
 
@@ -325,6 +360,10 @@ class GpuLightingPipeline:
         # only reassembles when one of them actually intersects its window
         # (streaming-frontier chunks are far outside cascade 0's 48 m box).
         self._pending_coords: set[tuple[int, int, int]] = set()
+        # Brush-edited chunk coords (explosions, digging) — handled SAME-FRAME
+        # by a synchronous reassembly so the crater lights immediately instead
+        # of flashing black for the 1-2 frames an async reassembly lags.
+        self._edited_coords: set[tuple[int, int, int]] = set()
         self._force_all_dirty = True         # first frame: build everything
         self._load_dirty_timer = 0.0
         self._last_sun: tuple | None = None  # (sun_dir, sun_rad, moon, sky)
@@ -333,8 +372,10 @@ class GpuLightingPipeline:
 
         _log.info(
             "GPU lighting: cascade0 %d^3 @ %.2f m, cascade1 %d^3 @ %.2f m, "
-            "fog %s", config.light_c0_cells, config.light_c0_cell_m,
+            "cascade2 %d^3 @ %.2f m, fog %s",
+            config.light_c0_cells, config.light_c0_cell_m,
             config.light_c1_cells, config.light_c1_cell_m,
+            config.light_c2_cells, config.light_c2_cell_m,
             "x".join(map(str, self._fog_dim)) if self.fog_enabled else "off")
 
     # ------------------------------------------------------------------
@@ -347,8 +388,10 @@ class GpuLightingPipeline:
         if isinstance(coords, tuple) and len(coords) == 3 \
                 and isinstance(coords[0], int):
             self._pending_coords.add(coords)
+            self._edited_coords.add(coords)
         else:
             self._pending_coords.update(coords)
+            self._edited_coords.update(coords)
         self._load_dirty_timer = _LOAD_REASSEMBLE_INTERVAL_S  # no batching
 
     def _on_chunk_loaded(self, event: ChunkLoadedEvent) -> None:
@@ -357,12 +400,16 @@ class GpuLightingPipeline:
 
     def _coords_hit_window(self, window: VolumeWindow) -> bool:
         """True when any pending chunk overlaps the window's world box."""
+        return self._any_coord_hits(self._pending_coords, window)
+
+    def _any_coord_hits(self, coords, window: VolumeWindow) -> bool:
+        """True when any coord in ``coords`` overlaps the window's world box."""
         if window.origin_cell is None:
             return True
         chunk_m = self._config.chunk_meters
         lo = window.world_origin_m
         size = window.size_m
-        for c in self._pending_coords:
+        for c in coords:
             if all(c[i] * chunk_m < lo[i] + size
                    and (c[i] + 1) * chunk_m > lo[i] for i in range(3)):
                 return True
@@ -403,27 +450,27 @@ class GpuLightingPipeline:
         self.exposure = base * mult
         self.exposure_sky = base * (mult ** 0.35)
 
-        # 1. Window follow + geometry reassembly.  A cascade reassembles when
-        #    its window moved, or when a pending loaded/edited chunk actually
-        #    intersects its box (the streaming frontier never touches the
-        #    48 m cascade-0 box, so it stays untouched while the world fills).
-        batch_ready = bool(self._pending_coords) and \
-            self._load_dirty_timer >= _LOAD_REASSEMBLE_INTERVAL_S
-        for casc in self.cascades:
-            moved = casc.window.recenter(camera_pos)
-            hit = (batch_ready and self._coords_hit_window(casc.window))
-            if moved or hit or self._force_all_dirty:
-                vol = assemble_geometry(
-                    casc.window, self._provider.chunks, self._palette,
-                    chunk_size=self._config.chunk_size,
-                    voxel_size=self._config.voxel_size)
-                _upload_volume(casc.geom, vol.albedo_occ)
-                _upload_volume(casc.emis, vol.emission)
-                casc.needs_inject = True
-        if batch_ready or self._force_all_dirty:
+        # 1. Window follow + geometry reassembly — the heavy CPU gather + pack
+        #    runs OFF the main thread (CascadeAssemblyWorker).  The main thread
+        #    only snapshots which chunks to read, uploads finished volumes, and
+        #    commits the window origin once its volume is on the GPU.  A cascade
+        #    reassembles when its window moved, or when a pending loaded/edited
+        #    chunk actually intersects its box (the streaming frontier never
+        #    touches the 48 m cascade-0 box, so it stays untouched while the
+        #    world fills).
+        if self._force_all_dirty:
+            # Boot / first frame: assemble synchronously so the world is lit on
+            # frame 1 (no async latency at startup; matches prior behaviour).
+            for casc in self.cascades:
+                casc.window.recenter(camera_pos)
+                self._assemble_and_upload_sync(casc)
             self._pending_coords.clear()
             self._load_dirty_timer = 0.0
             self._force_all_dirty = False
+        else:
+            self._apply_edits_sync()
+            self._schedule_assembly(camera_pos)
+            self._drain_assembly_results()
 
         # 2. Celestial / sky change detection (affects every cascade).
         if self._last_sun is None or any(
@@ -502,6 +549,161 @@ class GpuLightingPipeline:
             self._dispatch_fog(camera_pos, sun, sky_state, engine, gsg)
 
     # ------------------------------------------------------------------
+    # Cascade volume assembly (off-thread; see assembly_worker.py)
+    # ------------------------------------------------------------------
+
+    def _assemble_and_upload_sync(self, casc: "_Cascade") -> None:
+        """
+        Gather + upload one cascade volume inline on the main thread.
+
+        Used only for the boot/first frame so the world is lit immediately;
+        steady-state reassembly goes through the worker.
+        """
+        vol = assemble_geometry(
+            casc.window, self._provider.chunks, self._palette,
+            chunk_size=self._config.chunk_size,
+            voxel_size=self._config.voxel_size)
+        _upload_volume(casc.geom, vol.albedo_occ)
+        _upload_volume(casc.emis, vol.emission)
+        casc.needs_inject = True
+
+    def _apply_edits_sync(self) -> None:
+        """
+        Refresh brush-edited cascades' geometry SAME-FRAME (kills the black flash).
+
+        Terrain edits (explosions, digging) must light immediately.  The
+        steady-state async reassembly lags 1-2 frames; until it lands the stale
+        occupancy still marks the new crater as solid (so its sun visibility is
+        shadowed and its GI cell unlit) and it renders black, then pops to lit
+        once the volume catches up — the "black then lit" artefact.
+
+        Edits are discrete events (not per-frame like flying), so a synchronous
+        gather of the few hit cascades is affordable.  A cascade window does not
+        move on an edit, so this re-slices the live (already-edited) materials at
+        the committed origin and forces re-injection this frame.  Cascades with
+        an async job already in flight are skipped here and left to the normal
+        ``_pending_coords`` path (rare for the camera-local cascade 0 during a
+        stationary edit); the eager uploads here are otherwise redundant with —
+        not conflicting with — that path, which keeps the committed-origin
+        bookkeeping untouched.
+        """
+        if not self._edited_coords:
+            return
+        for casc in self.cascades:
+            # Only the near/mid cascades refresh synchronously: their crater is
+            # what the player is looking at, and their full-window gather is
+            # cheap (cascade 0 ~27, cascade 1 ~1.7k chunk coords).  The coarse
+            # FAR cascade (index 2, ~33k coords over 512 m) would add a one-frame
+            # hitch on every edit for a relight that lags invisibly at 96 m+, so
+            # it stays on the async ``_pending_coords`` path.
+            if casc.index >= 2:
+                continue
+            if casc._assembly_inflight:
+                continue
+            if casc.window.origin_cell is None:
+                continue
+            if not self._any_coord_hits(self._edited_coords, casc.window):
+                continue
+            self._assemble_and_upload_sync(casc)   # sets needs_inject = True
+        self._edited_coords.clear()
+
+    def _schedule_assembly(self, camera_pos) -> None:
+        """
+        Submit reassembly jobs for cascades that moved or whose terrain changed.
+
+        Non-mutating w.r.t. the committed window origin: ``needs_recenter`` and
+        ``_coords_hit_window`` test against the *committed* origin, and a job is
+        submitted for the new (snapped) origin without advancing it — the origin
+        commits only when the matching volume lands (``_drain_assembly_results``).
+        At most one job per cascade is in flight at a time.
+        """
+        batch_ready = bool(self._pending_coords) and \
+            self._load_dirty_timer >= _LOAD_REASSEMBLE_INTERVAL_S
+        deferred = False   # a cascade still owes pending edits but is busy
+        for casc in self.cascades:
+            moved = casc.window.needs_recenter(camera_pos)
+            hit = batch_ready and self._coords_hit_window(casc.window)
+            if casc._assembly_inflight:
+                if hit:
+                    deferred = True
+                continue
+            if not (moved or hit):
+                continue
+            # 'moved' → assemble for the new snapped origin; 'hit' (terrain
+            # changed inside the window, origin unchanged) → re-assemble the
+            # committed origin.  Either way the snapshot reads live materials,
+            # so a submit also satisfies any pending 'hit'.
+            origin = (casc.window._desired_origin(camera_pos)
+                      if moved else casc.window.origin_cell)
+            self._submit_assembly(casc, origin)
+        # Clear pending edits only once every cascade they touch has an
+        # up-to-date (just-submitted or current) volume — otherwise a busy
+        # cascade would silently miss the edit.
+        if batch_ready and not deferred:
+            self._pending_coords.clear()
+            self._load_dirty_timer = 0.0
+
+    def _submit_assembly(self, casc: "_Cascade", origin_cell) -> None:
+        """Snapshot the chunks a reassembly will read and enqueue the job."""
+        coords = window_chunk_span(
+            origin_cell, casc.cells, casc.cell_m,
+            int(self._config.chunk_size), float(self._config.voxel_size))
+        live = self._provider.chunks
+        # Snapshot *references* to the material arrays (not copies): cheap, and
+        # safe against streaming (dict membership changes don't affect captured
+        # arrays).  A concurrent in-place brush edit of a captured array is the
+        # only race; it self-corrects on the next reassembly.
+        materials = {c: live[c].materials for c in coords if c in live}
+        self._assembly_seq += 1
+        job = AssemblyJob(
+            cascade_index=casc.index, origin_cell=tuple(origin_cell),
+            cells=casc.cells, cell_m=casc.cell_m,
+            chunk_size=int(self._config.chunk_size),
+            voxel_size=float(self._config.voxel_size),
+            materials=materials, palette=self._palette,
+            seq=self._assembly_seq)
+        if self._threaded:
+            casc._assembly_inflight = True
+            casc._pending_seq = self._assembly_seq
+            self._assembly_worker.submit(job)
+        else:
+            # Inline (tooling/tests): assemble + commit immediately.
+            self._commit_assembly_result(assemble_packed(job))
+
+    def _drain_assembly_results(self) -> None:
+        """Upload finished volumes and commit their window origins (main thread)."""
+        if self._assembly_worker is None:
+            return
+        for res in self._assembly_worker.drain_results():
+            self._commit_assembly_result(res)
+
+    def _commit_assembly_result(self, res) -> None:
+        """Upload one finished volume and advance its committed window origin."""
+        casc = self.cascades[res.cascade_index]
+        if self._threaded and res.seq != casc._pending_seq:
+            casc._assembly_inflight = False
+            return   # superseded (single-inflight makes this rare)
+        casc._assembly_inflight = False
+        if not res.albedo_bytes:
+            return   # assembly failed → flag cleared, retry next frame
+        casc.geom.set_ram_image(res.albedo_bytes)
+        casc.emis.set_ram_image(res.emis_bytes)
+        # Commit: the GPU geom texture now matches this origin, so the shader
+        # origin uniforms (read from window.origin_cell) line up exactly.
+        casc.window.origin_cell = tuple(res.origin_cell)
+        casc.needs_inject = True
+
+    def shutdown(self) -> None:
+        """
+        Stop the background assembly worker.  Call once on app exit.
+
+        Idempotent and safe to call when running unthreaded (no-op).
+        """
+        if self._assembly_worker is not None:
+            self._assembly_worker.stop(join=True)
+            self._assembly_worker = None
+
+    # ------------------------------------------------------------------
 
     def _dispatch_fog(self, camera_pos, sun, sky_state,
                       engine, gsg) -> None:
@@ -562,7 +764,7 @@ class GpuLightingPipeline:
         Call once after applying the terrain shader; per-frame values are
         refreshed by :meth:`update_surface_inputs`.
         """
-        c0, c1 = self.cascades
+        c0, c1, c2 = self.cascades
         node.set_shader_input("u_c0_geom", c0.geom)
         node.set_shader_input("u_c0_vis", c0.vis)
         node.set_shader_input("u_c0_cells", float(c0.cells))
@@ -571,6 +773,10 @@ class GpuLightingPipeline:
         node.set_shader_input("u_c1_vis", c1.vis)
         node.set_shader_input("u_c1_cells", float(c1.cells))
         node.set_shader_input("u_c1_cell_m", float(c1.cell_m))
+        node.set_shader_input("u_c2_geom", c2.geom)
+        node.set_shader_input("u_c2_vis", c2.vis)
+        node.set_shader_input("u_c2_cells", float(c2.cells))
+        node.set_shader_input("u_c2_cell_m", float(c2.cell_m))
         node.set_shader_input("u_quant_m",
                               float(self._config.light_quant_m))
         node.set_shader_input("u_ao_strength",
@@ -600,9 +806,10 @@ class GpuLightingPipeline:
         sky_state : SkyState | None
             For sun/moon direction + radiance uniforms.
         """
-        c0, c1 = self.cascades
+        c0, c1, c2 = self.cascades
         node.set_shader_input("u_c0_radiance", c0.radiance_current)
         node.set_shader_input("u_c1_radiance", c1.radiance_current)
+        node.set_shader_input("u_c2_radiance", c2.radiance_current)
         node.set_shader_input("u_c0_emis", c0.emis)
         # Auto-exposure: the adapted tonemap exposure changes every frame.
         node.set_shader_input("u_exposure", float(self.exposure))
@@ -610,6 +817,8 @@ class GpuLightingPipeline:
             node.set_shader_input("u_c0_origin_m", LVecBase3f(*c0.origin_m()))
         if c1.window.origin_cell is not None:
             node.set_shader_input("u_c1_origin_m", LVecBase3f(*c1.origin_m()))
+        if c2.window.origin_cell is not None:
+            node.set_shader_input("u_c2_origin_m", LVecBase3f(*c2.origin_m()))
         sun_dir, sun_rad, moon_dir, moon_rad, sky_amb = \
             self._sky_inputs(sky_state)
         node.set_shader_input("u_sun_dir", LVecBase3f(*sun_dir))

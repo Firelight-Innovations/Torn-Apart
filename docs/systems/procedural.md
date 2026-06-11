@@ -1,5 +1,5 @@
 ﻿# procedural â€” System Doc
-keywords: procedural, ProceduralDef, ProceduralTextureDef, register, get, clear_cache, reset_registry, value_noise, pixel_noise, wasteland_ground, night_sky, rain_streak, grass_ground, dirt_ground, grass, dirt, pixel art, pixelated, pixel_noise, posterize, posterise, palette, stars, star field, galaxy, equirect, equirectangular, sky texture, rain texture, tileable, seamless, texture, noise, registry, cache, determinism, world_seed, params_digest, for_domain, biome, building, content, authoring, RGBA, uint8, octaves, persistence, lacunarity, base_freq, layered, heightmap, moon_surface, moon, crater, maria, lunar, normal map, emission map, derive_normal_map, flat_normal_map, black_emission_map, sobel, maps
+keywords: procedural, ProceduralDef, ProceduralTextureDef, register, get, clear_cache, reset_registry, value_noise, pixel_noise, wasteland_ground, night_sky, rain_streak, grass_ground, dirt_ground, grass, dirt, pixel art, pixelated, pixel_noise, posterize, posterise, palette, stars, star field, galaxy, equirect, equirectangular, sky texture, rain texture, tileable, seamless, texture, noise, registry, cache, determinism, world_seed, params_digest, for_domain, biome, building, content, authoring, RGBA, uint8, octaves, persistence, lacunarity, base_freq, layered, heightmap, moon_surface, moon, crater, maria, lunar, normal map, emission map, derive_normal_map, flat_normal_map, black_emission_map, sobel, maps, ground_lut, build_ground_lut, palette LUT, GRASS_PALETTE, DIRT_PALETTE, GRASS_THRESHOLDS, DIRT_THRESHOLDS, ground palette, posterised ramp, world-space ground
 
 > One doc per code package; filename matches the package exactly (`docs/systems/procedural.md` â†” `fire_engine/procedural/`).
 
@@ -52,8 +52,8 @@ All symbols below are re-exported from `fire_engine.procedural` (`__init__.py`).
 | `"wasteland_ground"` | `procedural/textures/wasteland_ground.py` | `(256,256,4) uint8` RGBA dirt/dead-grass (smooth `value_noise`, bilinear) |
 | `"night_sky"` | `procedural/textures/night_sky.py` | `(512,1024,4) uint8` equirect star field + galaxy band (+Z pole at v=1, U-seamless, alpha = luminance for additive blending).  Params: `width`, `height`, `star_count` (pass `Config.sky_star_count`). |
 | `"rain_streak"` | `procedural/textures/rain_streak.py` | `(512,128,4) uint8` sparse vertical rain streaks, tileable in U and V, alpha = streak intensity.  Params: `width`, `height`, `streak_count`. |
-| `"grass_ground"` | `procedural/textures/grass_ground.py` | `(64,64,4) uint8` crisp pixel-art weathered grass; 8-colour posterised palette; `pixel_noise`-based.  Params: `width`, `height`. |
-| `"dirt_ground"` | `procedural/textures/dirt_ground.py` | `(64,64,4) uint8` crisp pixel-art dry dirt with dark clod clusters; 6-colour posterised palette; `pixel_noise`-based.  Params: `width`, `height`. |
+| `"grass_ground"` | `procedural/textures/grass_ground.py` | `(64,64,4) uint8` crisp pixel-art weathered grass; 8-colour posterised palette; `pixel_noise`-based.  Params: `width`, `height`.  Exports `GRASS_PALETTE` / `GRASS_THRESHOLDS` (the colour ramp) for the GPU ground LUT. |
+| `"dirt_ground"` | `procedural/textures/dirt_ground.py` | `(64,64,4) uint8` crisp pixel-art dry dirt with dark clod clusters; 6-colour posterised palette; `pixel_noise`-based.  Params: `width`, `height`.  Exports `DIRT_PALETTE` / `DIRT_THRESHOLDS`. |
 | `"moon_surface"` | `procedural/textures/moon_surface.py` | `(256,256,4) uint8` lunar disc: pale regolith + dark maria + vectorised crater field (bright rims, shadowed floors); alpha 255 inside the unit disc.  Seeded per world — every world grows a different moon.  Params: `size`, `crater_count`.  Sampled disc-locally by the sky-dome shader; phase terminator applied dynamically (not baked). |
 | `"grass_tuft"` | `procedural/textures/grass_tuft.py` | `(32,32,4) uint8` pixel-art grass-blade silhouette with **binary alpha** (255 on blades, 0 elsewhere — render with discard, never blend).  ~9 leaning blades, dark base → pale dried tip, blade bases on the bottom image row (V=0 after the upload flip).  Mapped onto the GPU grass tuft quads (`world/grass_renderer.py`).  Params: `width`, `height`, `blades`. |
 
@@ -64,6 +64,12 @@ All symbols below are re-exported from `fire_engine.procedural` (`__init__.py`).
 | `derive_normal_map(rgba, strength=1.4) -> (H,W,4) uint8` | Tangent-space normal map from a texture's luminance gradient (wrap-padded Sobel; brightness-as-height).  Used by main.py to build the GPU terrain shader's per-material normal maps — no hand-authored maps, keeping textures 100 % procedural. |
 | `flat_normal_map(size=4)` | All-(128,128,255) flat normal map (placeholder stage). |
 | `black_emission_map(size=4)` | All-black emission map (placeholder stage). |
+
+### Ground palette LUT (`procedural/textures/ground_lut.py`)
+
+| Symbol | Description |
+|---|---|
+| `build_ground_lut(entries, levels=256) -> (rows, levels, 4) uint8` | Bake a per-material posterised colour ramp into a lookup texture: `entries` maps a **material id** to `(palette, thresholds)` (the constants the ground defs export); row `m`, column `v` holds the colour `_posterise` assigns to noise value `(v+0.5)/levels`.  `rows = max(material_id)+1`; alpha always 255.  Uses the same `searchsorted(..., side="right")` rule as the defs, so the GPU shader's world-space procedural ground matches the baked previews bucket-for-bucket.  Uploaded via `world/texture_bridge.to_field_texture` and bound as `u_ground_lut` (see `world/terrain_shader.apply_terrain_shader`).  Pure numpy/headless. |
 
 ## Imports Allowed
 

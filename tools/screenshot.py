@@ -177,7 +177,8 @@ def capture(frames: int, out_name: str, explode: bool,
             height_m: float | None = None, stub_sky: bool = False,
             torch: bool = False, game_day: int | None = None,
             flashlight: bool = False, gi_room: bool = False,
-            move_into_room: bool = False) -> Path:
+            move_into_room: bool = False, occluder: bool = False,
+            no_grass: bool = False) -> Path:
     """
     Build the demo, step `frames` frames, write the framebuffer to a PNG.
 
@@ -270,11 +271,13 @@ def capture(frames: int, out_name: str, explode: bool,
         cx, cy, z0 = demo.build_gi_test_room(app)
         print("GI ROOM at", (cx, cy, z0))
         if move_into_room:
-            # Just inside the doorway, looking slightly up so the far wall,
-            # both coloured walls and the glow panel are all in frame.
-            app.camera_go.transform.position = Vec3(cx, cy - 4.0, z0 + 1.7)
+            # Stand just inside the doorway and look down the room, tilted
+            # slightly down so the floor, both coloured side walls and the
+            # white back wall are framed — the red/green bounce onto the
+            # white surfaces (and floor) is the GI signature to look for.
+            app.camera_go.transform.position = Vec3(cx, cy - 4.2, z0 + 2.4)
             app.camera_go.transform.local_rotation = (
-                Quat.from_axis_angle(Vec3.RIGHT, math.radians(10.0))
+                Quat.from_axis_angle(Vec3.RIGHT, math.radians(-7.0))
             ).normalized()
 
     if flashlight and getattr(app, "lighting_pipeline", None) is not None:
@@ -300,6 +303,30 @@ def capture(frames: int, out_name: str, explode: bool,
             intensity=8.0, radius=16.0))
         print("TORCH dropped at", pos)
 
+    if occluder and getattr(app, "dev_overlay", None) is not None:
+        # Spawn a real dev cube ~6 m ahead and drop it just above the ground.
+        # The overlay's per-frame _sync_spawned pushes the cube's world AABB to
+        # the lighting pipeline as a dynamic occluder, so the sun's boxVis test
+        # in inject.comp must carve a shadow beneath it — the exact path the
+        # user's "every object casts shadows" request exercises.
+        from fire_engine.terrain import raycast_voxel as _rc
+        cam = app.camera_go.transform.position
+        fwd = app.camera_go.transform.forward
+        gx, gy = cam.x + fwd.x * 6.0, cam.y + fwd.y * 6.0
+        hit = _rc(Vec3(gx, gy, cam.z + 40.0), Vec3(0.0, 0.0, -1.0),
+                  app.chunk_manager.get_or_create, max_distance_m=90.0)
+        gz = (hit.point.z if hit is not None else 8.0)
+        go = app.dev_overlay.spawn_cube()
+        go.transform.position = Vec3(gx, gy, gz + 1.5)
+        go.transform.local_scale = Vec3(3.0, 3.0, 3.0)   # 3 m cube, big shadow
+        print("OCCLUDER dev cube at", (gx, gy, gz + 1.5))
+        import os as _os
+        if _os.environ.get("OCC_EMISSIVE"):
+            # Mark the cube emissive: registers an AreaLight on its AABB so it
+            # glows and lights its surroundings (the dynamic emission path).
+            app.dev_overlay.toggle_emissive()
+            print("OCCLUDER cube marked emissive")
+
     # Step the task manager so chunks stream, remesh, relight, and the sky
     # settles.  Each step runs the frame task AND flips the window, so the
     # framebuffer is valid.  Hold the game clock at the requested time so long
@@ -309,6 +336,20 @@ def capture(frames: int, out_name: str, explode: bool,
         app.taskMgr.step()
         if time_of_day is not None:
             app._clock.game_time_of_day = hold_tod
+
+    if gi_room or no_grass or occluder:
+        # Grass clutters the GI box and adds per-frame sway noise that swamps
+        # A/B shadow diffs.  The grass root only exists after the first frame,
+        # so hide it now and render one more frame before capturing.
+        grass_go = getattr(app, "grass_go", None)
+        if grass_go is not None:
+            from fire_engine.world.grass_renderer import GrassRendererComponent
+            gc = grass_go.get_component(GrassRendererComponent)
+            if gc is not None and getattr(gc, "_root", None) is not None:
+                gc._root.hide()
+                app.taskMgr.step()
+                if time_of_day is not None:
+                    app._clock.game_time_of_day = hold_tod
 
     out_dir = _REPO_ROOT / "tools" / "out"
     out_path = out_dir / out_name
@@ -366,6 +407,12 @@ def main() -> None:
     parser.add_argument("--inside", action="store_true",
                         help="with --gi-room: move the camera inside the "
                              "room (doorway view of the far wall)")
+    parser.add_argument("--occluder", action="store_true",
+                        help="float a box occluder ahead of the camera to "
+                             "verify dynamic-object (dev-cube) shadows")
+    parser.add_argument("--no-grass", action="store_true",
+                        help="hide the GPU grass before capture (clean A/B "
+                             "shadow diffs without sway noise)")
     args = parser.parse_args()
 
     path = capture(args.frames, args.out, args.explode,
@@ -374,7 +421,8 @@ def main() -> None:
                    height_m=args.height, stub_sky=args.stub_sky,
                    torch=args.torch, game_day=args.day,
                    flashlight=args.flashlight, gi_room=args.gi_room,
-                   move_into_room=args.inside)
+                   move_into_room=args.inside, occluder=args.occluder,
+                   no_grass=args.no_grass)
     # Report on stdout for CI.
     size = os.path.getsize(path) if path.exists() else 0
     print(f"SCREENSHOT_RESULT wrote {path} ({size} bytes)")

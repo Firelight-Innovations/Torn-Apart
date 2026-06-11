@@ -51,6 +51,8 @@ __all__ = [
     "VolumeWindow",
     "GeometryVolume",
     "assemble_geometry",
+    "window_chunk_span",
+    "pack_volume",
     "EMISSION_SCALE",
 ]
 
@@ -138,6 +140,27 @@ class VolumeWindow:
             out.append(snapped)
         return (out[0], out[1], out[2])
 
+    def needs_recenter(self, camera_pos) -> bool:
+        """
+        True when the camera has drifted past the hysteresis margin (or the
+        window was never placed) — i.e. a reassembly *should* be scheduled.
+
+        Non-mutating: unlike :meth:`recenter`, this does NOT move
+        ``origin_cell``.  The async assembly path uses it to decide whether to
+        submit a job while leaving the *committed* origin (what the GPU volume
+        and shader uniforms currently use) untouched until the new volume is
+        actually uploaded.  See ``lighting/gpu.py``.
+        """
+        if self.origin_cell is None:
+            return True
+        half = self.cells * 0.5
+        for axis in range(3):
+            centre = (self.origin_cell[axis] + half) * self.cell_m
+            if abs(float(camera_pos[axis]) - centre) \
+                    > self.margin_cells * self.cell_m:
+                return True
+        return False
+
     def recenter(self, camera_pos) -> bool:
         """
         Follow the camera; return True when the window moved.
@@ -214,9 +237,11 @@ def assemble_geometry(
     ----------
     window : VolumeWindow
         Placed window (``recenter`` called at least once).
-    chunks : dict[tuple[int, int, int], Chunk]
-        Loaded chunks (``ChunkManager.chunks``).  Only ``chunk.materials``
-        (``uint8 (S, S, S)``) is read.
+    chunks : dict[tuple[int, int, int], Chunk | numpy.ndarray]
+        Loaded chunks (``ChunkManager.chunks``).  Each value may be a chunk
+        object (only ``chunk.materials`` — ``uint8 (S, S, S)`` — is read) or a
+        bare ``materials`` ndarray (the form passed by the async assembly
+        worker, which snapshots arrays rather than live chunks).
     palette : MaterialPalette
         Material → albedo/emission lookup.
     chunk_size : int
@@ -261,6 +286,9 @@ def assemble_geometry(
                 chunk = chunks.get((ccx, ccy, ccz))
                 if chunk is None:
                     continue
+                # Accept either a chunk object (.materials) or a bare ndarray
+                # snapshot (async assembly worker passes the latter).
+                mats = getattr(chunk, "materials", chunk)
                 # Chunk extent in window-cell coordinates.
                 c0 = (ccx * cells_per_chunk, ccy * cells_per_chunk,
                       ccz * cells_per_chunk)
@@ -277,7 +305,7 @@ def assemble_geometry(
                 dst = tuple(
                     slice(a[i] - (ox, oy, oz)[i], b[i] - (ox, oy, oz)[i])
                     for i in range(3))
-                block = chunk.materials[src]
+                block = mats[src]
                 if k > 1:
                     s = block.shape
                     block = block.reshape(
@@ -303,3 +331,50 @@ def assemble_geometry(
         origin_cell=window.origin_cell,
         cell_m=window.cell_m,
     )
+
+
+def window_chunk_span(
+    origin_cell: tuple[int, int, int],
+    cells: int,
+    cell_m: float,
+    chunk_size: int,
+    voxel_size: float,
+) -> list[tuple[int, int, int]]:
+    """
+    Chunk coordinates whose voxels intersect a window placed at ``origin_cell``.
+
+    Mirrors the lo/hi chunk-range computation inside :func:`assemble_geometry`
+    so the async assembly path can snapshot exactly the chunks a reassembly
+    will read (a small superset is harmless; missing chunks would leave holes).
+
+    Returns
+    -------
+    list[tuple[int, int, int]]
+        All ``(cx, cy, cz)`` chunk coords overlapping the window box.  Pure /
+        deterministic; no chunk lookups (caller filters against loaded chunks).
+    """
+    k = int(round(cell_m / voxel_size))
+    cells_per_chunk = chunk_size // k
+    lo = [int(np.floor(o / cells_per_chunk)) for o in origin_cell]
+    hi = [int(np.floor((o + cells - 1) / cells_per_chunk)) for o in origin_cell]
+    out: list[tuple[int, int, int]] = []
+    for ccx in range(lo[0], hi[0] + 1):
+        for ccy in range(lo[1], hi[1] + 1):
+            for ccz in range(lo[2], hi[2] + 1):
+                out.append((ccx, ccy, ccz))
+    return out
+
+
+def pack_volume(arr: np.ndarray) -> bytes:
+    """
+    Pack a ``uint8 (N, N, N, 4)`` ``[x, y, z]`` block into Panda3D 3-D-texture
+    RAM bytes (page-major ``(z, y, x)``, BGRA channel order).
+
+    This is the numpy-heavy half of a volume upload (transpose + channel swap +
+    contiguous copy).  Factored out of ``lighting/gpu._upload_volume`` so the
+    async assembly worker can run it off the main thread, leaving only the
+    cheap ``Texture.set_ram_image(bytes)`` memcpy on the render thread.
+    """
+    data = np.ascontiguousarray(
+        np.transpose(arr, (2, 1, 0, 3))[..., [2, 1, 0, 3]])
+    return data.tobytes()

@@ -186,7 +186,11 @@ class TestFacetedMesher:
         assert seen["shape"] == (mesh.face_count, 3)
         # shade_strength=0 → grey is exactly the sampled light.
         assert np.allclose(mesh.colors[:, 0], 0.5, atol=1e-6)
-        assert np.allclose(mesh.colors[:, 3], 1.0)
+        # Alpha encodes the face material id (id / 255) for the GPU ground
+        # shader's per-material palette selection, not a constant 1.0.
+        expected_alpha = np.repeat(mesh.face_materials, 6).astype(np.float32) / 255.0
+        assert np.allclose(mesh.colors[:, 3], expected_alpha)
+        assert np.all(mesh.face_materials > 0)        # all faces are solid voxels
 
     def test_facet_shade_darkens_side_faces(self):
         """With shade_strength > 0, side facets are darker than top facets."""

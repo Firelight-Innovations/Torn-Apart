@@ -347,7 +347,12 @@ def build_mesh_faceted(
     colors[:, 0] = grey
     colors[:, 1] = grey
     colors[:, 2] = grey
-    colors[:, 3] = 1.0
+    # Alpha carries the face material id (id / 255) so the GPU terrain shader
+    # can pick a per-material, world-space procedural palette per fragment
+    # (see world/shaders/terrain.frag).  Terrain is opaque with no transparency
+    # attrib, so the fixed-function fallback never reads this alpha — safe to
+    # repurpose.  6 verts per face, matching the 6-vertex triangle expansion.
+    colors[:, 3] = np.repeat(face_mats, 6).astype(np.float32) / 255.0
 
     indices = np.arange(positions.shape[0], dtype=np.uint32)
 

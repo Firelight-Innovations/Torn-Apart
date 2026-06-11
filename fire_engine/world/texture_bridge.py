@@ -140,7 +140,10 @@ def to_panda_cubemap(faces: np.ndarray) -> Texture:
     Returns
     -------
     panda3d.core.Texture
-        Linear-filtered cube map ready for ``set_shader_input``.
+        Nearest-filtered cube map ready for ``set_shader_input``.  Nearest
+        (not linear) keeps the engine-wide **retro hard-pixel** look — the
+        star/galaxy sky reads as crisp pixels instead of a smeared bilinear
+        blur.
     """
     if faces.ndim != 4 or faces.shape[0] != 6 or faces.shape[3] != 4 \
             or faces.shape[1] != faces.shape[2]:
@@ -155,8 +158,8 @@ def to_panda_cubemap(faces: np.ndarray) -> Texture:
     tex.setup_cube_map(size, Texture.T_unsigned_byte, Texture.F_rgba)
     bgra = np.ascontiguousarray(faces[..., [2, 1, 0, 3]])   # RGBA -> BGRA
     tex.set_ram_image(bytes(bgra))
-    tex.set_minfilter(SamplerState.FT_linear)
-    tex.set_magfilter(SamplerState.FT_linear)
+    tex.set_minfilter(SamplerState.FT_nearest)
+    tex.set_magfilter(SamplerState.FT_nearest)
     return tex
 
 

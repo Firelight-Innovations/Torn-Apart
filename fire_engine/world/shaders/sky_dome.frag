@@ -169,6 +169,11 @@ void main() {
 
     vec3 sunT = viewTransmittance(u_sun_dir);
 
+    // Disc coverage of the sun/moon at this pixel — opaque bodies that must
+    // occlude the star skybox (added post-tonemap below) so they never look
+    // transparent.  Accumulated as the max of the sun & moon disc masks.
+    float bodyMask = 0.0;
+
     // --- Sun: large limb-darkened disc tinted by its own transmittance -----
     float sc = dot(d, u_sun_dir);
     if (sc > 0.999) {
@@ -179,6 +184,7 @@ void main() {
             float limb = sqrt(max(1.0 - sr * sr, 0.0));
             float ld = 0.42 + 0.58 * limb;               // limb darkening
             col += sunT * (u_sun_intensity * sdisc * ld * 14.0);
+            bodyMask = max(bodyMask, sdisc);             // sun occludes stars
         }
     }
     // Forward-Mie halo around the sun.
@@ -199,6 +205,7 @@ void main() {
             vec3 moonCol = mtex * viewTransmittance(u_moon_dir)
                          * (0.05 + 1.10 * lit) * 1.5;
             col = mix(col, moonCol, mdisc);               // moon occludes sky
+            bodyMask = max(bodyMask, mdisc);              // and occludes stars
         }
     }
     // Faint moon halo, night only.
@@ -237,6 +244,7 @@ void main() {
                         smoothstep(0.40, 0.85, night.a));
     vec3 stars = night.rgb * twinkle * u_star_visibility;
     stars *= smoothstep(-0.06, 0.18, d.z);              // sink into horizon haze
+    stars *= 1.0 - clamp(bodyMask, 0.0, 1.0);           // sun/moon in front of sky
     ldr += stars;
 
     // --- Shooting star: bright fading streak along a great circle ----------

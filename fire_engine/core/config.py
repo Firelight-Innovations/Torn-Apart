@@ -89,6 +89,10 @@ class Config:
                                    culled-face cubes).
     facet_shade_strength : float — [0,1] strength of the faceted mesher's
                                    normal-based facet accent shading (0 = off).
+    ground_texels_per_m  : float — virtual texels per world meter for the GPU
+                                   terrain shader's world-space procedural
+                                   ground pattern (non-repeating pixel art);
+                                   ~16 → 0.0625 m texels matching the voxel grid.
     lighting_backend     : str   — "gpu" (volumetric radiance cascades, GLSL
                                    compute) or "cpu" (legacy baked-vertex
                                    sunlight column pass).
@@ -98,9 +102,22 @@ class Config:
                                    terrain voxel).
     light_c1_cells       : int   — cascade-1 texels per axis (96 → 192 m box).
     light_c1_cell_m      : float — cascade-1 cell edge in meters (2.0).
+    light_c2_cells       : int   — cascade-2 texels per axis (64 → 512 m box):
+                                   the coarse FAR cascade that keeps distant
+                                   terrain (and the GI test room) lit with
+                                   low-resolution shadows + GI once it leaves
+                                   cascade 1, instead of falling back to flat
+                                   sky ambient.  Assembled off-thread like the
+                                   others.
+    light_c2_cell_m      : float — cascade-2 cell edge in meters (8.0).
     light_quant_m        : float — shading sample-grid quantisation in meters
-                                   (0.25 → 2×2×2 visible light pixels per
+                                   (0.0625 → 8×8×8 visible light pixels per
                                    0.5 m voxel — the pixelated-light look).
+                                   This is only the visible sample-snap grid;
+                                   the underlying GI *data* resolution is the
+                                   cascade-0 cell (``light_c0_cell_m``), so
+                                   shrinking this past the cell size yields a
+                                   finer-but-smoother grid, not more detail.
     light_prop_iters     : int   — GI flood-fill propagation iterations per
                                    frame per cascade (light "flows" over a few
                                    frames after a change).
@@ -156,12 +173,15 @@ class Config:
     sky_star_count:        int   = 2500
     mesh_style:            str   = "faceted"
     facet_shade_strength:  float = 0.25
+    ground_texels_per_m:   float = 16.0
     lighting_backend:      str   = "gpu"
     light_c0_cells:        int   = 96
     light_c0_cell_m:       float = 0.5
     light_c1_cells:        int   = 96
     light_c1_cell_m:       float = 2.0
-    light_quant_m:         float = 0.25
+    light_c2_cells:        int   = 64
+    light_c2_cell_m:       float = 8.0
+    light_quant_m:         float = 0.0625
     light_prop_iters:      int   = 2
     light_bounce_strength: float = 0.7
     light_ao_strength:     float = 0.6

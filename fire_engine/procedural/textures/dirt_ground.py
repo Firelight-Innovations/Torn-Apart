@@ -47,7 +47,7 @@ import numpy as np
 from fire_engine.procedural.defs import register_def
 from fire_engine.procedural.textures.base import ProceduralTextureDef, pixel_noise
 
-__all__ = ["DirtGroundDef"]
+__all__ = ["DirtGroundDef", "DIRT_PALETTE", "DIRT_THRESHOLDS"]
 
 
 # ---------------------------------------------------------------------------
@@ -69,6 +69,13 @@ _DIRT_PALETTE = np.array([
 
 # 5 thresholds divide [0,1] into 6 buckets.
 _THRESHOLDS = np.array([0.10, 0.24, 0.42, 0.60, 0.80], dtype=np.float32)
+
+# Public aliases — single source of truth for the dirt ground colour ramp,
+# baked into the GPU terrain shader's world-space palette LUT (see
+# procedural.textures.ground_lut.build_ground_lut) so the non-repeating
+# procedural ground matches this baked-texture art exactly.
+DIRT_PALETTE = _DIRT_PALETTE
+DIRT_THRESHOLDS = _THRESHOLDS
 
 
 def _posterise(field: np.ndarray, palette: np.ndarray, thresholds: np.ndarray) -> np.ndarray:

@@ -101,6 +101,33 @@ _GI_TEST_ALBEDO: dict[int, tuple[float, float, float]] = {
 }
 _GI_GLOW_RADIANCE = (8.0, 7.2, 5.6)   # ceiling-panel emission (linear HDR;
                                       # EMISSION_SCALE=8 is the storage cap)
+# AreaLight co-located with the panel (fills the room; meter-visible).
+_GI_PANEL_COLOR = (1.0, 0.95, 0.85)   # warm white
+_GI_PANEL_INTENSITY = 6.0             # HDR; lights the full 9 m room
+
+def _gi_ground_lut_entries():
+    """
+    Flat ``material id → (palette, thresholds)`` LUT rows for the GI test-room
+    surfaces, so the ground-palette LUT colours materials 200–203 with their
+    solid albedo instead of clamping to the last (grass) row.
+
+    The terrain shader gamma-decodes the LUT (``pow(alb, 2.2)``), so the
+    palette stores the sRGB-encoded form of the linear ``_GI_TEST_ALBEDO``
+    colours.  A single-colour palette uses zero thresholds (every noise bucket
+    maps to the one colour → a flat, non-noisy surface).
+
+    Returns
+    -------
+    dict[int, tuple[numpy.ndarray, numpy.ndarray]]
+    """
+    import numpy as np
+    entries = {}
+    for mid, rgb in _GI_TEST_ALBEDO.items():
+        srgb = (np.clip(np.asarray(rgb, np.float32), 0.0, 1.0)
+                ** (1.0 / 2.2) * 255.0 + 0.5).astype(np.uint8)
+        entries[mid] = (srgb.reshape(1, 3), np.zeros((0,), np.float32))
+    return entries
+
 
 # Flashlight (F key) tuning.
 _FLASHLIGHT_COLOR = (1.0, 0.96, 0.86)
@@ -344,7 +371,13 @@ def build_demo():
         lighting_pipeline = GpuLightingPipeline(cfg, app, chunk_manager, bus,
                                                 palette=palette)
         app.lighting_pipeline = lighting_pipeline
-        apply_terrain_shader(app.terrain_root, lighting_pipeline)
+        # Deterministic per-world hash offset for the procedural ground pattern.
+        from fire_engine.core.rng import for_domain
+        ground_seed = float(for_domain("terrain", "ground").integers(0, 65536))
+        apply_terrain_shader(app.terrain_root, lighting_pipeline,
+                             seed=ground_seed,
+                             texels_per_m=cfg.ground_texels_per_m,
+                             extra_materials=_gi_ground_lut_entries())
 
     # 10. Pre-stream spawn area + seed sunlight + upload initial meshes.
     _prewarm_terrain(app, chunk_manager, sunlight, light_sampler)
@@ -693,6 +726,22 @@ def build_gi_test_room(app) -> tuple[float, float, float]:
         box((1.25, 0.75, 1.5), (cx, cy - sign * 5.0, z0 + 1.5),
             BrushMode.REMOVE)
     box((0.75, 0.75, 1.0), (cx + 2.8, cy + 2.8, z0 + 5.0), BrushMode.REMOVE)
+
+    # Co-locate an AreaLight with the emissive ceiling panel.  The voxel
+    # emission alone glows but only fills its diffusion reach (~4 m); a real
+    # box light gives the whole 9 m room inverse-square direct fill, the
+    # coloured side walls then bleed red/green onto the white surfaces via the
+    # GI flood-fill (the bounce we want to demonstrate), and — unlike voxel
+    # emission — the exposure meter can see it, so the aperture settles sanely.
+    pipeline = getattr(app, "lighting_pipeline", None)
+    if pipeline is not None:
+        from fire_engine.lighting.lights import AreaLight
+        pipeline.lights.add(AreaLight(
+            center=(cx, cy, z0 + 4.1),            # just below the panel face
+            half_extents=(1.5, 1.5, 0.15),
+            color=_GI_PANEL_COLOR, intensity=_GI_PANEL_INTENSITY,
+            radius=18.0))
+
     _log.info("GI test room built at (%.1f, %.1f, %.1f) — walk in and watch "
               "the white walls pick up red/green bounce", cx, cy, z0)
     return cx, cy, z0
@@ -701,8 +750,15 @@ def build_gi_test_room(app) -> tuple[float, float, float]:
 def main() -> None:
     """Boot the demo and run the blocking main loop (opens a window)."""
     app = build_demo()
-    # 12. Run (blocks until the window closes).
-    app.run()
+    # 12. Run (blocks until the window closes).  The try/finally stops the
+    #     GPU-lighting assembly worker thread cleanly on exit (it is a daemon,
+    #     so this is belt-and-suspenders, not strictly required).
+    try:
+        app.run()
+    finally:
+        pipeline = getattr(app, "lighting_pipeline", None)
+        if pipeline is not None:
+            pipeline.shutdown()
 
 
 def _to_ground_texture():

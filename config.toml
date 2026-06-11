@@ -19,6 +19,7 @@ show_light_grid = false
 [terrain]
 mesh_style = "faceted"         # "faceted" = flat-shaded surface nets (semi-smooth Daggerfall look); "blocky" = classic cubes
 facet_shade_strength = 0.25    # [0,1] normal-based facet accent shading baked into vertex colors (0 = off)
+ground_texels_per_m = 16.0    # virtual texels/m for the GPU shader's non-repeating world-space ground pattern (~0.0625 m pixels); LOD octaves fade with distance
 
 [lighting]
 lighting_backend = "gpu"       # "gpu" = volumetric radiance cascades (GLSL compute); "cpu" = legacy baked vertex sunlight
@@ -26,7 +27,9 @@ light_c0_cells = 96            # cascade-0 texels per axis (96 x 0.5 m = 48 m bo
 light_c0_cell_m = 0.5          # cascade-0 cell edge (meters) — one terrain voxel
 light_c1_cells = 96            # cascade-1 texels per axis (96 x 2.0 m = 192 m box, covers view distance)
 light_c1_cell_m = 2.0          # cascade-1 cell edge (meters)
-light_quant_m = 0.25           # shading sample quantisation (meters) → 2x2x2 light pixels per voxel
+light_c2_cells = 64            # cascade-2 texels per axis (64 x 8.0 m = 512 m box) — coarse FAR cascade
+light_c2_cell_m = 8.0          # cascade-2 cell edge (meters); keeps distant terrain lit (low-res shadows + GI)
+light_quant_m = 0.0625         # shading sample quantisation (meters) → 8x8x8 light pixels per voxel
 light_prop_iters = 2           # GI flood-fill iterations per frame per cascade
 light_bounce_strength = 0.7    # [0,1] albedo-tinted bounce gain
 light_ao_strength = 0.6        # [0,1] voxel ambient-occlusion strength

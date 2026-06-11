@@ -262,3 +262,46 @@ file captures the choices made *underneath* it during implementation.
 - **Q:** How does grass get radiance-cascade light + froxel fog without new per-frame plumbing?
 - **Choice:** The grass root is parented under `App.terrain_root`, where `GpuLightingPipeline` already binds/refreshes every cascade/fog/celestial shader input; the grass fragment shader declares the same uniform names and samples GI + voxel-shadowed sun at the blade base, quantised to `light_quant_m`. GPU lighting backend only (component disables itself on "cpu").
 - **Why:** Zero new uniform-sync paths to keep in step; grass light pixels match the terrain's by construction.
+
+---
+
+## 2026-06-11 — World-space procedural ground (non-repeating pixel-art)
+
+### Ground albedo is generated in the shader from world-space noise, not a tiled texture
+- **Q:** The baked 64×64 `grass_ground`/`dirt_ground` textures tiled every 1 m visibly repeat across the 1 km map and shimmer at distance (nearest filtering, no mipmaps). How do we get the same pixel-art look without repetition?
+- **Choice:** The GPU terrain fragment shader (`world/shaders/terrain.frag`) now computes albedo in **world space**: a 2-octave integer-hash value noise of the dominant-axis-planar world coords, snapped to a `config.ground_texels_per_m` (≈16 → 0.0625 m) virtual texel grid for crisp pixels, posterised through a per-material **palette LUT** (`u_ground_lut`). The tiled `p3d_Texture0` albedo is no longer sampled (normal/emission maps still are). The face material id reaches the shader packed into **vertex-colour alpha** (`surface_nets.py`, `id/255`) so one NodePath-level shader needs no per-Geom uniforms; `extra_materials` adds flat LUT rows for debug/test materials (GI room).
+- **Why:** Pattern is `O(1)` per fragment, never repeats anywhere, and stays pixel-art crisp. Packing material into alpha (terrain is opaque, alpha was unused) avoids per-Geom shader inputs and any vertex-format change.
+
+### The shader's palette LUT is baked from the texture defs' own ramps (single source of truth)
+- **Q:** How do we guarantee the procedural ground matches the hand-tuned `grass_ground`/`dirt_ground` art instead of drifting?
+- **Choice:** `procedural/textures/ground_lut.build_ground_lut` bakes each material's `(PALETTE, THRESHOLDS)` — the very constants the defs export (`GRASS_PALETTE`, `DIRT_PALETTE`, …) — into a `(rows,256,4)` LUT via the same `searchsorted(side="right")` posterise rule, uploaded with `to_field_texture` (nearest, clamp). The shader reads `lut[material][noise]`.
+- **Why:** Both the baked preview and the in-shader ground go through one posterise definition, so they agree bucket-for-bucket; a palette tweak updates both with no GLSL edit.
+
+### Distant shimmer is killed with a derivative fade, not mipmaps
+- **Q:** Hard pixels alias badly when a texel shrinks below a screen pixel at distance.
+- **Choice:** The shader measures `fwidth(world_planar) × texels_per_m` and lerps the noise value toward the dominant mid bucket (0.5) as texels drop below ~1 pixel, so far ground resolves to a flat mean colour. No mipmap chain needed for the procedural ground (the LUT has none).
+- **Why:** A procedural pattern has no prefiltered mip pyramid; collapsing toward the mean is the cheap analytic equivalent and matches the "limited palette" aesthetic. **(Superseded 2026-06-11 below — the collapse-to-mean made distant ground a flat "sea of green"; replaced by per-octave LOD.)**
+
+---
+
+## 2026-06-11 — Lighting resolution, far cascade, edit responsiveness, ground LOD
+
+### Ground distance handling: per-octave LOD, not collapse-to-mean (supersedes the entry above)
+- **Q:** The derivative fade above lerped *all* ground noise toward one mid colour once a pixel spanned >2 texels, so the ground went from crisp pixel-art to flat green only ~3–5 m ahead (worst on grazing ground, where `fwidth` is large).
+- **Choice:** `terrain.frag::groundNoise` now sums **three hash octaves** (fine 1×, mid 4×, macro 16× larger texels); each octave fades toward 0.5 by its **own** screen footprint (`smoothstep(1.0, 2.5, mpp*texels)`, `mpp` = world m/pixel). Fine detail drops first, then mid, leaving the macro colour patches — distant ground stays varied. Each octave's mean is 0.5 so the posterise buckets stay balanced. `ground_texels_per_m` restored to 16 (crisp near pixels; the LOD now prevents the distant shimmer that previously forced it down to 8).
+- **Why:** Real mip-like band fade degrades detail gracefully toward the horizon instead of an all-or-nothing collapse — needed for the eventual 1 km render distance.
+
+### A third, coarse, FAR radiance cascade instead of a flat-ambient cutoff
+- **Q:** Beyond cascade 1 (~96 m) surfaces fell back to flat sky ambient with full sun visibility (no shadows/GI). While moving, the leading edge of newly-streamed chunks — and the GI test room as you backed away from it — popped to flat/unlit ("the lighting breaks when far away").
+- **Choice:** Added **cascade 2** (`light_c2_cells=64`, `light_c2_cell_m=8.0` → 512 m box). It reuses the existing camera-centered `VolumeWindow`, the off-thread `CascadeAssemblyWorker`, and the inject/propagate loops verbatim (they iterate `self.cascades`), so "bake far chunks on a separate thread at a lower resolution" added **no new subsystem** — just a third cascade entry, a `u_c2_*` uniform block, and a third branch in `sampleCascades`. Chose 64³ @ 8 m (not 96³) to keep the assembly chunk-span (~33k vs ~110k coords) and VRAM modest given the flat world's wasted vertical extent.
+- **Why:** The documented upgrade path (lighting.md gotcha #7). Graceful low-res far lighting matches the owner's stated solution and lays groundwork for `view_distance_chunks` → 1 km. At the current 96 m streaming radius it is reached only by geometry the trailing (hysteresis-lagged) cascade-1 window hasn't caught up to.
+
+### Light-pixel granularity: `light_quant_m` 0.25 → 0.0625 (8×8×8 per voxel)
+- **Q:** The owner wanted finer "lighting voxels" (up from 2×2 per face), found changing config seemed to have no effect, then found 4×4 (0.125) still looked too blocky up close.
+- **Choice:** Settled on `light_quant_m = 0.0625` (8×8 per 0.5 m face). The value was already plumbed (`u_quant_m`); the apparent "no effect" is that the radiance **data** lives at the 0.5 m cascade cell with trilinear filtering, so re-sampling it on a finer grid makes the light-pixel blocks smaller/smoother but does not add lighting detail. Recorded that the real data-resolution lever is the **cascade cell size** (`light_c0_cell_m`), which `light_quant_m` cannot exceed in true detail.
+- **Why:** Smallest change that makes the up-close light-pixel grid as fine as the owner wanted without a VRAM-heavy finer cascade; the cascade-cell lever is documented for when crisper near lighting (more actual detail) is wanted.
+
+### Brush edits relight synchronously the same frame (kills the "black then lit" crater)
+- **Q:** Explosions/digging showed the new crater black for a frame or two before it lit up.
+- **Choice:** `GpuLightingPipeline._apply_edits_sync` re-slices + uploads + re-injects the hit cascades **synchronously** the frame a `TerrainEditedEvent` arrives, instead of waiting for the 1–2-frame async reassembly (during which the stale occupancy still marks the crater solid → shadowed → black). Edits are discrete events, so the synchronous gather is affordable; cascades already mid-flight fall back to the batched `_pending_coords` async path.
+- **Why:** The async assembly worker exists to smooth *continuous* fly-around recenters, not one-shot edits — for an edit, same-frame correctness beats anti-stutter latency that doesn't apply.

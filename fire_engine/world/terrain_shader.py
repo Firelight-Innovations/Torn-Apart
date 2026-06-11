@@ -39,6 +39,13 @@ from __future__ import annotations
 from panda3d.core import NodePath, Shader  # type: ignore[import]
 
 from fire_engine.core.shader_source import load_glsl
+from fire_engine.procedural.textures.ground_lut import build_ground_lut
+from fire_engine.procedural.textures.grass_ground import (
+    GRASS_PALETTE, GRASS_THRESHOLDS)
+from fire_engine.procedural.textures.dirt_ground import (
+    DIRT_PALETTE, DIRT_THRESHOLDS)
+from fire_engine.terrain.generation import MATERIAL_DIRT, MATERIAL_GRASS
+from fire_engine.world.texture_bridge import to_field_texture
 
 __all__ = ["apply_terrain_shader", "TERRAIN_VERTEX", "TERRAIN_FRAGMENT"]
 
@@ -47,7 +54,14 @@ TERRAIN_VERTEX = load_glsl(__file__, "terrain.vert")
 TERRAIN_FRAGMENT = load_glsl(__file__, "terrain.frag")
 
 
-def apply_terrain_shader(terrain_root: NodePath, pipeline) -> None:
+def apply_terrain_shader(
+    terrain_root: NodePath,
+    pipeline,
+    *,
+    seed: float = 0.0,
+    texels_per_m: float = 16.0,
+    extra_materials=None,
+) -> None:
     """
     Compile and apply the volumetric terrain shader to ``terrain_root``.
 
@@ -55,15 +69,47 @@ def apply_terrain_shader(terrain_root: NodePath, pipeline) -> None:
     loop must call ``pipeline.update_surface_inputs(terrain_root, sky_state)``
     each frame (window origins, radiance ping-pong, sun/moon uniforms).
 
+    Also bakes the **world-space procedural ground** palette LUT (one row per
+    terrain material, from the ``grass_ground``/``dirt_ground`` colour ramps)
+    and binds it plus the noise parameters.  The fragment shader colours the
+    ground from a non-repeating world-space noise value indexed into this LUT,
+    so the tiled 64×64 albedo never appears and the ground never repeats.
+
     Parameters
     ----------
     terrain_root : NodePath
         Parent of every chunk Geom (``App.terrain_root``).
     pipeline : GpuLightingPipeline
         The active lighting pipeline (`lighting/gpu.py`).
+    seed : float, optional
+        Per-world hash offset for the procedural ground noise (pass a value
+        derived from the world seed via ``core.rng.for_domain`` for
+        determinism).  Default 0.
+    texels_per_m : float, optional
+        Virtual texels per world meter for the ground pattern
+        (``config.ground_texels_per_m``).  Default 16.
+    extra_materials : Mapping[int, tuple[ndarray, ndarray]] | None, optional
+        Additional ``material id → (palette, thresholds)`` LUT rows merged on
+        top of the built-in grass/dirt entries — used by debug/test materials
+        (e.g. the GI test-room white/red/green/glow surfaces) so they colour
+        from a flat palette instead of clamping to the last LUT row.  Palettes
+        are sRGB-encoded uint8 (the shader gamma-decodes via ``pow(alb, 2.2)``).
     """
     shader = Shader.make(Shader.SL_GLSL,
                          vertex=TERRAIN_VERTEX,
                          fragment=TERRAIN_FRAGMENT)
     terrain_root.set_shader(shader)
     pipeline.bind_surface_inputs(terrain_root)
+
+    # World-space procedural ground palette LUT (rows indexed by material id).
+    entries = {
+        MATERIAL_DIRT:  (DIRT_PALETTE,  DIRT_THRESHOLDS),
+        MATERIAL_GRASS: (GRASS_PALETTE, GRASS_THRESHOLDS),
+    }
+    if extra_materials:
+        entries.update(extra_materials)
+    lut = build_ground_lut(entries)
+    terrain_root.set_shader_input("u_ground_lut", to_field_texture(lut))
+    terrain_root.set_shader_input("u_ground_seed", float(seed))
+    terrain_root.set_shader_input("u_ground_texels_per_m", float(texels_per_m))
+    terrain_root.set_shader_input("u_ground_lut_rows", float(lut.shape[0]))

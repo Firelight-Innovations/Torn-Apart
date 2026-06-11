@@ -48,7 +48,7 @@ import numpy as np
 from fire_engine.procedural.defs import register_def
 from fire_engine.procedural.textures.base import ProceduralTextureDef, pixel_noise
 
-__all__ = ["GrassGroundDef"]
+__all__ = ["GrassGroundDef", "GRASS_PALETTE", "GRASS_THRESHOLDS"]
 
 
 # ---------------------------------------------------------------------------
@@ -75,6 +75,13 @@ _GRASS_PALETTE = np.array([
 # Threshold boundaries that divide [0, 1] into 8 buckets.
 # Values are upper bounds; the last bucket catches the remainder.
 _THRESHOLDS = np.array([0.08, 0.20, 0.34, 0.50, 0.64, 0.78, 0.90], dtype=np.float32)
+
+# Public aliases — the single source of truth for the grass ground colour ramp.
+# The GPU terrain shader bakes these into its world-space palette LUT
+# (world/terrain_shader.py → procedural.textures.ground_lut.build_ground_lut)
+# so the non-repeating procedural ground matches this baked-texture art exactly.
+GRASS_PALETTE = _GRASS_PALETTE
+GRASS_THRESHOLDS = _THRESHOLDS
 
 
 def _posterise(field: np.ndarray, palette: np.ndarray, thresholds: np.ndarray) -> np.ndarray:

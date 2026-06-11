@@ -13,8 +13,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import main as demo  # noqa: E402
-from torn_apart.core.math3d import Vec3, Quat  # noqa: E402
-from torn_apart.terrain import SphereBrush, BrushMode, apply_brush  # noqa: E402
+from fire_engine.core.math3d import Vec3, Quat  # noqa: E402
+from fire_engine.terrain import SphereBrush, BrushMode, apply_brush  # noqa: E402
 
 app = demo.build_demo()
 app.input_state.mouse_captured = False

@@ -16,8 +16,8 @@ import numpy as np
 import pytest
 import websockets
 
-from torn_apart.core.math3d import Vec3
-from torn_apart.terrain import BrushMode, SphereBrush, apply_brush
+from fire_engine.core.math3d import Vec3
+from fire_engine.terrain import BrushMode, SphereBrush, apply_brush
 
 from fire_editor import (
     Daemon,

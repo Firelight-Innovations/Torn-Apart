@@ -10,9 +10,9 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from torn_apart.core.math3d import Vec3
-from torn_apart.save import SaveIncompatibleError
-from torn_apart.terrain import BrushMode
+from fire_engine.core.math3d import Vec3
+from fire_engine.save import SaveIncompatibleError
+from fire_engine.terrain import BrushMode
 
 from .._generated import ErrorCode, Method, Notification, SchemaId
 from ..binary import encode_frame

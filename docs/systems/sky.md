@@ -1,7 +1,7 @@
 # sky — System Doc
 keywords: sky, skybox, sky dome, day night cycle, daynight, sun, moon, stars, star field, galaxy, milky way, weather, rain, fog, storm, wind, clouds, cloud coverage, celestial, time of day, sunrise, sunset, dawn, dusk, twilight, daylight, moon phase, sky gradient, zenith, horizon, fog color, fog density, terrain light scale, SkyState, SkySystem, WeatherSystem, WeatherType, WeatherParams, sun_direction, moon_direction, force_weather, WeatherChangedEvent, markov, night_sky, rain_streak, atmosphere, rayleigh, mie, scattering, transmittance, sun_radiance, moon_radiance, sky_ambient, physical sky, single scattering, earth shadow, moon_surface, external_lighting
 
-> One doc per code package; filename matches the package exactly (`docs/systems/sky.md` ↔ `torn_apart/sky/`).
+> One doc per code package; filename matches the package exactly (`docs/systems/sky.md` ↔ `fire_engine/sky/`).
 
 ## Role
 
@@ -13,7 +13,7 @@ keywords: sky, skybox, sky dome, day night cycle, daynight, sun, moon, stars, st
 
 ## Public API
 
-All symbols below are re-exported from `torn_apart.sky` (`__init__.py`).
+All symbols below are re-exported from `fire_engine.sky` (`__init__.py`).
 
 ### SkyState (`sky/sky_state.py`)
 
@@ -92,9 +92,9 @@ All symbols below are re-exported from `torn_apart.sky` (`__init__.py`).
 `sky/` may only import:
 - Python standard library (`math`, `dataclasses`, `enum`, ...)
 - `numpy`
-- `torn_apart.core` (Config, Clock, EventBus, `for_domain`, `math3d.Vec3`)
+- `fire_engine.core` (Config, Clock, EventBus, `for_domain`, `math3d.Vec3`)
 
-**No panda3d imports.** Never import from `world/`, `terrain/`, `lighting/`, or any higher layer.  The render half (`world/`) imports `torn_apart.sky` downward — never the reverse.
+**No panda3d imports.** Never import from `world/`, `terrain/`, `lighting/`, or any higher layer.  The render half (`world/`) imports `fire_engine.sky` downward — never the reverse.
 
 ## Events
 
@@ -123,8 +123,8 @@ Never per-frame events: blended parameter changes are returned from `update()`, 
 
 ### Boot + per-frame use
 ```python
-from torn_apart.core import Clock, EventBus, load_config, set_world_seed
-from torn_apart.sky import SkySystem
+from fire_engine.core import Clock, EventBus, load_config, set_world_seed
+from fire_engine.sky import SkySystem
 
 cfg = load_config()
 set_world_seed(cfg.world_seed)
@@ -144,7 +144,7 @@ def frame(real_dt: float) -> None:
 
 ### React to weather changes
 ```python
-from torn_apart.core import WeatherChangedEvent
+from fire_engine.core import WeatherChangedEvent
 
 def on_weather(evt: WeatherChangedEvent) -> None:
     print(f"day {evt.day}: {evt.previous} -> {evt.current}")
@@ -156,7 +156,7 @@ bus.subscribe(WeatherChangedEvent, on_weather)
 
 ### Dev override (debug key binding)
 ```python
-from torn_apart.sky import WeatherType
+from fire_engine.sky import WeatherType
 
 sky.weather.force_weather(WeatherType.STORM)   # blends in over 20 game min
 sky.weather.force_weather(None)                # blends back to the schedule
@@ -164,7 +164,7 @@ sky.weather.force_weather(None)                # blends back to the schedule
 
 ### Pure celestial queries (no system needed)
 ```python
-from torn_apart.sky import sun_direction, moon_direction
+from fire_engine.sky import sun_direction, moon_direction
 
 noon_sun = sun_direction(12 * 3600.0)     # Vec3, z ≈ 0.94
 dusk_moon = moon_direction(17.5 * 3600.0) # already above the east horizon

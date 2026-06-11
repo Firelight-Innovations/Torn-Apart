@@ -1,7 +1,7 @@
 """EditorSession — a headless engine world the daemon edits and renders.
 
 Wires the engine's terrain + lighting + save systems into one object the
-services drive. Imports only headless ``torn_apart`` APIs (never ``torn_apart``
+services drive. Imports only headless ``fire_engine`` APIs (never ``fire_engine``
 ``world``'s panda3d-bound package init; the object model arrives in Phase E2 once
 the engine split lands). Determinism is preserved: the session sets the world
 seed via ``core.rng`` and adds no unseeded randomness (EDITOR_PRD hard rule 4),
@@ -13,13 +13,13 @@ import dataclasses
 
 import numpy as np
 
-from torn_apart.core import Clock, EventBus, load_config
-from torn_apart.core.config import Config
-from torn_apart.core.math3d import Vec3
-from torn_apart.core.rng import set_world_seed
-from torn_apart.lighting import LightGrid, SunlightComputer, make_light_sampler
-from torn_apart.save import SaveManager
-from torn_apart.terrain import (
+from fire_engine.core import Clock, EventBus, load_config
+from fire_engine.core.config import Config
+from fire_engine.core.math3d import Vec3
+from fire_engine.core.rng import set_world_seed
+from fire_engine.lighting import LightGrid, SunlightComputer, make_light_sampler
+from fire_engine.save import SaveManager
+from fire_engine.terrain import (
     BoxBrush,
     BrushMode,
     ChunkManager,
@@ -33,7 +33,7 @@ from torn_apart.terrain import (
 from .scene_objects import SceneObjectStore
 
 # Z band of streamed chunks relative to the camera chunk. Mirrors the private
-# band in torn_apart.terrain.chunk_manager (_Z_MIN/_Z_MAX); guarded against
+# band in fire_engine.terrain.chunk_manager (_Z_MIN/_Z_MAX); guarded against
 # drift by tests/editor/test_session.py::test_region_matches_engine_desired_set.
 _Z_MIN: int = -2
 _Z_MAX: int = 4
@@ -43,7 +43,7 @@ class EditorSession:
     """One open world: terrain chunks, sunlight, and delta saves.
 
     Construct via :meth:`from_seed` or :meth:`from_save`; the bare constructor
-    takes a fully-resolved :class:`~torn_apart.core.config.Config`.
+    takes a fully-resolved :class:`~fire_engine.core.config.Config`.
 
     Attributes:
         config: The frozen engine config for this session.

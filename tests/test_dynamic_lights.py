@@ -12,7 +12,7 @@ import math
 
 import numpy as np
 
-from torn_apart.lighting.lights import (
+from fire_engine.lighting.lights import (
     LIGHT_TYPE_AREA,
     LIGHT_TYPE_POINT,
     LIGHT_TYPE_SPOT,

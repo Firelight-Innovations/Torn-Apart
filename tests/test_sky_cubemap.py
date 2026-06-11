@@ -11,13 +11,13 @@ from __future__ import annotations
 
 import numpy as np
 
-from torn_apart.core.rng import set_world_seed
+from fire_engine.core.rng import set_world_seed
 
 
 def _fresh_registry():
     """Reset + re-register the night-sky defs only (fast, isolated)."""
-    from torn_apart.procedural.registry import reset_registry, register
-    from torn_apart.procedural.textures.night_sky import (
+    from fire_engine.procedural.registry import reset_registry, register
+    from fire_engine.procedural.textures.night_sky import (
         NightSkyCubeDef,
         NightSkyDef,
     )
@@ -30,7 +30,7 @@ class TestCubeFaceMath:
     """cube_face_directions ↔ _dirs_to_face_pixels must be exact inverses."""
 
     def test_roundtrip_every_texel(self):
-        from torn_apart.procedural.textures.night_sky import (
+        from fire_engine.procedural.textures.night_sky import (
             _dirs_to_face_pixels,
             cube_face_directions,
         )
@@ -42,7 +42,7 @@ class TestCubeFaceMath:
         assert (col == np.tile(np.arange(size), 6 * size)).all()
 
     def test_directions_are_unit(self):
-        from torn_apart.procedural.textures.night_sky import (
+        from fire_engine.procedural.textures.night_sky import (
             cube_face_directions,
         )
         dirs = cube_face_directions(16)
@@ -51,7 +51,7 @@ class TestCubeFaceMath:
 
     def test_axis_directions_hit_face_centres(self):
         """±X/±Y/±Z unit vectors land on the centre texel of faces 0..5."""
-        from torn_apart.procedural.textures.night_sky import (
+        from fire_engine.procedural.textures.night_sky import (
             _dirs_to_face_pixels,
         )
         size = 8
@@ -73,13 +73,13 @@ class TestNightSkyCube:
         _fresh_registry()
 
     def test_shape_and_dtype(self):
-        from torn_apart.procedural import get
+        from fire_engine.procedural import get
         arr = get("night_sky_cube", face_size=128, star_count=800)
         assert arr.shape == (6, 128, 128, 4)
         assert arr.dtype == np.uint8
 
     def test_deterministic(self):
-        from torn_apart.procedural import get
+        from fire_engine.procedural import get
         a = get("night_sky_cube", face_size=128, star_count=800)
         set_world_seed(1337)
         _fresh_registry()
@@ -87,7 +87,7 @@ class TestNightSkyCube:
         assert (a == b).all()
 
     def test_seed_changes_sky(self):
-        from torn_apart.procedural import get
+        from fire_engine.procedural import get
         a = get("night_sky_cube", face_size=128, star_count=800)
         set_world_seed(99)
         _fresh_registry()
@@ -95,7 +95,7 @@ class TestNightSkyCube:
         assert (a != b).any()
 
     def test_alpha_is_luminance_mask(self):
-        from torn_apart.procedural import get
+        from fire_engine.procedural import get
         arr = get("night_sky_cube", face_size=128, star_count=800)
         # Alpha tracks brightness: bright texels mask high, floor masks low.
         bright = arr[..., :3].max(axis=-1) > 200
@@ -110,7 +110,7 @@ class TestNightSkyCube:
         draws precede the star draws, making the field byte-identical and
         the star delta exact.
         """
-        from torn_apart.procedural.textures.night_sky import NightSkyCubeDef
+        from fire_engine.procedural.textures.night_sky import NightSkyCubeDef
 
         d = NightSkyCubeDef()
 
@@ -134,7 +134,7 @@ class TestNightSkyCube:
         of touching texel rows across the +Z/+X shared edge using a star-free
         statistic (medians are robust to the splatted stars).
         """
-        from torn_apart.procedural import get
+        from fire_engine.procedural import get
         arr = get("night_sky_cube", face_size=128, star_count=0).astype(
             np.int32)
         # Face 4 (+Z) col S-1 (sc=+1) borders face 0 (+X) row... derive via

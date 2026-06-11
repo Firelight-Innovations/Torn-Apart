@@ -1,7 +1,7 @@
 """``fire_editor`` — the Fire Editor daemon (EDITOR_PRD).
 
 Headless host that runs the Torn Apart engine with the game closed and serves a
-WebSocket protocol to the VS Code / Cursor extension. Imports ``torn_apart``
+WebSocket protocol to the VS Code / Cursor extension. Imports ``fire_engine``
 public APIs only; **never imports panda3d** (hard rule 1).
 
 Public surface (Phase E0):

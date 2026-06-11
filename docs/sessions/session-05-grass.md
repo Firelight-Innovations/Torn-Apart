@@ -1,7 +1,7 @@
 # Session 5 — GPU grass + zone volumes (2026-06-11)
 
 ## What shipped
-- **`torn_apart/zones/`** (new foundation package, headless): `ZoneVolume`
+- **`fire_engine/zones/`** (new foundation package, headless): `ZoneVolume`
   tagged AABBs, `ZoneStore` registry (Saveable, `save_key="zones"`,
   baseline-aware full-list delta), `grass_placement.py` (instance hash
   mirror, blade counts, height-field bake). Docs: `docs/systems/zones.md`.

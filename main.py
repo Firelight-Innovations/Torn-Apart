@@ -40,22 +40,22 @@ import sys
 from pathlib import Path
 
 # --- Foundation layer (panda3d-free) -------------------------------------
-from torn_apart.core import (
+from fire_engine.core import (
     Clock,
     EventBus,
     load_config,
     get_logger,
 )
-from torn_apart.core.rng import set_world_seed
-from torn_apart.core.math3d import Vec3
+from fire_engine.core.rng import set_world_seed
+from fire_engine.core.math3d import Vec3
 
 # --- Procedural content: importing the package auto-registers the
 #     "wasteland_ground" texture def (and any other built-ins). --------------
-import torn_apart.procedural  # noqa: F401  (import-for-side-effect: registration)
-from torn_apart.procedural import get as get_procedural
+import fire_engine.procedural  # noqa: F401  (import-for-side-effect: registration)
+from fire_engine.procedural import get as get_procedural
 
 # --- Terrain (Layer 2) ----------------------------------------------------
-from torn_apart.terrain import (
+from fire_engine.terrain import (
     ChunkManager,
     SphereBrush,
     BrushMode,
@@ -64,17 +64,17 @@ from torn_apart.terrain import (
 )
 
 # --- Lighting (Layer 2) ---------------------------------------------------
-from torn_apart.lighting import (
+from fire_engine.lighting import (
     LightGrid,
     SunlightComputer,
     make_light_sampler,
 )
 
 # --- Player (thin control layer) ------------------------------------------
-from torn_apart.player import FlyController
+from fire_engine.player import FlyController
 
 # --- Save subsystem -------------------------------------------------------
-from torn_apart.save import SaveManager, SaveIncompatibleError
+from fire_engine.save import SaveManager, SaveIncompatibleError
 
 _log = get_logger("main")
 
@@ -198,7 +198,7 @@ def _load_proof_model(app) -> None:
     The model is parented under render near the origin, slightly above ground.
     """
     try:
-        from torn_apart.resources import default_manager, acquire
+        from fire_engine.resources import default_manager, acquire
         fixture = Path(__file__).resolve().parent / "tests" / "fixtures" / "triangle.egg"
         handle = acquire(default_manager.load(str(fixture)))
         nodepath = handle.resource
@@ -246,7 +246,7 @@ def build_demo():
 
     # 5. App — creates the window + camera_go (at (0,-20,10)) + CameraComponent.
     #    (Constructed before step 4 so the Panda3D global loader exists.)
-    from torn_apart.world.app import App  # panda3d import lives behind world/
+    from fire_engine.world.app import App  # panda3d import lives behind world/
     app = App(cfg, clock, bus)
 
     # Which GPU did Windows actually give us?  On hybrid laptops an "Intel"
@@ -264,8 +264,8 @@ def build_demo():
         _log.debug("Renderer query failed: %s", exc)
 
     # 4. Resource manager loaders — register AFTER the window/loader exists.
-    from torn_apart.resources import default_manager
-    from torn_apart.world.resource_adapter import register_panda_loaders
+    from fire_engine.resources import default_manager
+    from fire_engine.world.resource_adapter import register_panda_loaders
     register_panda_loaders(default_manager)
 
     # 7. Terrain manager — built BEFORE the SunlightComputer (which needs it as
@@ -276,7 +276,7 @@ def build_demo():
     #     front of spawn (camera at (0,-20,10) looking +Y; ground top z=8).
     #     mark_baseline() makes these defaults the save baseline, so untouched
     #     worlds keep a ~0-byte "zones" delta.
-    from torn_apart.zones import ZoneStore
+    from fire_engine.zones import ZoneStore
     zone_store = ZoneStore()
     zone_store.add(
         "grass",
@@ -303,7 +303,7 @@ def build_demo():
     # 6b. Sky + weather (Layer 1 service, headless) — constructed after lighting;
     #     the SkyRendererComponent (added below) drives sky_system.update() once
     #     per frame from its update() and reads the SkyState in late_update().
-    from torn_apart.sky import SkySystem, WeatherType
+    from fire_engine.sky import SkySystem, WeatherType
     sky_system = SkySystem(cfg, clock, bus)
     app.sky_system = sky_system   # exposed for tooling (tools/screenshot.py)
 
@@ -334,9 +334,9 @@ def build_demo():
     #     emissive ceiling-panel material (tests the emission-map path).
     lighting_pipeline = None
     if use_gpu_lighting:
-        from torn_apart.lighting.gpu import GpuLightingPipeline
-        from torn_apart.lighting.palette import build_default_palette
-        from torn_apart.world.terrain_shader import apply_terrain_shader
+        from fire_engine.lighting.gpu import GpuLightingPipeline
+        from fire_engine.lighting.palette import build_default_palette
+        from fire_engine.world.terrain_shader import apply_terrain_shader
         palette = build_default_palette()
         for mid, rgb in _GI_TEST_ALBEDO.items():
             palette.albedo[mid] = rgb
@@ -352,8 +352,8 @@ def build_demo():
     # 10b. Sky renderer — a GameObject with the render half of the sky system.
     #      SkyRendererComponent.update() calls sky_system.update() (registry
     #      runs update before late_update), so no App changes are needed.
-    from torn_apart.world import instantiate
-    from torn_apart.world.sky_renderer import SkyRendererComponent
+    from fire_engine.world import instantiate
+    from fire_engine.world.sky_renderer import SkyRendererComponent
     sky_go = instantiate()
     sky_go.name = "Sky"
     sky_go.add_component(
@@ -370,7 +370,7 @@ def build_demo():
     #      placed entirely on the GPU (gl_InstanceID hash), lit by the same
     #      radiance cascades as the terrain, swaying with the weather.
     #      GPU lighting backend only (the component disables itself on cpu).
-    from torn_apart.world.grass_renderer import GrassRendererComponent
+    from fire_engine.world.grass_renderer import GrassRendererComponent
     grass_go = instantiate()
     grass_go.name = "Grass"
     grass_go.add_component(
@@ -426,7 +426,7 @@ def build_demo():
         # volume — the GI flood fill carries it into the crater and the
         # froxel fog catches it as a glow.
         if lighting_pipeline is not None:
-            from torn_apart.lighting.lights import PointLight
+            from fire_engine.lighting.lights import PointLight
             lighting_pipeline.lights.add(PointLight(
                 position=(hit.point.x, hit.point.y, hit.point.z),
                 color=(1.0, 0.55, 0.2), intensity=40.0, radius=18.0,
@@ -527,7 +527,7 @@ def build_demo():
         """L → drop a permanent torch light at the camera position."""
         if lighting_pipeline is None:
             return
-        from torn_apart.lighting.lights import PointLight
+        from fire_engine.lighting.lights import PointLight
         pos = app.camera_go.transform.position
         lighting_pipeline.lights.add(PointLight(
             position=(pos.x, pos.y, pos.z),
@@ -552,7 +552,7 @@ def build_demo():
         """F → toggle a camera-mounted flashlight (GPU backend only)."""
         if lighting_pipeline is None:
             return
-        from torn_apart.lighting.lights import SpotLight
+        from fire_engine.lighting.lights import SpotLight
         if flashlight["id"] is not None:
             lighting_pipeline.lights.remove(flashlight["id"])
             flashlight["id"] = flashlight["light"] = None
@@ -608,7 +608,7 @@ def build_demo():
     # The headless DevToolsManager underneath holds the tools, selection, and
     # picking; see docs/systems/devtools.md.  Expose the demo explosion as an
     # action button too so it can be triggered from the menu.
-    from torn_apart.world import DevOverlay
+    from fire_engine.world import DevOverlay
     overlay = DevOverlay(app) if DevOverlay is not None else None
     if overlay is not None:
         overlay.actions.add_action("Fire Explosion", fire_explosion)
@@ -650,7 +650,7 @@ def build_gi_test_room(app) -> tuple[float, float, float]:
     -------
     tuple[float, float, float] — the room's (cx, cy, floor_z) in meters.
     """
-    from torn_apart.terrain import BoxBrush
+    from fire_engine.terrain import BoxBrush
     chunk_manager = app.chunk_manager
     bus = app._event_bus
     cfg = app._config
@@ -718,7 +718,7 @@ def _to_ground_texture():
     panda3d.core.Texture | None
     """
     try:
-        from torn_apart.world.texture_bridge import to_panda_texture
+        from fire_engine.world.texture_bridge import to_panda_texture
         rgba = get_procedural("wasteland_ground")   # (256,256,4) uint8
         return to_panda_texture(rgba)
     except Exception as exc:  # noqa: BLE001
@@ -750,14 +750,14 @@ def _to_material_textures(triples: bool = False):
     dict[int, panda3d.core.Texture | tuple] | None
     """
     try:
-        from torn_apart.world.texture_bridge import to_panda_texture
-        from torn_apart.terrain import MATERIAL_DIRT, MATERIAL_GRASS
+        from fire_engine.world.texture_bridge import to_panda_texture
+        from fire_engine.terrain import MATERIAL_DIRT, MATERIAL_GRASS
         if not triples:
             return {
                 MATERIAL_DIRT: to_panda_texture(get_procedural("dirt_ground")),
                 MATERIAL_GRASS: to_panda_texture(get_procedural("grass_ground")),
             }
-        from torn_apart.procedural.maps import (
+        from fire_engine.procedural.maps import (
             black_emission_map,
             derive_normal_map,
             flat_normal_map,

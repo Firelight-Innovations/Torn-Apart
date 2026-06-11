@@ -17,7 +17,7 @@ import sys
 import numpy as np
 import pytest
 
-from torn_apart.core.rng import set_world_seed, for_domain
+from fire_engine.core.rng import set_world_seed, for_domain
 
 
 # ---------------------------------------------------------------------------
@@ -79,10 +79,10 @@ class TestInProcessDeterminism:
 _SUBPROCESS_SCRIPT = """\
 import sys
 import os
-# Ensure the project root is on sys.path so torn_apart imports work.
+# Ensure the project root is on sys.path so fire_engine imports work.
 # The script is executed via -c from cwd=project_root, so '.' works.
 sys.path.insert(0, os.getcwd())
-from torn_apart.core.rng import set_world_seed, for_domain
+from fire_engine.core.rng import set_world_seed, for_domain
 set_world_seed({seed})
 rng = for_domain("terrain", (1, 2, 3))
 result = rng.integers(0, 1_000_000, 5)

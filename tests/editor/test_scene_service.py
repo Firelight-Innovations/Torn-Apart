@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 
-from torn_apart.core import load_config
+from fire_engine.core import load_config
 
 from fire_editor import Daemon, EditorSession
 from fire_editor._generated import Method, Notification

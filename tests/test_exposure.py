@@ -13,8 +13,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from torn_apart.core.config import Config
-from torn_apart.lighting.exposure import ExposureMeter
+from fire_engine.core.config import Config
+from fire_engine.lighting.exposure import ExposureMeter
 
 CHUNK = 32  # voxels per chunk edge
 

@@ -16,8 +16,8 @@ import math
 
 import pytest
 
-from torn_apart.world.transform import Transform, Space
-from torn_apart.core.math3d import Vec3, Quat
+from fire_engine.world.transform import Transform, Space
+from fire_engine.core.math3d import Vec3, Quat
 
 
 EPS = 1e-4  # float32 accumulation tolerance for composed matrices

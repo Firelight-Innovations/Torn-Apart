@@ -1,7 +1,7 @@
 # <package> — System Doc
 keywords: <comma-separated synonyms an agent might grep for — e.g. for terrain: voxel, chunk, mesh, mesher, brush, crater, heightmap, octree, raycast>
 
-> One doc per code package; filename matches the package exactly (`docs/systems/terrain.md` ↔ `torn_apart/terrain/`).
+> One doc per code package; filename matches the package exactly (`docs/systems/terrain.md` ↔ `fire_engine/terrain/`).
 > Every system doc uses these exact H2 headings, always in this order, so structured greps work:
 > `grep -rA5 "## Events" docs/systems/` · `grep -rl "apply_brush" docs/` · `grep -A10 "## Units" docs/systems/terrain.md`
 

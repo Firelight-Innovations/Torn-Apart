@@ -1,7 +1,7 @@
 ﻿# world â€” System Doc
 keywords: gameobject, game object, transform, component, registry, lifecycle, awake, start, update, late_update, fixed_update, on_enable, on_disable, on_destroy, instantiate, destroy, find_with_tag, find_objects_with_tag, space, camera, app, showbase, panda3d, input, inputstate, unity, clone, hierarchy, parent, children, world matrix, dirty flag, position, rotation, forward, right, up, look_at, transform_point, inverse_transform_point, active_in_hierarchy, set_active, add_component, get_component, get_components, get_component_in_children, remove_component, compare_tag, layer, tag, uuid, batched, bucket, run_frame, fixed_steps, spiral of death, quaternion, z-up, meters, radians, texture_bridge, to_panda_texture, geometry_bridge, to_geom, to_geom_node, resource_adapter, register_panda_loaders, bridge, bgra, f_rgba, ram_image, world meters, terrain_root, chunk_manager, light_sampler, setup_terrain_rendering, stream_and_upload_terrain, nodepath, geom, vertex color, sky, sky_renderer, SkyRendererComponent, sky_shaders, sky dome, skydome, clouds, cloud layer, boxy clouds, raymarch, dda, rain, rain_streak, night_sky, galaxy, stars, twinkle, shooting star, sun disc, moon, moon phase, fog, exponential fog, set_color_scale, terrain_light_scale, background bin, set_shader_input, weather render, day night cycle render, equirect, terrain_shader, apply_terrain_shader, volumetric, GPU lighting, lighting_pipeline, radiance cascade, froxel, ACES, tonemap, normal map, emission map, TBN, make_material_state, texture stage, external_lighting, physical atmosphere, single scattering, sun disc, moon texture, moon_surface
 
-> One doc per code package; filename matches the package exactly (`docs/systems/world.md` â†” `torn_apart/world/`).
+> One doc per code package; filename matches the package exactly (`docs/systems/world.md` â†” `fire_engine/world/`).
 
 ## Role
 
@@ -16,16 +16,16 @@ keywords: gameobject, game object, transform, component, registry, lifecycle, aw
   - `texture_bridge.to_panda_texture` (Phase 2): numpy RGBA â†’ Panda3D `Texture`.
   - `geometry_bridge.to_geom` / `to_geom_node` (Phase 3): `MeshArrays` â†’ Panda3D `Geom` / `GeomNode` (bulk writes).
   - `resource_adapter.register_panda_loaders` (Phase 5): injects Panda3D asset loaders into the `resources.ResourceManager` (inversion of control).
-- **DevOverlay** (`world/devtools_overlay.py`): the DirectGUI renderer for the in-game developer overlay (F1). It is the Panda3D half of the `devtools` system â€” see `docs/systems/devtools.md`; the headless brain lives in `torn_apart/devtools/`.
-- **SkyRendererComponent** (`world/sky_renderer.py`) + GLSL sources (`world/sky_shaders.py`): the render half of the sky/weather system. The headless simulation lives in `torn_apart/sky/`; this component drives `sky_system.update()` each frame and draws the sky dome — now a **per-pixel physical single-scattering atmosphere** (Rayleigh+Mie, constants mirrored from `sky/atmosphere.py`) with a 2.5×-sized limb-darkened sun disc tinted by its own transmittance, a 2.5×-sized moon disc textured with the seeded procedural `"moon_surface"` texture under the dynamic phase terminator, `"night_sky"` galaxy + twinkle + shooting stars composited post-tonemap — plus boxy raymarched clouds and rain cylinders.  With `external_lighting=False` (CPU backend) it also applies exponential fog and the global terrain colour-scale; with `external_lighting=True` (GPU backend) it leaves terrain shading entirely to the lighting pipeline and samples the froxel fog's far slice for the dome.
+- **DevOverlay** (`world/devtools_overlay.py`): the DirectGUI renderer for the in-game developer overlay (F1). It is the Panda3D half of the `devtools` system â€” see `docs/systems/devtools.md`; the headless brain lives in `fire_engine/devtools/`.
+- **SkyRendererComponent** (`world/sky_renderer.py`) + GLSL sources (`world/sky_shaders.py`): the render half of the sky/weather system. The headless simulation lives in `fire_engine/sky/`; this component drives `sky_system.update()` each frame and draws the sky dome — now a **per-pixel physical single-scattering atmosphere** (Rayleigh+Mie, constants mirrored from `sky/atmosphere.py`) with a 2.5×-sized limb-darkened sun disc tinted by its own transmittance, a 2.5×-sized moon disc textured with the seeded procedural `"moon_surface"` texture under the dynamic phase terminator, `"night_sky"` galaxy + twinkle + shooting stars composited post-tonemap — plus boxy raymarched clouds and rain cylinders.  With `external_lighting=False` (CPU backend) it also applies exponential fog and the global terrain colour-scale; with `external_lighting=True` (GPU backend) it leaves terrain shading entirely to the lighting pipeline and samples the froxel fog's far slice for the dome.
 
 `world/` deliberately does NOT: implement game logic, generate terrain, simulate NPCs, or own any voxel data.  It is the scene-graph boundary: everything above uses the object model; everything below is contacted through direct API calls.
 
-The **object-model modules import ZERO panda3d** â€” `transform.py`, `component.py`, `gameobject.py`, `registry.py` (and `player/fly_controller.py`) are pure Python/numpy and fully headless-testable.  Only the **shell + bridges** import panda3d: `app.py`, `camera.py`, `texture_bridge.py`, `geometry_bridge.py`, `resource_adapter.py`, `sky_renderer.py`, `devtools_overlay.py` (`sky_shaders.py` is pure GLSL string constants â€” importable headless).  The package `__init__.py` imports each bridge inside a `try/except ImportError`, so `import torn_apart.world` works headless (the panda3d-backed symbols are then `None`).
+The **object-model modules import ZERO panda3d** â€” `transform.py`, `component.py`, `gameobject.py`, `registry.py` (and `player/fly_controller.py`) are pure Python/numpy and fully headless-testable.  Only the **shell + bridges** import panda3d: `app.py`, `camera.py`, `texture_bridge.py`, `geometry_bridge.py`, `resource_adapter.py`, `sky_renderer.py`, `devtools_overlay.py` (`sky_shaders.py` is pure GLSL string constants â€” importable headless).  The package `__init__.py` imports each bridge inside a `try/except ImportError`, so `import fire_engine.world` works headless (the panda3d-backed symbols are then `None`).
 
 ## Public API
 
-All symbols below are re-exported from `torn_apart.world` (`__init__.py`).
+All symbols below are re-exported from `fire_engine.world` (`__init__.py`).
 
 ### Transform (`world/transform.py`)
 
@@ -138,7 +138,7 @@ All symbols below are re-exported from `torn_apart.world` (`__init__.py`).
 | `to_geom(mesh) -> Geom` | `geometry_bridge.py` | `MeshArrays` â†’ Panda3D `Geom` (one bulk memoryview write per array). |
 | `to_geom_node(mesh, name, material_textures=None) -> GeomNode` | `geometry_bridge.py` | `to_geom` wrapped in a named `GeomNode`. When `mesh.face_materials` is set (faceted mesher) and `material_textures` (`{material_id: Texture}`) is given, the mesh is split into **one Geom per material**, each added with a `RenderState` carrying its texture (grass vs dirt). Geom states compose OVER node states, so they win over the `terrain_root` fallback texture. |
 | `register_panda_loaders(manager)` | `resource_adapter.py` | Register `.egg`/`.bam`/`.gltf`/`.glb`/`.ogg`/`.wav`/`.png`/`.jpg` loaders into a `ResourceManager` (IoC; keeps `resources/` panda3d-free). |
-| `DevOverlay(app, manager=None)` | `devtools_overlay.py` | DirectGUI renderer for the in-game dev overlay (F1): stats, click-to-select + outline, live inspector/edit, spawn/actions, day-night/weather. Headless brain in `torn_apart/devtools/` â€” see `docs/systems/devtools.md`. |
+| `DevOverlay(app, manager=None)` | `devtools_overlay.py` | DirectGUI renderer for the in-game dev overlay (F1): stats, click-to-select + outline, live inspector/edit, spawn/actions, day-night/weather. Headless brain in `fire_engine/devtools/` â€” see `docs/systems/devtools.md`. |
 
 ### CameraComponent (`world/camera.py`)
 
@@ -149,11 +149,11 @@ All symbols below are re-exported from `torn_apart.world` (`__init__.py`).
 
 ### SkyRendererComponent (`world/sky_renderer.py`, shaders in `world/sky_shaders.py`)
 
-The render half of the sky/weather system (`None` when panda3d is absent).  The headless half is `torn_apart.sky.SkySystem` (Layer 1).
+The render half of the sky/weather system (`None` when panda3d is absent).  The headless half is `fire_engine.sky.SkySystem` (Layer 1).
 
 | Symbol | Description |
 |---|---|
-| `SkyRendererComponent(base, sky_system, terrain_root, clock=None)` | Add to a GameObject via `add_component`. `base` = the `App`; `sky_system` = `torn_apart.sky.SkySystem` (or any duck-typed object with the `SkyState` fields â€” see `tools/screenshot.py --stub-sky`); `terrain_root` receives fog + light scale; `clock` enables star rotation + the deterministic shooting-star schedule. |
+| `SkyRendererComponent(base, sky_system, terrain_root, clock=None)` | Add to a GameObject via `add_component`. `base` = the `App`; `sky_system` = `fire_engine.sky.SkySystem` (or any duck-typed object with the `SkyState` fields â€” see `tools/screenshot.py --stub-sky`); `terrain_root` receives fog + light scale; `clock` enables star rotation + the deterministic shooting-star schedule. |
 
 **Lifecycle split:** `start()` builds ALL geometry once (bulk numpy â†’ memoryview writes, mirroring `geometry_bridge`); `update(dt)` calls `sky_system.update()` (registry runs every `update` before any `late_update`, so the frame's `SkyState` is fresh without App changes); `late_update(dt)` writes the per-frame render state â€” a fixed handful of `set_shader_input` / `set_pos` / `set_color_scale` calls.
 
@@ -174,7 +174,7 @@ The render half of the sky/weather system (`None` when panda3d is absent).  The 
 
 ### GrassRendererComponent (`world/grass_renderer.py`, shaders in `world/grass_shaders.py`)
 
-GPU-only instanced grass for every `tag="grass"` `ZoneVolume` (headless math in `torn_apart/zones/` — see `docs/systems/zones.md`). **GPU lighting backend only**: requires the active `GpuLightingPipeline`; on the legacy CPU backend the component logs and disables itself.
+GPU-only instanced grass for every `tag="grass"` `ZoneVolume` (headless math in `fire_engine/zones/` — see `docs/systems/zones.md`). **GPU lighting backend only**: requires the active `GpuLightingPipeline`; on the legacy CPU backend the component logs and disables itself.
 
 | Symbol | Description |
 |---|---|
@@ -189,7 +189,7 @@ GPU-only instanced grass for every `tag="grass"` `ZoneVolume` (headless math in 
 ## Imports Allowed
 
 `world/transform.py`, `world/component.py`, `world/gameobject.py`, `world/registry.py`:
-- `torn_apart.core` (Vec3, Quat, etc.)
+- `fire_engine.core` (Vec3, Quat, etc.)
 - Python standard library, `numpy`
 - **No panda3d imports**
 
@@ -236,11 +236,11 @@ Rotations are stored **only as quaternions**.  `Quat.from_euler` and `as_euler` 
 
 ### Creating an entity with a component
 ```python
-from torn_apart.world import instantiate, ComponentRegistry
-from torn_apart.world.component import Component
-from torn_apart.core.math3d import Vec3, Quat
-from torn_apart.core.clock import Clock
-from torn_apart.core.event_bus import EventBus
+from fire_engine.world import instantiate, ComponentRegistry
+from fire_engine.world.component import Component
+from fire_engine.core.math3d import Vec3, Quat
+from fire_engine.core.clock import Clock
+from fire_engine.core.event_bus import EventBus
 
 class Rotator(Component):
     def update(self, dt: float) -> None:
@@ -257,8 +257,8 @@ ComponentRegistry.run_frame(clock)  # awake + start + update
 
 ### Transform parent/child hierarchy
 ```python
-from torn_apart.world.transform import Transform, Space
-from torn_apart.core.math3d import Vec3, Quat
+from fire_engine.world.transform import Transform, Space
+from fire_engine.core.math3d import Vec3, Quat
 from math import pi
 
 parent = Transform()
@@ -283,8 +283,8 @@ cam.look_at(Vec3.ZERO)
 
 ### App setup (game entry point)
 ```python
-from torn_apart.core import load_config, Clock, EventBus
-from torn_apart.world.app import App
+from fire_engine.core import load_config, Clock, EventBus
+from fire_engine.world.app import App
 
 cfg   = load_config()
 bus   = EventBus()
@@ -292,9 +292,9 @@ clock = Clock(fixed_dt=cfg.fixed_dt, bus=bus)
 app   = App(cfg, clock, bus)
 
 # Add player with fly controller
-from torn_apart.world import instantiate
-from torn_apart.player import FlyController
-from torn_apart.core.math3d import Vec3
+from fire_engine.world import instantiate
+from fire_engine.player import FlyController
+from fire_engine.core.math3d import Vec3
 player_go = instantiate(position=Vec3(0, 0, 20))
 player_go.add_component(FlyController, move_speed=10.0)
 

@@ -21,10 +21,10 @@ import math
 
 import pytest
 
-from torn_apart.core import Clock, EventBus, load_config
-from torn_apart.core.rng import set_world_seed
-from torn_apart.sky import SkySystem, WeatherType, moon_direction, sun_direction
-from torn_apart.sky.celestial import daylight_factor
+from fire_engine.core import Clock, EventBus, load_config
+from fire_engine.core.rng import set_world_seed
+from fire_engine.sky import SkySystem, WeatherType, moon_direction, sun_direction
+from fire_engine.sky.celestial import daylight_factor
 
 HOUR = 3600.0
 

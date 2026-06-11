@@ -18,21 +18,21 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from torn_apart.core.rng import set_world_seed
-from torn_apart.lighting.lights import (
+from fire_engine.core.rng import set_world_seed
+from fire_engine.lighting.lights import (
     AreaLight,
     LIGHT_TYPE_AREA,
     LIGHT_TYPE_POINT,
     LightSet,
     PointLight,
 )
-from torn_apart.lighting.palette import MaterialPalette, build_default_palette
-from torn_apart.lighting.volume import (
+from fire_engine.lighting.palette import MaterialPalette, build_default_palette
+from fire_engine.lighting.volume import (
     EMISSION_SCALE,
     VolumeWindow,
     assemble_geometry,
 )
-from torn_apart.procedural.maps import (
+from fire_engine.procedural.maps import (
     black_emission_map,
     derive_normal_map,
     flat_normal_map,
@@ -206,7 +206,7 @@ class TestAssembleCascade1:
 class TestPalette:
     def test_default_palette_air_is_zero_and_materials_differ(self):
         set_world_seed(1337)
-        import torn_apart.procedural  # noqa: F401  (registration)
+        import fire_engine.procedural  # noqa: F401  (registration)
         pal = build_default_palette()
         assert (pal.albedo[0] == 0).all()
         assert not np.allclose(pal.albedo[1], pal.albedo[2])
@@ -214,7 +214,7 @@ class TestPalette:
 
     def test_default_palette_deterministic(self):
         set_world_seed(1337)
-        import torn_apart.procedural  # noqa: F401
+        import fire_engine.procedural  # noqa: F401
         a = build_default_palette().albedo.tobytes()
         b = build_default_palette().albedo.tobytes()
         assert a == b
@@ -306,8 +306,8 @@ class TestDerivedMaps:
 
     def test_deterministic(self):
         set_world_seed(1337)
-        import torn_apart.procedural  # noqa: F401
-        from torn_apart.procedural import get as get_procedural
+        import fire_engine.procedural  # noqa: F401
+        from fire_engine.procedural import get as get_procedural
         rgba = get_procedural("grass_ground")
         assert derive_normal_map(rgba).tobytes() == \
             derive_normal_map(rgba).tobytes()

@@ -15,7 +15,7 @@ export type DaemonState =
   | "restarting";
 
 export interface DaemonOptions {
-  /** Repo root (cwd for the daemon; must contain torn_apart/ and editor/). */
+  /** Repo root (cwd for the daemon; must contain fire_engine/ and editor/). */
   repoRoot: string;
   /** Explicit python path, or "" to autodetect the repo .venv. */
   pythonPath: string;
@@ -61,7 +61,7 @@ export class DaemonController extends EventEmitter {
   private spawnOnce(): void {
     const python = resolvePython(this.opts.repoRoot, this.opts.pythonPath);
     const editorDir = path.join(this.opts.repoRoot, "editor");
-    // PYTHONPATH: repo root (torn_apart) + editor/ (fire_editor).
+    // PYTHONPATH: repo root (fire_engine) + editor/ (fire_editor).
     const sep = path.delimiter;
     const env = {
       ...process.env,

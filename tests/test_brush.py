@@ -10,11 +10,11 @@ import math
 import numpy as np
 import pytest
 
-from torn_apart.core import EventBus, TerrainEditedEvent, load_config
-from torn_apart.core.math3d import Vec3
-from torn_apart.core.rng import set_world_seed
-from torn_apart.terrain.chunk import Chunk
-from torn_apart.terrain.brush import (
+from fire_engine.core import EventBus, TerrainEditedEvent, load_config
+from fire_engine.core.math3d import Vec3
+from fire_engine.core.rng import set_world_seed
+from fire_engine.terrain.chunk import Chunk
+from fire_engine.terrain.brush import (
     SphereBrush,
     BoxBrush,
     CylinderBrush,

@@ -1,7 +1,7 @@
 # lighting — System Doc
 keywords: sun, sunlight, moonlight, light grid, occupancy, ambient, GI, global illumination, bounce, flood fill, radiance cascade, volume, volumetric, fog, god rays, froxel, shadow, voxel shadow, AO, ambient occlusion, point light, area light, torch, emission, emissive, albedo, palette, compute shader, GPU, inject, propagate, LightGrid, SunlightComputer, make_light_sampler, occupancy_from_materials, LIGHT_FULL, LIGHT_AMBIENT, VolumeWindow, GeometryVolume, assemble_geometry, EMISSION_SCALE, MaterialPalette, build_default_palette, PointLight, AreaLight, LightSet, GpuLightingPipeline, lighting_backend, light_quant_m, dispatch_compute, ping pong, cascade, recenter, hysteresis
 
-> One doc per code package; filename matches the package exactly (`docs/systems/lighting.md` ↔ `torn_apart/lighting/`).
+> One doc per code package; filename matches the package exactly (`docs/systems/lighting.md` ↔ `fire_engine/lighting/`).
 
 ## Role
 
@@ -24,7 +24,7 @@ keywords: sun, sunlight, moonlight, light grid, occupancy, ambient, GI, global i
 
 ## Public API
 
-Headless symbols re-exported from `torn_apart.lighting`; the GPU pipeline imports explicitly from `torn_apart.lighting.gpu`.
+Headless symbols re-exported from `fire_engine.lighting`; the GPU pipeline imports explicitly from `fire_engine.lighting.gpu`.
 
 | Symbol | Description |
 |---|---|
@@ -39,7 +39,7 @@ Headless symbols re-exported from `torn_apart.lighting`; the GPU pipeline import
 | `LightSet()` | Registry: `add/remove/clear/update(dt)/pack(max_lights)`; `version` bumps on packed-data change. |
 | `LightGrid`, `SunlightComputer`, `make_light_sampler`, `occupancy_from_materials`, `LIGHT_FULL`, `LIGHT_AMBIENT` | CPU backend — unchanged from Phase 4 v0 (see git history of this doc for the full reference). |
 
-`torn_apart.lighting.gpu` (panda3d — excluded from headless tests):
+`fire_engine.lighting.gpu` (panda3d — excluded from headless tests):
 
 | Symbol | Description |
 |---|---|
@@ -48,11 +48,11 @@ Headless symbols re-exported from `torn_apart.lighting`; the GPU pipeline import
 | `.bind_surface_inputs(node)` / `.update_surface_inputs(node, sky_state)` | Static / per-frame shader-input contract for `world/terrain_shader.py`. |
 | `.lights: LightSet` | Public dynamic-light registry (demo: explosion flash, L-key torches). |
 
-`torn_apart.lighting.glsl` — `INJECT_COMPUTE`, `PROPAGATE_COMPUTE`, `FOG_SCATTER_COMPUTE`, `FOG_INTEGRATE_COMPUTE`, `MAX_LIGHTS = 64` (plain strings, headless-importable).
+`fire_engine.lighting.glsl` — `INJECT_COMPUTE`, `PROPAGATE_COMPUTE`, `FOG_SCATTER_COMPUTE`, `FOG_INTEGRATE_COMPUTE`, `MAX_LIGHTS = 64` (plain strings, headless-importable).
 
 ## Imports Allowed
 
-- `numpy`, stdlib, `torn_apart.core` everywhere; `torn_apart.procedural` (palette derivation — foundation layer, callable from anywhere); `torn_apart.terrain` (downward).
+- `numpy`, stdlib, `fire_engine.core` everywhere; `fire_engine.procedural` (palette derivation — foundation layer, callable from anywhere); `fire_engine.terrain` (downward).
 - `panda3d` **only in `gpu.py`** — keeps the rest of the package in the headless suite.
 - No imports from `world/` or higher.  `world/terrain_shader.py` imports lighting, never the reverse.
 
@@ -86,8 +86,8 @@ None.
 
 ### Boot wiring (GPU backend — what main.py does)
 ```python
-from torn_apart.lighting.gpu import GpuLightingPipeline
-from torn_apart.world.terrain_shader import apply_terrain_shader
+from fire_engine.lighting.gpu import GpuLightingPipeline
+from fire_engine.world.terrain_shader import apply_terrain_shader
 
 pipeline = GpuLightingPipeline(cfg, app, chunk_manager, bus)
 app.lighting_pipeline = pipeline            # App frame task drives update()
@@ -97,7 +97,7 @@ apply_terrain_shader(app.terrain_root, pipeline)
 
 ### Dynamic lights
 ```python
-from torn_apart.lighting import PointLight, AreaLight
+from fire_engine.lighting import PointLight, AreaLight
 
 torch_id = pipeline.lights.add(PointLight(
     position=(8.0, 8.0, 10.5), color=(1.0, 0.62, 0.28),
@@ -113,14 +113,14 @@ pipeline.lights.remove(torch_id)
 
 ### Emissive material
 ```python
-from torn_apart.lighting import build_default_palette
+from fire_engine.lighting import build_default_palette
 palette = build_default_palette().with_emission(7, (2.0, 1.2, 0.4))  # lava-ish
 pipeline = GpuLightingPipeline(cfg, app, chunk_manager, bus, palette=palette)
 ```
 
 ### Headless volume assembly (tests / tools)
 ```python
-from torn_apart.lighting import VolumeWindow, assemble_geometry, build_default_palette
+from fire_engine.lighting import VolumeWindow, assemble_geometry, build_default_palette
 win = VolumeWindow(cells=96, cell_m=0.5)
 win.recenter(camera_pos)
 vol = assemble_geometry(win, chunk_manager.chunks, build_default_palette(),
@@ -129,7 +129,7 @@ vol = assemble_geometry(win, chunk_manager.chunks, build_default_palette(),
 
 ## Gotchas
 
-1. **Never import `torn_apart.lighting.gpu` from headless code/tests** — it imports panda3d.  The package `__init__` deliberately does not re-export it.
+1. **Never import `fire_engine.lighting.gpu` from headless code/tests** — it imports panda3d.  The package `__init__` deliberately does not re-export it.
 2. **The GPU backend bakes NO light into vertex colours** — main.py passes `light_sampler=None`, so vertex colours hold only the facet accent.  Pointing the old CPU sampler at meshes while the GPU shader is active would double-light.
 3. **`SkyRendererComponent` must be constructed with `external_lighting=True`** on the GPU backend, or its `terrain_root.set_color_scale` + Panda3D `Fog` fight the shader.
 4. **Light flows over a few frames** (propagation is iterative).  An explosion flash (`ttl_s=0.5`) is visible because injection re-runs on every lights change; don't expect single-frame convergence of large skylight changes — that's the look, not a bug.

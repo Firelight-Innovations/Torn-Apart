@@ -19,7 +19,7 @@ keywords: editor, fire editor, vscode, cursor, viewport, scene view, hierarchy, 
 This turns Cursor into the complete development environment for the engine: code + the one missing piece, the visual editor.
 
 ### Why this architecture is cheap here
-Fire Engine is headless-by-design: only `torn_apart/world/` and `torn_apart/lighting/` may import panda3d (CLAUDE.md hard rule 1). Terrain generation, meshing (vertex positions/normals/colors), the Unity-clone object model (`Transform`, `GameObject`, `Component`), procedural textures, RNG, and saves are all pure Python/numpy. The editor therefore **does not need Panda3D at all** — it runs the headless engine in a Python daemon and renders the resulting mesh/texture arrays in a WebGL viewport.
+Fire Engine is headless-by-design: only `fire_engine/world/` and `fire_engine/lighting/` may import panda3d (CLAUDE.md hard rule 1). Terrain generation, meshing (vertex positions/normals/colors), the Unity-clone object model (`Transform`, `GameObject`, `Component`), procedural textures, RNG, and saves are all pure Python/numpy. The editor therefore **does not need Panda3D at all** — it runs the headless engine in a Python daemon and renders the resulting mesh/texture arrays in a WebGL viewport.
 
 ### Non-goals (v1)
 - **No live attach to a running game.** Designed for (versioned protocol, daemon embeddable later), built later.
@@ -45,7 +45,7 @@ Fire Engine is headless-by-design: only `torn_apart/world/` and `torn_apart/ligh
 ┌───────────────▼───────────────────────────────────────────────┐
 │  fire_editor daemon (Python, in the game repo's .venv)        │
 │  ├─ EditorSession: world seed/config/save → headless world    │
-│  ├─ imports torn_apart: core, procedural, terrain, save,      │
+│  ├─ imports fire_engine: core, procedural, terrain, save,      │
 │  │   world object model (gameobject/component/transform),     │
 │  │   lighting CPU pass — NEVER panda3d (hard rule, see §6)    │
 │  ├─ ChunkService: generate → mesh → vertex-light → stream     │
@@ -123,7 +123,7 @@ Core methods (sketch — final list defined in Phase E0):
 
 These are engine changes, in the game repo, following all CLAUDE.md rules (docs/systems updates in the same commit, headless tests, type hints, docstrings-as-product).
 
-### 5.1 Introspection API — `torn_apart/world/introspect.py` (headless)
+### 5.1 Introspection API — `fire_engine/world/introspect.py` (headless)
 The inspector needs to enumerate component types and properties without hardcoding.
 - `component_types() -> list[type[Component]]` — from the registry's type buckets + an import-scan registration hook.
 - `describe(obj: GameObject | Component) -> ObjectDescription` — fields with name, type, value, units, readonly flag, and UI hints. Source of truth: type hints on public attributes + an optional class-level `__editor_fields__` override for hints (range, step, enum choices). Same mechanism reused for `ProceduralDef` params (texture lab) — put the shared core in `core/introspect.py` if cleaner.
@@ -132,7 +132,7 @@ The inspector needs to enumerate component types and properties without hardcodi
 ### 5.2 World manifest (authored content persistence) — record in DECISIONS.md
 Saves hold *runtime deltas*; the editor also produces *authored* content: ZoneVolumes, hand-placed GameObjects/model instances. Persist these as a **world manifest** — `assets/world/<name>.manifest.json` (plain JSON: primitives only, no pickle — consistent with hard rule 3) loaded during worldgen before deltas apply. Engine change: worldgen reads manifest → instantiates ZoneVolumes/objects as part of the baseline. Editing the manifest changes the baseline; saves stay delta-only on top.
 
-### 5.3 `PrimitiveModelDef` — `torn_apart/procedural/models.py`
+### 5.3 `PrimitiveModelDef` — `fire_engine/procedural/models.py`
 `ProceduralDef` subclass: loads a `.model.json` part list, emits merged vertex arrays (numpy) with per-part procedural texture assignment. Headless; `world/` uploads it via the existing geometry bridge when the *game* uses it; the *editor* renders the same arrays in three.js. Determinism test required like any `ProceduralDef`.
 
 ### 5.4 Editor undo/redo — `fire_editor/commands.py` (editor-side, not engine)
@@ -142,7 +142,7 @@ Command stack with inverse ops. Brush inverse = pre-edit snapshot of affected vo
 Sunlight v0 (column pass → vertex colors) must be importable without panda3d so the daemon can light meshes. If Session 1 put it in `lighting/` next to GPU code, split it (e.g. `lighting/sunlight_cpu.py` clean of panda3d imports, re-exported) — this respects the spirit of hard rule 1 and needs a one-line DECISIONS.md note.
 
 ### 5.6 Engine version check
-Daemon asserts engine compatibility at boot (read a `torn_apart.__version__`; add one if missing).
+Daemon asserts engine compatibility at boot (read a `fire_engine.__version__`; add one if missing).
 
 ---
 

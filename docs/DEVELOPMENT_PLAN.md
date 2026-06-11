@@ -26,7 +26,7 @@ git init
 `requirements.txt`, `.gitignore` (`.venv/`, `__pycache__/`, `saves/`, `*.png` under `tools/out/`), package tree:
 
 ```
-torn_apart/
+fire_engine/
   main.py
   core/        # event_bus.py, config.py, rng.py, clock.py, log.py, lod.py, math3d.py
   procedural/  # registry.py, defs.py, textures/

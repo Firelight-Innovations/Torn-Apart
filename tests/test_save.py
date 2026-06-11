@@ -13,13 +13,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from torn_apart.core import load_config, Clock, EventBus
-from torn_apart.core.math3d import Vec3
-from torn_apart.core.rng import set_world_seed
-from torn_apart.terrain import ChunkManager
-from torn_apart.terrain.brush import SphereBrush, BrushMode, apply_brush
-from torn_apart.save import SaveManager, Saveable, SaveIncompatibleError
-from torn_apart.save.save_manager import (
+from fire_engine.core import load_config, Clock, EventBus
+from fire_engine.core.math3d import Vec3
+from fire_engine.core.rng import set_world_seed
+from fire_engine.terrain import ChunkManager
+from fire_engine.terrain.brush import SphereBrush, BrushMode, apply_brush
+from fire_engine.save import SaveManager, Saveable, SaveIncompatibleError
+from fire_engine.save.save_manager import (
     _encode_delta,
     _decode_delta,
     _encode_value,
@@ -204,7 +204,7 @@ class TestUneditedWorldIsTiny:
 # ---------------------------------------------------------------------------
 
 class TestNoPickle:
-    """Walk torn_apart/ and tools/ .py files; fail if any contain pickle imports."""
+    """Walk fire_engine/ and tools/ .py files; fail if any contain pickle imports."""
 
     # Match any form of pickle import:
     #   import pickle
@@ -221,7 +221,7 @@ class TestNoPickle:
 
     def _collect_py_files(self) -> list[Path]:
         repo_root = Path(__file__).resolve().parent.parent
-        dirs = [repo_root / "torn_apart", repo_root / "tools"]
+        dirs = [repo_root / "fire_engine", repo_root / "tools"]
         files = []
         for d in dirs:
             if d.exists():
@@ -229,7 +229,7 @@ class TestNoPickle:
         return files
 
     def test_no_pickle_imports(self):
-        """None of the source files in torn_apart/ or tools/ import pickle."""
+        """None of the source files in fire_engine/ or tools/ import pickle."""
         violations: list[str] = []
         for py_file in self._collect_py_files():
             source = py_file.read_text(encoding="utf-8", errors="replace")

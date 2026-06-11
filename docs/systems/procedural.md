@@ -1,7 +1,7 @@
 ﻿# procedural â€” System Doc
 keywords: procedural, ProceduralDef, ProceduralTextureDef, register, get, clear_cache, reset_registry, value_noise, pixel_noise, wasteland_ground, night_sky, rain_streak, grass_ground, dirt_ground, grass, dirt, pixel art, pixelated, pixel_noise, posterize, posterise, palette, stars, star field, galaxy, equirect, equirectangular, sky texture, rain texture, tileable, seamless, texture, noise, registry, cache, determinism, world_seed, params_digest, for_domain, biome, building, content, authoring, RGBA, uint8, octaves, persistence, lacunarity, base_freq, layered, heightmap, moon_surface, moon, crater, maria, lunar, normal map, emission map, derive_normal_map, flat_normal_map, black_emission_map, sobel, maps
 
-> One doc per code package; filename matches the package exactly (`docs/systems/procedural.md` â†” `torn_apart/procedural/`).
+> One doc per code package; filename matches the package exactly (`docs/systems/procedural.md` â†” `fire_engine/procedural/`).
 
 ## Role
 
@@ -19,7 +19,7 @@ The bridge from procedural arrays to Panda3D Texture lives in `world/texture_bri
 
 ## Public API
 
-All symbols below are re-exported from `torn_apart.procedural` (`__init__.py`).
+All symbols below are re-exported from `fire_engine.procedural` (`__init__.py`).
 
 ### Base classes (`procedural/defs.py`, `procedural/textures/base.py`)
 
@@ -70,7 +70,7 @@ All symbols below are re-exported from `torn_apart.procedural` (`__init__.py`).
 `procedural/` may only import:
 - Python standard library (`hashlib`, `abc`, ...)
 - `numpy`
-- `torn_apart.core` (for `for_domain`, `set_world_seed`)
+- `fire_engine.core` (for `for_domain`, `set_world_seed`)
 
 **No panda3d imports.** Never import from `world/`, `terrain/`, `lighting/`, or any higher layer.
 
@@ -111,8 +111,8 @@ All `ProceduralTextureDef.generate()` implementations must produce:
 
 ### Get a pre-registered texture
 ```python
-from torn_apart.core.rng import set_world_seed
-from torn_apart.procedural import get
+from fire_engine.core.rng import set_world_seed
+from fire_engine.procedural import get
 import numpy as np
 
 set_world_seed(1337)
@@ -128,7 +128,7 @@ arr1 = get("wasteland_ground")
 arr2 = get("wasteland_ground")
 assert arr1 is arr2               # same cached object
 
-from torn_apart.procedural import clear_cache
+from fire_engine.procedural import clear_cache
 clear_cache()
 arr3 = get("wasteland_ground")
 assert arr3 is not arr1           # freshly generated after cache clear
@@ -136,8 +136,8 @@ assert arr3 is not arr1           # freshly generated after cache clear
 
 ### Use value_noise directly (Phase 3 terrain heightmap pattern)
 ```python
-from torn_apart.core.rng import set_world_seed, for_domain
-from torn_apart.procedural import value_noise
+from fire_engine.core.rng import set_world_seed, for_domain
+from fire_engine.procedural import value_noise
 import numpy as np
 
 set_world_seed(42)
@@ -151,11 +151,11 @@ assert 0.0 <= heights.min() and heights.max() <= 1.0
 
 ### Author a new texture (AI-agent authoring guide)
 ```python
-# 1. Create torn_apart/procedural/textures/cracked_rock.py:
+# 1. Create fire_engine/procedural/textures/cracked_rock.py:
 
 import numpy as np
-from torn_apart.procedural.defs import register_def
-from torn_apart.procedural.textures.base import ProceduralTextureDef, value_noise
+from fire_engine.procedural.defs import register_def
+from fire_engine.procedural.textures.base import ProceduralTextureDef, value_noise
 
 @register_def
 class CrackedRockDef(ProceduralTextureDef):
@@ -177,8 +177,8 @@ class CrackedRockDef(ProceduralTextureDef):
         rgba[..., 3] = 255
         return rgba
 
-# 2. Import in torn_apart/procedural/textures/__init__.py:
-#    from torn_apart.procedural.textures import cracked_rock
+# 2. Import in fire_engine/procedural/textures/__init__.py:
+#    from fire_engine.procedural.textures import cracked_rock
 
 # 3. Add determinism test in tests/test_procedural.py.
 
@@ -188,8 +188,8 @@ class CrackedRockDef(ProceduralTextureDef):
 ### Bridge to Panda3D (in world/ only)
 ```python
 # Only in world/ â€” do not call this from procedural/ or tests/
-from torn_apart.procedural import get
-from torn_apart.world.texture_bridge import to_panda_texture
+from fire_engine.procedural import get
+from fire_engine.world.texture_bridge import to_panda_texture
 
 arr = get("wasteland_ground")      # (256,256,4) uint8
 tex = to_panda_texture(arr)        # panda3d.core.Texture, nearest-neighbour
@@ -198,7 +198,7 @@ node_path.set_texture(tex)
 
 ## Gotchas
 
-1. **Import order for registration**: `@register_def` calls `registry.register()` at decoration time (module import).  The texture module must be imported before `get()` is called.  `torn_apart/procedural/__init__.py` does this automatically by importing `torn_apart.procedural.textures`, which in turn imports each texture module (`wasteland_ground`, `night_sky`, `rain_streak`, `grass_ground`, `dirt_ground`).  If you add a new texture module, add an import line in `procedural/textures/__init__.py`.
+1. **Import order for registration**: `@register_def` calls `registry.register()` at decoration time (module import).  The texture module must be imported before `get()` is called.  `fire_engine/procedural/__init__.py` does this automatically by importing `fire_engine.procedural.textures`, which in turn imports each texture module (`wasteland_ground`, `night_sky`, `rain_streak`, `grass_ground`, `dirt_ground`).  If you add a new texture module, add an import line in `procedural/textures/__init__.py`.
 
 2. **`reset_registry()` is tests-only**: it drops all registered defs.  After calling it, you must re-register any defs you need (or re-import the package).  Never call it in production code.
 

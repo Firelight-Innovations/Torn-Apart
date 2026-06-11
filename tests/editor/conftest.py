@@ -1,7 +1,7 @@
 """pytest config for the Fire Editor daemon tests.
 
 Puts ``editor/`` on ``sys.path`` so ``import fire_editor`` resolves. The repo
-root is already added by ``tests/conftest.py`` for ``import torn_apart``.
+root is already added by ``tests/conftest.py`` for ``import fire_engine``.
 """
 import os
 import sys

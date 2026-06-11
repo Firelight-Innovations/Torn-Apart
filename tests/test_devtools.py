@@ -2,7 +2,7 @@
 tests/test_devtools.py — headless tests for the developer-overlay engine.
 
 Covers the panda3d-free half of the dev tools (everything in
-``torn_apart/devtools/``): the selection counter, CPU ray/AABB picking, the
+``fire_engine/devtools/``): the selection counter, CPU ray/AABB picking, the
 GameObject → editable-sections introspection (including the edit round-trip),
 and the tool/manager plumbing.  The DirectGUI renderer
 (``world/devtools_overlay.py``) is panda3d-backed and out of scope here.
@@ -15,12 +15,12 @@ import math
 import numpy as np
 import pytest
 
-from torn_apart.core.math3d import Vec3, Quat
-from torn_apart.world.gameobject import GameObject
-from torn_apart.world.component import Component
-from torn_apart.world.registry import ComponentRegistry
+from fire_engine.core.math3d import Vec3, Quat
+from fire_engine.world.gameobject import GameObject
+from fire_engine.world.component import Component
+from fire_engine.world.registry import ComponentRegistry
 
-from torn_apart.devtools import (
+from fire_engine.devtools import (
     Selection,
     Selectable,
     ray_aabb,
@@ -43,7 +43,7 @@ from torn_apart.devtools import (
     HandleType,
     update_drag,
 )
-from torn_apart.devtools.gizmo import ray_plane_intersect, closest_on_axis
+from fire_engine.devtools.gizmo import ray_plane_intersect, closest_on_axis
 
 
 @pytest.fixture(autouse=True)
@@ -247,14 +247,14 @@ def test_inspector_tool_tracks_selection_revision():
 
 
 def test_is_chunk_distinguishes_chunk_from_gameobject():
-    from torn_apart.terrain.chunk import Chunk
+    from fire_engine.terrain.chunk import Chunk
 
     assert is_chunk(Chunk((0, 0, 0))) is True
     assert is_chunk(GameObject(name="Obj")) is False
 
 
 def test_describe_chunk_reports_voxel_stats():
-    from torn_apart.terrain.chunk import Chunk
+    from fire_engine.terrain.chunk import Chunk
 
     chunk = Chunk((1, 0, -1))                 # all-air baseline
     chunk.materials[0, 0, 0] = 1             # one solid voxel
@@ -273,7 +273,7 @@ def test_describe_chunk_reports_voxel_stats():
 
 
 def test_inspector_tool_routes_chunk_to_chunk_describer():
-    from torn_apart.terrain.chunk import Chunk
+    from fire_engine.terrain.chunk import Chunk
 
     mgr = DevToolsManager()
     tool = InspectorTool(mgr.selection)

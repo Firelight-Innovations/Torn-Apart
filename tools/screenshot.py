@@ -19,7 +19,7 @@ Usage
     python tools/screenshot.py --time-of-day 0 --weather clear --pitch 30 \
         --out sky/midnight.png
     python tools/screenshot.py --stub-sky --time-of-day 12 --weather rain \
-        --out sky/stub_rain.png    # renderer-only debug (bypasses torn_apart.sky)
+        --out sky/stub_rain.png    # renderer-only debug (bypasses fire_engine.sky)
 
 Notes
 -----
@@ -73,7 +73,7 @@ _STUB_WEATHER = {
 
 def _make_stub_sky(clock, weather_name: str | None):
     """
-    Build a duck-typed stand-in for ``torn_apart.sky.SkySystem``.
+    Build a duck-typed stand-in for ``fire_engine.sky.SkySystem``.
 
     Returns an object with ``update() -> SimpleNamespace``, ``state``, and a
     ``weather`` namespace whose ``force_weather`` is a no-op (the stub's
@@ -81,7 +81,7 @@ def _make_stub_sky(clock, weather_name: str | None):
     ``clock.game_time_of_day`` on every ``update()`` so ``--time-of-day``
     works, with a crude-but-plausible day cycle.
     """
-    from torn_apart.core.math3d import Vec3
+    from fire_engine.core.math3d import Vec3
 
     name = (weather_name or "CLEAR").upper()
     cov, den, fog_d, rain, wind, dim = _STUB_WEATHER.get(name, _STUB_WEATHER["CLEAR"])
@@ -155,7 +155,7 @@ def _apply_sky_settings(app, time_of_day_h: float | None,
         if time_of_day_h is not None else float(clock.game_time_of_day)
 
     if weather and sky is not None:
-        from torn_apart.sky import WeatherType
+        from fire_engine.sky import WeatherType
         anchor_s = target_s - _WEATHER_BLEND_LEAD_S
         wrapped = anchor_s < 0.0
         clock.game_time_of_day = anchor_s + _GAME_DAY_S if wrapped else anchor_s
@@ -207,7 +207,7 @@ def capture(frames: int, out_name: str, explode: bool,
         use ~110 to fly above the cloud layer (96–104 m).
     stub_sky : bool
         Swap a SimpleNamespace SkyState stub into the SkyRendererComponent
-        (renderer-only debugging; bypasses torn_apart.sky entirely).
+        (renderer-only debugging; bypasses fire_engine.sky entirely).
 
     Returns
     -------
@@ -215,8 +215,8 @@ def capture(frames: int, out_name: str, explode: bool,
         The written PNG path.
     """
     import main as demo
-    from torn_apart.core.math3d import Vec3, Quat
-    from torn_apart.terrain import SphereBrush, BrushMode, apply_brush
+    from fire_engine.core.math3d import Vec3, Quat
+    from fire_engine.terrain import SphereBrush, BrushMode, apply_brush
 
     app = demo.build_demo()
 
@@ -240,7 +240,7 @@ def capture(frames: int, out_name: str, explode: bool,
 
     if stub_sky:
         # Renderer-only path: swap the stub into the live SkyRendererComponent.
-        from torn_apart.world.sky_renderer import SkyRendererComponent
+        from fire_engine.world.sky_renderer import SkyRendererComponent
         if time_of_day is not None:
             app._clock.game_time_of_day = (float(time_of_day) * 3600.0) % _GAME_DAY_S
         stub = _make_stub_sky(app._clock, weather)
@@ -279,7 +279,7 @@ def capture(frames: int, out_name: str, explode: bool,
 
     if flashlight and getattr(app, "lighting_pipeline", None) is not None:
         # Camera-mounted spot light (the F-key flashlight, statically placed).
-        from torn_apart.lighting.lights import SpotLight
+        from fire_engine.lighting.lights import SpotLight
         cam = app.camera_go.transform.position
         fwd = app.camera_go.transform.forward
         app.lighting_pipeline.lights.add(SpotLight(
@@ -292,7 +292,7 @@ def capture(frames: int, out_name: str, explode: bool,
     if torch and getattr(app, "lighting_pipeline", None) is not None:
         # Drop a warm torch point-light ahead of the camera (GPU backend
         # only) so GI flood-fill / volumetric glow can be captured headless.
-        from torn_apart.lighting.lights import PointLight
+        from fire_engine.lighting.lights import PointLight
         cam = app.camera_go.transform.position
         pos = (cam.x, cam.y + 8.0, cam.z - 2.5)   # ~2.5 m above the ground
         app.lighting_pipeline.lights.add(PointLight(

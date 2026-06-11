@@ -32,17 +32,17 @@ def _fresh_registry():
     # We need to reset first, then re-trigger auto-registration.
     # The cleanest way without module-reload tricks is to call reset_registry
     # and then re-register the built-in defs directly.
-    from torn_apart.procedural.registry import reset_registry, register
-    from torn_apart.procedural.textures.wasteland_ground import WastelandGroundDef
-    from torn_apart.procedural.textures.night_sky import (
+    from fire_engine.procedural.registry import reset_registry, register
+    from fire_engine.procedural.textures.wasteland_ground import WastelandGroundDef
+    from fire_engine.procedural.textures.night_sky import (
         NightSkyCubeDef,
         NightSkyDef,
     )
-    from torn_apart.procedural.textures.rain_streak import RainStreakDef
-    from torn_apart.procedural.textures.grass_ground import GrassGroundDef
-    from torn_apart.procedural.textures.dirt_ground import DirtGroundDef
-    from torn_apart.procedural.textures.moon_surface import MoonSurfaceDef
-    from torn_apart.procedural.textures.grass_tuft import GrassTuftDef
+    from fire_engine.procedural.textures.rain_streak import RainStreakDef
+    from fire_engine.procedural.textures.grass_ground import GrassGroundDef
+    from fire_engine.procedural.textures.dirt_ground import DirtGroundDef
+    from fire_engine.procedural.textures.moon_surface import MoonSurfaceDef
+    from fire_engine.procedural.textures.grass_tuft import GrassTuftDef
     reset_registry()
     register(WastelandGroundDef())
     register(NightSkyDef())
@@ -60,31 +60,31 @@ def _fresh_registry():
 
 class TestRegistryRoundTrip:
     def setup_method(self):
-        from torn_apart.core.rng import set_world_seed
+        from fire_engine.core.rng import set_world_seed
         set_world_seed(1337)
         _fresh_registry()
 
     def test_wasteland_ground_shape(self):
-        from torn_apart.procedural.registry import get
+        from fire_engine.procedural.registry import get
         arr = get("wasteland_ground")
         assert arr.shape == (256, 256, 4), (
             f"Expected (256,256,4), got {arr.shape}"
         )
 
     def test_wasteland_ground_dtype(self):
-        from torn_apart.procedural.registry import get
+        from fire_engine.procedural.registry import get
         arr = get("wasteland_ground")
         assert arr.dtype == np.uint8, f"Expected uint8, got {arr.dtype}"
 
     def test_alpha_channel_all_opaque(self):
-        from torn_apart.procedural.registry import get
+        from fire_engine.procedural.registry import get
         arr = get("wasteland_ground")
         assert (arr[..., 3] == 255).all(), (
             "Alpha channel should be all 255 (fully opaque)"
         )
 
     def test_rgb_values_in_range(self):
-        from torn_apart.procedural.registry import get
+        from fire_engine.procedural.registry import get
         arr = get("wasteland_ground")
         assert arr[..., :3].min() >= 0
         assert arr[..., :3].max() <= 255
@@ -97,8 +97,8 @@ class TestRegistryRoundTrip:
 class TestDeterminism:
     def test_same_seed_byte_identical(self):
         """Two get() calls on fresh registries with same seed → identical arrays."""
-        from torn_apart.core.rng import set_world_seed
-        from torn_apart.procedural.registry import get
+        from fire_engine.core.rng import set_world_seed
+        from fire_engine.procedural.registry import get
 
         set_world_seed(42)
         _fresh_registry()
@@ -114,8 +114,8 @@ class TestDeterminism:
 
     def test_determinism_across_three_runs(self):
         """Consistency check: three independent generations with seed 9999."""
-        from torn_apart.core.rng import set_world_seed
-        from torn_apart.procedural.registry import get
+        from fire_engine.core.rng import set_world_seed
+        from fire_engine.procedural.registry import get
 
         results = []
         for _ in range(3):
@@ -133,8 +133,8 @@ class TestDeterminism:
 
 class TestDifferentSeed:
     def test_different_seeds_produce_different_output(self):
-        from torn_apart.core.rng import set_world_seed
-        from torn_apart.procedural.registry import get
+        from fire_engine.core.rng import set_world_seed
+        from fire_engine.procedural.registry import get
 
         set_world_seed(1)
         _fresh_registry()
@@ -155,12 +155,12 @@ class TestDifferentSeed:
 
 class TestCacheIdentity:
     def setup_method(self):
-        from torn_apart.core.rng import set_world_seed
+        from fire_engine.core.rng import set_world_seed
         set_world_seed(1337)
         _fresh_registry()
 
     def test_same_call_returns_same_object(self):
-        from torn_apart.procedural.registry import get
+        from fire_engine.procedural.registry import get
         arr1 = get("wasteland_ground")
         arr2 = get("wasteland_ground")
         assert arr1 is arr2, (
@@ -168,7 +168,7 @@ class TestCacheIdentity:
         )
 
     def test_clear_cache_breaks_identity(self):
-        from torn_apart.procedural.registry import get, clear_cache
+        from fire_engine.procedural.registry import get, clear_cache
         arr1 = get("wasteland_ground")
         clear_cache()
         arr2 = get("wasteland_ground")
@@ -177,7 +177,7 @@ class TestCacheIdentity:
         )
 
     def test_different_params_different_cache_slot(self):
-        from torn_apart.procedural.registry import get
+        from fire_engine.procedural.registry import get
         arr_default = get("wasteland_ground")
         arr_custom  = get("wasteland_ground", width=128, height=128)
         assert arr_default is not arr_custom
@@ -190,19 +190,19 @@ class TestCacheIdentity:
 
 class TestCustomParams:
     def setup_method(self):
-        from torn_apart.core.rng import set_world_seed
+        from fire_engine.core.rng import set_world_seed
         set_world_seed(77)
         _fresh_registry()
 
     def test_custom_width_height(self):
-        from torn_apart.procedural.registry import get
+        from fire_engine.procedural.registry import get
         arr = get("wasteland_ground", width=64, height=32)
         assert arr.shape == (32, 64, 4)
         assert arr.dtype == np.uint8
 
     def test_custom_size_deterministic(self):
-        from torn_apart.core.rng import set_world_seed
-        from torn_apart.procedural.registry import get
+        from fire_engine.core.rng import set_world_seed
+        from fire_engine.procedural.registry import get
 
         set_world_seed(5)
         _fresh_registry()
@@ -221,8 +221,8 @@ class TestCustomParams:
 
 class TestUnknownName:
     def test_unknown_name_raises_key_error(self):
-        from torn_apart.core.rng import set_world_seed
-        from torn_apart.procedural.registry import get
+        from fire_engine.core.rng import set_world_seed
+        from fire_engine.procedural.registry import get
         set_world_seed(0)
         _fresh_registry()
         with pytest.raises(KeyError, match="does_not_exist"):
@@ -235,15 +235,15 @@ class TestUnknownName:
 
 class TestRegisterDefDecorator:
     def setup_method(self):
-        from torn_apart.core.rng import set_world_seed
-        from torn_apart.procedural.registry import reset_registry
+        from fire_engine.core.rng import set_world_seed
+        from fire_engine.procedural.registry import reset_registry
         set_world_seed(42)
         reset_registry()
 
     def test_decorator_registers_at_import(self):
         """A class decorated with @register_def is immediately retrievable."""
-        from torn_apart.procedural.defs import ProceduralDef, register_def
-        from torn_apart.procedural.registry import get
+        from fire_engine.procedural.defs import ProceduralDef, register_def
+        from fire_engine.procedural.registry import get
 
         @register_def
         class MinimalDef(ProceduralDef):
@@ -258,10 +258,10 @@ class TestRegisterDefDecorator:
 
     def test_custom_def_deterministic(self):
         """Custom def uses for_domain RNG → same seed = same output."""
-        from torn_apart.procedural.defs import ProceduralDef, register_def
-        from torn_apart.procedural.textures.base import value_noise
-        from torn_apart.procedural.registry import get, reset_registry
-        from torn_apart.core.rng import set_world_seed
+        from fire_engine.procedural.defs import ProceduralDef, register_def
+        from fire_engine.procedural.textures.base import value_noise
+        from fire_engine.procedural.registry import get, reset_registry
+        from fire_engine.core.rng import set_world_seed
 
         @register_def
         class NoiseDef(ProceduralDef):
@@ -272,9 +272,9 @@ class TestRegisterDefDecorator:
 
         set_world_seed(11)
         reset_registry()
-        from torn_apart.procedural.defs import register_def as _rd  # re-apply
+        from fire_engine.procedural.defs import register_def as _rd  # re-apply
         # Re-register after reset
-        from torn_apart.procedural.registry import register
+        from fire_engine.procedural.registry import register
         register(NoiseDef())
         a = get("_test_noise").copy()
 
@@ -292,8 +292,8 @@ class TestRegisterDefDecorator:
 
 class TestValueNoise:
     def test_shape_and_dtype(self):
-        from torn_apart.core.rng import set_world_seed, for_domain
-        from torn_apart.procedural.textures.base import value_noise
+        from fire_engine.core.rng import set_world_seed, for_domain
+        from fire_engine.procedural.textures.base import value_noise
         set_world_seed(0)
         rng = for_domain("test", "noise")
         h = value_noise(rng, (64, 32), octaves=3)
@@ -301,8 +301,8 @@ class TestValueNoise:
         assert h.dtype == np.float32
 
     def test_range(self):
-        from torn_apart.core.rng import set_world_seed, for_domain
-        from torn_apart.procedural.textures.base import value_noise
+        from fire_engine.core.rng import set_world_seed, for_domain
+        from fire_engine.procedural.textures.base import value_noise
         set_world_seed(0)
         rng = for_domain("test", "range")
         h = value_noise(rng, (128, 128), octaves=4)
@@ -310,8 +310,8 @@ class TestValueNoise:
         assert float(h.max()) <= 1.0, f"max={h.max()} above 1"
 
     def test_deterministic(self):
-        from torn_apart.core.rng import set_world_seed, for_domain
-        from torn_apart.procedural.textures.base import value_noise
+        from fire_engine.core.rng import set_world_seed, for_domain
+        from fire_engine.procedural.textures.base import value_noise
         set_world_seed(7)
         h1 = value_noise(for_domain("test","det"), (32, 32))
         set_world_seed(7)
@@ -319,8 +319,8 @@ class TestValueNoise:
         assert np.array_equal(h1, h2)
 
     def test_different_seeds_differ(self):
-        from torn_apart.core.rng import set_world_seed, for_domain
-        from torn_apart.procedural.textures.base import value_noise
+        from fire_engine.core.rng import set_world_seed, for_domain
+        from fire_engine.procedural.textures.base import value_noise
         set_world_seed(1)
         h1 = value_noise(for_domain("test","diff"), (32, 32))
         set_world_seed(2)
@@ -334,26 +334,26 @@ class TestValueNoise:
 
 class TestNightSkyTexture:
     def setup_method(self):
-        from torn_apart.core.rng import set_world_seed
+        from fire_engine.core.rng import set_world_seed
         set_world_seed(1337)
         _fresh_registry()
 
     def test_shape_and_dtype(self):
-        from torn_apart.procedural.registry import get
+        from fire_engine.procedural.registry import get
         arr = get("night_sky")
         assert arr.shape == (512, 1024, 4), f"Expected (512,1024,4), got {arr.shape}"
         assert arr.dtype == np.uint8
 
     def test_alpha_is_luminance_mask(self):
         """Alpha varies (additive-blend mask): dark sky → low, stars → high."""
-        from torn_apart.procedural.registry import get
+        from fire_engine.procedural.registry import get
         arr = get("night_sky")
         assert arr[..., 3].max() > 128, "bright stars should give high alpha"
         assert arr[..., 3].min() < 64, "empty sky should give low alpha"
 
     def test_same_seed_byte_identical(self):
-        from torn_apart.core.rng import set_world_seed
-        from torn_apart.procedural.registry import get
+        from fire_engine.core.rng import set_world_seed
+        from fire_engine.procedural.registry import get
 
         set_world_seed(42)
         _fresh_registry()
@@ -368,8 +368,8 @@ class TestNightSkyTexture:
         )
 
     def test_different_seeds_differ(self):
-        from torn_apart.core.rng import set_world_seed
-        from torn_apart.procedural.registry import get
+        from fire_engine.core.rng import set_world_seed
+        from fire_engine.procedural.registry import get
 
         set_world_seed(1)
         _fresh_registry()
@@ -383,7 +383,7 @@ class TestNightSkyTexture:
 
     def test_star_count_param(self):
         """star_count is accepted and changes the output (separate cache slot)."""
-        from torn_apart.procedural.registry import get
+        from fire_engine.procedural.registry import get
         default = get("night_sky")
         custom = get("night_sky", star_count=500)
         assert custom is not default
@@ -397,27 +397,27 @@ class TestNightSkyTexture:
 
 class TestRainStreakTexture:
     def setup_method(self):
-        from torn_apart.core.rng import set_world_seed
+        from fire_engine.core.rng import set_world_seed
         set_world_seed(1337)
         _fresh_registry()
 
     def test_shape_and_dtype(self):
-        from torn_apart.procedural.registry import get
+        from fire_engine.procedural.registry import get
         arr = get("rain_streak")
         assert arr.shape == (512, 128, 4), f"Expected (512,128,4), got {arr.shape}"
         assert arr.dtype == np.uint8
 
     def test_sparse_streaks(self):
         """Alpha = streak intensity: mostly empty with some bright streaks."""
-        from torn_apart.procedural.registry import get
+        from fire_engine.procedural.registry import get
         arr = get("rain_streak")
         lit = (arr[..., 3] > 0).mean()
         assert 0.0 < lit < 0.5, f"streaks should be sparse, got {lit:.0%} lit"
         assert arr[..., 3].max() > 200, "the brightest tier should be near-opaque"
 
     def test_same_seed_byte_identical(self):
-        from torn_apart.core.rng import set_world_seed
-        from torn_apart.procedural.registry import get
+        from fire_engine.core.rng import set_world_seed
+        from fire_engine.procedural.registry import get
 
         set_world_seed(42)
         _fresh_registry()
@@ -432,8 +432,8 @@ class TestRainStreakTexture:
         )
 
     def test_different_seeds_differ(self):
-        from torn_apart.core.rng import set_world_seed
-        from torn_apart.procedural.registry import get
+        from fire_engine.core.rng import set_world_seed
+        from fire_engine.procedural.registry import get
 
         set_world_seed(1)
         _fresh_registry()
@@ -452,8 +452,8 @@ class TestRainStreakTexture:
 
 class TestPixelNoise:
     def test_shape_and_dtype(self):
-        from torn_apart.core.rng import set_world_seed, for_domain
-        from torn_apart.procedural.textures.base import pixel_noise
+        from fire_engine.core.rng import set_world_seed, for_domain
+        from fire_engine.procedural.textures.base import pixel_noise
         set_world_seed(0)
         rng = for_domain("test", "pixel_noise_shape")
         pn = pixel_noise(rng, (64, 32), octaves=3)
@@ -461,8 +461,8 @@ class TestPixelNoise:
         assert pn.dtype == np.float32
 
     def test_range(self):
-        from torn_apart.core.rng import set_world_seed, for_domain
-        from torn_apart.procedural.textures.base import pixel_noise
+        from fire_engine.core.rng import set_world_seed, for_domain
+        from fire_engine.procedural.textures.base import pixel_noise
         set_world_seed(0)
         rng = for_domain("test", "pixel_noise_range")
         pn = pixel_noise(rng, (128, 128), octaves=3)
@@ -470,8 +470,8 @@ class TestPixelNoise:
         assert float(pn.max()) <= 1.0, f"max={pn.max()} above 1"
 
     def test_deterministic(self):
-        from torn_apart.core.rng import set_world_seed, for_domain
-        from torn_apart.procedural.textures.base import pixel_noise
+        from fire_engine.core.rng import set_world_seed, for_domain
+        from fire_engine.procedural.textures.base import pixel_noise
         set_world_seed(7)
         pn1 = pixel_noise(for_domain("test", "pn_det"), (32, 32))
         set_world_seed(7)
@@ -479,8 +479,8 @@ class TestPixelNoise:
         assert np.array_equal(pn1, pn2), "pixel_noise must be deterministic for same seed"
 
     def test_different_seeds_differ(self):
-        from torn_apart.core.rng import set_world_seed, for_domain
-        from torn_apart.procedural.textures.base import pixel_noise
+        from fire_engine.core.rng import set_world_seed, for_domain
+        from fire_engine.procedural.textures.base import pixel_noise
         set_world_seed(1)
         pn1 = pixel_noise(for_domain("test", "pn_diff"), (32, 32))
         set_world_seed(2)
@@ -489,8 +489,8 @@ class TestPixelNoise:
 
     def test_blocks_are_constant(self):
         """Nearest-neighbour: adjacent pixels in same coarse cell must be equal."""
-        from torn_apart.core.rng import set_world_seed, for_domain
-        from torn_apart.procedural.textures.base import pixel_noise
+        from fire_engine.core.rng import set_world_seed, for_domain
+        from fire_engine.procedural.textures.base import pixel_noise
         set_world_seed(5)
         # 8×8 output with base_freq=2 → 2-cell grid → 4px-wide blocks
         pn = pixel_noise(for_domain("test", "pn_blocks"), (8, 8), octaves=1, base_freq=2)
@@ -506,24 +506,24 @@ class TestPixelNoise:
 
 class TestGrassGroundTexture:
     def setup_method(self):
-        from torn_apart.core.rng import set_world_seed
+        from fire_engine.core.rng import set_world_seed
         set_world_seed(1337)
         _fresh_registry()
 
     def test_shape_and_dtype(self):
-        from torn_apart.procedural.registry import get
+        from fire_engine.procedural.registry import get
         arr = get("grass_ground")
         assert arr.shape == (64, 64, 4), f"Expected (64,64,4), got {arr.shape}"
         assert arr.dtype == np.uint8
 
     def test_alpha_all_opaque(self):
-        from torn_apart.procedural.registry import get
+        from fire_engine.procedural.registry import get
         arr = get("grass_ground")
         assert (arr[..., 3] == 255).all(), "Alpha must be 255 everywhere"
 
     def test_same_seed_byte_identical(self):
-        from torn_apart.core.rng import set_world_seed
-        from torn_apart.procedural.registry import get
+        from fire_engine.core.rng import set_world_seed
+        from fire_engine.procedural.registry import get
 
         set_world_seed(42)
         _fresh_registry()
@@ -536,8 +536,8 @@ class TestGrassGroundTexture:
         assert np.array_equal(arr1, arr2), "Same seed must produce byte-identical grass_ground"
 
     def test_different_seeds_differ(self):
-        from torn_apart.core.rng import set_world_seed
-        from torn_apart.procedural.registry import get
+        from fire_engine.core.rng import set_world_seed
+        from fire_engine.procedural.registry import get
 
         set_world_seed(10)
         _fresh_registry()
@@ -551,7 +551,7 @@ class TestGrassGroundTexture:
 
     def test_palette_size_small(self):
         """Unique RGB colours should be <= 16 (posterised palette)."""
-        from torn_apart.procedural.registry import get
+        from fire_engine.procedural.registry import get
         arr = get("grass_ground")
         rgb = arr[..., :3].reshape(-1, 3)
         unique_colours = len(np.unique(rgb, axis=0))
@@ -560,7 +560,7 @@ class TestGrassGroundTexture:
         )
 
     def test_custom_size(self):
-        from torn_apart.procedural.registry import get
+        from fire_engine.procedural.registry import get
         arr = get("grass_ground", width=128, height=128)
         assert arr.shape == (128, 128, 4)
         assert arr.dtype == np.uint8
@@ -572,24 +572,24 @@ class TestGrassGroundTexture:
 
 class TestDirtGroundTexture:
     def setup_method(self):
-        from torn_apart.core.rng import set_world_seed
+        from fire_engine.core.rng import set_world_seed
         set_world_seed(1337)
         _fresh_registry()
 
     def test_shape_and_dtype(self):
-        from torn_apart.procedural.registry import get
+        from fire_engine.procedural.registry import get
         arr = get("dirt_ground")
         assert arr.shape == (64, 64, 4), f"Expected (64,64,4), got {arr.shape}"
         assert arr.dtype == np.uint8
 
     def test_alpha_all_opaque(self):
-        from torn_apart.procedural.registry import get
+        from fire_engine.procedural.registry import get
         arr = get("dirt_ground")
         assert (arr[..., 3] == 255).all(), "Alpha must be 255 everywhere"
 
     def test_same_seed_byte_identical(self):
-        from torn_apart.core.rng import set_world_seed
-        from torn_apart.procedural.registry import get
+        from fire_engine.core.rng import set_world_seed
+        from fire_engine.procedural.registry import get
 
         set_world_seed(42)
         _fresh_registry()
@@ -602,8 +602,8 @@ class TestDirtGroundTexture:
         assert np.array_equal(arr1, arr2), "Same seed must produce byte-identical dirt_ground"
 
     def test_different_seeds_differ(self):
-        from torn_apart.core.rng import set_world_seed
-        from torn_apart.procedural.registry import get
+        from fire_engine.core.rng import set_world_seed
+        from fire_engine.procedural.registry import get
 
         set_world_seed(10)
         _fresh_registry()
@@ -617,7 +617,7 @@ class TestDirtGroundTexture:
 
     def test_palette_size_small(self):
         """Unique RGB colours should be <= 16 (posterised palette)."""
-        from torn_apart.procedural.registry import get
+        from fire_engine.procedural.registry import get
         arr = get("dirt_ground")
         rgb = arr[..., :3].reshape(-1, 3)
         unique_colours = len(np.unique(rgb, axis=0))
@@ -626,7 +626,7 @@ class TestDirtGroundTexture:
         )
 
     def test_custom_size(self):
-        from torn_apart.procedural.registry import get
+        from fire_engine.procedural.registry import get
         arr = get("dirt_ground", width=128, height=128)
         assert arr.shape == (128, 128, 4)
         assert arr.dtype == np.uint8

@@ -79,7 +79,7 @@ file captures the choices made *underneath* it during implementation.
 ### Editor repo placement
 - **Q:** Where do the editor daemon and extension live?
 - **Choice:** New top-level `editor/` in the game repo: `editor/fire_editor/` (Python daemon, uses the repo `.venv`), `editor/extension/` (TypeScript VS Code/Cursor extension), `editor/protocol/` (single-source `schema.json` + `codegen.py`). Editor docs at `docs/systems/editor.md`; daemon tests at `tests/editor/` (run in the headless `pytest` suite); the extension has its own `npm test` (excluded from pytest).
-- **Why:** Matches EDITOR_PRD §2. Keeping the daemon in-repo lets it bind to `torn_apart` public APIs and share `.venv`; one codegen source keeps the two languages' bindings from drifting.
+- **Why:** Matches EDITOR_PRD §2. Keeping the daemon in-repo lets it bind to `fire_engine` public APIs and share `.venv`; one codegen source keeps the two languages' bindings from drifting.
 
 ### WebSocket library for the daemon transport
 - **Q:** How does the daemon serve the protocol?
@@ -140,17 +140,17 @@ file captures the choices made *underneath* it during implementation.
 
 ### In-game dev overlay is a separate system from the Fire Editor
 - **Q:** The owner described an in-game debug menu (noclip cam, perf stats, click-to-select + outline, live value editing, spawn/fire-event buttons) — is that the `EDITOR_PRD.md` Fire Editor?
-- **Choice:** No — it is a **new, distinct in-game system** (`torn_apart/devtools/` + `world/devtools_overlay.py`), toggled with **F1**, that runs *inside the live Panda3D window*. The Fire Editor (`editor/`) is the *external* VS Code/Cursor tool that runs with the game *closed*. Both coexist; ARCHITECTURE.md §6 explicitly anticipates in-game debug overlays for Session 1.
+- **Choice:** No — it is a **new, distinct in-game system** (`fire_engine/devtools/` + `world/devtools_overlay.py`), toggled with **F1**, that runs *inside the live Panda3D window*. The Fire Editor (`editor/`) is the *external* VS Code/Cursor tool that runs with the game *closed*. Both coexist; ARCHITECTURE.md §6 explicitly anticipates in-game debug overlays for Session 1.
 - **Why:** They serve different workflows (live in-engine tweaking vs. offline content authoring). Conflating them would have forced the daemon/webview architecture onto something that just needs to draw over the running game.
 
 ### Renderer: Panda3D DirectGUI now, not Dear ImGui (but swappable)
 - **Q:** The "common debug-menu UI" the owner named is Dear ImGui. Build a real ImGui-in-Panda3D integration, or use Panda3D's native GUI?
-- **Choice:** **DirectGUI** for v1 (owner-approved). The dev-tools *logic* is fully decoupled behind a declarative `Panel`/`Section`/`Field`/`Button` model (`devtools/fields.py`); the renderer only consumes that model. A real Dear ImGui backend can replace `world/devtools_overlay.py` later without touching `torn_apart/devtools/`.
+- **Choice:** **DirectGUI** for v1 (owner-approved). The dev-tools *logic* is fully decoupled behind a declarative `Panel`/`Section`/`Field`/`Button` model (`devtools/fields.py`); the renderer only consumes that model. A real Dear ImGui backend can replace `world/devtools_overlay.py` later without touching `fire_engine/devtools/`.
 - **Why:** ImGui has no first-class Panda3D binding — a custom draw-list backend is a fragile native dependency and slow to a first working version. DirectGUI is zero-dependency, solid on Windows/Panda3D, and ships a working stats/inspector/spawn overlay today. The panel-model indirection keeps the ImGui door open.
 
 ### New headless `devtools/` package (logic) + renderer in `world/`
 - **Q:** Where does the dev-overlay code live given hard rule 1 (panda3d only in `world/`/`lighting/`)?
-- **Choice:** A new **headless** package `torn_apart/devtools/` (selection, CPU picking, GameObject introspection, tools, manager) imports **`core` only** — never panda3d, never `world` at runtime (TYPE_CHECKING duck-typing). The single panda3d-touching file is `world/devtools_overlay.py` (DirectGUI + mouse→ray + outline + spawn visuals). `tests/test_devtools.py` runs in the headless suite.
+- **Choice:** A new **headless** package `fire_engine/devtools/` (selection, CPU picking, GameObject introspection, tools, manager) imports **`core` only** — never panda3d, never `world` at runtime (TYPE_CHECKING duck-typing). The single panda3d-touching file is `world/devtools_overlay.py` (DirectGUI + mouse→ray + outline + spawn visuals). `tests/test_devtools.py` runs in the headless suite.
 - **Why:** Keeps the editor logic unit-testable without a window and obeys the import rule; the renderer is a thin, replaceable presentation layer.
 
 ### Object picking via CPU ray/AABB, not a Panda3D collision graph
@@ -162,7 +162,7 @@ file captures the choices made *underneath* it during implementation.
 
 ### Sky lives in a new headless Layer-1 package; rendering stays in world/
 - **Q:** Where does the sky/weather system live given hard rule 1 (panda3d only in `world/`/`lighting/`)?
-- **Choice:** A new **headless** package `torn_apart/sky/` (Layer 1 — Services, peer of `lighting/`): celestial math (`celestial.py`), the weather state machine (`weather.py`), and the per-frame `SkyState` aggregate (`sky_state.py`). All panda3d rendering (dome shader, clouds, rain, fog) lives in `world/sky_renderer.py` + `world/sky_shaders.py`, driven by a `SkyRendererComponent` on a "Sky" GameObject — so the system is authored through the World API object model, per the owner's request.
+- **Choice:** A new **headless** package `fire_engine/sky/` (Layer 1 — Services, peer of `lighting/`): celestial math (`celestial.py`), the weather state machine (`weather.py`), and the per-frame `SkyState` aggregate (`sky_state.py`). All panda3d rendering (dome shader, clouds, rain, fog) lives in `world/sky_renderer.py` + `world/sky_shaders.py`, driven by a `SkyRendererComponent` on a "Sky" GameObject — so the system is authored through the World API object model, per the owner's request.
 - **Why:** Same split as lighting and devtools: simulation is headless-testable and deterministic; `world/` only reads a frozen `SkyState` dataclass and writes uniforms/scene state in bulk.
 
 ### Day/night + weather lighting integration is a global colour-scale (v0)
@@ -250,7 +250,7 @@ file captures the choices made *underneath* it during implementation.
 
 ### Grass volumes are tagged boxes in a new `zones` package
 - **Q:** Where does "grass grows here" live? (Also the foundation for biome regions later.)
-- **Choice:** New foundation-layer package `torn_apart/zones/`: frozen `ZoneVolume` AABBs (tag `"grass"` now, `"biome"` reserved) in a `ZoneStore` registry that is `Saveable` (`save_key="zones"`, full-list delta vs a `mark_baseline()` snapshot). Matches the ZoneVolume concept in ARCHITECTURE §5.2.
+- **Choice:** New foundation-layer package `fire_engine/zones/`: frozen `ZoneVolume` AABBs (tag `"grass"` now, `"biome"` reserved) in a `ZoneStore` registry that is `Saveable` (`save_key="zones"`, full-list delta vs a `mark_baseline()` snapshot). Matches the ZoneVolume concept in ARCHITECTURE §5.2.
 - **Why:** Smallest shape that covers grass today and biome/snow regions next; volumes are a handful of dicts, so full-snapshot deltas beat diff machinery.
 
 ### Grass is GPU-only: blades derive from gl_InstanceID, CPU stores none

@@ -45,7 +45,7 @@ class _FakeLoadersModule:
         self._loaders[suffix.lower()] = fn
 
     def dispatch(self, path: str) -> object:
-        from torn_apart.resources.loaders import UnknownResourceFormatError
+        from fire_engine.resources.loaders import UnknownResourceFormatError
         dot_idx = path.rfind(".")
         suffix  = path[dot_idx:].lower() if dot_idx != -1 else ""
         if suffix not in self._loaders or self._loaders[suffix] is None:
@@ -60,7 +60,7 @@ def _fresh_manager(fake_loaders=None):
     By default creates a new _FakeLoadersModule with a ``.fake`` loader
     pre-registered.
     """
-    from torn_apart.resources.manager import ResourceManager
+    from fire_engine.resources.manager import ResourceManager
 
     if fake_loaders is None:
         fake_loaders = _FakeLoadersModule()
@@ -95,7 +95,7 @@ class TestCacheIdentity:
     def test_different_paths_different_handles(self):
         fake = _FakeLoadersModule()
         fake.register_loader(".fake", lambda p: {"p": p})
-        manager = __import__("torn_apart.resources.manager", fromlist=["ResourceManager"]).ResourceManager(
+        manager = __import__("fire_engine.resources.manager", fromlist=["ResourceManager"]).ResourceManager(
             loaders_module=fake
         )
         h1 = manager.load("a.fake")
@@ -187,7 +187,7 @@ class TestUnloadUnreferenced:
         """Load three handles; acquire one; unload_unreferenced evicts the other two."""
         fake = _FakeLoadersModule()
         fake.register_loader(".fake", lambda p: p)
-        from torn_apart.resources.manager import ResourceManager
+        from fire_engine.resources.manager import ResourceManager
         manager = ResourceManager(loaders_module=fake)
 
         h_keep = manager.load("keep.fake")
@@ -222,7 +222,7 @@ class TestUnloadUnreferenced:
 
         fake = _FakeLoadersModule()
         fake.register_loader(".fake", lambda p: _Cleanable())
-        from torn_apart.resources.manager import ResourceManager
+        from fire_engine.resources.manager import ResourceManager
         manager = ResourceManager(loaders_module=fake)
 
         manager.load("clean.fake")   # refcount 0
@@ -241,7 +241,7 @@ class TestSuffixDispatch:
         fake = _FakeLoadersModule()
         call_log = []
         fake.register_loader(".fake", lambda p: call_log.append(p) or "result")
-        from torn_apart.resources.manager import ResourceManager
+        from fire_engine.resources.manager import ResourceManager
         manager = ResourceManager(loaders_module=fake)
         h = manager.load("some/path/asset.fake")
         assert h.resource == "result"
@@ -251,7 +251,7 @@ class TestSuffixDispatch:
         fake = _FakeLoadersModule()
         fake.register_loader(".alpha", lambda p: "alpha_result")
         fake.register_loader(".beta",  lambda p: "beta_result")
-        from torn_apart.resources.manager import ResourceManager
+        from fire_engine.resources.manager import ResourceManager
         manager = ResourceManager(loaders_module=fake)
         ha = manager.load("file.alpha")
         hb = manager.load("file.beta")
@@ -267,14 +267,14 @@ class TestUnknownSuffix:
     """Unregistered suffix raises UnknownResourceFormatError."""
 
     def test_unknown_suffix_raises(self):
-        from torn_apart.resources.loaders import UnknownResourceFormatError
+        from fire_engine.resources.loaders import UnknownResourceFormatError
         manager, _ = _fresh_manager()
         with pytest.raises(UnknownResourceFormatError) as exc_info:
             manager.load("model.xyz")
         assert ".xyz" in str(exc_info.value)
 
     def test_error_has_correct_suffix_attribute(self):
-        from torn_apart.resources.loaders import UnknownResourceFormatError
+        from fire_engine.resources.loaders import UnknownResourceFormatError
         manager, _ = _fresh_manager()
         try:
             manager.load("sound.mp3")
@@ -288,7 +288,7 @@ class TestUnknownSuffix:
         A suffix in the known dispatch table (e.g. ".egg") but with no loader
         registered yet should also raise UnknownResourceFormatError.
         """
-        from torn_apart.resources.loaders import UnknownResourceFormatError
+        from fire_engine.resources.loaders import UnknownResourceFormatError
         # Use a fresh fake loaders module that knows nothing about .egg
         manager, _ = _fresh_manager()
         with pytest.raises(UnknownResourceFormatError):
@@ -333,7 +333,7 @@ class TestStats:
     def test_stats_mixed(self):
         fake = _FakeLoadersModule()
         fake.register_loader(".fake", lambda p: p)
-        from torn_apart.resources.manager import ResourceManager
+        from fire_engine.resources.manager import ResourceManager
         manager = ResourceManager(loaders_module=fake)
 
         h1 = manager.load("a.fake")
@@ -365,14 +365,14 @@ class TestDefaultManager:
     """The module-level default_manager and convenience functions work correctly."""
 
     def test_default_manager_exists(self):
-        from torn_apart.resources import default_manager, ResourceManager
+        from fire_engine.resources import default_manager, ResourceManager
         assert isinstance(default_manager, ResourceManager)
 
     def test_register_loader_on_global(self):
         """register_loader wires into the global loaders module dispatch table."""
-        import torn_apart.resources.loaders as _loaders
+        import fire_engine.resources.loaders as _loaders
         _loaders.register_loader(".testfmt", lambda p: "test_resource")
-        from torn_apart.resources.loaders import dispatch
+        from fire_engine.resources.loaders import dispatch
         result = dispatch("something.testfmt")
         assert result == "test_resource"
         # Clean up
@@ -418,9 +418,9 @@ def test_load_triangle_egg_with_panda3d():
     try:
         # Create a fresh ResourceManager backed by the real loaders module
         # but with a clean private loaders state to avoid polluting the global.
-        import torn_apart.resources.loaders as _loaders
-        from torn_apart.resources.manager import ResourceManager
-        from torn_apart.world.resource_adapter import register_panda_loaders
+        import fire_engine.resources.loaders as _loaders
+        from fire_engine.resources.manager import ResourceManager
+        from fire_engine.world.resource_adapter import register_panda_loaders
 
         manager = ResourceManager()
         register_panda_loaders(manager)

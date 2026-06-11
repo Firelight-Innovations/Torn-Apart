@@ -1,7 +1,7 @@
 # save — System Doc
 keywords: save, load, delta, msgpack, zlib, Saveable, header, F5, F9, atomic, SaveIncompatibleError, save_key, get_delta, apply_delta, format_version, world_seed, config_digest, game_clock, clock, pickle, no-pickle, tuple-key, numpy, compression, dump_save, on-disk layout, registration order, kv_pairs, ndarray, blake2b, incompatible, round-trip, baseline, deviation, persistence, serialisation
 
-> One doc per code package; filename matches the package exactly (`docs/systems/save.md` ↔ `torn_apart/save/`).
+> One doc per code package; filename matches the package exactly (`docs/systems/save.md` ↔ `fire_engine/save/`).
 
 ## Role
 
@@ -21,7 +21,7 @@ The design principle: `world = regenerate_from_seed() + apply_delta(saved_delta)
 
 ## Public API
 
-All symbols below are re-exported from `torn_apart.save` (`__init__.py`).
+All symbols below are re-exported from `fire_engine.save` (`__init__.py`).
 
 | Symbol | Description |
 |---|---|
@@ -48,7 +48,7 @@ Per ARCHITECTURE.md §4a.2, `save/` may import:
 - Python standard library (`hashlib`, `os`, `zlib`, `pathlib`, `typing`, ...)
 - `numpy`
 - `msgpack` (third-party; in `requirements.txt`)
-- `torn_apart.core` (Config, Clock, get_logger)
+- `fire_engine.core` (Config, Clock, get_logger)
 
 **No panda3d imports.  No imports from any layer above core.**  Systems register *into* SaveManager; SaveManager never imports them.  This is inversion of control — adding a new saveable system never touches save code.
 
@@ -142,7 +142,7 @@ If a system's `save_key` is absent from the file, `apply_delta` is NOT called an
 
 ### No-Pickle Rule
 
-**No pickle anywhere in the codebase** (Hard Rule 3, owner decision 2026-06-09).  `tests/test_save.py::TestNoPickle::test_no_pickle_imports` walks all `torn_apart/` and `tools/` `.py` files and fails if any contain `import pickle`, `import cPickle`, `from pickle`, `from cPickle`, or `pickle.` (regex).  This test runs as part of the normal headless suite.
+**No pickle anywhere in the codebase** (Hard Rule 3, owner decision 2026-06-09).  `tests/test_save.py::TestNoPickle::test_no_pickle_imports` walks all `fire_engine/` and `tools/` `.py` files and fails if any contain `import pickle`, `import cPickle`, `from pickle`, `from cPickle`, or `pickle.` (regex).  This test runs as part of the normal headless suite.
 
 ## Events
 
@@ -166,10 +166,10 @@ None.  `save/` is called directly (F5 → `sm.save(path)`, F9 → `sm.load(path)
 ### Wire up SaveManager at boot (main.py)
 
 ```python
-from torn_apart.core import load_config, Clock, EventBus
-from torn_apart.core.rng import set_world_seed
-from torn_apart.terrain import ChunkManager
-from torn_apart.save import SaveManager
+from fire_engine.core import load_config, Clock, EventBus
+from fire_engine.core.rng import set_world_seed
+from fire_engine.terrain import ChunkManager
+from fire_engine.save import SaveManager
 
 cfg = load_config()
 set_world_seed(cfg.world_seed)
@@ -193,7 +193,7 @@ sm.save("saves/quick.ta")     # atomic: .tmp → rename
 ### F9 (quick load)
 
 ```python
-from torn_apart.save import SaveIncompatibleError
+from fire_engine.save import SaveIncompatibleError
 
 try:
     sm.load("saves/quick.ta")
@@ -213,7 +213,7 @@ for coord, chunk in cm.chunks.items():
 ### Implement a custom Saveable
 
 ```python
-from torn_apart.save import Saveable   # runtime_checkable Protocol
+from fire_engine.save import Saveable   # runtime_checkable Protocol
 
 class EconomyManager:
     save_key: str = "economy"

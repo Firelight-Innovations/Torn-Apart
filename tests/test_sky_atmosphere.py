@@ -13,10 +13,10 @@ import math
 import numpy as np
 import pytest
 
-from torn_apart.core import Clock, EventBus, load_config
-from torn_apart.core.rng import set_world_seed
-from torn_apart.sky import atmosphere
-from torn_apart.sky.sky_state import MOON_CYCLE_DAYS, SkySystem
+from fire_engine.core import Clock, EventBus, load_config
+from fire_engine.core.rng import set_world_seed
+from fire_engine.sky import atmosphere
+from fire_engine.sky.sky_state import MOON_CYCLE_DAYS, SkySystem
 
 NOON_Z = 0.94          # sin(sun elevation) at the v0 noon arc peak
 
@@ -142,23 +142,23 @@ class TestMoonSurface:
     def setup_method(self):
         # Other test modules reset the procedural registry; make sure the
         # moon def is registered regardless of test order.
-        from torn_apart.procedural import registry
-        from torn_apart.procedural.textures.moon_surface import MoonSurfaceDef
+        from fire_engine.procedural import registry
+        from fire_engine.procedural.textures.moon_surface import MoonSurfaceDef
         if "moon_surface" not in registry._registry:
             registry.register(MoonSurfaceDef())
 
     def test_shape_dtype_and_disc_alpha(self):
         set_world_seed(1337)
-        import torn_apart.procedural  # noqa: F401  (registration)
-        from torn_apart.procedural import get
+        import fire_engine.procedural  # noqa: F401  (registration)
+        from fire_engine.procedural import get
         arr = get("moon_surface")
         assert arr.shape == (256, 256, 4) and arr.dtype == np.uint8
         assert arr[128, 128, 3] == 255      # centre inside the disc
         assert arr[0, 0, 3] == 0            # corner outside the disc
 
     def test_deterministic_per_seed(self):
-        import torn_apart.procedural  # noqa: F401
-        from torn_apart.procedural import get, clear_cache
+        import fire_engine.procedural  # noqa: F401
+        from fire_engine.procedural import get, clear_cache
         set_world_seed(1337)
         clear_cache()
         a = get("moon_surface").copy()
@@ -168,8 +168,8 @@ class TestMoonSurface:
         np.testing.assert_array_equal(a, b)
 
     def test_different_seed_different_moon(self):
-        import torn_apart.procedural  # noqa: F401
-        from torn_apart.procedural import get, clear_cache
+        import fire_engine.procedural  # noqa: F401
+        from fire_engine.procedural import get, clear_cache
         set_world_seed(1337)
         clear_cache()
         a = get("moon_surface").copy()
@@ -180,8 +180,8 @@ class TestMoonSurface:
 
     def test_has_craters_and_maria_variation(self):
         set_world_seed(1337)
-        import torn_apart.procedural  # noqa: F401
-        from torn_apart.procedural import get
+        import fire_engine.procedural  # noqa: F401
+        from fire_engine.procedural import get
         arr = get("moon_surface")
         inside = arr[arr[..., 3] == 255][:, :3].astype(np.int32)
         assert inside.std() > 8.0           # visible surface detail

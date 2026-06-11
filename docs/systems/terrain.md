@@ -1,7 +1,7 @@
 # terrain — System Doc
 keywords: voxel, chunk, mesh, mesher, build_mesh, build_mesh_faceted, surface nets, faceted, facet, smooth terrain, semi-smooth, Daggerfall, mesh_style, blocky, facet_shade_strength, grass, dirt, MATERIAL_DIRT, MATERIAL_GRASS, face_materials, verts_per_face, neighbor_materials, NEIGHBOR_OFFSETS_26, brush, apply_brush, SphereBrush, BoxBrush, CylinderBrush, BrushMode, crater, flat, flat terrain, world_size_m, ground_height_m, world footprint, world bounds, world size, seed-independent, authored terrain, heightmap, surface_height, carve, cave, overhang, raycast, raycast_voxel, DDA, Hit, streaming, ChunkManager, desired_set, stream_frame, get_or_create, chunk_provider, Saveable, delta, get_delta, apply_delta, generate_chunk, MeshArrays, light_sampler, neighbor_solids, WORLD_FLOOR_SOLID, padding, world_origin, materials, dirty, edited, determinism, geometry_bridge, to_geom
 
-> One doc per code package; filename matches the package exactly (`docs/systems/terrain.md` ↔ `torn_apart/terrain/`).
+> One doc per code package; filename matches the package exactly (`docs/systems/terrain.md` ↔ `fire_engine/terrain/`).
 
 ## Role
 
@@ -20,7 +20,7 @@ keywords: voxel, chunk, mesh, mesher, build_mesh, build_mesh_faceted, surface ne
 
 ## Public API
 
-All symbols below are re-exported from `torn_apart.terrain` (`__init__.py`).
+All symbols below are re-exported from `fire_engine.terrain` (`__init__.py`).
 
 | Symbol | Description |
 |---|---|
@@ -53,8 +53,8 @@ The render-side bridge `world/geometry_bridge.to_geom(mesh) -> panda3d.core.Geom
 
 Per ARCHITECTURE.md §4a.2, `terrain/` may import:
 - `numpy`, Python standard library
-- `torn_apart.core` (Config, EventBus + events, `for_domain`, Vec3, get_logger)
-- `torn_apart.procedural` (`value_noise` and registry — foundation, callable from anywhere)
+- `fire_engine.core` (Config, EventBus + events, `for_domain`, Vec3, get_logger)
+- `fire_engine.procedural` (`value_noise` and registry — foundation, callable from anywhere)
 
 **No panda3d imports.** Never import from `world/`, `lighting/`, `buildings/`, or any higher layer.  The `terrain → world` mesh handoff is data-only (numpy `MeshArrays` returned to the World layer's geometry bridge), not an import of `world`.
 
@@ -158,9 +158,9 @@ Terrain produces `MeshArrays` (pure numpy) and records them; the World layer dra
 
 ### Generate + mesh a chunk
 ```python
-from torn_apart.core import load_config
-from torn_apart.core.rng import set_world_seed
-from torn_apart.terrain import Chunk, generate_chunk, build_mesh
+from fire_engine.core import load_config
+from fire_engine.core.rng import set_world_seed
+from fire_engine.terrain import Chunk, generate_chunk, build_mesh
 
 set_world_seed(1337)
 cfg = load_config()
@@ -171,10 +171,10 @@ print(mesh.face_count, mesh.tri_count)            # exposed quads / triangles
 
 ### Click → crater (the demo loop)
 ```python
-from torn_apart.core import EventBus, load_config
-from torn_apart.core.rng import set_world_seed
-from torn_apart.core.math3d import Vec3
-from torn_apart.terrain import ChunkManager, raycast_voxel, apply_brush, SphereBrush, BrushMode
+from fire_engine.core import EventBus, load_config
+from fire_engine.core.rng import set_world_seed
+from fire_engine.core.math3d import Vec3
+from fire_engine.terrain import ChunkManager, raycast_voxel, apply_brush, SphereBrush, BrushMode
 
 set_world_seed(1337)
 cm = ChunkManager(load_config(), EventBus())
@@ -186,7 +186,7 @@ if hit:
 
 ### Streaming each frame
 ```python
-from torn_apart.core.math3d import Vec3
+from fire_engine.core.math3d import Vec3
 cm.stream_frame(Vec3(0, 0, 20))            # loads up to 2 chunks
 for coord, mesh in list(cm.pending_meshes.items()):
     ...                                     # world/ uploads via geometry_bridge.to_geom(mesh)

@@ -1,7 +1,7 @@
 # core — System Doc
 keywords: vec3, quat, quaternion, math3d, event bus, eventbus, publish, subscribe, drain, rng, seed, for_domain, config, clock, fixed_update, lod, lodpolicy, logging, math, rotation, euler, hpr, slerp, chunk loaded, game day, terrain edited, weather changed, world seed, determinism, blake2b, float32, z-up, forward, right, up, meters, radians, fixed_dt, spiral of death, saveable, get_state, set_state, game_time_scale, time scale, sky config, cloud altitude, star count
 
-> One doc per code package; filename matches the package exactly (`docs/systems/core.md` ↔ `torn_apart/core/`).
+> One doc per code package; filename matches the package exactly (`docs/systems/core.md` ↔ `fire_engine/core/`).
 
 ## Role
 
@@ -19,7 +19,7 @@ keywords: vec3, quat, quaternion, math3d, event bus, eventbus, publish, subscrib
 
 ## Public API
 
-All symbols below are re-exported from `torn_apart.core` (`__init__.py`).
+All symbols below are re-exported from `fire_engine.core` (`__init__.py`).
 
 ### Math (`core/math3d.py`)
 
@@ -71,7 +71,7 @@ All symbols below are re-exported from `torn_apart.core` (`__init__.py`).
 | `ChunkUnloadedEvent(coord)` | Terrain chunk evicted from memory. |
 | `TerrainEditedEvent(chunk_coords, brush)` | Brush edit applied to terrain voxel data. |
 | `GameDayTickEvent(day)` | In-game day counter incremented. |
-| `WeatherChangedEvent(previous, current, day)` | Discrete weather state changed (`WeatherType.value` strings, e.g. `"clear"` → `"rain"`).  Published by `torn_apart.sky.WeatherSystem` via `publish_deferred`. |
+| `WeatherChangedEvent(previous, current, day)` | Discrete weather state changed (`WeatherType.value` strings, e.g. `"clear"` → `"rain"`).  Published by `fire_engine.sky.WeatherSystem` via `publish_deferred`. |
 
 ### RNG (`core/rng.py`)
 
@@ -141,7 +141,7 @@ All symbols below are re-exported from `torn_apart.core` (`__init__.py`).
 - Python standard library (`math`, `hashlib`, `logging`, `tomllib`, `collections`, `dataclasses`, ...)
 - `numpy`
 
-**No panda3d imports.** No imports from any other `torn_apart.*` package (core is the bottom of the dependency graph).
+**No panda3d imports.** No imports from any other `fire_engine.*` package (core is the bottom of the dependency graph).
 
 ## Events
 
@@ -193,7 +193,7 @@ Default: 1 real second = 60 in-game seconds → 1 real minute = 1 game hour → 
 ### Math3d
 ```python
 from math import pi
-from torn_apart.core.math3d import Vec3, Quat
+from fire_engine.core.math3d import Vec3, Quat
 
 # Build a position and rotation
 pos = Vec3(10.0, 5.0, 2.0)           # 10 m east, 5 m north, 2 m up
@@ -214,7 +214,7 @@ combined = yaw * pitch               # yaw, then pitch in yaw-frame
 
 ### Event Bus
 ```python
-from torn_apart.core.event_bus import EventBus, ChunkLoadedEvent
+from fire_engine.core.event_bus import EventBus, ChunkLoadedEvent
 
 bus = EventBus()
 
@@ -232,7 +232,7 @@ bus.drain()
 
 ### RNG
 ```python
-from torn_apart.core.rng import set_world_seed, for_domain
+from fire_engine.core.rng import set_world_seed, for_domain
 
 set_world_seed(1337)   # once, at boot
 
@@ -247,7 +247,7 @@ assert (rng2.random((32, 32)) == rng.random((32, 32))).all()  # True
 
 ### Config
 ```python
-from torn_apart.core.config import load_config
+from fire_engine.core.config import load_config
 
 cfg = load_config("config.toml")
 print(cfg.chunk_meters)          # 16.0
@@ -257,8 +257,8 @@ print(cfg.fixed_dt)              # 0.02
 
 ### Clock + Fixed Steps
 ```python
-from torn_apart.core.clock import Clock
-from torn_apart.core.event_bus import EventBus
+from fire_engine.core.clock import Clock
+from fire_engine.core.event_bus import EventBus
 
 bus = EventBus()
 clock = Clock(fixed_dt=0.02, bus=bus)

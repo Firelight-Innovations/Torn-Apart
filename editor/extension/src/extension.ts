@@ -84,7 +84,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const repoRoot = findRepoRoot(context.extensionPath);
   if (!repoRoot) {
     output.appendLine(
-      "[extension] no Torn Apart repo detected (need torn_apart/ + editor/fire_editor). Idle."
+      "[extension] no Torn Apart repo detected (need fire_engine/ + editor/fire_editor). Idle."
     );
     return;
   }
@@ -395,7 +395,7 @@ function setStatus(state: DaemonState, connected = false): void {
 
 function isRepoRoot(root: string): boolean {
   return (
-    fs.existsSync(path.join(root, "torn_apart")) &&
+    fs.existsSync(path.join(root, "fire_engine")) &&
     fs.existsSync(path.join(root, "editor", "fire_editor"))
   );
 }

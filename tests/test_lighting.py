@@ -21,10 +21,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from torn_apart.core import EventBus, TerrainEditedEvent, ChunkLoadedEvent, load_config
-from torn_apart.core.rng import set_world_seed
-from torn_apart.terrain.chunk import Chunk
-from torn_apart.lighting import (
+from fire_engine.core import EventBus, TerrainEditedEvent, ChunkLoadedEvent, load_config
+from fire_engine.core.rng import set_world_seed
+from fire_engine.terrain.chunk import Chunk
+from fire_engine.lighting import (
     LightGrid,
     occupancy_from_materials,
     SunlightComputer,

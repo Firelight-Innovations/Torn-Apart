@@ -14,7 +14,7 @@ Tagged axis-aligned box volumes in world space, and the math behind systems that
 - `bake_grass_height_field(volume, chunks, config)` — `(H, W, 4) uint8` field, 1 texel/voxel (0.5 m); R encodes surface height inside the volume's Z window, `HEIGHT_SENTINEL` (255) = no surface → shader culls the blade.
 
 ## Imports Allowed
-`numpy`, `torn_apart.core` only (foundation layer — headless, no panda3d, Hard Rule 1).
+`numpy`, `fire_engine.core` only (foundation layer — headless, no panda3d, Hard Rule 1).
 
 ## Events
 Published: none.
@@ -30,7 +30,7 @@ Subscribed: none (the *renderer* in `world/` subscribes to `TerrainEditedEvent` 
 
 ## Examples
 ```python
-from torn_apart.zones import ZoneStore, grass_instance_count, grass_hash_seed
+from fire_engine.zones import ZoneStore, grass_instance_count, grass_hash_seed
 
 zones = ZoneStore()
 vol = zones.add("grass", (-12.0, -5.0, 6.0), (12.0, 25.0, 10.0),
@@ -44,7 +44,7 @@ seed = grass_hash_seed(vol)                      # shader uniform u_hash_seed
 ```python
 # Headless check of what the GPU will draw (no panda3d needed):
 import numpy as np
-from torn_apart.zones import instance_attribs, bake_grass_height_field
+from fire_engine.zones import instance_attribs, bake_grass_height_field
 
 attrs = instance_attribs(np.arange(count), seed, vol.min_corner, vol.max_corner)
 field = bake_grass_height_field(vol, chunk_manager.chunks, cfg)

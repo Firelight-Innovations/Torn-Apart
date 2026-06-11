@@ -11,7 +11,7 @@ docs/            # grep-first knowledge base — search HERE before reading code
   systems/       # one doc per code package, filename == package name (_TEMPLATE.md defines the format)
   content/       # authoring guides for AI content agents (textures, biomes, buildings...)
   sessions/      # per-session handoff notes (session-01.md, ...)
-torn_apart/      # the code package (core/ procedural/ world/ terrain/ lighting/ ...)
+fire_engine/      # the code package (core/ procedural/ world/ terrain/ lighting/ ...)
 tests/  tools/   # headless suite; preview/dump/screenshot utilities
 assets/          # hand-crafted only: models/ audio/ textures/ (env textures are procedural — never put them here)
 saves/           # gitignored
@@ -19,7 +19,7 @@ saves/           # gitignored
 
 ## Docs Are Grep-First (the AI search index)
 - **Before exploring code, grep `docs/`:** `grep -ril "<topic>" docs/` → read the hit. Every `docs/systems/*.md` uses identical H2 headings (Role / Public API / Imports Allowed / Events / Units & Invariants / Examples / Gotchas), so structured queries work: `grep -rA5 "## Events" docs/systems/`.
-- Filenames mirror package names exactly: `docs/systems/terrain.md` documents `torn_apart/terrain/`.
+- Filenames mirror package names exactly: `docs/systems/terrain.md` documents `fire_engine/terrain/`.
 - Each doc opens with a `keywords:` line of synonyms — extend it when you notice a missed grep.
 - Spell code identifiers in docs exactly as in code (`apply_brush`, `for_domain`) so one grep hits both.
 - **Any commit that changes a public API must update the matching `docs/systems/<package>.md` in the same commit.** Stale docs are bugs — they poison every future agent's context.

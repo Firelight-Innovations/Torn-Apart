@@ -46,14 +46,14 @@ import sys
 import zlib
 from pathlib import Path
 
-# Ensure the repo root is on sys.path so torn_apart imports work.
+# Ensure the repo root is on sys.path so fire_engine imports work.
 _repo_root = Path(__file__).resolve().parent.parent
 if str(_repo_root) not in sys.path:
     sys.path.insert(0, str(_repo_root))
 
 import msgpack  # noqa: E402 (after sys.path fixup)
 
-from torn_apart.save.save_manager import _decode_delta  # noqa: E402
+from fire_engine.save.save_manager import _decode_delta  # noqa: E402
 
 
 def _decode_bytes_keys(obj):

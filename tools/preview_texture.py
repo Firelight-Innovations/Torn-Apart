@@ -31,7 +31,7 @@ import argparse
 import os
 import sys
 
-# Ensure the project root is on sys.path (so ``torn_apart`` imports work when
+# Ensure the project root is on sys.path (so ``fire_engine`` imports work when
 # the script is run from any directory).
 _script_dir = os.path.dirname(os.path.abspath(__file__))
 _project_root = os.path.dirname(_script_dir)
@@ -71,15 +71,15 @@ def main() -> None:
     args = parser.parse_args()
 
     # --- Load config (for default seed) ---
-    from torn_apart.core.config import load_config
-    from torn_apart.core.rng import set_world_seed
+    from fire_engine.core.config import load_config
+    from fire_engine.core.rng import set_world_seed
 
     cfg = load_config()
     seed = args.seed if args.seed is not None else cfg.world_seed
     set_world_seed(seed)
 
     # --- Import procedural package (auto-registers all built-in defs) ---
-    from torn_apart.procedural import get
+    from fire_engine.procedural import get
 
     # --- Build optional param overrides ---
     params: dict = {}

@@ -10,13 +10,13 @@ import hashlib
 import numpy as np
 import pytest
 
-from torn_apart.core import load_config, EventBus
-from torn_apart.core.math3d import Vec3
-from torn_apart.core.rng import set_world_seed
-from torn_apart.terrain.chunk import Chunk
-from torn_apart.terrain.generation import generate_chunk
-from torn_apart.terrain.meshing import build_mesh, WORLD_FLOOR_SOLID
-from torn_apart.terrain.chunk_manager import ChunkManager
+from fire_engine.core import load_config, EventBus
+from fire_engine.core.math3d import Vec3
+from fire_engine.core.rng import set_world_seed
+from fire_engine.terrain.chunk import Chunk
+from fire_engine.terrain.generation import generate_chunk
+from fire_engine.terrain.meshing import build_mesh, WORLD_FLOOR_SOLID
+from fire_engine.terrain.chunk_manager import ChunkManager
 
 
 @pytest.fixture
@@ -89,7 +89,7 @@ class TestFlatGeneration:
         assert np.all(east > 0) and np.all(west > 0)
 
     def test_surface_height_is_flat_constant(self, cfg):
-        from torn_apart.terrain.generation import surface_height
+        from fire_engine.terrain.generation import surface_height
         wx = np.array([0.0, 8.0, -300.0])[:, None]
         wy = np.array([0.0, -50.0])[None, :]
         surf = surface_height(wx, wy, cfg)

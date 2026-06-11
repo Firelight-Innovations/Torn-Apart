@@ -5,13 +5,13 @@ Unity-style hierarchy the Scene View and the sidebar tree both read. Each object
 is an id, a name, a kind, an optional parent, and a TRS transform. The store is
 pure Python (no panda3d, no RNG — ids come from a monotonic counter so the same
 sequence of edits always yields the same ids), so it is fully headless-testable
-and participates in delta saves via the :class:`~torn_apart.save.saveable.Saveable`
+and participates in delta saves via the :class:`~fire_engine.save.saveable.Saveable`
 protocol.
 
 The baseline (procedural) scene is empty, so an untouched world saves ~0 bytes;
 every object the user creates is a deviation captured in :meth:`get_delta`.
 
-These authoring objects map onto runtime ``torn_apart.world.GameObject`` instances
+These authoring objects map onto runtime ``fire_engine.world.GameObject`` instances
 when a world is built for play; here they are plain data the editor manipulates.
 
 Example::

@@ -16,9 +16,9 @@ from __future__ import annotations
 
 import pytest
 
-from torn_apart.world.component  import Component
-from torn_apart.world.gameobject import GameObject
-from torn_apart.world.registry   import (
+from fire_engine.world.component  import Component
+from fire_engine.world.gameobject import GameObject
+from fire_engine.world.registry   import (
     ComponentRegistry,
     instantiate,
     destroy,
@@ -26,9 +26,9 @@ from torn_apart.world.registry   import (
     find_objects_with_tag,
     _STATE,
 )
-from torn_apart.core.clock     import Clock
-from torn_apart.core.event_bus import EventBus
-from torn_apart.core.math3d    import Vec3, Quat
+from fire_engine.core.clock     import Clock
+from fire_engine.core.event_bus import EventBus
+from fire_engine.core.math3d    import Vec3, Quat
 
 
 # ---------------------------------------------------------------------------

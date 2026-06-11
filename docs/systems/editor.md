@@ -4,7 +4,7 @@ keywords: editor, fire editor, daemon, fire_editor, extension, vscode, cursor, w
 > Documents the `editor/` tree: the headless Python daemon `editor/fire_editor/`,
 > the TypeScript VS Code/Cursor extension `editor/extension/`, and the shared
 > protocol `editor/protocol/`. The editor is **not** part of the runtime engine —
-> it imports `torn_apart` public APIs to drive an offline visual editor.
+> it imports `fire_engine` public APIs to drive an offline visual editor.
 > Authoritative design: `docs/EDITOR_PRD.md`.
 
 ## Role
@@ -95,7 +95,7 @@ install path, so the daemon starts even when the Extension Development Host open
 with no folder. The Scene View auto-opens once the daemon connects.
 
 ## Imports Allowed
-The daemon may import **any headless `torn_apart` public API** (`core`,
+The daemon may import **any headless `fire_engine` public API** (`core`,
 `terrain`, `save`, `procedural`, `lighting`, and the `world/` object model —
 `Transform`, `Component`, `GameObject`, `ComponentRegistry`, `instantiate`,
 etc.) plus `websockets`, `msgpack`, `numpy`. It may **never** import `panda3d`
@@ -125,7 +125,7 @@ events (e.g. `TerrainEditedEvent`) to know which chunks to remesh.
 - Determinism: the daemon sets the world seed via the engine's RNG service and
   introduces no unseeded randomness — editor preview of seed N matches the game
   world of seed N (hard rule 4).
-- Versions: the daemon reports `torn_apart.__version__` in the handshake; the
+- Versions: the daemon reports `fire_engine.__version__` in the handshake; the
   extension surfaces it.
 
 ## Examples
@@ -171,7 +171,7 @@ python editor/protocol/codegen.py
 - The daemon prints exactly **one** machine-readable line to stdout (the
   listening port). Everything else must go to stderr/logging, or the extension's
   stdout parser will choke.
-- `python -m fire_editor` needs both the repo root (for `torn_apart`) and
+- `python -m fire_editor` needs both the repo root (for `fire_engine`) and
   `editor/` (for `fire_editor`) on `PYTHONPATH`; the extension sets this when it
   spawns the daemon, and `tests/editor/conftest.py` sets it for tests.
 - The extension auto-respawns the daemon up to 5 times with backoff; a genuine

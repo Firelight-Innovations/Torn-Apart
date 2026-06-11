@@ -2,7 +2,7 @@
 keywords: dev tools, developer overlay, debug menu, debug overlay, in-game editor, imgui, dear imgui, directgui, inspector, hierarchy, selection, picking, outline, gizmo, spawn, performance stats, fps overlay, noclip, dev camera, panel, field, tool, DevToolsManager, DevOverlay, describe_object, ray_aabb
 
 > One doc per code package, but this system spans **two**: the headless brain
-> `torn_apart/devtools/` and its Panda3D renderer `torn_apart/world/devtools_overlay.py`
+> `fire_engine/devtools/` and its Panda3D renderer `fire_engine/world/devtools_overlay.py`
 > (the only panda3d-touching half, per CLAUDE.md hard rule 1). They are documented
 > together here because they are one feature; `world.md` cross-links back.
 
@@ -38,7 +38,7 @@ DirectGUI widgets and mouse events into world rays. Swapping the renderer (e.g.
 to real Dear ImGui later) touches nothing in `devtools/`.
 
 ## Public API
-From `torn_apart/devtools/__init__.py`:
+From `fire_engine/devtools/__init__.py`:
 - `DevToolsManager` — the hub: holds `tools`, `selection`, `selectables`, `enabled`; `register_tool`, `panels`, `add_selectable`, `remove_selectable`, `find_selectable`, `pick`, `pick_and_select`.
 - `DevTool` — base class for a panel; subclass + implement `build() -> Panel`, expose a `revision` that bumps on structural change.
 - `PerformanceTool(providers)` — live stats from a `{label: callable}` map.
@@ -56,12 +56,12 @@ From `torn_apart/devtools/__init__.py`:
 - `Gizmo(pivot, size, mode)` — `pick(ray_o, ray_d) -> Handle | None` (hit-test handles) and `begin(handle, ray_o, ray_d, pos, rot, scale) -> DragState`.
 - `update_drag(state, ray_o, ray_d) -> (Vec3, Quat, Vec3)` — resolve a live drag into the object's new local position / rotation / scale (absolute from the captured reference).
 
-From `torn_apart/world/__init__.py` (panda3d-backed; `None` if panda3d missing):
+From `fire_engine/world/__init__.py` (panda3d-backed; `None` if panda3d missing):
 - `DevOverlay(app, manager=None)` — the DirectGUI renderer. `toggle()` (bind to F1), `set_enabled(bool)`, `handle_world_click() -> bool`, `end_gizmo_drag()` (bind to `mouse1-up`), `spawn_cube()`, and `.actions` (the "World" `ActionsTool`) / `.manager`.
 
 ## Imports Allowed
-- `torn_apart/devtools/` may import: `core` (math3d, config, clock — duck-typed) and `numpy`. It reads chunks **duck-typed** (`describe_chunk`/`is_chunk` touch only `materials`/`coord`/`chunk_meters`/`world_origin`/`dirty`/`edited`) — it does **not** import `terrain`. **Not** `world` at runtime (TYPE_CHECKING only), so it and its tests never pull panda3d into the import graph. **Never** panda3d, lighting, save.
-- `torn_apart/world/devtools_overlay.py` may import: panda3d (`direct.gui`, `panda3d.core`), `core`, `devtools`, `terrain` (`raycast_voxel`, for chunk picking — an allowed downward dep), and `world.registry` (`instantiate`). It is a `world/` module, so panda3d is allowed here and nowhere else for this feature.
+- `fire_engine/devtools/` may import: `core` (math3d, config, clock — duck-typed) and `numpy`. It reads chunks **duck-typed** (`describe_chunk`/`is_chunk` touch only `materials`/`coord`/`chunk_meters`/`world_origin`/`dirty`/`edited`) — it does **not** import `terrain`. **Not** `world` at runtime (TYPE_CHECKING only), so it and its tests never pull panda3d into the import graph. **Never** panda3d, lighting, save.
+- `fire_engine/world/devtools_overlay.py` may import: panda3d (`direct.gui`, `panda3d.core`), `core`, `devtools`, `terrain` (`raycast_voxel`, for chunk picking — an allowed downward dep), and `world.registry` (`instantiate`). It is a `world/` module, so panda3d is allowed here and nowhere else for this feature.
 
 ## Events
 Published: none. The overlay drives engine state through direct public-API calls
@@ -80,7 +80,7 @@ Event Bus — it reads live state each frame and writes through setters.)
 ## Examples
 Register a custom tool and an action (headless side):
 ```python
-from torn_apart.devtools import DevToolsManager, DevTool, Panel, Section, Field, FieldKind
+from fire_engine.devtools import DevToolsManager, DevTool, Panel, Section, Field, FieldKind
 
 class WeatherTool(DevTool):
     tool_id, title = "weather", "Weather"
@@ -97,7 +97,7 @@ mgr.register_tool(WeatherTool(sky))
 
 Wire the overlay into the app (in `main.py`, after the App + camera exist):
 ```python
-from torn_apart.world import DevOverlay
+from fire_engine.world import DevOverlay
 overlay = DevOverlay(app)
 overlay.actions.add_action("Fire Explosion", fire_explosion)
 app.accept("f1", overlay.toggle)

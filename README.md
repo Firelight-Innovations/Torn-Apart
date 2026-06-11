@@ -97,7 +97,7 @@ Player ──► World ──► Terrain ──► Lighting / Resources ──�
 ```
 main.py            # vertical-slice demo entry point
 config.toml        # world_seed + sizes/distances (no magic numbers in code)
-torn_apart/        # the engine package (core, world, player, procedural, resources,
+fire_engine/        # the engine package (core, world, player, procedural, resources,
                    #   terrain, lighting, save; buildings/ai/economy/politics are stubs)
 docs/              # grep-first knowledge base (ARCHITECTURE, DEVELOPMENT_PLAN, systems/, sessions/)
 tests/             # headless suite (+ one @pytest.mark.window test)

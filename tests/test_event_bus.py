@@ -15,7 +15,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from torn_apart.core.event_bus import (
+from fire_engine.core.event_bus import (
     EventBus,
     ChunkLoadedEvent,
     ChunkUnloadedEvent,

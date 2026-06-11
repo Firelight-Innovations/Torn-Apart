@@ -1,6 +1,6 @@
 # Torn Apart — Engine Architecture v2
 *Last updated: June 9, 2026 | Status: Pre-production → Session 1 implementation*
-*Supersedes: torn_apart_architecture.md (v1). All deviations from v1 are listed in the Changelog (§10).*
+*Supersedes: fire_engine_architecture.md (v1). All deviations from v1 are listed in the Changelog (§10).*
 
 ---
 

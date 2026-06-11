@@ -1,7 +1,7 @@
 # player — System Doc
 keywords: fly_controller, flycontroller, fly controller, camera, wasd, mouse look, mouse-look, yaw, pitch, sprint, speed, input state, inputstate, keyboard, mouse, panda3d free, component, update, look around, movement, horizontal, vertical, space, ctrl, shift, esc, escape, mouse capture, quaternion, roll drift, clamp, sensitivity, radians, meters per second
 
-> One doc per code package; filename matches the package exactly (`docs/systems/player.md` ↔ `torn_apart/player/`).
+> One doc per code package; filename matches the package exactly (`docs/systems/player.md` ↔ `fire_engine/player/`).
 
 ## Role
 
@@ -15,7 +15,7 @@ keywords: fly_controller, flycontroller, fly controller, camera, wasd, mouse loo
 
 ## Public API
 
-All symbols below are re-exported from `torn_apart.player` (`__init__.py`).
+All symbols below are re-exported from `fire_engine.player` (`__init__.py`).
 
 ### FlyController (`player/fly_controller.py`)
 
@@ -56,8 +56,8 @@ Yaw and pitch are accumulated **as floats** each frame — NOT integrated into t
 ## Imports Allowed
 
 `player/` may import:
-- `torn_apart.world` (Component, Transform, etc.)
-- `torn_apart.core` (Vec3, Quat, etc.)
+- `fire_engine.world` (Component, Transform, etc.)
+- `fire_engine.core` (Vec3, Quat, etc.)
 - Python standard library, `numpy`
 
 **No panda3d imports** — controller is headless-testable.
@@ -85,11 +85,11 @@ None. Input arrives via `InputState` injection, not the event bus.
 
 ### Attach to a camera GameObject
 ```python
-from torn_apart.world import instantiate, ComponentRegistry
-from torn_apart.player import FlyController
-from torn_apart.core.math3d import Vec3
-from torn_apart.core.clock import Clock
-from torn_apart.core.event_bus import EventBus
+from fire_engine.world import instantiate, ComponentRegistry
+from fire_engine.player import FlyController
+from fire_engine.core.math3d import Vec3
+from fire_engine.core.clock import Clock
+from fire_engine.core.event_bus import EventBus
 
 clock = Clock(fixed_dt=0.02, bus=EventBus())
 
@@ -97,7 +97,7 @@ camera_go = instantiate(name="MainCamera", position=Vec3(0, -20, 10))
 ctrl = camera_go.add_component(FlyController, move_speed=15.0)
 
 # Simulate one frame with W held and a small mouse delta:
-from torn_apart.world.app import InputState
+from fire_engine.world.app import InputState
 inp = InputState(
     move_forward=True,
     mouse_captured=True,
@@ -120,13 +120,13 @@ The controller reads the state on its next `update(dt)`.
 
 ### Testing the controller headlessly
 ```python
-from torn_apart.world.gameobject import GameObject
-from torn_apart.player.fly_controller import FlyController
-from torn_apart.world.registry import ComponentRegistry
-from torn_apart.core.clock import Clock
-from torn_apart.core.event_bus import EventBus
-from torn_apart.world.app import InputState
-from torn_apart.core.math3d import Vec3
+from fire_engine.world.gameobject import GameObject
+from fire_engine.player.fly_controller import FlyController
+from fire_engine.world.registry import ComponentRegistry
+from fire_engine.core.clock import Clock
+from fire_engine.core.event_bus import EventBus
+from fire_engine.world.app import InputState
+from fire_engine.core.math3d import Vec3
 
 ComponentRegistry.clear()
 clock = Clock(fixed_dt=0.02, bus=EventBus())

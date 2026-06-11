@@ -9,19 +9,19 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from torn_apart.core import load_config, EventBus
-from torn_apart.core.config import Config
-from torn_apart.core.math3d import Vec3
-from torn_apart.terrain.chunk import Chunk
-from torn_apart.terrain.chunk_manager import ChunkManager
-from torn_apart.terrain.generation import (
+from fire_engine.core import load_config, EventBus
+from fire_engine.core.config import Config
+from fire_engine.core.math3d import Vec3
+from fire_engine.terrain.chunk import Chunk
+from fire_engine.terrain.chunk_manager import ChunkManager
+from fire_engine.terrain.generation import (
     MATERIAL_DIRT,
     MATERIAL_GRASS,
     generate_chunk,
 )
-from torn_apart.terrain.brush import SphereBrush, BrushMode, apply_brush
-from torn_apart.terrain.meshing import build_mesh
-from torn_apart.terrain.surface_nets import (
+from fire_engine.terrain.brush import SphereBrush, BrushMode, apply_brush
+from fire_engine.terrain.meshing import build_mesh
+from fire_engine.terrain.surface_nets import (
     NEIGHBOR_OFFSETS_26,
     _build_padded_materials,
     _cell_vertices,

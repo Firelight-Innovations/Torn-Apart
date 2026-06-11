@@ -18,9 +18,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from torn_apart.core import Clock, Config, EventBus, load_config
-from torn_apart.core.rng import set_world_seed
-from torn_apart.zones import (
+from fire_engine.core import Clock, Config, EventBus, load_config
+from fire_engine.core.rng import set_world_seed
+from fire_engine.zones import (
     HEIGHT_SENTINEL,
     ZoneStore,
     ZoneVolume,
@@ -74,7 +74,7 @@ class TestZoneVolume:
 # ---------------------------------------------------------------------------
 
 def _make_save_env(seed: int = 1337):
-    from torn_apart.save import SaveManager
+    from fire_engine.save import SaveManager
     cfg = load_config()
     set_world_seed(seed)
     bus = EventBus()
@@ -239,7 +239,7 @@ class TestInstancePlacement:
 
 def _flat_chunks(cfg, coords):
     """Dict chunk provider with baseline flat terrain (like test_brush.py)."""
-    from torn_apart.terrain.generation import generate_chunk
+    from fire_engine.terrain.generation import generate_chunk
 
     class _Chunk:
         def __init__(self, materials):

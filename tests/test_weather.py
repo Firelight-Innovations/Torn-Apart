@@ -22,9 +22,9 @@ import math
 
 import pytest
 
-from torn_apart.core import EventBus, WeatherChangedEvent, load_config
-from torn_apart.core.rng import set_world_seed
-from torn_apart.sky.weather import (
+from fire_engine.core import EventBus, WeatherChangedEvent, load_config
+from fire_engine.core.rng import set_world_seed
+from fire_engine.sky.weather import (
     BLEND_SECONDS,
     SEGMENT_SECONDS,
     WeatherParams,

@@ -1,6 +1,6 @@
 """Fire Editor daemon — headless engine host behind a WebSocket protocol.
 
-The daemon imports the Torn Apart engine (``torn_apart.*``) through documented
+The daemon imports the Torn Apart engine (``fire_engine.*``) through documented
 public APIs only and **never imports panda3d** (EDITOR_PRD hard rule 1, enforced
 by ``tests/editor/test_no_panda3d.py``). It runs with the game closed and serves
 the VS Code / Cursor extension.
@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 
-import torn_apart
+import fire_engine
 
 from ._generated import DAEMON_VERSION, PROTOCOL_VERSION, ErrorCode, Method
 from .rpc import Dispatcher, RpcError
@@ -57,7 +57,7 @@ class Daemon:
         return {
             "ok": True,
             "protocol_version": PROTOCOL_VERSION,
-            "engine_version": torn_apart.__version__,
+            "engine_version": fire_engine.__version__,
             "daemon_version": DAEMON_VERSION,
         }
 
@@ -74,5 +74,5 @@ class Daemon:
         # Machine-readable readiness line on stdout (the extension parses this).
         print(f'{{"event":"listening","port":{bound}}}', flush=True)
         log.info("fire_editor daemon ready (engine=%s, protocol=%d)",
-                 torn_apart.__version__, PROTOCOL_VERSION)
+                 fire_engine.__version__, PROTOCOL_VERSION)
         await self.server._server.wait_closed()  # type: ignore[union-attr]

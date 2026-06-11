@@ -47,7 +47,120 @@ Example
 from __future__ import annotations
 
 import tomllib
+import warnings
 from dataclasses import dataclass, field
+
+
+# ----------------------------------------------------------------------------
+# Graphics-quality presets.  Each maps the heavy/quality-dependent ``gfx_*``
+# knobs to a value; aesthetic constants (bloom threshold/knee/strength, cloud
+# max distance) are intentionally omitted so they fall back to the dataclass
+# default and stay consistent across presets.  ``"high"`` mirrors the Config
+# dataclass defaults exactly.  Tune for the target machine via config.toml.
+# ----------------------------------------------------------------------------
+GRAPHICS_PRESETS: dict[str, dict] = {
+    "off": {
+        "gfx_post_process": False,
+        "gfx_hdr_format": "rgba8",
+        "gfx_render_scale": 1.0,
+        "gfx_bloom": False,
+        "gfx_fxaa": False,
+        "gfx_lens_flare": False,
+        "gfx_clouds": False,
+        "gfx_god_rays": False,
+    },
+    "low": {
+        "gfx_post_process": True,
+        "gfx_hdr_format": "rgba16f",
+        "gfx_render_scale": 1.0,
+        "gfx_bloom": True,
+        "gfx_bloom_mips": 3,
+        "gfx_fxaa": False,
+        "gfx_lens_flare": False,
+        "gfx_clouds": True,
+        "gfx_cloud_steps": 32,
+        "gfx_cloud_light_steps": 4,
+        "gfx_cloud_resolution_scale": 0.5,
+        "gfx_god_rays": False,
+        "gfx_god_ray_samples": 16,
+    },
+    "medium": {
+        "gfx_post_process": True,
+        "gfx_hdr_format": "rgba16f",
+        "gfx_render_scale": 1.0,
+        "gfx_bloom": True,
+        "gfx_bloom_mips": 4,
+        "gfx_fxaa": True,
+        "gfx_lens_flare": True,
+        "gfx_clouds": True,
+        "gfx_cloud_steps": 48,
+        "gfx_cloud_light_steps": 6,
+        "gfx_cloud_resolution_scale": 1.0,
+        "gfx_god_rays": True,
+        "gfx_god_ray_samples": 24,
+    },
+    "high": {
+        "gfx_post_process": True,
+        "gfx_hdr_format": "rgba16f",
+        "gfx_render_scale": 1.0,
+        "gfx_bloom": True,
+        "gfx_bloom_mips": 5,
+        "gfx_fxaa": True,
+        "gfx_lens_flare": True,
+        "gfx_clouds": True,
+        "gfx_cloud_steps": 96,
+        "gfx_cloud_light_steps": 8,
+        "gfx_cloud_resolution_scale": 1.0,
+        "gfx_god_rays": True,
+        "gfx_god_ray_samples": 32,
+    },
+}
+
+
+def resolve_graphics_preset(graphics_table: dict | None = None) -> dict:
+    """
+    Expand a ``[graphics]`` TOML table into flat ``gfx_*`` ``Config`` kwargs.
+
+    The table's ``preset`` key (one of ``off/low/medium/high``, default
+    ``"high"``) selects a base set of quality knobs from
+    :data:`GRAPHICS_PRESETS`; any other ``gfx_*`` key in the table overrides
+    that preset's value.  Unknown / invalid preset names fall back to
+    ``"high"`` with a warning (never raises) so a typo can't break startup.
+
+    Deterministic: the same table always yields the same dict.
+
+    Parameters
+    ----------
+    graphics_table : dict | None
+        The raw ``[graphics]`` table from the parsed TOML (or ``None``/empty
+        for "no table present" → pure ``"high"`` preset).
+
+    Returns
+    -------
+    dict
+        ``gfx_*`` field → value, including ``gfx_preset`` (the resolved name).
+
+    Example
+    -------
+    >>> resolve_graphics_preset({"preset": "low"})["gfx_cloud_resolution_scale"]
+    0.5
+    >>> resolve_graphics_preset({"preset": "low", "gfx_fxaa": True})["gfx_fxaa"]
+    True
+    """
+    table = dict(graphics_table or {})
+    requested = str(table.pop("preset", "high")).lower()
+    if requested not in GRAPHICS_PRESETS:
+        warnings.warn(
+            f"unknown graphics preset {requested!r}; falling back to 'high'",
+            stacklevel=2,
+        )
+        requested = "high"
+    resolved: dict = dict(GRAPHICS_PRESETS[requested])
+    resolved["gfx_preset"] = requested
+    # Explicit per-field overrides win over the preset.
+    for key, value in table.items():
+        resolved[key] = value
+    return resolved
 
 
 @dataclass(frozen=True)
@@ -74,6 +187,12 @@ class Config:
     light_grid_scale     : int   — terrain voxels per light cell edge (2).
     view_distance_chunks : int   — chunk-streaming XY radius in chunks.
     fixed_dt             : float — fixed-update period in seconds (50 Hz = 0.02).
+    msaa_samples         : int   — hardware MSAA sample count for the window
+                                   framebuffer (0 = off).  Anti-aliases
+                                   GEOMETRY edges only (facet silhouettes,
+                                   crater rims, the horizon) — surface
+                                   interiors stay single-sample, so the
+                                   pixel-art texel look is unaffected.
     show_fps             : bool  — overlay FPS counter.
     show_chunk_borders   : bool  — debug overlay for chunk boundaries.
     show_light_grid      : bool  — debug overlay for the light grid.
@@ -154,6 +273,43 @@ class Config:
     grass_fade_end_m     : float — camera distance where blades are fully
                                    gone (meters).
     grass_max_instances  : int   — hard cap on instances per grass volume.
+
+    Graphics-quality fields (from [graphics] table, prefix ``gfx_``)
+    ---------------------------------------------------------------
+    These drive the HDR post-processing pipeline and volumetric clouds so the
+    look can be dialed down (or off) on weak GPUs.  Pick a ``preset``
+    (off/low/medium/high) in ``[graphics]``; any explicit ``gfx_*`` key in the
+    same table overrides that preset's value (see ``resolve_graphics_preset``).
+    The dataclass defaults equal the ``"high"`` preset.
+
+    gfx_preset            : str   — which preset produced these values
+                                    (off/low/medium/high; informational).
+    gfx_post_process      : bool  — master switch for the offscreen HDR buffer
+                                    + post chain.  False ⇒ shaders tonemap
+                                    internally (legacy path), no bloom/flare.
+    gfx_hdr_format        : str   — scene buffer format: "rgba16f" (float HDR)
+                                    or "rgba8" (LDR fallback for GPUs lacking
+                                    float render targets).
+    gfx_render_scale      : float — internal render resolution scale (1.0 = full;
+                                    0.75 = render at 75% then upscale).
+    gfx_bloom             : bool  — bloom on/off.
+    gfx_bloom_mips        : int   — bloom downsample pyramid depth (more = wider,
+                                    softer glow; costs more).
+    gfx_bloom_threshold   : float — luminance above which pixels bloom (HDR).
+    gfx_bloom_knee        : float — soft-knee width below the threshold.
+    gfx_bloom_strength    : float — bloom contribution added back at composite.
+    gfx_fxaa              : bool  — cheap post anti-aliasing pass.
+    gfx_lens_flare        : bool  — screen-space lens flare when looking near
+                                    the (unoccluded) sun.
+    gfx_clouds            : bool  — volumetric raymarched clouds on/off.
+    gfx_cloud_steps       : int   — primary raymarch sample count (quality).
+    gfx_cloud_light_steps : int   — sun light-march steps per sample
+                                    (self-shadow quality; dominant cost).
+    gfx_cloud_resolution_scale: float — cloud pass resolution (0.5 = half-res,
+                                    the biggest perf win on an iGPU).
+    gfx_cloud_max_dist_m  : float — far raymarch distance for clouds (meters).
+    gfx_god_rays          : bool  — screen-space crepuscular rays through clouds.
+    gfx_god_ray_samples   : int   — radial sample count for god rays.
     """
 
     world_seed:           int   = 1337
@@ -164,6 +320,7 @@ class Config:
     light_grid_scale:     int   = 2
     view_distance_chunks: int   = 6
     fixed_dt:             float = 0.02
+    msaa_samples:         int   = 4
     show_fps:             bool  = True
     show_chunk_borders:   bool  = False
     show_light_grid:      bool  = False
@@ -204,6 +361,25 @@ class Config:
     grass_fade_start_m:    float = 60.0
     grass_fade_end_m:      float = 90.0
     grass_max_instances:   int   = 200_000
+    # --- Graphics quality ([graphics] table; defaults == "high" preset) ---
+    gfx_preset:                 str   = "high"
+    gfx_post_process:           bool  = True
+    gfx_hdr_format:             str   = "rgba16f"
+    gfx_render_scale:           float = 1.0
+    gfx_bloom:                  bool  = True
+    gfx_bloom_mips:             int   = 5
+    gfx_bloom_threshold:        float = 1.0
+    gfx_bloom_knee:             float = 0.5
+    gfx_bloom_strength:         float = 0.06
+    gfx_fxaa:                   bool  = True
+    gfx_lens_flare:             bool  = True
+    gfx_clouds:                 bool  = True
+    gfx_cloud_steps:            int   = 96
+    gfx_cloud_light_steps:      int   = 8
+    gfx_cloud_resolution_scale: float = 1.0
+    gfx_cloud_max_dist_m:       float = 2400.0
+    gfx_god_rays:               bool  = True
+    gfx_god_ray_samples:        int   = 32
 
     # ------------------------------------------------------------------
     # Derived read-only properties
@@ -232,12 +408,15 @@ def load_config(path: str = "config.toml") -> Config:
     """
     Load engine configuration from a TOML file, returning a frozen ``Config``.
 
-    The TOML file may have ``[debug]``, ``[sky]`` and ``[terrain]`` tables;
-    their keys (``show_fps``, ``show_chunk_borders``, ``show_light_grid``,
-    ``sky_cloud_altitude_m``, ``sky_cloud_thickness_m``, ``sky_cloud_cell_m``,
-    ``sky_star_count``, ``mesh_style``, ``facet_shade_strength``) are
-    flattened into the same ``Config`` struct.  Any key absent from the file
-    falls back to the ``Config`` dataclass default.
+    The TOML file may have ``[debug]``, ``[sky]``, ``[terrain]``,
+    ``[lighting]``, ``[fog]``, ``[grass]`` and ``[graphics]`` tables; their
+    keys are flattened into the same ``Config`` struct.  Any key absent from
+    the file falls back to the ``Config`` dataclass default.
+
+    ``[graphics]`` is special: its ``preset`` key (off/low/medium/high) is
+    expanded into the ``gfx_*`` quality fields via
+    :func:`resolve_graphics_preset`, and any explicit ``gfx_*`` key in the
+    table overrides the chosen preset.
 
     If the file does not exist or cannot be read, returns a default ``Config``
     (same as ``Config()``).
@@ -266,11 +445,16 @@ def load_config(path: str = "config.toml") -> Config:
     except (FileNotFoundError, OSError):
         return Config()
 
-    # Flatten [debug], [sky] and [terrain] tables into top-level dict
-    _TABLES = ("debug", "sky", "terrain", "lighting", "fog", "grass")
+    # Flatten the organisational tables into one top-level dict.  Most tables
+    # just carry fully-named Config fields; [graphics] is special — its keys go
+    # through preset expansion first (see resolve_graphics_preset).
+    _TABLES = ("debug", "sky", "terrain", "lighting", "fog", "grass", "graphics")
     flat: dict = {k: v for k, v in raw.items() if k not in _TABLES}
     for table in _TABLES:
+        if table == "graphics":
+            continue
         flat.update(raw.get(table, {}))
+    flat.update(resolve_graphics_preset(raw.get("graphics", {})))
 
     # Build Config by extracting only known fields (ignore unknown keys)
     known_fields = {f.name for f in Config.__dataclass_fields__.values()}  # type: ignore[attr-defined]

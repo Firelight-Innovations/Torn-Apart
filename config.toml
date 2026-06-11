@@ -10,6 +10,7 @@ chunk_size = 32            # voxels per chunk edge (16 m cube)
 light_grid_scale = 2       # terrain voxels per light cell edge (1 m cells)
 view_distance_chunks = 6   # XY streaming radius in chunks
 fixed_dt = 0.02            # fixed-update timestep (50 Hz)
+msaa_samples = 4           # geometry-edge MSAA (0 = off); texel interiors stay crisp single-sample
 
 [debug]
 show_fps = true
@@ -62,3 +63,26 @@ sky_cloud_altitude_m = 96.0    # cloud layer base altitude (world Z, meters)
 sky_cloud_thickness_m = 8.0    # cloud layer vertical thickness (meters)
 sky_cloud_cell_m = 12.0        # horizontal size of one cloud cell (meters)
 sky_star_count = 9000          # stars baked into the night-sky cubemap (smaller + denser field)
+
+[graphics]
+# HDR post-processing + volumetric clouds quality. Pick a preset, then
+# uncomment any gfx_* line below to override that preset's value.
+# Presets: "off" (no post-fx, fastest) | "low" (iGPU) | "medium" | "high".
+preset = "high"
+# gfx_post_process = true        # master switch for the HDR buffer + post chain
+# gfx_hdr_format = "rgba16f"     # "rgba16f" float HDR, or "rgba8" fallback
+# gfx_render_scale = 1.0         # internal render resolution scale (1.0 = full)
+# gfx_bloom = true               # bloom (the sun's glow/bleed)
+# gfx_bloom_mips = 5             # bloom pyramid depth (wider, softer glow)
+# gfx_bloom_threshold = 1.0      # HDR luminance above which pixels bloom
+# gfx_bloom_knee = 0.5           # soft-knee width below the threshold
+# gfx_bloom_strength = 0.06      # bloom added back at composite
+# gfx_fxaa = true                # cheap post anti-aliasing
+# gfx_lens_flare = true          # lens flare near the unoccluded sun
+# gfx_clouds = true              # volumetric raymarched clouds
+# gfx_cloud_steps = 96           # primary raymarch samples (quality)
+# gfx_cloud_light_steps = 8      # sun light-march steps (self-shadow; main cost)
+# gfx_cloud_resolution_scale = 1.0  # 0.5 = half-res clouds (big iGPU win)
+# gfx_cloud_max_dist_m = 2400.0  # far raymarch distance for clouds (meters)
+# gfx_god_rays = true            # crepuscular rays through clouds
+# gfx_god_ray_samples = 32       # radial god-ray samples

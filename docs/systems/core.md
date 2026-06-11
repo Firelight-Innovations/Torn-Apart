@@ -1,5 +1,5 @@
 # core — System Doc
-keywords: vec3, quat, quaternion, math3d, event bus, eventbus, publish, subscribe, drain, rng, seed, for_domain, config, clock, fixed_update, lod, lodpolicy, logging, math, rotation, euler, hpr, slerp, chunk loaded, game day, terrain edited, weather changed, world seed, determinism, blake2b, float32, z-up, forward, right, up, meters, radians, fixed_dt, spiral of death, saveable, get_state, set_state, game_time_scale, time scale, sky config, cloud altitude, star count, shader_source, load_glsl, glsl, shader file, vert, frag, comp, syntax highlighting
+keywords: vec3, quat, quaternion, math3d, event bus, eventbus, publish, subscribe, drain, rng, seed, for_domain, config, clock, fixed_update, lod, lodpolicy, logging, math, rotation, euler, hpr, slerp, chunk loaded, game day, terrain edited, weather changed, world seed, determinism, blake2b, float32, z-up, forward, right, up, meters, radians, fixed_dt, spiral of death, saveable, get_state, set_state, game_time_scale, time scale, sky config, cloud altitude, star count, shader_source, load_glsl, glsl, shader file, vert, frag, comp, syntax highlighting, graphics, graphics quality, preset, gfx, post process, postprocess, hdr, bloom, fxaa, lens flare, volumetric clouds, cloud quality, god rays, render scale, quality preset, resolve_graphics_preset, GRAPHICS_PRESETS, off low medium high
 
 > One doc per code package; filename matches the package exactly (`docs/systems/core.md` ↔ `fire_engine/core/`).
 
@@ -104,7 +104,10 @@ All symbols below are re-exported from `fire_engine.core` (`__init__.py`).
 | `Config.facet_shade_strength` | `float` — [0,1] strength of the faceted mesher's normal-based facet accent shading (0.25; 0 = off). |
 | `Config.chunk_meters` | property — `chunk_size * voxel_size` (16.0 m) |
 | `Config.light_cell_meters` | property — `voxel_size * light_grid_scale` (1.0 m) |
-| `load_config(path="config.toml") -> Config` | Load from TOML; returns defaults if file missing.  Flattens the `[debug]`, `[sky]` and `[terrain]` tables. |
+| `Config.gfx_*` | Graphics-quality knobs for the HDR post-processing + volumetric cloud pipeline (from the `[graphics]` TOML table). Master switch `gfx_post_process`; bloom (`gfx_bloom`, `gfx_bloom_mips`, `gfx_bloom_threshold`, `gfx_bloom_knee`, `gfx_bloom_strength`); `gfx_fxaa`; `gfx_lens_flare`; clouds (`gfx_clouds`, `gfx_cloud_steps`, `gfx_cloud_light_steps`, `gfx_cloud_resolution_scale`, `gfx_cloud_max_dist_m`); `gfx_god_rays`, `gfx_god_ray_samples`; `gfx_hdr_format` (`rgba16f`/`rgba8`), `gfx_render_scale`. Dataclass defaults == the `"high"` preset. |
+| `GRAPHICS_PRESETS` | `dict[str, dict]` — the `off`/`low`/`medium`/`high` quality presets, each mapping `gfx_*` knobs to values. `"high"` mirrors the dataclass defaults. |
+| `resolve_graphics_preset(table) -> dict` | Expand a `[graphics]` table into flat `gfx_*` kwargs: the `preset` key picks the base set; any explicit `gfx_*` key overrides it. Invalid preset → `"high"` + warning (never raises). Deterministic. |
+| `load_config(path="config.toml") -> Config` | Load from TOML; returns defaults if file missing.  Flattens the `[debug]`, `[sky]`, `[terrain]`, `[lighting]`, `[fog]`, `[grass]` and `[graphics]` tables (the last via preset expansion). |
 
 ### Clock (`core/clock.py`)
 
@@ -293,3 +296,5 @@ def game_loop(real_dt: float) -> None:
 7. **`Config` is frozen** — attempting `cfg.world_seed = 9999` raises `FrozenInstanceError`.  Load once at boot, pass by reference to all systems.
 
 8. **`set_world_seed` is global module state** — the world seed is module-level in `rng.py`.  Change it only at boot or during a world-load (save/load sets it from the save header before any generation).
+
+9. **`[graphics]` precedence**: the `preset` key sets a base, then any explicit `gfx_*` key in the *same* table overrides just that field — so you can run `preset = "low"` but force `gfx_lens_flare = true`.  The `Config` dataclass defaults equal the `"high"` preset, so a missing `[graphics]` table (or a missing `gfx_*` key not covered by the chosen preset) yields high-quality values.  Set `preset = "off"` (or `gfx_post_process = false`) to fall back to the legacy in-shader tonemap path with no HDR buffer/bloom/flare — the escape hatch for weak GPUs.

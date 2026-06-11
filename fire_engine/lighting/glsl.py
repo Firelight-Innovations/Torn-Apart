@@ -49,6 +49,7 @@ from fire_engine.core.shader_source import load_glsl
 __all__ = [
     "INJECT_COMPUTE",
     "PROPAGATE_COMPUTE",
+    "SHIFT_COMPUTE",
     "FOG_SCATTER_COMPUTE",
     "FOG_INTEGRATE_COMPUTE",
     "MAX_LIGHTS",
@@ -70,6 +71,16 @@ INJECT_COMPUTE = load_glsl(__file__, "inject.comp")
 # ---------------------------------------------------------------------------
 
 PROPAGATE_COMPUTE = load_glsl(__file__, "propagate.comp")
+
+
+# ---------------------------------------------------------------------------
+# 2b. Radiance shift on recenter: copy the previous radiance field into the
+#     write texture offset by the integer cell delta so a recentered cascade
+#     keeps its already-converged GI (only the newly-exposed border band needs
+#     to re-propagate) instead of reading a stale, misaligned field.
+# ---------------------------------------------------------------------------
+
+SHIFT_COMPUTE = load_glsl(__file__, "shift.comp")
 
 
 # ---------------------------------------------------------------------------

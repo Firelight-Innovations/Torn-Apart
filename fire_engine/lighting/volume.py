@@ -41,6 +41,8 @@ True
 
 from __future__ import annotations
 
+import threading
+from collections import OrderedDict
 from dataclasses import dataclass
 
 import numpy as np
@@ -53,6 +55,7 @@ __all__ = [
     "assemble_geometry",
     "window_chunk_span",
     "pack_volume",
+    "ChunkBlockCache",
     "EMISSION_SCALE",
 ]
 
@@ -199,8 +202,13 @@ class GeometryVolume:
     ----------
     albedo_occ : numpy.ndarray
         ``uint8 (N, N, N, 4)`` indexed ``[x, y, z]``: RGB = surface albedo
-        (linear, 0–255), A = 255 where the cell contains any solid voxel,
-        0 where it is air.
+        (linear, 0–255), A = **solid sub-voxel fraction ×255**: the fraction
+        of the cell's ``k³`` terrain voxels that are solid, rounded to a byte.
+        At cascade 0 (``cell_m == voxel_size``, ``k == 1``) this is exactly
+        255 (solid) or 0 (air), identical to a binary occupancy flag.  At the
+        coarse cascades it is a partial value, so a hollow room reads air
+        (A == 0) in its interior and only its 1-voxel walls read partly-solid
+        — the GPU probes no longer treat a hollow box as a solid block.
     emission : numpy.ndarray
         ``uint8 (N, N, N, 4)``: RGB = emitted radiance / ``EMISSION_SCALE``
         (clipped to 255), A unused (255).
@@ -216,22 +224,58 @@ class GeometryVolume:
     cell_m: float
 
 
+def _downsample_chunk_block(mats: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Downsample a chunk's ``uint8 (S, S, S)`` material array to a per-cell
+    mini-block at a ``k`` voxels/cell ratio.
+
+    Returns a ``(material_id, solid_count)`` pair, both ``(S//k, S//k, S//k)``:
+
+    - ``material_id`` (``uint8``) — **max** material id over each ``k³`` block
+      (so grass skin wins over dirt bulk for the bounce albedo, and any solid
+      voxel keeps a non-zero id for the palette lookup).
+    - ``solid_count`` (``uint16``) — number of solid (``> 0``) voxels in each
+      ``k³`` block, ``0 .. k³``.  Divided by ``k³`` this is the cell's solid
+      sub-voxel fraction; ``×255`` and rounded it becomes the occupancy alpha.
+
+    At ``k == 1`` (cascade 0) ``material_id`` is the array itself and
+    ``solid_count`` is 0/1 — i.e. binary occupancy, byte-identical to the old
+    any-solid behaviour.  All numpy bulk ops; no per-voxel Python loops.
+    """
+    if k == 1:
+        return mats, (mats > 0).astype(np.uint16)
+    s = mats.shape
+    folded = mats.reshape(s[0] // k, k, s[1] // k, k, s[2] // k, k)
+    material_id = folded.max(axis=(1, 3, 5)).astype(np.uint8)
+    solid_count = (folded > 0).sum(axis=(1, 3, 5)).astype(np.uint16)
+    return material_id, solid_count
+
+
 def assemble_geometry(
     window: VolumeWindow,
     chunks: dict,
     palette: MaterialPalette,
     chunk_size: int,
     voxel_size: float,
+    cache: "ChunkBlockCache | None" = None,
 ) -> GeometryVolume:
     """
     Slice loaded chunks into one contiguous geometry block for ``window``.
 
     For every chunk intersecting the window, the overlapping sub-array of
-    ``chunk.materials`` is (a) downsampled to the window's cell size by
-    taking the **max material id** per cell block (so any solid voxel makes
-    the cell solid, and grass skin wins over dirt bulk for the bounce
-    colour), then (b) palette-indexed to albedo/emission.  Cells outside any
-    loaded chunk are air.
+    ``chunk.materials`` is (a) downsampled to the window's cell size — the
+    cell's material id is the **max** id over its ``k³`` voxels (so any solid
+    voxel keeps a non-zero id and grass skin wins over dirt bulk for the
+    bounce colour), and the cell's occupancy is the **solid sub-voxel
+    fraction** (count of solid voxels ÷ ``k³``) — then (b) palette-indexed to
+    albedo/emission.  Cells outside any loaded chunk are air.
+
+    The occupancy alpha is therefore ``round(255 × solid_fraction)``, NOT a
+    binary any-solid flag: a hollow room (1-voxel walls, air interior)
+    downsamples to ``A == 0`` in its interior and partial ``A`` on its walls,
+    so the GPU lighting probes inside it read air instead of a solid block.
+    At cascade 0 (``cell_m == voxel_size``) the fraction is exactly 0 or 1, so
+    the output is byte-identical to the previous binary-occupancy behaviour.
 
     Parameters
     ----------
@@ -249,6 +293,13 @@ def assemble_geometry(
     voxel_size : float
         Meters per voxel (``config.voxel_size``).  ``window.cell_m`` must be
         an integer multiple of it.
+    cache : ChunkBlockCache, optional
+        Per-chunk downsampled-block cache (see :class:`ChunkBlockCache`).  When
+        supplied, each chunk's full ``(material_id, solid_count)`` mini-block at
+        this ``cell_m`` is reused across reassemblies instead of recomputed — a
+        large saving for the coarse far cascade, whose ~33k-chunk window is
+        otherwise re-downsampled from scratch on every recenter.  Output is
+        byte-identical with and without the cache.
 
     Returns
     -------
@@ -275,6 +326,8 @@ def assemble_geometry(
 
     ox, oy, oz = window.origin_cell         # window origin, in cells
     materials = np.zeros((n, n, n), dtype=np.uint8)
+    # Per-cell solid sub-voxel count (0 .. k³); ÷k³ ×255 → occupancy alpha.
+    solid_count = np.zeros((n, n, n), dtype=np.uint16)
 
     # Chunk index range intersecting the window (in chunk coords).
     lo = [int(np.floor(o / cells_per_chunk)) for o in (ox, oy, oz)]
@@ -283,12 +336,24 @@ def assemble_geometry(
     for ccx in range(lo[0], hi[0] + 1):
         for ccy in range(lo[1], hi[1] + 1):
             for ccz in range(lo[2], hi[2] + 1):
-                chunk = chunks.get((ccx, ccy, ccz))
+                coord = (ccx, ccy, ccz)
+                chunk = chunks.get(coord)
                 if chunk is None:
                     continue
-                # Accept either a chunk object (.materials) or a bare ndarray
-                # snapshot (async assembly worker passes the latter).
-                mats = getattr(chunk, "materials", chunk)
+                # Per-chunk mini-blocks downsampled to this cell size.  A cache
+                # hit reuses them; a miss computes + stores them.  Only caches
+                # the coarse cascades (k > 1): at k == 1 the "block" aliases the
+                # live chunk array, and there's no downsample cost to amortise.
+                use_cache = cache is not None and k > 1
+                blk = cache.get(coord, window.cell_m) if use_cache else None
+                if blk is None:
+                    # Accept either a chunk object (.materials) or a bare
+                    # ndarray snapshot (async assembly worker passes the latter).
+                    mats = getattr(chunk, "materials", chunk)
+                    blk = _downsample_chunk_block(mats, k)
+                    if use_cache:
+                        cache.put(coord, window.cell_m, blk)
+                chunk_mat, chunk_cnt = blk
                 # Chunk extent in window-cell coordinates.
                 c0 = (ccx * cells_per_chunk, ccy * cells_per_chunk,
                       ccz * cells_per_chunk)
@@ -298,26 +363,21 @@ def assemble_geometry(
                          (ox, oy, oz)[i] + n) for i in range(3)]
                 if any(b[i] <= a[i] for i in range(3)):
                     continue
-                # Source slice in chunk voxels; dest slice in window cells.
+                # Source slice in the chunk's cell mini-block; dest in window.
                 src = tuple(
-                    slice((a[i] - c0[i]) * k, (b[i] - c0[i]) * k)
-                    for i in range(3))
+                    slice(a[i] - c0[i], b[i] - c0[i]) for i in range(3))
                 dst = tuple(
                     slice(a[i] - (ox, oy, oz)[i], b[i] - (ox, oy, oz)[i])
                     for i in range(3))
-                block = mats[src]
-                if k > 1:
-                    s = block.shape
-                    block = block.reshape(
-                        s[0] // k, k, s[1] // k, k, s[2] // k, k
-                    ).max(axis=(1, 3, 5))
-                materials[dst] = block
+                materials[dst] = chunk_mat[src]
+                solid_count[dst] = chunk_cnt[src]
 
-    solid = materials > 0
     albedo_occ = np.empty((n, n, n, 4), dtype=np.uint8)
     albedo_occ[..., :3] = np.clip(
         palette.albedo[materials] * 255.0, 0.0, 255.0).astype(np.uint8)
-    albedo_occ[..., 3] = np.where(solid, 255, 0).astype(np.uint8)
+    # A = solid sub-voxel fraction ×255, rounded.  k³ at k==1 → 0/255 binary.
+    occ = np.rint(solid_count.astype(np.float32) * (255.0 / (k ** 3)))
+    albedo_occ[..., 3] = np.clip(occ, 0.0, 255.0).astype(np.uint8)
 
     emission = np.empty((n, n, n, 4), dtype=np.uint8)
     emission[..., :3] = np.clip(
@@ -378,3 +438,124 @@ def pack_volume(arr: np.ndarray) -> bytes:
     data = np.ascontiguousarray(
         np.transpose(arr, (2, 1, 0, 3))[..., [2, 1, 0, 3]])
     return data.tobytes()
+
+
+class ChunkBlockCache:
+    """
+    Thread-safe LRU cache of per-chunk downsampled geometry mini-blocks.
+
+    Reassembling a coarse cascade re-downsamples every intersecting chunk's
+    material array from scratch — at ``light_c2_cell_m`` = 8 m cells the far
+    cascade's 512 m window touches tens of thousands of chunk coords, and a
+    full recenter re-folds all their ``uint8 (32,32,32)`` arrays each time,
+    which on the assembly worker outruns the recenter interval.  This cache
+    stores, per ``(chunk coord, cell_m)``, the chunk's
+    ``(material_id, solid_count)`` mini-block (the output of
+    ``_downsample_chunk_block``) so a recenter that re-reads the same chunk
+    copies the block instead of recomputing it.  A 16 m chunk yields a
+    ``2×2×2`` block at 8 m cells (``8×8×8`` at 2 m cells), so the entries are
+    tiny.
+
+    Thread-safety
+    -------------
+    The assembly worker thread reads + populates the cache (via
+    :func:`assemble_geometry`) while the main thread invalidates edited chunks.
+    All access is guarded by a single :class:`threading.Lock`; the blocks are
+    small so a coarse lock is fine.  Stored blocks are immutable
+    (``WRITEABLE`` cleared); :func:`assemble_geometry` slices but never mutates
+    them, so a hit can safely hand out a reference without copying.
+
+    Palette dependency
+    ------------------
+    The cached mini-blocks are material ids + solid counts — **palette-
+    independent** — so a palette change does NOT invalidate them (the palette
+    is applied after the cache, on the assembled material array).  The cache
+    *is* keyed only by chunk coord + cell size and assumes one terrain
+    voxel→chunk geometry per run; terrain edits invalidate per-chunk via
+    :meth:`invalidate`.
+
+    Eviction
+    --------
+    Bounded LRU: at most ``max_entries`` ``(coord, cell_m)`` entries
+    (default 4096).  Each entry is a few hundred bytes to a few KB, so the cap
+    bounds the cache to single-digit MB.  The least-recently-used entry is
+    evicted on overflow.
+
+    Parameters
+    ----------
+    max_entries : int, default 4096
+        Hard cap on stored ``(coord, cell_m)`` mini-blocks.
+
+    Example
+    -------
+    >>> cache = ChunkBlockCache(max_entries=8192)
+    >>> vol = assemble_geometry(win, chunks, palette, 32, 0.5, cache=cache)
+    >>> cache.invalidate((cx, cy, cz))   # after a terrain edit in that chunk
+    """
+
+    def __init__(self, max_entries: int = 4096) -> None:
+        self.max_entries = int(max_entries)
+        # key: (coord, cell_m) -> (material_id, solid_count) read-only arrays.
+        self._store: "OrderedDict[tuple, tuple[np.ndarray, np.ndarray]]" = \
+            OrderedDict()
+        self._lock = threading.Lock()
+
+    def get(
+        self, coord: tuple[int, int, int], cell_m: float,
+    ) -> "tuple[np.ndarray, np.ndarray] | None":
+        """
+        Return the cached ``(material_id, solid_count)`` mini-block for
+        ``(coord, cell_m)``, or ``None`` on a miss.  Marks the entry MRU.
+
+        The returned arrays are read-only views into the cache — callers must
+        not mutate them (``assemble_geometry`` only slices/copies out of them).
+        """
+        key = (coord, float(cell_m))
+        with self._lock:
+            blk = self._store.get(key)
+            if blk is not None:
+                self._store.move_to_end(key)
+            return blk
+
+    def put(
+        self,
+        coord: tuple[int, int, int],
+        cell_m: float,
+        block: tuple[np.ndarray, np.ndarray],
+    ) -> None:
+        """
+        Store a chunk's mini-block, evicting the LRU entry past the cap.
+
+        The arrays are frozen read-only (their ``WRITEABLE`` flag is cleared)
+        so a later :meth:`get` can hand out references without copying.
+        """
+        mat, cnt = block
+        mat.setflags(write=False)
+        cnt.setflags(write=False)
+        key = (coord, float(cell_m))
+        with self._lock:
+            self._store[key] = (mat, cnt)
+            self._store.move_to_end(key)
+            while len(self._store) > self.max_entries:
+                self._store.popitem(last=False)  # evict LRU
+
+    def invalidate(self, coord: tuple[int, int, int]) -> None:
+        """
+        Drop every cached mini-block for ``coord`` (all cell sizes).
+
+        Call when a terrain edit changes that chunk's material array so the
+        next reassembly recomputes the affected blocks.
+        """
+        with self._lock:
+            for key in [k for k in self._store if k[0] == coord]:
+                del self._store[key]
+
+    def clear(self) -> None:
+        """Drop all cached blocks (e.g. on world reload)."""
+        with self._lock:
+            self._store.clear()
+
+    def __len__(self) -> int:
+        """Number of cached ``(coord, cell_m)`` entries."""
+        with self._lock:
+            return len(self._store)

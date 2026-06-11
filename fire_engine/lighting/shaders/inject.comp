@@ -50,17 +50,30 @@ float boxVis(vec3 ro, vec3 rd, float tmax) {
 
 // Fixed-step occupancy march from a cell centre; 1.0 = unobstructed.
 // Chunky single-cell steps are deliberate â€” voxel-crisp shadows.
+//
+// Fractional occupancy (coarse cascades carry A = solid-sub-cell fraction in
+// [0,1], not binary) is treated as per-step OPACITY: transmittance attenuates
+// by (1 - occ) at each cell instead of a hard stop.  At occ == 1 the step
+// zeroes ``vis`` (identical to the old ``> 0.5 â†’ return 0`` hard hit); at
+// occ == 0 it passes unchanged (identical to air).  So binary 0/1 data â€” all
+// that exists until the volume side ships fractions â€” reproduces today's
+// crisp voxel shadows exactly, while fractional data gives soft low-LOD
+// shadows instead of black blocks.  Steps are one cell long, so opacity is
+// applied once per cell with no path-length rescale.  Early-out at near-zero
+// transmittance keeps the common fully-shadowed case as cheap as the old stop.
 float marchVis(ivec3 cell, vec3 dir, int maxSteps) {
     vec3 p = vec3(cell) + 0.5 + dir * 1.2;   // hop out of the own cell
+    float vis = 1.0;
     for (int i = 0; i < maxSteps; i++) {
         ivec3 c = ivec3(floor(p));
         if (any(lessThan(c, ivec3(0))) ||
             any(greaterThanEqual(c, ivec3(u_cells))))
-            return 1.0;                       // left the window: assume open
-        if (imageLoad(u_geom, c).a > 0.5) return 0.0;
+            return vis;                       // left the window: assume open
+        vis *= (1.0 - imageLoad(u_geom, c).a);
+        if (vis < 0.003) return 0.0;          // saturated: fully shadowed
         p += dir;
     }
-    return 1.0;
+    return vis;
 }
 
 const ivec3 NEIGHBORS[6] = ivec3[6](
@@ -73,6 +86,11 @@ void main() {
     if (any(greaterThanEqual(c, ivec3(u_cells)))) return;
 
     vec4 g = imageLoad(u_geom, c);
+    // Fractional occupancy: A is the solid sub-cell fraction in [0,1] (coarse
+    // cascades), binary 0/1 in cascade 0.  Treat a cell as a "solid emitter"
+    // cell only when it is essentially full (>0.5) â€” partial cells stay air-
+    // like so hollow rooms in coarse cascades keep lit interiors; their solid
+    // fraction still shadows (marchVis) and reflects (bounce, scaled below).
     bool solid = g.a > 0.5;
     vec3 wp = u_origin_m + (vec3(c) + 0.5) * u_cell_m;
 
@@ -103,21 +121,24 @@ void main() {
     // Skylight: open-air cells receive the hemispheric sky ambient.
     direct += u_sky_ambient * skyVis;
 
-    // First bounce + emissive leak from the 6 solid neighbours.
+    // First bounce + emissive leak from the 6 neighbours.  A neighbour's
+    // reflected/emitted contribution scales by its solid fraction ``no`` (the
+    // occupancy), so a fully-solid wall (no == 1) reflects exactly as before
+    // and air (no == 0) is skipped; a half-solid coarse cell reflects half.
     for (int i = 0; i < 6; i++) {
         ivec3 nc = c + NEIGHBORS[i];
         float no = occAt(nc);
-        if (no < 0.5) continue;
+        if (no < 0.01) continue;
         vec3 nrm = -vec3(NEIGHBORS[i]);   // neighbour surface normal â‰ˆ toward us
         vec4 ng = imageLoad(u_geom, clamp(nc, ivec3(0), ivec3(u_cells - 1)));
         float lamS = max(dot(nrm, u_sun_dir), 0.0);
         float lamM = max(dot(nrm, u_moon_dir), 0.0);
         direct += ng.rgb * (u_sun_radiance  * (sunVis  * lamS) +
                             u_moon_radiance * (moonVis * lamM)) *
-                  (u_bounce * 0.45);
+                  (u_bounce * 0.45 * no);
         direct += imageLoad(u_emis,
                   clamp(nc, ivec3(0), ivec3(u_cells - 1))).rgb *
-                  (u_emission_scale * 0.6);
+                  (u_emission_scale * 0.6 * no);
     }
 
     // Dynamic point / area / spot lights (windowed inverse-square +

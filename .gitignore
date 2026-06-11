@@ -5,6 +5,7 @@ saves/
 tools/out/*.png
 tools/out/sky/
 tools/out/ground/
+tools/out/diag/
 .pytest_cache/
 
 # Fire Editor (VS Code / Cursor extension)

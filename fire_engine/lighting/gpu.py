@@ -138,12 +138,18 @@ class _Cascade:
 
     def __init__(self, index: int, cells: int, cell_m: float,
                  inject_shader: Shader, propagate_shader: Shader,
-                 decay: float, bounce: float) -> None:
+                 shift_shader: Shader, decay: float, bounce: float,
+                 *, margin_cells: int = 8) -> None:
         self.index = index
-        self.window = VolumeWindow(cells=cells, cell_m=cell_m)
+        self.window = VolumeWindow(cells=cells, cell_m=cell_m,
+                                   margin_cells=margin_cells)
         self.cells = cells
         self.cell_m = cell_m
         self.decay = decay
+        # Extra propagate iterations for a few frames after a recenter, so the
+        # newly-exposed border band (filled with vec4(0) by the shift pass)
+        # converges quickly instead of brightening over many frames.
+        self.boost_frames = 0
 
         self.geom = _make_volume_texture(f"lit_geom_{index}", cells,
                                          hdr=False, linear=True)
@@ -192,6 +198,19 @@ class _Cascade:
             pn.set_shader_input("u_decay", float(decay))
             pn.set_shader_input("u_bounce", float(bounce))
             self.prop_np.append(pn)
+
+        # Two pre-bound shift nodes (a→b and b→a): copy the CURRENT radiance
+        # (read side = ``ping``) into the other texture offset by the recenter
+        # cell delta, then the caller swaps ``ping`` so the next propagate reads
+        # the spatially-aligned field.  Only ``u_shift`` is refreshed per use.
+        self.shift_np: list[NodePath] = []
+        for src, dst in ((0, 1), (1, 0)):
+            sn = NodePath(f"lit_shift_{index}_{src}{dst}")
+            sn.set_shader(shift_shader)
+            sn.set_shader_input("u_src", self.radiance[src])
+            sn.set_shader_input("u_dst", self.radiance[dst])
+            sn.set_shader_input("u_cells", cells)
+            self.shift_np.append(sn)
 
     @property
     def radiance_current(self) -> Texture:
@@ -281,6 +300,8 @@ class GpuLightingPipeline:
             Shader.SL_GLSL, glsl.INJECT_COMPUTE)
         propagate_shader = Shader.make_compute(
             Shader.SL_GLSL, glsl.PROPAGATE_COMPUTE)
+        shift_shader = Shader.make_compute(
+            Shader.SL_GLSL, glsl.SHIFT_COMPUTE)
 
         # Diffusion reach ≈ 1/(1−decay) cells; aim a few metres on each cascade.
         # Cascade 2 is the coarse FAR cascade (8 m cells, 512 m box): it keeps
@@ -290,19 +311,26 @@ class GpuLightingPipeline:
         # propagate machinery as the others (the per-frame loops iterate
         # ``self.cascades``), so "bake far chunks on a separate thread at a
         # lower resolution" needs no new subsystem.
+        # Cascade-2 recenter hysteresis is widened (margin 16 cells = 128 m vs
+        # the default 8 cells = 64 m) so the coarse FAR cascade recenters half
+        # as often: its ~33k-chunk gather over a 512 m window — even with the
+        # ChunkBlockCache cutting per-chunk re-downsample cost — can otherwise
+        # lag at flight speed, leaving c2 permanently mid-assembly.  The cache
+        # restores throughput; the wider margin cuts the recenter rate.
         self.cascades = [
             _Cascade(0, config.light_c0_cells, config.light_c0_cell_m,
-                     inject_shader, propagate_shader,
+                     inject_shader, propagate_shader, shift_shader,
                      decay=math.exp(-config.light_c0_cell_m / 4.0),
                      bounce=float(config.light_bounce_strength)),
             _Cascade(1, config.light_c1_cells, config.light_c1_cell_m,
-                     inject_shader, propagate_shader,
+                     inject_shader, propagate_shader, shift_shader,
                      decay=math.exp(-config.light_c1_cell_m / 10.0),
                      bounce=float(config.light_bounce_strength)),
             _Cascade(2, config.light_c2_cells, config.light_c2_cell_m,
-                     inject_shader, propagate_shader,
+                     inject_shader, propagate_shader, shift_shader,
                      decay=math.exp(-config.light_c2_cell_m / 24.0),
-                     bounce=float(config.light_bounce_strength)),
+                     bounce=float(config.light_bounce_strength),
+                     margin_cells=16),
         ]
 
         # --- froxel fog -------------------------------------------------
@@ -365,6 +393,10 @@ class GpuLightingPipeline:
         # of flashing black for the 1-2 frames an async reassembly lags.
         self._edited_coords: set[tuple[int, int, int]] = set()
         self._force_all_dirty = True         # first frame: build everything
+        # After the boot-frame synchronous assemble + first inject, run a big
+        # one-shot propagate burst so the world starts at converged GI instead
+        # of brightening over ~1 s (light_prop_iters per frame is slow to fill).
+        self._boot_warmup_pending = True
         self._load_dirty_timer = 0.0
         self._last_sun: tuple | None = None  # (sun_dir, sun_rad, moon, sky)
         bus.subscribe(TerrainEditedEvent, self._on_terrain_edited)
@@ -387,11 +419,18 @@ class GpuLightingPipeline:
         coords = event.chunk_coords
         if isinstance(coords, tuple) and len(coords) == 3 \
                 and isinstance(coords[0], int):
-            self._pending_coords.add(coords)
-            self._edited_coords.add(coords)
+            edited = (coords,)
         else:
-            self._pending_coords.update(coords)
-            self._edited_coords.update(coords)
+            edited = tuple(coords)
+        self._pending_coords.update(edited)
+        self._edited_coords.update(edited)
+        # Invalidate the block cache for every edited chunk BEFORE the
+        # synchronous reassembly below — otherwise a coarse cascade would copy
+        # the stale pre-edit mini-block out of the cache and the crater would
+        # not relight.  Thread-safe (the worker may be mid-read).
+        if self._assembly_worker is not None:
+            for c in edited:
+                self._assembly_worker.invalidate_chunk(c)
         self._load_dirty_timer = _LOAD_REASSEMBLE_INTERVAL_S  # no batching
 
     def _on_chunk_loaded(self, event: ChunkLoadedEvent) -> None:
@@ -536,13 +575,35 @@ class GpuLightingPipeline:
                     groups, n.get_attrib(ShaderAttrib), gsg)
 
         # 5. Propagation — every frame; light visibly flows toward steady state.
+        #    A just-recentered cascade runs extra iterations for a few frames
+        #    (``boost_frames``) so the border band the shift pass zeroed out
+        #    converges fast instead of crawling in over ~1/light_prop_iters s.
+        base_iters = max(1, self._config.light_prop_iters)
         for casc in self.cascades:
             groups = (_groups(casc.cells, 4),) * 3
-            for _ in range(max(1, self._config.light_prop_iters)):
+            iters = base_iters
+            if casc.boost_frames > 0:
+                iters += 6
+                casc.boost_frames -= 1
+            for _ in range(iters):
                 node = casc.prop_np[casc.ping]      # ping → pong
                 engine.dispatch_compute(
                     groups, node.get_attrib(ShaderAttrib), gsg)
                 casc.ping ^= 1
+
+        # 5b. Boot warmup: on the very first frame, after the first inject +
+        #     normal propagate above, flood the field to convergence in one shot
+        #     (~48 iters, all cascades) so the world is fully lit on frame 1
+        #     instead of fading up over a second of normal 2-iters/frame.
+        if self._boot_warmup_pending:
+            self._boot_warmup_pending = False
+            for casc in self.cascades:
+                groups = (_groups(casc.cells, 4),) * 3
+                for _ in range(48):
+                    node = casc.prop_np[casc.ping]
+                    engine.dispatch_compute(
+                        groups, node.get_attrib(ShaderAttrib), gsg)
+                    casc.ping ^= 1
 
         # 6. Froxel fog.
         if self.fog_enabled:
@@ -558,11 +619,18 @@ class GpuLightingPipeline:
 
         Used only for the boot/first frame so the world is lit immediately;
         steady-state reassembly goes through the worker.
+
+        Passes the worker's thread-safe ``block_cache`` (when threaded) so the
+        synchronous boot/edit downsample warms the same cache the worker reuses
+        — the coarse cascades skip re-downsampling already-seen chunks.  The
+        cache is lock-guarded, so a concurrent worker read is safe.
         """
+        cache = (self._assembly_worker.block_cache
+                 if self._assembly_worker is not None else None)
         vol = assemble_geometry(
             casc.window, self._provider.chunks, self._palette,
             chunk_size=self._config.chunk_size,
-            voxel_size=self._config.voxel_size)
+            voxel_size=self._config.voxel_size, cache=cache)
         _upload_volume(casc.geom, vol.albedo_occ)
         _upload_volume(casc.emis, vol.emission)
         casc.needs_inject = True
@@ -617,12 +685,20 @@ class GpuLightingPipeline:
         commits only when the matching volume lands (``_drain_assembly_results``).
         At most one job per cascade is in flight at a time.
         """
-        batch_ready = bool(self._pending_coords) and \
+        have_pending = bool(self._pending_coords)
+        batch_ready = have_pending and \
             self._load_dirty_timer >= _LOAD_REASSEMBLE_INTERVAL_S
         deferred = False   # a cascade still owes pending edits but is busy
         for casc in self.cascades:
             moved = casc.window.needs_recenter(camera_pos)
-            hit = batch_ready and self._coords_hit_window(casc.window)
+            # Cascade 0 (the small 48 m near box) reassembles the instant a
+            # newly-streamed chunk intersects it — its ~27-chunk gather is cheap
+            # and the 0.25 s batch interval otherwise leaves freshly-loaded
+            # near terrain rendering unshadowed until it fires, then it pops.
+            # The mid/far cascades keep the batch interval (their frontier loads
+            # are frequent and the relight lags invisibly far away).
+            casc_ready = batch_ready if casc.index > 0 else have_pending
+            hit = casc_ready and self._coords_hit_window(casc.window)
             if casc._assembly_inflight:
                 if hit:
                     deferred = True
@@ -638,7 +714,9 @@ class GpuLightingPipeline:
             self._submit_assembly(casc, origin)
         # Clear pending edits only once every cascade they touch has an
         # up-to-date (just-submitted or current) volume — otherwise a busy
-        # cascade would silently miss the edit.
+        # cascade would silently miss the edit.  Gated on the batch interval so
+        # the mid/far cascades (which only act on a batch) don't lose a coord a
+        # c0-immediate pass already consumed.
         if batch_ready and not deferred:
             self._pending_coords.clear()
             self._load_dirty_timer = 0.0
@@ -688,10 +766,43 @@ class GpuLightingPipeline:
             return   # assembly failed → flag cleared, retry next frame
         casc.geom.set_ram_image(res.albedo_bytes)
         casc.emis.set_ram_image(res.emis_bytes)
+        # Radiance continuity: the two ping-pong textures still hold the OLD
+        # window's field at the OLD origin.  If this commit moves the origin,
+        # shift the current radiance by the integer cell delta so the already-
+        # converged GI follows the window instead of reading stale, misaligned
+        # light for the many frames propagate would need to re-converge.
+        old_origin = casc.window.origin_cell
+        new_origin = tuple(res.origin_cell)
+        if old_origin is not None and old_origin != new_origin:
+            self._shift_radiance(casc, old_origin, new_origin)
+            # Re-converge the newly-exposed border band fast for a few frames.
+            casc.boost_frames = 4
         # Commit: the GPU geom texture now matches this origin, so the shader
         # origin uniforms (read from window.origin_cell) line up exactly.
-        casc.window.origin_cell = tuple(res.origin_cell)
+        casc.window.origin_cell = new_origin
         casc.needs_inject = True
+
+    def _shift_radiance(self, casc: "_Cascade",
+                        old_origin: tuple[int, int, int],
+                        new_origin: tuple[int, int, int]) -> None:
+        """
+        Copy ``casc``'s current radiance into its other ping-pong texture,
+        offset by the recenter cell delta, then swap so the next propagate reads
+        the spatially-aligned field (kills the recenter GI pop).
+
+        ``u_shift = new_origin - old_origin``: a cell at new-window index ``c``
+        holds the same world cell the previous window held at index
+        ``c + u_shift``; source cells outside the previous window become
+        ``vec4(0)`` (the newly-exposed border band).
+        """
+        shift = tuple(int(new_origin[i] - old_origin[i]) for i in range(3))
+        node = casc.shift_np[casc.ping]       # reads radiance[ping] → other
+        node.set_shader_input("u_shift", LVecBase3i(*shift))
+        gsg = self._base.win.get_gsg()
+        engine = self._base.graphicsEngine
+        groups = (_groups(casc.cells, 4),) * 3
+        engine.dispatch_compute(groups, node.get_attrib(ShaderAttrib), gsg)
+        casc.ping ^= 1                        # the shifted texture is now current
 
     def shutdown(self) -> None:
         """
@@ -830,6 +941,16 @@ class GpuLightingPipeline:
         node.set_shader_input(
             "u_viewport", LVecBase2f(float(win.get_x_size()),
                                      float(win.get_y_size())))
+        # Radians of view angle per screen pixel — lets the surface shader
+        # compute its texel footprint ANALYTICALLY (dist * u_px_rad / cos i)
+        # instead of with fwidth().  Screen-space derivatives are evaluated on
+        # 2x2 pixel quads; where a quad straddles two facets of the faceted
+        # terrain mesh the helper pixels extrapolate the wrong plane and the
+        # derivatives explode, which made every facet edge of a crater/cliff
+        # sparkle as the camera moved (see world.md gotcha 22).
+        node.set_shader_input(
+            "u_px_rad", float(math.radians(self._base.camLens.get_fov()[0])
+                              / max(1.0, float(win.get_x_size()))))
         cam_pos = self._base.camera.get_pos(self._base.render)
         node.set_shader_input(
             "u_cam_pos", LVecBase3f(cam_pos[0], cam_pos[1], cam_pos[2]))

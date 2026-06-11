@@ -47,7 +47,7 @@ fog_enabled = true             # volumetric froxel fog + god rays
 fog_froxels_x = 160            # froxel grid width (screen-aligned)
 fog_froxels_y = 90             # froxel grid height
 fog_froxels_z = 64             # exponential depth slices
-fog_far_m = 160.0              # froxel volume far range (meters)
+fog_far_m = 192.0              # froxel volume far range (meters) — covers the cascade-1 192 m box so fog never cuts off mid-cascade
 fog_anisotropy = 0.55          # Henyey-Greenstein g (forward-scatter strength of god rays)
 
 [grass]

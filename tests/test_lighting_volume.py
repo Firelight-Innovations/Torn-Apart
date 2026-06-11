@@ -29,8 +29,14 @@ from fire_engine.lighting.lights import (
 from fire_engine.lighting.palette import MaterialPalette, build_default_palette
 from fire_engine.lighting.volume import (
     EMISSION_SCALE,
+    ChunkBlockCache,
     VolumeWindow,
     assemble_geometry,
+)
+from fire_engine.lighting.assembly_worker import (
+    AssemblyJob,
+    CascadeAssemblyWorker,
+    assemble_packed,
 )
 from fire_engine.procedural.maps import (
     black_emission_map,
@@ -176,7 +182,9 @@ class TestAssembleCascade0:
 # ---------------------------------------------------------------------------
 
 class TestAssembleCascade1:
-    def test_any_solid_voxel_occupies_cell_and_max_material_wins(self):
+    def test_partial_occupancy_and_max_material_wins(self):
+        # Coarse cells carry a FRACTIONAL occupancy alpha now (solid-voxel
+        # fraction ×255), while albedo still picks the max material id.
         win = VolumeWindow(cells=16, cell_m=2.0, snap_cells=8)
         win.recenter((16.0, 16.0, 16.0))
         assert win.origin_cell == (0, 0, 0)
@@ -185,7 +193,8 @@ class TestAssembleCascade1:
         chunk.materials[1, 0, 0] = 2     # plus one grass voxel — max id wins
         vol = assemble_geometry(win, {(0, 0, 0): chunk}, _palette(),
                                 chunk_size=CHUNK, voxel_size=VOXEL)
-        assert vol.albedo_occ[0, 0, 0, 3] == 255
+        # 2 solid voxels of the cell's 4^3 = 64 sub-voxels → round(255*2/64).
+        assert vol.albedo_occ[0, 0, 0, 3] == int(round(255.0 * 2 / 64))
         np.testing.assert_allclose(
             vol.albedo_occ[0, 0, 0, :3],
             np.clip(np.array([0.2, 0.5, 0.1]) * 255, 0, 255).astype(np.uint8))
@@ -317,3 +326,242 @@ class TestDerivedMaps:
         assert tuple(fn[0, 0]) == (128, 128, 255, 255)
         em = black_emission_map()
         assert tuple(em[0, 0]) == (0, 0, 0, 255)
+
+
+# ---------------------------------------------------------------------------
+# assemble_geometry — fractional occupancy (coarse downsample)
+# ---------------------------------------------------------------------------
+
+def _hollow_box_chunk() -> _Chunk:
+    """A chunk-sized hollow box: 1-voxel solid shell, air interior."""
+    chunk = _Chunk()
+    chunk.materials[:] = 1               # fill solid
+    chunk.materials[1:-1, 1:-1, 1:-1] = 0  # hollow out the interior
+    return chunk
+
+
+class TestFractionalOccupancy:
+    def test_fine_path_is_binary_and_byte_identical(self):
+        # At cell_m == voxel_size (k == 1) alpha must be exactly 0/255 — the
+        # previous any-solid behaviour — for arbitrary material content.
+        win = VolumeWindow(cells=32, cell_m=VOXEL, snap_cells=8)
+        win.recenter((8.0, 8.0, 8.0))
+        chunk = _Chunk()
+        chunk.materials[:, :, :8] = 1
+        chunk.materials[:, :, 8] = 2
+        chunk.materials[3, 4, 5] = 0
+        vol = assemble_geometry(win, {(0, 0, 0): chunk}, _palette(),
+                                chunk_size=CHUNK, voxel_size=VOXEL)
+        alpha = vol.albedo_occ[..., 3]
+        solid = chunk.materials > 0
+        expected = np.where(solid, 255, 0).astype(np.uint8)
+        np.testing.assert_array_equal(alpha, expected)
+        assert set(np.unique(alpha)).issubset({0, 255})
+
+    def test_hollow_box_interior_air_walls_partial_8m(self):
+        # 8 m cells over a 16 m chunk => 2x2x2 block; each cell is 16^3 voxels.
+        win = VolumeWindow(cells=8, cell_m=8.0, snap_cells=8)
+        win.recenter((40.0, 40.0, 40.0))   # centres an 8x8m window on origin 0
+        assert win.origin_cell == (0, 0, 0)
+        chunk = _hollow_box_chunk()
+        vol = assemble_geometry(win, {(0, 0, 0): chunk}, _palette(),
+                                chunk_size=CHUNK, voxel_size=VOXEL)
+        alpha = vol.albedo_occ[..., 3]
+        # The 2x2x2 corner block is all wall cells (every 16^3 corner block of
+        # the shell touches the shell) — partial, never fully solid, never air.
+        corner = alpha[0:2, 0:2, 0:2]
+        assert (corner > 0).all()
+        assert (corner < 255).all()
+
+    def test_hollow_box_interior_air_2m(self):
+        # 2 m cells => 8x8x8 cells per chunk; each cell is 4^3 voxels.  Interior
+        # cells fully inside the 1-voxel-shell hollow must read air (alpha 0).
+        win = VolumeWindow(cells=8, cell_m=2.0, snap_cells=8)
+        win.recenter((8.0, 8.0, 8.0))
+        assert win.origin_cell == (0, 0, 0)
+        chunk = _hollow_box_chunk()
+        vol = assemble_geometry(win, {(0, 0, 0): chunk}, _palette(),
+                                chunk_size=CHUNK, voxel_size=VOXEL)
+        alpha = vol.albedo_occ[..., 3]
+        # Cell (2,2,2) spans voxels [8:12]^3 — fully in the hollow interior.
+        assert alpha[2, 2, 2] == 0
+        # Edge cell (0,0,0) spans [0:4]^3 — contains the 1-voxel shell faces.
+        assert 0 < alpha[0, 0, 0] < 255
+
+    def test_partial_fraction_value(self):
+        # A cell with exactly one solid voxel out of 4^3 => round(255/64).
+        win = VolumeWindow(cells=8, cell_m=2.0, snap_cells=8)
+        win.recenter((8.0, 8.0, 8.0))
+        chunk = _Chunk()
+        chunk.materials[0, 0, 0] = 1     # single solid voxel in cell (0,0,0)
+        vol = assemble_geometry(win, {(0, 0, 0): chunk}, _palette(),
+                                chunk_size=CHUNK, voxel_size=VOXEL)
+        assert vol.albedo_occ[0, 0, 0, 3] == int(round(255.0 / 64.0))
+
+    def test_albedo_still_max_material(self):
+        # Albedo RGB selection unchanged: max material id wins within a cell.
+        win = VolumeWindow(cells=8, cell_m=2.0, snap_cells=8)
+        win.recenter((8.0, 8.0, 8.0))
+        chunk = _Chunk()
+        chunk.materials[0, 0, 0] = 1
+        chunk.materials[1, 0, 0] = 2     # same 4^3 cell — id 2 wins
+        vol = assemble_geometry(win, {(0, 0, 0): chunk}, _palette(),
+                                chunk_size=CHUNK, voxel_size=VOXEL)
+        np.testing.assert_allclose(
+            vol.albedo_occ[0, 0, 0, :3],
+            np.clip(np.array([0.2, 0.5, 0.1]) * 255, 0, 255).astype(np.uint8))
+
+
+# ---------------------------------------------------------------------------
+# ChunkBlockCache
+# ---------------------------------------------------------------------------
+
+def _coarse_window():
+    win = VolumeWindow(cells=8, cell_m=2.0, snap_cells=8)
+    win.recenter((8.0, 8.0, 8.0))
+    return win
+
+
+def _varied_chunk() -> _Chunk:
+    chunk = _Chunk()
+    chunk.materials[:, :, :8] = 1
+    chunk.materials[2:5, 2:5, 2:5] = 2
+    chunk.materials[0, 0, 0] = 0
+    return chunk
+
+
+class TestChunkBlockCache:
+    def test_hit_equals_miss_bytes(self):
+        chunk = _varied_chunk()
+        chunks = {(0, 0, 0): chunk}
+        pal = _palette()
+
+        no_cache = assemble_geometry(_coarse_window(), chunks, pal,
+                                     chunk_size=CHUNK, voxel_size=VOXEL)
+        cache = ChunkBlockCache()
+        miss = assemble_geometry(_coarse_window(), chunks, pal,
+                                 chunk_size=CHUNK, voxel_size=VOXEL,
+                                 cache=cache)
+        assert len(cache) == 1           # populated on miss
+        hit = assemble_geometry(_coarse_window(), chunks, pal,
+                                chunk_size=CHUNK, voxel_size=VOXEL,
+                                cache=cache)
+        a = no_cache.albedo_occ.tobytes() + no_cache.emission.tobytes()
+        b = miss.albedo_occ.tobytes() + miss.emission.tobytes()
+        c = hit.albedo_occ.tobytes() + hit.emission.tobytes()
+        assert a == b == c
+
+    def test_invalidate_forces_recompute(self):
+        chunk = _varied_chunk()
+        chunks = {(0, 0, 0): chunk}
+        pal = _palette()
+        cache = ChunkBlockCache()
+        assemble_geometry(_coarse_window(), chunks, pal,
+                          chunk_size=CHUNK, voxel_size=VOXEL, cache=cache)
+        # Mutate the chunk; without invalidation the stale block is reused.
+        chunk.materials[10, 10, 10] = 2
+        stale = assemble_geometry(_coarse_window(), chunks, pal,
+                                  chunk_size=CHUNK, voxel_size=VOXEL,
+                                  cache=cache)
+        cache.invalidate((0, 0, 0))
+        assert len(cache) == 0
+        fresh = assemble_geometry(_coarse_window(), chunks, pal,
+                                  chunk_size=CHUNK, voxel_size=VOXEL,
+                                  cache=cache)
+        # Fresh must match a no-cache assembly of the mutated chunk.
+        truth = assemble_geometry(_coarse_window(), chunks, pal,
+                                  chunk_size=CHUNK, voxel_size=VOXEL)
+        assert fresh.albedo_occ.tobytes() == truth.albedo_occ.tobytes()
+        assert stale.albedo_occ.tobytes() != truth.albedo_occ.tobytes()
+
+    def test_clear(self):
+        chunk = _varied_chunk()
+        cache = ChunkBlockCache()
+        assemble_geometry(_coarse_window(), {(0, 0, 0): chunk}, _palette(),
+                          chunk_size=CHUNK, voxel_size=VOXEL, cache=cache)
+        assert len(cache) == 1
+        cache.clear()
+        assert len(cache) == 0
+
+    def test_lru_eviction_bounds_size(self):
+        cache = ChunkBlockCache(max_entries=2)
+        for i in range(5):
+            cache.put((i, 0, 0), 2.0,
+                      (np.zeros((2, 2, 2), np.uint8),
+                       np.zeros((2, 2, 2), np.uint16)))
+        assert len(cache) == 2
+
+    def test_fine_path_does_not_cache(self):
+        # k == 1 (cascade 0) must not populate the cache (block aliases the
+        # live chunk array — caching it would freeze the caller's materials).
+        win = VolumeWindow(cells=32, cell_m=VOXEL, snap_cells=8)
+        win.recenter((8.0, 8.0, 8.0))
+        chunk = _Chunk()
+        chunk.materials[5, 5, 5] = 1
+        cache = ChunkBlockCache()
+        assemble_geometry(win, {(0, 0, 0): chunk}, _palette(),
+                          chunk_size=CHUNK, voxel_size=VOXEL, cache=cache)
+        assert len(cache) == 0
+        # The chunk array stays writeable.
+        chunk.materials[5, 5, 5] = 2     # must not raise
+
+
+# ---------------------------------------------------------------------------
+# CascadeAssemblyWorker + cache parity
+# ---------------------------------------------------------------------------
+
+def _coarse_job(materials: dict, seq: int = 0) -> AssemblyJob:
+    win = _coarse_window()
+    return AssemblyJob(
+        cascade_index=2,
+        origin_cell=win.origin_cell,
+        cells=win.cells,
+        cell_m=win.cell_m,
+        chunk_size=CHUNK,
+        voxel_size=VOXEL,
+        materials={k: v.materials for k, v in materials.items()},
+        palette=_palette(),
+        seq=seq,
+    )
+
+
+class TestWorkerCacheParity:
+    def test_assemble_packed_cache_matches_no_cache(self):
+        materials = {(0, 0, 0): _varied_chunk()}
+        job = _coarse_job(materials)
+        plain = assemble_packed(job)
+        cached = assemble_packed(job, cache=ChunkBlockCache())
+        assert plain.albedo_bytes == cached.albedo_bytes
+        assert plain.emis_bytes == cached.emis_bytes
+
+    def test_worker_thread_output_matches_sync_no_cache(self):
+        materials = {(0, 0, 0): _varied_chunk()}
+        job = _coarse_job(materials)
+        truth = assemble_packed(job)          # sync, no cache
+
+        worker = CascadeAssemblyWorker()
+        worker.start()
+        try:
+            worker.submit(job)
+            results = []
+            deadline = 5.0
+            import time
+            t0 = time.time()
+            while not results and time.time() - t0 < deadline:
+                results = worker.drain_results()
+            assert results, "worker produced no result"
+            res = results[0]
+        finally:
+            worker.stop()
+        assert res.albedo_bytes == truth.albedo_bytes
+        assert res.emis_bytes == truth.emis_bytes
+
+    def test_worker_invalidate_recomputes(self):
+        chunk = _varied_chunk()
+        worker = CascadeAssemblyWorker()
+        job1 = _coarse_job({(0, 0, 0): chunk}, seq=1)
+        # Populate the worker's cache synchronously through its cache object.
+        assemble_packed(job1, cache=worker.block_cache)
+        assert len(worker.block_cache) == 1
+        worker.invalidate_chunk((0, 0, 0))
+        assert len(worker.block_cache) == 0

@@ -22,7 +22,9 @@ void main() {
     vec3 direct = imageLoad(u_direct, c).rgb;
     vec4 g = imageLoad(u_geom, c);
     if (g.a > 0.5) {
-        // Solid cells hold their own emission only; light flows around them.
+        // Fully-solid cells hold their own emission only; light flows around
+        // them.  (Partial cells, g.a in (0,0.5], are diffused below â€” coarse-
+        // cascade hollow interiors stay lit.)
         imageStore(u_next, c, vec4(direct, 1.0));
         return;
     }
@@ -37,10 +39,22 @@ void main() {
             continue;
         }
         vec4 ng = imageLoad(u_geom, nc);
-        if (ng.a > 0.5)
-            sum += own * ng.rgb * u_bounce;  // wall bounces our light back, tinted
-        else
-            sum += imageLoad(u_prev, nc).rgb;
+        // Fractional occupancy ``f`` is a convex blend of the two existing
+        // exact-binary terms: a neighbour conducts the incoming flood-fill
+        // light through its air fraction (1-f) and reflects our own light back
+        // (tinted by its albedo) through its solid fraction f.  At f==1 this is
+        // exactly the old "wall bounces our light back" term; at f==0 it is
+        // exactly the old "conduct neighbour radiance" term â€” so binary data
+        // is bit-for-bit unchanged.  Because every per-neighbour contribution
+        // stays a convex combination of own/neighbour radiance (coefficients
+        // (1-f), f*albedo*bounce, all in [0,1] with albedo<1, bounce<=1), the
+        // 6-neighbour average scaled by u_decay/6 keeps the operator a convex
+        // contraction of the previous field: spectral radius < 1 unchanged, so
+        // the radiance field stays bounded by the injected sources.
+        float f = ng.a;
+        vec3 conduct = imageLoad(u_prev, nc).rgb;       // light through its air
+        vec3 reflect = own * ng.rgb * u_bounce;          // our light off its solid
+        sum += mix(conduct, reflect, f);
     }
 
     // next = directÂ·(1âˆ’decay) + decayÂ·avg â€” converges to a diffusion of the

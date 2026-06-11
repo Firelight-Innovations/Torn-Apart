@@ -58,6 +58,7 @@ from fire_engine.lighting.palette import (
 )
 from fire_engine.lighting.volume import (
     EMISSION_SCALE,
+    ChunkBlockCache,
     GeometryVolume,
     VolumeWindow,
     assemble_geometry,
@@ -85,5 +86,6 @@ __all__ = [
     "VolumeWindow",
     "GeometryVolume",
     "assemble_geometry",
+    "ChunkBlockCache",
     "EMISSION_SCALE",
 ]

@@ -305,3 +305,51 @@ file captures the choices made *underneath* it during implementation.
 - **Q:** Explosions/digging showed the new crater black for a frame or two before it lit up.
 - **Choice:** `GpuLightingPipeline._apply_edits_sync` re-slices + uploads + re-injects the hit cascades **synchronously** the frame a `TerrainEditedEvent` arrives, instead of waiting for the 1–2-frame async reassembly (during which the stale occupancy still marks the crater solid → shadowed → black). Edits are discrete events, so the synchronous gather is affordable; cascades already mid-flight fall back to the batched `_pending_coords` async path.
 - **Why:** The async assembly worker exists to smooth *continuous* fly-around recenters, not one-shot edits — for an edit, same-frame correctness beats anti-stutter latency that doesn't apply.
+
+---
+
+## 2026-06-11 — Terrain "z-fighting" root cause: quantise-after-filter, fixed by posterising per tap
+
+### The shimmer was the palette LUT re-hardening the filtered noise, not the normal map or the light grid
+- **Q:** Owner reported persistent "z-fighting"/shimmer in the terrain textures while moving, after the previous session's albedo Nyquist-LOD work did not cure it. The standing hypotheses were the nearest-filtered normal map (A) and the 0.0625 m light-quant grid (B).
+- **Choice:** Built a *working* motion-shimmer meter first (`tools/shimmer_probe.py`: sub-pixel yaw sweep written through `FlyController.yaw`, multi-frame settle per pose, `RTM_copy_ram` capture, static + positive controls so a broken harness self-reports — the prior session's diff attempts failed silently). Measurements: disabling the normal map changed nothing (A refuted); LOD-clamping the quant grid changed nothing on open ground (B not the cause there); a constant-albedo run dropped even the 8 px positive control to zero → all motion contrast lived in the albedo path. Root cause: `terrain.frag` averaged the band-limited `groundNoise` over 4 supersample taps and *then* pushed the single averaged value through the hard posterising palette LUT — a quantiser after the filter, so pixels near a palette-bucket edge popped a full palette step on every sub-pixel camera move. Fix: run the LUT lookup **inside** the 4-tap loop and average the resulting colours. Far-ground flip fraction 0.00805 → 0.00028 (~27×); near field unchanged (all taps share one texel up close).
+- **Why:** Filtering must come after quantisation or the quantiser undoes it — now recorded as `world.md` gotcha 21 for every future palette/posterise/dither stage. Measure-first beat the plausible-but-wrong fix list: both inherited hypotheses were innocent on open ground.
+
+### Residual horizon twinkle is geometric edge aliasing, deliberately left to an owner call
+- **Q:** After the fix the probe's only hot band is the terrain-vs-sky silhouette line.
+- **Choice:** Left `render.set_antialias(M_none)` (the explicit "retro look" choice in `App.__init__`) untouched; documented MSAA (`framebuffer-multisample` PRC + `M_multisample`) as the lever if the owner wants the silhouette smoothed. MSAA only touches polygon edges, so the pixel-art interiors would stay crisp.
+- **Why:** Aesthetic default flips belong to the owner; the measured texture shimmer — the actual complaint — is gone.
+
+---
+
+## 2026-06-11 — Lighting overhaul: recenter pops, load latency, GI room, fog reach
+
+### Radiance shift on cascade recenter (kills the worst recenter pop)
+- **Q:** When a cascade window recenters (camera flies past the hysteresis margin), the geom texture and origin uniform are committed together, but the two radiance ping-pong textures still hold the *previous* window's converged field at the *old* origin — so for the many frames `light_prop_iters`=2/frame needs to re-converge, the GI is read at the new origin while holding old, spatially-misaligned light. That misalignment was the most visible fly-around pop.
+- **Choice:** New `shift.comp` compute pass (`SHIFT_COMPUTE`, exported like the others via `core.shader_source.load_glsl`). On commit, when the origin moves, copy the current radiance (read side = `ping`) into the other ping-pong texture **shifted by the integer cell delta `new_origin − old_origin`** (`dst[c] = src[c + u_shift]`, `vec4(0)` for source cells off the previous window), then swap `ping` so the next propagate reads the spatially-aligned field. Also set a per-cascade `boost_frames = 4` so the cascade runs +6 propagate iterations for 4 frames, re-converging the newly-exposed border band fast.
+- **Why:** Shifting the already-converged field is nearly free (one 16f texture copy at recenter granularity) and the converged GI now *follows* the window instead of being thrown away and rebuilt over ~½ s. rgba16f image bindings match inject/propagate; cascade 0 stays 1 cell = 1 voxel binary — the shift is origin-delta only and never touches geometry.
+
+### Boot warmup burst (kills the 1–2 s dark load-in)
+- **Q:** On boot the world brightened over ~1 s as the GI flood-fill filled in at 2 iters/frame.
+- **Choice:** On the boot frame only, after the synchronous assemble + first inject + normal propagate, run a one-shot **48-iteration propagate burst across all cascades** before the first rendered frame.
+- **Why:** The field converges in one frame instead of over dozens; 48 iters is a one-time cost paid while the world is already assembling, invisible to steady-state perf.
+
+### Cascade-2 keepalive: ChunkBlockCache + wider recenter hysteresis
+- **Q:** The coarse far cascade (8 m cells, 512 m box, ~33k chunk coords) recenters every 64 m but its gather takes longer than that at flight speed, so its committed volume permanently lagged — c2 was *always* mid-assembly.
+- **Choice:** (1) Wire the parallel agents' `ChunkBlockCache` (owned by the worker) through every assembly path — async jobs get it automatically; the synchronous boot/edit paths pass `worker.block_cache` so boot warms it; terrain edits call `worker.invalidate_chunk(coord)` so a stale pre-edit mini-block can't keep a crater dark. (2) Widen c2's recenter hysteresis to `margin_cells=16` (128 m, vs the default 8 cells = 64 m) so it recenters half as often.
+- **Why:** The cache restores throughput (cache hits skip the per-chunk downsample, the dominant cost of the 33k-chunk gather); the wider margin halves the recenter *rate*. Together c2 keeps up instead of perpetually lagging. The cache is palette-independent and skips cascade-0 (k==1, no downsample to amortise).
+
+### Cascade-0 reassembles immediately on a near chunk load (kills the 0.25 s unshadowed-then-pop)
+- **Q:** `_LOAD_REASSEMBLE_INTERVAL_S = 0.25` batches newly-streamed chunks, so a chunk loading inside the small near cascade rendered unshadowed for up to 0.25 s, then popped to lit.
+- **Choice:** A pending coord that intersects **cascade 0** triggers an immediate c0 reassembly (its ~27-chunk gather is cheap); cascades 1/2 keep the 0.25 s batch. The shared `_pending_coords` clear stays gated on the batch interval so a c0-immediate pass can't make the mid/far cascades miss a coord.
+- **Why:** Near terrain is what the player is looking at; far-cascade relight lags invisibly so it can stay batched. Smallest change that special-cases only the cheap, visible cascade.
+
+### fog_far_m 160 → 192 (fog covers the cascade-1 range)
+- **Q:** Fog cut off at 160 m while cascade 1 covers 192 m, so the fog edge read as a pop at the cascade-1 boundary.
+- **Choice:** `fog_far_m = 192.0` (config.toml + `core/config.py` default). Froxel counts unchanged.
+- **Why:** Align the fog far plane with the cascade-1 box so there is no visible fog cutoff inside the lit range; keeping the froxel count fixed means the same slices stretch slightly, negligible cost.
+
+### GI room exposure: lower the panel light + emission so the coloured bounce reads
+- **Q:** The Cornell room interior washed out to flat gray (AreaLight intensity 6 + emissive panel (8,7.2,5.6) in a closed white box + auto-exposure → blowout that hid the red/green bounce).
+- **Choice:** `_GI_PANEL_INTENSITY` 6.0 → 2.0 and `_GI_GLOW_RADIANCE` (8,7.2,5.6) → (4,3.6,2.8) (main.py only). The lower white direct-fill lets the red/green wall inter-reflection through; measured the warm-left / cool-right bounce gradient on the `--inside` shot (left wall R−G ≈ +7 vs uniform ≈ +3 before).
+- **Why:** Auto-exposure normalises absolute brightness, so the lever is the *ratio* of coloured bounce to white direct fill — cutting the white AreaLight (not just total brightness) is what surfaces the bounce. NOTE/risk: the `tools/screenshot.py --inside` framing jams the camera near the back wall and its right side catches sky through the doorway/roof openings, which auto-exposure still meters on — the red-wall bounce is now clearly visible but the green wall is partly washed by that sky light. A cleaner verification framing (square-on to a coloured wall, no sky opening in frame) would show both walls; left as an owner call since it is a tooling-framing limit, not a lighting one.

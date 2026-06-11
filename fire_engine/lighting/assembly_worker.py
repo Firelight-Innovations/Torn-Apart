@@ -45,6 +45,7 @@ import numpy as np
 from fire_engine.core import get_logger
 from fire_engine.lighting.palette import MaterialPalette
 from fire_engine.lighting.volume import (
+    ChunkBlockCache,
     VolumeWindow,
     assemble_geometry,
     pack_volume,
@@ -119,18 +120,27 @@ class AssemblyResult:
     seq: int
 
 
-def assemble_packed(job: AssemblyJob) -> AssemblyResult:
+def assemble_packed(
+    job: AssemblyJob, cache: "ChunkBlockCache | None" = None,
+) -> AssemblyResult:
     """
     Run one job: ``assemble_geometry`` on the snapshot, then ``pack_volume``.
 
     Pure function of the job (no shared state) — used both by the worker thread
     and, synchronously, by the boot/first-frame path and the tests.
+
+    Parameters
+    ----------
+    job : AssemblyJob
+    cache : ChunkBlockCache, optional
+        Per-chunk downsampled-block cache passed through to
+        :func:`assemble_geometry`.  Output is byte-identical with or without it.
     """
     window = VolumeWindow(cells=job.cells, cell_m=job.cell_m)
     window.origin_cell = job.origin_cell  # placed directly; no recenter needed
     vol = assemble_geometry(
         window, job.materials, job.palette,
-        chunk_size=job.chunk_size, voxel_size=job.voxel_size)
+        chunk_size=job.chunk_size, voxel_size=job.voxel_size, cache=cache)
     return AssemblyResult(
         cascade_index=job.cascade_index,
         origin_cell=job.origin_cell,
@@ -154,15 +164,25 @@ class CascadeAssemblyWorker:
       :class:`AssemblyResult`\\ s (non-blocking).
     - :meth:`pending` — number of jobs submitted but not yet returned.
 
-    Only the two queues cross the thread boundary; there is no shared mutable
-    state, so no locks are needed.
+    The two queues cross the thread boundary lock-free.  The one piece of
+    shared mutable state is :attr:`block_cache` — the worker thread reads +
+    populates it during assembly while the main thread calls
+    :meth:`invalidate_chunk` / :meth:`clear_cache` on terrain edits; the cache
+    guards itself with an internal lock, so that sharing is safe.
+
+    Attributes
+    ----------
+    block_cache : ChunkBlockCache
+        Per-chunk coarse-block cache reused across reassemblies (see
+        :class:`fire_engine.lighting.volume.ChunkBlockCache`).
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *, cache_max_entries: int = 4096) -> None:
         self._in: "queue.Queue[AssemblyJob | None]" = queue.Queue()
         self._out: "queue.Queue[AssemblyResult]" = queue.Queue()
         self._thread: threading.Thread | None = None
         self._pending = 0
+        self.block_cache = ChunkBlockCache(max_entries=cache_max_entries)
 
     # ------------------------------------------------------------------
 
@@ -195,6 +215,17 @@ class CascadeAssemblyWorker:
         """Jobs submitted but not yet drained."""
         return self._pending
 
+    def invalidate_chunk(self, coord: tuple[int, int, int]) -> None:
+        """
+        Drop the block cache's mini-blocks for ``coord`` (main thread, on a
+        terrain edit) so the next reassembly recomputes them.  Thread-safe.
+        """
+        self.block_cache.invalidate(coord)
+
+    def clear_cache(self) -> None:
+        """Drop the entire block cache (e.g. world reload).  Thread-safe."""
+        self.block_cache.clear()
+
     def stop(self, *, join: bool = True, timeout: float = 2.0) -> None:
         """Signal the worker to exit and (optionally) join it."""
         if self._thread is None:
@@ -212,7 +243,7 @@ class CascadeAssemblyWorker:
             if job is None:  # sentinel → shutdown
                 break
             try:
-                self._out.put(assemble_packed(job))
+                self._out.put(assemble_packed(job, cache=self.block_cache))
             except Exception:  # noqa: BLE001 — never let the worker die silently
                 _log.exception(
                     "Cascade assembly failed (cascade %d, seq %d)",

@@ -11,6 +11,48 @@ hypotheses below before coding.
 
 ---
 
+## RESOLVED 2026-06-11 (next session) — root cause found and fixed
+
+A working motion-shimmer measurement tool now exists:
+`tools/shimmer_probe.py` (sub-pixel camera-yaw sweep via
+`FlyController.yaw`, multi-frame settle per pose, `RTM_copy_ram` capture,
+built-in static + positive controls that validate the harness every run).
+Metric: fraction of pixels whose value flips > 0.12 per 0.25 px yaw step.
+
+Measured results (open ground, noon, pitch −12):
+
+| variant                          | full    | far-ground band |
+|----------------------------------|---------|-----------------|
+| baseline                         | 0.00496 | 0.00805         |
+| Hypothesis A (`N = n`)           | 0.00495 | 0.00804         |
+| Hypothesis B (quant-grid LOD)    | 0.00497 | 0.00805         |
+| constant albedo (`base=0.18`)    | ~0      | ~0              |
+| **fix: posterise-per-tap**       | 0.00048 | 0.00028         |
+
+- **Hypothesis A (normal map): REFUTED** — disabling it changed nothing.
+- **Hypothesis B (light-quant grid): not the open-ground cause** — noon
+  open-field lighting is uniform, so grid flips are invisible there.  (It may
+  still matter where lighting has contrast; the GI room measured only 0.0008
+  at a 3× more sensitive threshold, before AND after, i.e. already tiny.)
+- **Actual cause: quantise-after-filter ordering in the albedo path.**
+  `groundNoise` was supersampled/octave-faded (band-limited, fine) but the
+  *averaged* value was then pushed through the hard posterising palette LUT
+  once — re-hardening it.  Pixels whose averaged noise sat near a palette
+  bucket edge popped a full palette step on every sub-pixel camera move.
+  Fix in `terrain.frag`: run the LUT lookup inside the 4-tap supersample and
+  average the resulting **colours** (filter after quantisation) — far-ground
+  flips down ~27×, near-field pixel art unchanged (all taps share one texel).
+  See `docs/systems/world.md` gotcha 21 and DECISIONS.md 2026-06-11.
+
+Remaining residual: the **horizon/silhouette line** (terrain-vs-sky geometric
+edge, no MSAA — `App.__init__` sets `M_none` for the retro look).  That is
+edge aliasing, not texture shimmer; if the owner still sees twinkle it is
+this, and the lever is MSAA (`framebuffer-multisample`/`multisamples` PRC +
+`M_multisample`), an owner aesthetic call.  Hypothesis C (cascade handoff
+popping) and symptoms 3–6 remain open.
+
+---
+
 ## Symptoms (owner, observed in-motion in `python main.py`)
 
 1. **"z-fighting"/shimmer in the textures as the camera moves** — on dirt,

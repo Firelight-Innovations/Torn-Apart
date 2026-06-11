@@ -197,7 +197,7 @@ class Config:
     fog_froxels_x:         int   = 160
     fog_froxels_y:         int   = 90
     fog_froxels_z:         int   = 64
-    fog_far_m:             float = 160.0
+    fog_far_m:             float = 192.0
     fog_anisotropy:        float = 0.55
     grass_density_per_m2:  float = 12.0
     grass_blade_height_m:  float = 0.6

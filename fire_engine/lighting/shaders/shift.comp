@@ -1,0 +1,37 @@
+#version 430
+layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
+
+// Radiance-continuity shift on cascade recenter.
+//
+// When a cascade window recenters, its committed origin jumps by an integer
+// cell delta but the two radiance ping-pong textures still hold the PREVIOUS
+// window's field at the OLD origin.  Reading them as-is at the new origin gives
+// stale, spatially MISALIGNED GI for the many frames propagate (only
+// light_prop_iters per frame) needs to re-converge — the worst recenter pop.
+//
+// This pass copies the previous radiance into the write texture, shifted by the
+// integer cell delta ``u_shift = new_origin_cell - old_origin_cell`` (in cells),
+// so a cell at new-window index ``c`` reads the previous field at the SAME world
+// cell, which sits at previous-window index ``c + u_shift``.  Source cells that
+// fall outside the previous window get vec4(0) (newly exposed border band — the
+// boost-iteration propagate then fills them fast).  After this pass the caller
+// swaps ping↔pong so the next propagate reads the aligned field.
+
+layout (rgba16f) uniform readonly  image3D u_src;   // previous radiance (read)
+layout (rgba16f) uniform writeonly image3D u_dst;   // shifted radiance (write)
+
+uniform int  u_cells;
+uniform ivec3 u_shift;   // new_origin_cell - old_origin_cell, in cells
+
+void main() {
+    ivec3 c = ivec3(gl_GlobalInvocationID.xyz);
+    if (any(greaterThanEqual(c, ivec3(u_cells)))) return;
+
+    ivec3 sc = c + u_shift;   // same world cell, in the previous window's frame
+    vec4 v = vec4(0.0);
+    if (all(greaterThanEqual(sc, ivec3(0))) &&
+        all(lessThan(sc, ivec3(u_cells)))) {
+        v = imageLoad(u_src, sc);
+    }
+    imageStore(u_dst, c, v);
+}

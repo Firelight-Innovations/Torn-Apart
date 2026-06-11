@@ -99,11 +99,20 @@ _GI_TEST_ALBEDO: dict[int, tuple[float, float, float]] = {
     _MAT_GI_GREEN: (0.07, 0.66, 0.08),
     _MAT_GI_GLOW:  (0.90, 0.88, 0.84),
 }
-_GI_GLOW_RADIANCE = (8.0, 7.2, 5.6)   # ceiling-panel emission (linear HDR;
-                                      # EMISSION_SCALE=8 is the storage cap)
+_GI_GLOW_RADIANCE = (4.0, 3.6, 2.8)   # ceiling-panel emission (linear HDR;
+                                      # EMISSION_SCALE=8 is the storage cap).
+                                      # Lowered from (8,7.2,5.6): a panel that
+                                      # bright in a closed white box blows the
+                                      # auto-exposed interior to flat gray and
+                                      # hides the red/green wall bleed.  This
+                                      # value still strongly lights the coloured
+                                      # walls (saturated bounce) without blowout.
 # AreaLight co-located with the panel (fills the room; meter-visible).
 _GI_PANEL_COLOR = (1.0, 0.95, 0.85)   # warm white
-_GI_PANEL_INTENSITY = 6.0             # HDR; lights the full 9 m room
+_GI_PANEL_INTENSITY = 2.0             # HDR; a low white direct fill so the
+                                      # red/green wall inter-reflection isn't
+                                      # swamped by white light (was 6.0 → the
+                                      # closed white box blew out flat gray).
 
 def _gi_ground_lut_entries():
     """

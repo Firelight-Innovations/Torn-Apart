@@ -34,12 +34,24 @@ def _fresh_registry():
     # and then re-register the built-in defs directly.
     from torn_apart.procedural.registry import reset_registry, register
     from torn_apart.procedural.textures.wasteland_ground import WastelandGroundDef
-    from torn_apart.procedural.textures.night_sky import NightSkyDef
+    from torn_apart.procedural.textures.night_sky import (
+        NightSkyCubeDef,
+        NightSkyDef,
+    )
     from torn_apart.procedural.textures.rain_streak import RainStreakDef
+    from torn_apart.procedural.textures.grass_ground import GrassGroundDef
+    from torn_apart.procedural.textures.dirt_ground import DirtGroundDef
+    from torn_apart.procedural.textures.moon_surface import MoonSurfaceDef
+    from torn_apart.procedural.textures.grass_tuft import GrassTuftDef
     reset_registry()
     register(WastelandGroundDef())
     register(NightSkyDef())
+    register(NightSkyCubeDef())
     register(RainStreakDef())
+    register(GrassGroundDef())
+    register(DirtGroundDef())
+    register(MoonSurfaceDef())
+    register(GrassTuftDef())
 
 
 # ---------------------------------------------------------------------------
@@ -432,3 +444,189 @@ class TestRainStreakTexture:
         arr_b = get("rain_streak")
 
         assert not np.array_equal(arr_a, arr_b)
+
+
+# ---------------------------------------------------------------------------
+# pixel_noise helper
+# ---------------------------------------------------------------------------
+
+class TestPixelNoise:
+    def test_shape_and_dtype(self):
+        from torn_apart.core.rng import set_world_seed, for_domain
+        from torn_apart.procedural.textures.base import pixel_noise
+        set_world_seed(0)
+        rng = for_domain("test", "pixel_noise_shape")
+        pn = pixel_noise(rng, (64, 32), octaves=3)
+        assert pn.shape == (64, 32)
+        assert pn.dtype == np.float32
+
+    def test_range(self):
+        from torn_apart.core.rng import set_world_seed, for_domain
+        from torn_apart.procedural.textures.base import pixel_noise
+        set_world_seed(0)
+        rng = for_domain("test", "pixel_noise_range")
+        pn = pixel_noise(rng, (128, 128), octaves=3)
+        assert float(pn.min()) >= 0.0, f"min={pn.min()} below 0"
+        assert float(pn.max()) <= 1.0, f"max={pn.max()} above 1"
+
+    def test_deterministic(self):
+        from torn_apart.core.rng import set_world_seed, for_domain
+        from torn_apart.procedural.textures.base import pixel_noise
+        set_world_seed(7)
+        pn1 = pixel_noise(for_domain("test", "pn_det"), (32, 32))
+        set_world_seed(7)
+        pn2 = pixel_noise(for_domain("test", "pn_det"), (32, 32))
+        assert np.array_equal(pn1, pn2), "pixel_noise must be deterministic for same seed"
+
+    def test_different_seeds_differ(self):
+        from torn_apart.core.rng import set_world_seed, for_domain
+        from torn_apart.procedural.textures.base import pixel_noise
+        set_world_seed(1)
+        pn1 = pixel_noise(for_domain("test", "pn_diff"), (32, 32))
+        set_world_seed(2)
+        pn2 = pixel_noise(for_domain("test", "pn_diff"), (32, 32))
+        assert not np.array_equal(pn1, pn2)
+
+    def test_blocks_are_constant(self):
+        """Nearest-neighbour: adjacent pixels in same coarse cell must be equal."""
+        from torn_apart.core.rng import set_world_seed, for_domain
+        from torn_apart.procedural.textures.base import pixel_noise
+        set_world_seed(5)
+        # 8×8 output with base_freq=2 → 2-cell grid → 4px-wide blocks
+        pn = pixel_noise(for_domain("test", "pn_blocks"), (8, 8), octaves=1, base_freq=2)
+        # The first 4 rows should all be identical (they map to the same coarse row)
+        assert np.array_equal(pn[0], pn[1]) and np.array_equal(pn[1], pn[2]) and \
+               np.array_equal(pn[2], pn[3]), \
+               "Rows 0-3 should be identical (same coarse-grid row, nn upsample)"
+
+
+# ---------------------------------------------------------------------------
+# "grass_ground" texture
+# ---------------------------------------------------------------------------
+
+class TestGrassGroundTexture:
+    def setup_method(self):
+        from torn_apart.core.rng import set_world_seed
+        set_world_seed(1337)
+        _fresh_registry()
+
+    def test_shape_and_dtype(self):
+        from torn_apart.procedural.registry import get
+        arr = get("grass_ground")
+        assert arr.shape == (64, 64, 4), f"Expected (64,64,4), got {arr.shape}"
+        assert arr.dtype == np.uint8
+
+    def test_alpha_all_opaque(self):
+        from torn_apart.procedural.registry import get
+        arr = get("grass_ground")
+        assert (arr[..., 3] == 255).all(), "Alpha must be 255 everywhere"
+
+    def test_same_seed_byte_identical(self):
+        from torn_apart.core.rng import set_world_seed
+        from torn_apart.procedural.registry import get
+
+        set_world_seed(42)
+        _fresh_registry()
+        arr1 = get("grass_ground").copy()
+
+        set_world_seed(42)
+        _fresh_registry()
+        arr2 = get("grass_ground")
+
+        assert np.array_equal(arr1, arr2), "Same seed must produce byte-identical grass_ground"
+
+    def test_different_seeds_differ(self):
+        from torn_apart.core.rng import set_world_seed
+        from torn_apart.procedural.registry import get
+
+        set_world_seed(10)
+        _fresh_registry()
+        arr_a = get("grass_ground").copy()
+
+        set_world_seed(20)
+        _fresh_registry()
+        arr_b = get("grass_ground")
+
+        assert not np.array_equal(arr_a, arr_b)
+
+    def test_palette_size_small(self):
+        """Unique RGB colours should be <= 16 (posterised palette)."""
+        from torn_apart.procedural.registry import get
+        arr = get("grass_ground")
+        rgb = arr[..., :3].reshape(-1, 3)
+        unique_colours = len(np.unique(rgb, axis=0))
+        assert unique_colours <= 16, (
+            f"Expected a small pixel-art palette (<=16 colours), got {unique_colours}"
+        )
+
+    def test_custom_size(self):
+        from torn_apart.procedural.registry import get
+        arr = get("grass_ground", width=128, height=128)
+        assert arr.shape == (128, 128, 4)
+        assert arr.dtype == np.uint8
+
+
+# ---------------------------------------------------------------------------
+# "dirt_ground" texture
+# ---------------------------------------------------------------------------
+
+class TestDirtGroundTexture:
+    def setup_method(self):
+        from torn_apart.core.rng import set_world_seed
+        set_world_seed(1337)
+        _fresh_registry()
+
+    def test_shape_and_dtype(self):
+        from torn_apart.procedural.registry import get
+        arr = get("dirt_ground")
+        assert arr.shape == (64, 64, 4), f"Expected (64,64,4), got {arr.shape}"
+        assert arr.dtype == np.uint8
+
+    def test_alpha_all_opaque(self):
+        from torn_apart.procedural.registry import get
+        arr = get("dirt_ground")
+        assert (arr[..., 3] == 255).all(), "Alpha must be 255 everywhere"
+
+    def test_same_seed_byte_identical(self):
+        from torn_apart.core.rng import set_world_seed
+        from torn_apart.procedural.registry import get
+
+        set_world_seed(42)
+        _fresh_registry()
+        arr1 = get("dirt_ground").copy()
+
+        set_world_seed(42)
+        _fresh_registry()
+        arr2 = get("dirt_ground")
+
+        assert np.array_equal(arr1, arr2), "Same seed must produce byte-identical dirt_ground"
+
+    def test_different_seeds_differ(self):
+        from torn_apart.core.rng import set_world_seed
+        from torn_apart.procedural.registry import get
+
+        set_world_seed(10)
+        _fresh_registry()
+        arr_a = get("dirt_ground").copy()
+
+        set_world_seed(20)
+        _fresh_registry()
+        arr_b = get("dirt_ground")
+
+        assert not np.array_equal(arr_a, arr_b)
+
+    def test_palette_size_small(self):
+        """Unique RGB colours should be <= 16 (posterised palette)."""
+        from torn_apart.procedural.registry import get
+        arr = get("dirt_ground")
+        rgb = arr[..., :3].reshape(-1, 3)
+        unique_colours = len(np.unique(rgb, axis=0))
+        assert unique_colours <= 16, (
+            f"Expected a small pixel-art palette (<=16 colours), got {unique_colours}"
+        )
+
+    def test_custom_size(self):
+        from torn_apart.procedural.registry import get
+        arr = get("dirt_ground", width=128, height=128)
+        assert arr.shape == (128, 128, 4)
+        assert arr.dtype == np.uint8

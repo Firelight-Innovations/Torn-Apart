@@ -9,9 +9,15 @@ deterministic from ``(world_seed, chunk coord)`` and fully headless-testable.
 Public API
 ----------
 Chunk          — 32³ uint8 material array + dirty/edited flags + world origin.
-generate_chunk — pure-function chunk generation (heightmap + 3-D carve).
-build_mesh     — culled-face vectorised mesher → MeshArrays.
-MeshArrays     — dataclass of positions/normals/uvs/colors/indices arrays.
+generate_chunk — pure-function chunk generation (flat baseline, grass skin).
+MATERIAL_DIRT, MATERIAL_GRASS — material ids (1 = dirt bulk, 2 = grass skin).
+build_mesh     — culled-face cube mesher → MeshArrays (mesh_style="blocky").
+build_mesh_faceted — flat-shaded surface-nets mesher (mesh_style="faceted",
+                 the default: semi-smooth Daggerfall-ish facets + per-face
+                 materials).
+NEIGHBOR_OFFSETS_26 — the 26 neighbour offsets the faceted mesher needs.
+MeshArrays     — dataclass of positions/normals/uvs/colors/indices arrays
+                 (+ face_materials / verts_per_face).
 SphereBrush, BoxBrush, CylinderBrush — brush shapes.
 BrushMode      — ADD | REMOVE enum.
 apply_brush    — the single terrain mutation path.
@@ -24,8 +30,14 @@ light_sampler contract, chunk_provider contract, Saveable delta format).
 """
 
 from torn_apart.terrain.chunk import Chunk
-from torn_apart.terrain.generation import generate_chunk, surface_height
+from torn_apart.terrain.generation import (
+    MATERIAL_DIRT,
+    MATERIAL_GRASS,
+    generate_chunk,
+    surface_height,
+)
 from torn_apart.terrain.meshing import build_mesh, MeshArrays, WORLD_FLOOR_SOLID
+from torn_apart.terrain.surface_nets import NEIGHBOR_OFFSETS_26, build_mesh_faceted
 from torn_apart.terrain.brush import (
     SphereBrush,
     BoxBrush,
@@ -40,7 +52,11 @@ __all__ = [
     "Chunk",
     "generate_chunk",
     "surface_height",
+    "MATERIAL_DIRT",
+    "MATERIAL_GRASS",
     "build_mesh",
+    "build_mesh_faceted",
+    "NEIGHBOR_OFFSETS_26",
     "MeshArrays",
     "WORLD_FLOOR_SOLID",
     "SphereBrush",

@@ -44,8 +44,103 @@
         "command": "fireEditor.openWorldSave",
         "title": "Fire Editor: Open World from Save",
         "category": "Fire Editor"
+      },
+      {
+        "command": "fireEditor.refreshHierarchy",
+        "title": "Refresh",
+        "category": "Fire Editor",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "fireEditor.createEmpty",
+        "title": "Create Empty",
+        "category": "Fire Editor",
+        "icon": "$(add)"
+      },
+      {
+        "command": "fireEditor.createCube",
+        "title": "Create Cube",
+        "category": "Fire Editor"
+      },
+      {
+        "command": "fireEditor.createSphere",
+        "title": "Create Sphere",
+        "category": "Fire Editor"
+      },
+      {
+        "command": "fireEditor.createLight",
+        "title": "Create Light",
+        "category": "Fire Editor"
+      },
+      {
+        "command": "fireEditor.createSpawn",
+        "title": "Create Spawn Point",
+        "category": "Fire Editor"
+      },
+      {
+        "command": "fireEditor.renameObject",
+        "title": "Rename",
+        "category": "Fire Editor",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "fireEditor.deleteObject",
+        "title": "Delete",
+        "category": "Fire Editor",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "fireEditor.frameObject",
+        "title": "Frame in Scene View",
+        "category": "Fire Editor",
+        "icon": "$(eye)"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "fireEditor",
+          "title": "Fire Editor",
+          "icon": "media/flame.svg"
+        }
+      ]
+    },
+    "views": {
+      "fireEditor": [
+        {
+          "id": "fireEditor.hierarchy",
+          "name": "Hierarchy",
+          "icon": "media/flame.svg",
+          "contextualTitle": "Fire Editor Hierarchy"
+        }
+      ]
+    },
+    "submenus": [
+      {
+        "id": "fireEditor.createMenu",
+        "label": "Create Object",
+        "icon": "$(add)"
+      }
+    ],
+    "menus": {
+      "fireEditor.createMenu": [
+        { "command": "fireEditor.createEmpty", "group": "1_create@1" },
+        { "command": "fireEditor.createCube", "group": "1_create@2" },
+        { "command": "fireEditor.createSphere", "group": "1_create@3" },
+        { "command": "fireEditor.createLight", "group": "1_create@4" },
+        { "command": "fireEditor.createSpawn", "group": "1_create@5" }
+      ],
+      "view/title": [
+        { "submenu": "fireEditor.createMenu", "when": "view == fireEditor.hierarchy", "group": "navigation@1" },
+        { "command": "fireEditor.refreshHierarchy", "when": "view == fireEditor.hierarchy", "group": "navigation@2" }
+      ],
+      "view/item/context": [
+        { "command": "fireEditor.frameObject", "when": "view == fireEditor.hierarchy && viewItem == sceneObject", "group": "inline@1" },
+        { "submenu": "fireEditor.createMenu", "when": "view == fireEditor.hierarchy && viewItem == sceneObject", "group": "1_create" },
+        { "command": "fireEditor.renameObject", "when": "view == fireEditor.hierarchy && viewItem == sceneObject", "group": "2_edit@1" },
+        { "command": "fireEditor.deleteObject", "when": "view == fireEditor.hierarchy && viewItem == sceneObject", "group": "2_edit@2" }
+      ]
+    },
     "configuration": {
       "title": "Fire Editor",
       "properties": {
@@ -58,6 +153,11 @@
           "type": "boolean",
           "default": true,
           "description": "Spawn the Fire Editor daemon automatically when a Torn Apart workspace opens."
+        },
+        "fireEditor.autoOpenSceneView": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open the 3D Scene View automatically once the daemon connects. Disable to start the daemon headless and open the view manually."
         },
         "fireEditor.logLevel": {
           "type": "string",

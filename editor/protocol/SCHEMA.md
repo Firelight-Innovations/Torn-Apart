@@ -56,7 +56,7 @@ Codec: `editor/fire_editor/meshcodec.py` (encode) ↔
 `editor/extension/src/protocol/meshPayload.ts` (decode). Positions are absolute
 world meters, so the viewport attaches every chunk at the origin.
 
-## Methods (protocol_version 3)
+## Methods (protocol_version 4)
 | Method | Params | Result |
 |---|---|---|
 | `hello` | `protocol_version:int, client:str` | `ok:bool, protocol_version:int, engine_version:str, daemon_version:str` |
@@ -69,9 +69,17 @@ world meters, so the viewport attaches every chunk at the origin.
 | `terrain.brush` | `shape:str, x,y,z:float, mode:str, material?,radius?,hx?,hy?,hz?,height?` | `ok:bool, touched:int, can_undo:bool, can_redo:bool` |
 | `edit.undo` | — | `ok:bool, touched:int, label:str, can_undo:bool, can_redo:bool` |
 | `edit.redo` | — | `ok:bool, touched:int, label:str, can_undo:bool, can_redo:bool` |
+| `scene.tree` | — | `objects:any` (flat DFS list of `{id,name,kind,parent,position,rotation,scale}`) |
+| `scene.create` | `kind:str, parent?:int, name?:str, x?,y?,z?:float` | `ok:bool, object:any` |
+| `scene.rename` | `id:int, name:str` | `ok:bool, object:any` |
+| `scene.reparent` | `id:int, parent?:int` (omit = root) | `ok:bool, object:any` |
+| `scene.set_transform` | `id:int, px?,py?,pz?, rw?,rx?,ry?,rz?, sx?,sy?,sz?:float` | `ok:bool, object:any` |
+| `scene.delete` | `id:int` | `ok:bool, removed:any` (list of deleted ids, cascaded) |
 
 `hello` must be the first call; on `protocol_version` mismatch the daemon returns
-`VERSION_MISMATCH` and the extension prompts a rebuild.
+`VERSION_MISMATCH` and the extension prompts a rebuild. Scene objects are kinds
+`empty|cube|sphere|light|spawn`; ids are deterministic (monotonic counter);
+`scene.reparent` rejects cycles; every `scene.*` mutation emits `scene.changed`.
 
 ## Notifications
 | Notification | Params | Meaning |
@@ -81,5 +89,6 @@ world meters, so the viewport attaches every chunk at the origin.
 | `chunk.unload` | `cx,cy,cz:int` | chunk left the region; client drops its geometry |
 | `stream.done` | `sent:int, removed:int` | a `set_center` streaming pass finished |
 | `edit.state` | `can_undo:bool, can_redo:bool, edited_chunks:int` | dirty/undo state changed |
+| `scene.changed` | `objects:any` | the authoring hierarchy changed; carries the full object list so the tree + viewport refresh |
 
 *(Method/notification tables grow per phase; keep them in sync with `schema.json`.)*

@@ -118,11 +118,170 @@ function clearAll(): void {
   updateStats();
 }
 
-// --- fly camera ---
+// --- object gizmos (Phase E2) ---
+// Each placeable scene object is drawn as a coloured proxy mesh. Gizmos are
+// parented to each other to mirror the hierarchy, so three.js composes world
+// transforms for us. The selected object wears a yellow bounding box.
+interface SceneObjectDTO {
+  id: number;
+  name: string;
+  kind: string;
+  parent: number | null;
+  position: number[];
+  rotation: number[];
+  scale: number[];
+}
+
+const objectGroup = new THREE.Group();
+scene.add(objectGroup);
+const objectGizmos = new Map<number, THREE.Object3D>();
+let selectedObjectId: number | null = null;
+
+const selectionHelper = new THREE.BoxHelper(new THREE.Mesh(), 0xffcc33);
+(selectionHelper.material as THREE.LineBasicMaterial).depthTest = false;
+selectionHelper.renderOrder = 1000;
+selectionHelper.visible = false;
+scene.add(selectionHelper);
+
+const KIND_COLOR: Record<string, number> = {
+  empty: 0x9aa7b2,
+  cube: 0x4f9fe0,
+  sphere: 0xe0884f,
+  light: 0xf2d54b,
+  spawn: 0x53d769,
+};
+
+function makeGizmoMesh(kind: string): THREE.Mesh {
+  let geo: THREE.BufferGeometry;
+  switch (kind) {
+    case "cube":
+      geo = new THREE.BoxGeometry(1, 1, 1);
+      break;
+    case "sphere":
+      geo = new THREE.SphereGeometry(0.6, 20, 14);
+      break;
+    case "light":
+      geo = new THREE.IcosahedronGeometry(0.5, 0);
+      break;
+    case "spawn":
+      geo = new THREE.ConeGeometry(0.5, 1.4, 16).rotateX(Math.PI / 2); // tip points +Z (up)
+      break;
+    default: // empty
+      geo = new THREE.OctahedronGeometry(0.4, 0);
+      break;
+  }
+  const mat = new THREE.MeshBasicMaterial({
+    color: KIND_COLOR[kind] ?? 0xcccccc,
+    transparent: true,
+    opacity: kind === "empty" ? 0.55 : 0.9,
+  });
+  return new THREE.Mesh(geo, mat);
+}
+
+function disposeNode(node: THREE.Object3D): void {
+  node.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (m.geometry) m.geometry.dispose();
+    if (m.material) (m.material as THREE.Material).dispose();
+  });
+}
+
+function setObjects(list: SceneObjectDTO[]): void {
+  const ids = new Set(list.map((o) => o.id));
+  for (const [id, node] of [...objectGizmos]) {
+    if (!ids.has(id)) {
+      node.parent?.remove(node);
+      disposeNode(node);
+      objectGizmos.delete(id);
+    }
+  }
+  // tree() arrives DFS roots-first, so a parent gizmo always exists before its
+  // children — safe to reparent in one pass.
+  for (const o of list) {
+    let node = objectGizmos.get(o.id);
+    if (!node || node.userData.kind !== o.kind) {
+      if (node) {
+        node.parent?.remove(node);
+        disposeNode(node);
+      }
+      node = makeGizmoMesh(o.kind);
+      node.userData.kind = o.kind;
+      node.userData.id = o.id;
+      objectGizmos.set(o.id, node);
+    }
+    const desiredParent = o.parent != null ? objectGizmos.get(o.parent) ?? objectGroup : objectGroup;
+    if (node.parent !== desiredParent) desiredParent.add(node);
+    node.position.set(o.position[0], o.position[1], o.position[2]);
+    // stored quat is (w, x, y, z); three.js wants (x, y, z, w).
+    node.quaternion.set(o.rotation[1], o.rotation[2], o.rotation[3], o.rotation[0]);
+    node.scale.set(o.scale[0], o.scale[1], o.scale[2]);
+  }
+  if (selectedObjectId != null && !objectGizmos.has(selectedObjectId)) selectedObjectId = null;
+  refreshSelectionHelper();
+}
+
+function refreshSelectionHelper(): void {
+  const node = selectedObjectId != null ? objectGizmos.get(selectedObjectId) : undefined;
+  if (node) {
+    objectGroup.updateMatrixWorld(true);
+    selectionHelper.setFromObject(node);
+    selectionHelper.visible = true;
+  } else {
+    selectionHelper.visible = false;
+  }
+}
+
+function selectObjectLocal(id: number | null): void {
+  selectedObjectId = id != null && objectGizmos.has(id) ? id : null;
+  refreshSelectionHelper();
+}
+
+function raycastObjects(): number | null {
+  raycaster.setFromCamera(ndc, camera);
+  const hits = raycaster.intersectObjects(objectGroup.children, true);
+  if (!hits.length) return null;
+  let o: THREE.Object3D | null = hits[0].object;
+  while (o && o.userData.id === undefined) o = o.parent;
+  return o ? (o.userData.id as number) : null;
+}
+
+function frameObject(id: number): void {
+  const node = objectGizmos.get(id);
+  if (!node) return;
+  const target = new THREE.Vector3();
+  node.getWorldPosition(target);
+  camera.position.copy(target).addScaledVector(forwardVector(), -10);
+}
+
+// --- Unity-style editor camera ---
+// The cursor is FREE by default (no pointer lock), so it can hover the terrain
+// for the brush preview and use the palette. Navigation mirrors the Unity Scene
+// View:
+//   • Right-drag        = look around; while held, WASD/QE fly, Shift = faster,
+//                         scroll = adjust fly speed (flythrough mode).
+//   • Middle-drag       = pan on the screen plane.
+//   • Scroll            = dolly zoom along the view ray.
+//   • Alt + Left-drag   = orbit around the hovered point.
+//   • Left-click        = carve with the active brush at the hovered point.
 const keys = new Set<string>();
 let yaw = Math.PI * 0.75; // facing toward origin-ish
 let pitch = -0.5;
-let pointerLocked = false;
+
+type DragMode = null | "look" | "pan" | "orbit";
+let dragMode: DragMode = null;
+const orbitPivot = new THREE.Vector3();
+let orbitDistance = 30;
+let pivotDist = 30; // distance to whatever the cursor last hovered; scales pan/zoom
+
+const LOOK_SENS = 0.0025;
+const PAN_SPEED = 0.0016; // world meters per pixel, per meter of view distance
+const ZOOM_SPEED = 0.0016;
+let flySpeed = 14; // meters/sec while in flythrough, adjustable via scroll
+
+const raycaster = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 function brushSettings(): { shape: string; mode: string; radius: number; material: number } {
   const val = (id: string) => (document.getElementById(id) as HTMLInputElement | HTMLSelectElement).value;
@@ -134,30 +293,160 @@ function brushSettings(): { shape: string; mode: string; radius: number; materia
   };
 }
 
-renderer.domElement.addEventListener("mousedown", (e) => {
-  if (!pointerLocked) {
-    renderer.domElement.requestPointerLock();
-    return;
+// --- brush preview gizmo ---
+// A wireframe shape that hugs the hovered terrain point, sized by brush radius
+// and tinted by mode (green = add, red = remove). depthTest off so it reads
+// through the surface like Unity's tool gizmos.
+const gizmoMat = new THREE.MeshBasicMaterial({
+  color: 0x53d769,
+  wireframe: true,
+  transparent: true,
+  opacity: 0.9,
+  depthTest: false,
+});
+const gizmo: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial> = new THREE.Mesh(
+  new THREE.SphereGeometry(1, 20, 14) as THREE.BufferGeometry,
+  gizmoMat
+);
+gizmo.renderOrder = 999;
+gizmo.visible = false;
+scene.add(gizmo);
+let gizmoShape = "";
+let gizmoRadius = -1;
+
+function buildGizmoGeo(shape: string, radius: number): THREE.BufferGeometry {
+  switch (shape) {
+    case "box":
+      return new THREE.BoxGeometry(radius * 2, radius * 2, radius * 2);
+    case "cylinder":
+      // Cylinder is Y-up by default; rotate so its axis is world Z (up).
+      return new THREE.CylinderGeometry(radius, radius, radius * 2, 24).rotateX(Math.PI / 2);
+    default:
+      return new THREE.SphereGeometry(radius, 24, 16);
   }
-  if (e.button !== 0) return; // left click = carve at the crosshair
-  const o = camera.position;
-  const d = forwardVector();
-  vscode.postMessage({
-    type: "edit",
-    ox: o.x, oy: o.y, oz: o.z,
-    dx: d.x, dy: d.y, dz: d.z,
-    brush: brushSettings(),
-  });
+}
+
+function updateGizmoAppearance(): void {
+  const b = brushSettings();
+  if (b.shape !== gizmoShape || Math.abs(b.radius - gizmoRadius) > 1e-3) {
+    gizmo.geometry.dispose();
+    gizmo.geometry = buildGizmoGeo(b.shape, b.radius);
+    gizmoShape = b.shape;
+    gizmoRadius = b.radius;
+  }
+  gizmoMat.color.setHex(b.mode === "add" ? 0x53d769 : 0xe0533d);
+}
+
+function pointerNDC(e: MouseEvent): void {
+  const r = renderer.domElement.getBoundingClientRect();
+  ndc.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+  ndc.y = -(((e.clientY - r.top) / r.height) * 2 - 1);
+}
+
+function raycastTerrain(): THREE.Intersection | null {
+  raycaster.setFromCamera(ndc, camera);
+  const hits = raycaster.intersectObjects(Array.from(chunks.values()), false);
+  return hits.length ? hits[0] : null;
+}
+
+function rightVector(): THREE.Vector3 {
+  return new THREE.Vector3().crossVectors(forwardVector(), camera.up).normalize();
+}
+
+renderer.domElement.addEventListener("contextmenu", (e) => e.preventDefault());
+
+renderer.domElement.addEventListener("mousedown", (e) => {
+  pointerNDC(e);
+  if (e.button === 2) {
+    dragMode = "look";
+    renderer.domElement.requestPointerLock();
+    e.preventDefault();
+  } else if (e.button === 1) {
+    dragMode = "pan";
+    e.preventDefault();
+  } else if (e.button === 0) {
+    if (e.altKey) {
+      const hit = raycastTerrain();
+      orbitPivot.copy(hit ? hit.point : camera.position.clone().addScaledVector(forwardVector(), orbitDistance));
+      orbitDistance = camera.position.distanceTo(orbitPivot);
+      dragMode = "orbit";
+    } else {
+      // Selecting an object takes priority over carving: if a gizmo is under the
+      // cursor, pick it; otherwise carve the terrain.
+      const picked = raycastObjects();
+      if (picked != null) {
+        selectObjectLocal(picked);
+        vscode.postMessage({ type: "selectObject", id: picked });
+        return;
+      }
+      // Carve: hand the daemon the ray through the cursor; it does the
+      // authoritative terrain raycast + brush.
+      raycaster.setFromCamera(ndc, camera);
+      const o = camera.position;
+      const d = raycaster.ray.direction;
+      vscode.postMessage({
+        type: "edit",
+        ox: o.x, oy: o.y, oz: o.z,
+        dx: d.x, dy: d.y, dz: d.z,
+        brush: brushSettings(),
+      });
+    }
+  }
 });
-document.addEventListener("pointerlockchange", () => {
-  pointerLocked = document.pointerLockElement === renderer.domElement;
+
+window.addEventListener("mouseup", () => {
+  if (dragMode === "look") document.exitPointerLock();
+  dragMode = null;
 });
+window.addEventListener("blur", () => {
+  keys.clear();
+  if (dragMode === "look") document.exitPointerLock();
+  dragMode = null;
+});
+
 document.addEventListener("mousemove", (e) => {
-  if (!pointerLocked) return;
-  yaw -= e.movementX * 0.0025;
-  pitch -= e.movementY * 0.0025;
-  pitch = Math.max(-1.5, Math.min(1.5, pitch));
+  if (dragMode === "look") {
+    yaw -= e.movementX * LOOK_SENS;
+    pitch = clamp(pitch - e.movementY * LOOK_SENS, -1.5, 1.5);
+  } else if (dragMode === "pan") {
+    const k = PAN_SPEED * pivotDist;
+    const right = rightVector();
+    const up = new THREE.Vector3().crossVectors(right, forwardVector()).normalize();
+    camera.position.addScaledVector(right, -e.movementX * k);
+    camera.position.addScaledVector(up, e.movementY * k);
+  } else if (dragMode === "orbit") {
+    yaw -= e.movementX * LOOK_SENS;
+    pitch = clamp(pitch - e.movementY * LOOK_SENS, -1.5, 1.5);
+    camera.position.copy(orbitPivot).addScaledVector(forwardVector(), -orbitDistance);
+  } else {
+    // Free hover: drive the brush preview off the terrain under the cursor.
+    pointerNDC(e);
+    const hit = raycastTerrain();
+    if (hit) {
+      pivotDist = hit.distance;
+      gizmo.position.copy(hit.point);
+      updateGizmoAppearance();
+      gizmo.visible = true;
+    } else {
+      gizmo.visible = false;
+    }
+  }
 });
+
+renderer.domElement.addEventListener(
+  "wheel",
+  (e) => {
+    e.preventDefault();
+    if (dragMode === "look") {
+      flySpeed = clamp(flySpeed * (e.deltaY < 0 ? 1.1 : 0.9), 1, 250);
+    } else {
+      const step = -e.deltaY * ZOOM_SPEED * Math.max(4, pivotDist);
+      camera.position.addScaledVector(forwardVector(), step);
+    }
+  },
+  { passive: false }
+);
+
 window.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.code === "KeyZ") {
     vscode.postMessage({ type: "undo" });
@@ -178,6 +467,13 @@ window.addEventListener("keydown", (e) => {
     showBorders = !showBorders;
     rebuildBorders();
   }
+  if (e.code === "KeyF" && selectedObjectId != null) {
+    frameObject(selectedObjectId);
+  }
+  if (e.code === "Escape" && selectedObjectId != null) {
+    selectObjectLocal(null);
+    vscode.postMessage({ type: "selectObject", id: null });
+  }
 });
 window.addEventListener("keyup", (e) => keys.delete(e.code));
 
@@ -189,6 +485,7 @@ function forwardVector(): THREE.Vector3 {
 
 let lastCenterSent = new THREE.Vector3(Infinity, Infinity, Infinity);
 let lastTime = performance.now();
+let lastFocusSent = 0;
 let fps = 0;
 
 function tick(): void {
@@ -197,20 +494,25 @@ function tick(): void {
   lastTime = now;
   fps = fps * 0.9 + (1 / Math.max(dt, 1e-4)) * 0.1;
 
-  const fwd = forwardVector();
-  const right = new THREE.Vector3().crossVectors(fwd, camera.up).normalize();
-  const speed = (keys.has("ShiftLeft") || keys.has("ShiftRight") ? 50 : 10) * dt;
-  const move = new THREE.Vector3();
-  if (keys.has("KeyW")) move.add(fwd);
-  if (keys.has("KeyS")) move.sub(fwd);
-  if (keys.has("KeyD")) move.add(right);
-  if (keys.has("KeyA")) move.sub(right);
-  if (keys.has("KeyE")) move.z += 1;
-  if (keys.has("KeyQ")) move.z -= 1;
-  if (move.lengthSq() > 0) camera.position.addScaledVector(move.normalize(), speed);
+  // Flythrough movement only while looking (right-drag held) — keeps the editor
+  // from drifting like a free debug camera when the user isn't navigating.
+  if (dragMode === "look") {
+    const fwd = forwardVector();
+    const right = new THREE.Vector3().crossVectors(fwd, camera.up).normalize();
+    const fast = keys.has("ShiftLeft") || keys.has("ShiftRight") ? 4 : 1;
+    const speed = flySpeed * fast * dt;
+    const move = new THREE.Vector3();
+    if (keys.has("KeyW")) move.add(fwd);
+    if (keys.has("KeyS")) move.sub(fwd);
+    if (keys.has("KeyD")) move.add(right);
+    if (keys.has("KeyA")) move.sub(right);
+    if (keys.has("KeyE")) move.z += 1;
+    if (keys.has("KeyQ")) move.z -= 1;
+    if (move.lengthSq() > 0) camera.position.addScaledVector(move.normalize(), speed);
+  }
 
   camera.up.set(0, 0, 1);
-  camera.lookAt(camera.position.clone().add(fwd));
+  camera.lookAt(camera.position.clone().add(forwardVector()));
 
   // Re-center streaming when the camera crosses ~half a chunk.
   if (camera.position.distanceTo(lastCenterSent) > chunkMeters * 0.5) {
@@ -221,6 +523,13 @@ function tick(): void {
       y: camera.position.y,
       z: camera.position.z,
     });
+  }
+
+  // Report a spawn focus point (where the camera looks) for new-object placement.
+  if (now - lastFocusSent > 250) {
+    lastFocusSent = now;
+    const focus = camera.position.clone().addScaledVector(forwardVector(), 18);
+    vscode.postMessage({ type: "focus", x: focus.x, y: focus.y, z: focus.z });
   }
 
   renderer.render(scene, camera);
@@ -255,6 +564,17 @@ window.addEventListener("message", (event) => {
       break;
     case "reset":
       clearAll();
+      setObjects([]);
+      selectObjectLocal(null);
+      break;
+    case "objects":
+      setObjects((msg.objects ?? []) as SceneObjectDTO[]);
+      break;
+    case "select":
+      selectObjectLocal(msg.id === null || msg.id === undefined ? null : Number(msg.id));
+      break;
+    case "frame":
+      frameObject(Number(msg.id));
       break;
     case "editState": {
       const st = (msg.state ?? {}) as { edited_chunks?: number };

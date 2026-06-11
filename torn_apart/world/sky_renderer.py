@@ -6,9 +6,10 @@ its per-frame ``SkyState``:
 
 * **Sky dome** — an inverted UV-sphere (radius ~800 m) camera-centred via
   translation-only follow, painted by ``sky_shaders.SKY_DOME_FRAGMENT``:
-  atmosphere gradient, sun disc + halo, moon with phase terminator, the
-  ``"night_sky"`` equirect galaxy texture with per-star twinkle, slow star
-  rotation, and deterministic shooting stars.
+  physical atmosphere, sun disc + halo, moon with phase terminator, the
+  ``"night_sky_cube"`` star/galaxy CUBE MAP (per-star twinkle, no pole
+  distortion) rotating about a seed-derived TILTED celestial axis, and
+  deterministic shooting stars.
 * **Boxy raymarched clouds** — two camera-following horizontal quads (slab
   bottom + top) DDA-raymarching a grid of ``sky_cloud_cell_m`` cells in the
   slab ``[sky_cloud_altitude_m, +sky_cloud_thickness_m]``; crisp Minecraft-style
@@ -373,39 +374,28 @@ def _cloud_value_quantiles(seed: float, sample_cells: int = 192) -> np.ndarray:
     return np.sort(vals.ravel().astype(np.float64))
 
 
-def _fallback_night_sky(star_count: int) -> np.ndarray:
+def _fallback_star_cube(star_count: int) -> np.ndarray:
     """
-    Deterministic stand-in for the registry ``"night_sky"`` def: a 1024x512
-    equirect RGBA galaxy band + *star_count* point stars; alpha = luminance.
+    Deterministic stand-in for the registry ``"night_sky_cube"`` def: six
+    64² faces of deep-indigo floor + point stars; alpha = luminance.
 
-    Used only when ``procedural.get("night_sky")`` is unavailable (the sky
-    package not yet landed).  All randomness via ``for_domain``.
+    Used only when ``procedural.get("night_sky_cube")`` is unavailable.
+    All randomness via ``for_domain``.
     """
-    rng = for_domain("sky", "night_sky_fallback")
-    height, width = 512, 1024
-    rgb = np.zeros((height, width, 3), dtype=np.float32)
-
-    yy = np.arange(height, dtype=np.float32)[:, None]
-    xx = np.arange(width, dtype=np.float32)[None, :]
-    band_center = height * 0.5 + (height * 0.22) * np.sin(
-        xx / width * 2.0 * np.pi + 1.3)
-    band = np.exp(-(((yy - band_center) / (height * 0.10)) ** 2))
-    mottle = np.kron(rng.random((height // 8, width // 8)).astype(np.float32),
-                     np.ones((8, 8), dtype=np.float32))
-    band *= 0.45 + 0.75 * mottle
-    rgb[..., 0] += band * 0.12
-    rgb[..., 1] += band * 0.12
-    rgb[..., 2] += band * 0.19
-
-    sx = rng.integers(0, width, star_count)
-    sy = rng.integers(0, height, star_count)
-    brightness = (rng.random(star_count).astype(np.float32) ** 3) * 0.9 + 0.08
-    rgb[sy, sx, :] = np.maximum(rgb[sy, sx, :], brightness[:, None])
-
-    rgb = np.clip(rgb, 0.0, 1.0)
-    out = np.empty((height, width, 4), dtype=np.uint8)
-    out[..., :3] = (rgb * 255.0).astype(np.uint8)
-    out[..., 3] = (rgb.max(axis=-1) * 255.0).astype(np.uint8)   # alpha = luminance
+    rng = for_domain("sky", "star_cube_fallback")
+    size = 64
+    rgb = np.full((6, size, size, 3), 0.012, dtype=np.float32)
+    rgb[..., 2] = 0.035
+    n = max(int(star_count), 1)
+    face = rng.integers(0, 6, n)
+    row = rng.integers(0, size, n)
+    col = rng.integers(0, size, n)
+    b = (rng.random(n).astype(np.float32) ** 3) * 0.8 + 0.08
+    np.maximum.at(rgb, (face, row, col),
+                  np.repeat(b[:, None], 3, axis=1))
+    out = np.empty((6, size, size, 4), dtype=np.uint8)
+    out[..., :3] = (np.clip(rgb, 0.0, 1.0) * 255.0).astype(np.uint8)
+    out[..., 3] = out[..., :3].max(axis=-1)
     return out
 
 
@@ -429,6 +419,23 @@ def _fallback_rain_streak() -> np.ndarray:
     out[..., 1] = (streak * 0.80 * 255.0).astype(np.uint8)
     out[..., 2] = v
     out[..., 3] = v
+    return out
+
+
+def _fallback_moon() -> np.ndarray:
+    """
+    Deterministic stand-in for the registry ``"moon_surface"`` def: a flat
+    pale-gray 64x64 disc (alpha 255 inside the unit circle, 0 outside).
+    """
+    size = 64
+    ax = np.linspace(-1.0, 1.0, size, dtype=np.float32)
+    xx, yy = np.meshgrid(ax, ax)
+    disc = (xx * xx + yy * yy) <= 1.0
+    out = np.zeros((size, size, 4), dtype=np.uint8)
+    out[..., 0] = 168
+    out[..., 1] = 166
+    out[..., 2] = 158
+    out[..., 3] = np.where(disc, 255, 0).astype(np.uint8)
     return out
 
 
@@ -501,12 +508,18 @@ class SkyRendererComponent(Component):
     """
 
     def __init__(self, base: Any = None, sky_system: Any = None,
-                 terrain_root: Any = None, clock: Any = None) -> None:
+                 terrain_root: Any = None, clock: Any = None,
+                 external_lighting: bool = False) -> None:
         super().__init__()
         self.base = base
         self.sky_system = sky_system
         self.terrain_root = terrain_root
         self.clock = clock
+        # True when the GPU volumetric lighting pipeline owns terrain
+        # shading: the sky renderer must then NOT apply Panda3D Fog, NOT
+        # set terrain_root colour-scale, and NOT blend the clear colour
+        # toward fog (the froxel fog composites in the terrain/sky shaders).
+        self.external_lighting = bool(external_lighting)
         if self.clock is None and sky_system is not None:
             self.clock = getattr(sky_system, "clock", None) or \
                 getattr(sky_system, "_clock", None)
@@ -570,10 +583,13 @@ class SkyRendererComponent(Component):
         self._build_rain()
 
         # Exponential fog on the terrain (density/colour driven per frame).
-        self._fog = Fog("sky_fog")
-        self._fog.set_exp_density(0.0008)
-        if self.terrain_root is not None:
-            self.terrain_root.set_fog(self._fog)
+        # Skipped under external (GPU volumetric) lighting — the froxel fog
+        # composites inside the terrain shader instead.
+        if not self.external_lighting:
+            self._fog = Fog("sky_fog")
+            self._fog.set_exp_density(0.0008)
+            if self.terrain_root is not None:
+                self.terrain_root.set_fog(self._fog)
 
         _log.info("Sky renderer ready (cloud slab z=[%.0f, %.0f] m, cell=%.0f m)",
                   self._cloud_alt_m, self._cloud_alt_m + self._cloud_thick_m,
@@ -627,7 +643,7 @@ class SkyRendererComponent(Component):
     # ------------------------------------------------------------------
 
     def _build_dome(self, star_count: int) -> None:
-        """Build the inverted sky-dome sphere + dome shader + night texture."""
+        """Build the inverted sky-dome sphere + dome shader + star cubemap."""
         node = _build_dome_node(_DOME_RADIUS_M, _DOME_STACKS, _DOME_SLICES)
         dome = self.base.render.attach_new_node(node)
         dome.set_bin("background", 10)
@@ -636,16 +652,33 @@ class SkyRendererComponent(Component):
         dome.set_light_off()
         dome.set_color_off()
 
-        night_tex = _sky_texture("night_sky",
-                                 fallback=_fallback_night_sky(star_count))
-        night_tex.set_wrap_u(Texture.WM_repeat)
-        night_tex.set_wrap_v(Texture.WM_clamp)
-        dome.set_texture(night_tex)
-
         shader = Shader.make(Shader.SL_GLSL,
                              vertex=sky_shaders.SKY_DOME_VERTEX,
                              fragment=sky_shaders.SKY_DOME_FRAGMENT)
         dome.set_shader(shader)
+
+        # Night-sky star/galaxy CUBE MAP (no equirect pole distortion) and
+        # the tilted celestial axis it rotates about: Polaris elevation ==
+        # the world's latitude, seed-derived per world — so the night sky
+        # wheels properly across the sky instead of pinwheeling at zenith.
+        star_cube: np.ndarray | None = None
+        try:
+            from torn_apart.procedural import get as get_procedural
+            star_cube = get_procedural("night_sky_cube",
+                                       star_count=star_count)
+        except Exception as exc:  # noqa: BLE001 — def may predate this build
+            _log.warning("night_sky_cube unavailable (%s) — using fallback",
+                         exc)
+        if star_cube is None:
+            star_cube = _fallback_star_cube(star_count)
+        from torn_apart.world.texture_bridge import to_panda_cubemap
+        dome.set_shader_input("u_star_cube", to_panda_cubemap(star_cube))
+        lat_rad = math.radians(
+            28.0 + 27.0 * float(for_domain("sky", "celestial_latitude")
+                                .random()))
+        dome.set_shader_input(
+            "u_celestial_axis",
+            LVecBase3f(0.0, math.cos(lat_rad), math.sin(lat_rad)))
         # Neutral defaults so the first frame renders with every uniform defined.
         dome.set_shader_input("u_sun_dir", LVecBase3f(0.0, 0.0, 1.0))
         dome.set_shader_input("u_sun_color", LVecBase3f(1.0, 0.95, 0.85))
@@ -663,6 +696,28 @@ class SkyRendererComponent(Component):
         dome.set_shader_input("u_ss_start", LVecBase3f(0.0, 1.0, 0.3))
         dome.set_shader_input("u_ss_travel", LVecBase3f(1.0, 0.0, 0.0))
         dome.set_shader_input("u_ss_progress", 0.0)
+
+        # Physical-atmosphere additions: procedural moon texture, tonemap
+        # exposure (matches the terrain shader), night-floor/weather inputs,
+        # and the froxel-fog defaults (a 1x1x1 dummy keeps the sampler3D
+        # bound; the GPU pipeline's real texture replaces it in late_update).
+        moon_tex = _sky_texture("moon_surface", fallback=_fallback_moon())
+        moon_tex.set_minfilter(SamplerState.FT_linear_mipmap_linear)
+        moon_tex.set_magfilter(SamplerState.FT_linear)
+        dome.set_shader_input("u_moon_tex", moon_tex)
+        dome.set_shader_input("u_moon_glow", 0.0)
+        dome.set_shader_input("u_daylight", 1.0)
+        dome.set_shader_input("u_weather_gray", 0.0)
+        cfg = getattr(self.base, "_config", None)
+        dome.set_shader_input("u_exposure",
+                              float(getattr(cfg, "light_exposure", 0.9)))
+        dummy_fog = Texture("dome_fog_dummy")
+        dummy_fog.setup_3d_texture(1, 1, 1, Texture.T_float, Texture.F_rgba16)
+        dummy_fog.set_clear_color((0.0, 0.0, 0.0, 1.0))
+        dome.set_shader_input("u_fog_integrated", dummy_fog)
+        dome.set_shader_input("u_fog_enabled", 0.0)
+        dome.set_shader_input("u_viewport", LVecBase2f(1280.0, 720.0))
+        self._fog_tex_bound = False
         self._dome_np = dome
 
     def _build_clouds(self) -> None:
@@ -764,7 +819,40 @@ class SkyRendererComponent(Component):
         dome.set_shader_input("u_star_visibility", float(st.star_visibility))
         dome.set_shader_input("u_time", float(self._time_s))
         dome.set_shader_input("u_fog_color", LVecBase3f(*st.fog_color))
-        dome.set_shader_input("u_fog_blend", self._fog_blend(st))
+        # Legacy horizon fog band only on the CPU backend; the froxel fog
+        # owns atmosphere depth under external (GPU volumetric) lighting.
+        dome.set_shader_input(
+            "u_fog_blend",
+            0.0 if self.external_lighting else self._fog_blend(st))
+
+        # Physical-atmosphere per-frame inputs.
+        dome.set_shader_input("u_daylight", float(st.daylight))
+        gray = min(1.0, 1.6 * float(st.cloud_coverage) * float(st.cloud_density))
+        dome.set_shader_input("u_weather_gray", gray)
+        illum = 0.5 * (1.0 - math.cos(2.0 * math.pi * float(st.moon_phase)))
+        dome.set_shader_input("u_moon_glow", float(illum))
+
+        # Froxel-fog composite: bind the pipeline's integrated texture once
+        # it exists (the pipeline is created after the sky GameObject).
+        pipeline = getattr(self.base, "lighting_pipeline", None)
+        if self.external_lighting and pipeline is not None:
+            # Auto-exposure: the dome uses the COMPRESSED adaptation
+            # (pipeline.exposure_sky) — terrain brightens fully in the dark,
+            # the night sky deepens only slightly (stars keep their contrast).
+            dome.set_shader_input(
+                "u_exposure",
+                float(getattr(pipeline, "exposure_sky",
+                              getattr(pipeline, "exposure", 0.9))))
+            if getattr(pipeline, "fog_enabled", False):
+                if not self._fog_tex_bound:
+                    dome.set_shader_input("u_fog_integrated",
+                                          pipeline.fog_integrated_tex)
+                    dome.set_shader_input("u_fog_enabled", 1.0)
+                    self._fog_tex_bound = True
+                win = self.base.win
+                dome.set_shader_input(
+                    "u_viewport", LVecBase2f(float(win.get_x_size()),
+                                             float(win.get_y_size())))
 
         # Slow whole-sky star rotation: one revolution per game day.
         rot = 0.0
@@ -905,6 +993,12 @@ class SkyRendererComponent(Component):
 
     def _update_fog_and_light(self, st: Any) -> None:
         """Exponential fog + clear colour + global terrain light scale."""
+        if self.external_lighting:
+            # GPU pipeline owns terrain light + fog; keep a plain horizon
+            # clear colour so un-domed pixels match the sky.
+            hr, hg, hb = st.horizon_color
+            self.base.set_background_color(hr, hg, hb, 1.0)
+            return
         fr, fg, fb = st.fog_color
         if self._fog is not None:
             self._fog.set_exp_density(float(st.fog_density))

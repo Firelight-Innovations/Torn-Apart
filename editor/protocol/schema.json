@@ -1,6 +1,6 @@
 {
   "$comment": "SINGLE SOURCE OF TRUTH for the Fire Editor wire protocol. Both editor/fire_editor/_generated.py and editor/extension/src/protocol/generated.ts are produced from this file by codegen.py. Never hand-edit the generated files. Bump protocol_version on ANY incompatible change and regenerate both bindings in the same commit (EDITOR_PRD hard rule 6).",
-  "protocol_version": 3,
+  "protocol_version": 4,
   "daemon_version": "0.1.0",
   "binary": {
     "magic_hex": "0x46495245",
@@ -69,6 +69,36 @@
       "doc": "Redo the most recently undone edit.",
       "params": {},
       "result": { "ok": "bool", "touched": "int", "label": "str", "can_undo": "bool", "can_redo": "bool" }
+    },
+    "scene.tree": {
+      "doc": "Full authoring hierarchy: a flat, depth-first list of object dicts (id, name, kind, parent, position, rotation, scale).",
+      "params": {},
+      "result": { "objects": "any" }
+    },
+    "scene.create": {
+      "doc": "Create a placeable object. kind: empty|cube|sphere|light|spawn. Optional parent id and spawn position. Broadcasts scene.changed.",
+      "params": { "kind": "str", "parent?": "int", "name?": "str", "x?": "float", "y?": "float", "z?": "float" },
+      "result": { "ok": "bool", "object": "any" }
+    },
+    "scene.rename": {
+      "doc": "Rename an object. Broadcasts scene.changed.",
+      "params": { "id": "int", "name": "str" },
+      "result": { "ok": "bool", "object": "any" }
+    },
+    "scene.reparent": {
+      "doc": "Move an object under a new parent (omit parent for a root). Rejects cycles. Broadcasts scene.changed.",
+      "params": { "id": "int", "parent?": "int" },
+      "result": { "ok": "bool", "object": "any" }
+    },
+    "scene.set_transform": {
+      "doc": "Set an object's local transform (any omitted component is left unchanged). Broadcasts scene.changed.",
+      "params": { "id": "int", "px?": "float", "py?": "float", "pz?": "float", "rw?": "float", "rx?": "float", "ry?": "float", "rz?": "float", "sx?": "float", "sy?": "float", "sz?": "float" },
+      "result": { "ok": "bool", "object": "any" }
+    },
+    "scene.delete": {
+      "doc": "Delete an object and all its descendants. Broadcasts scene.changed.",
+      "params": { "id": "int" },
+      "result": { "ok": "bool", "removed": "any" }
     }
   },
   "notifications": {
@@ -91,6 +121,10 @@
     "edit.state": {
       "doc": "Editor dirty/undo state changed (drives the dirty indicator + undo/redo enablement).",
       "params": { "can_undo": "bool", "can_redo": "bool", "edited_chunks": "int" }
+    },
+    "scene.changed": {
+      "doc": "The authoring hierarchy changed (create/rename/reparent/delete/transform). Carries the full object list so the tree view and viewport can refresh.",
+      "params": { "objects": "any" }
     }
   }
 }

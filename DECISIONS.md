@@ -189,3 +189,76 @@ file captures the choices made *underneath* it during implementation.
 - **Q:** Where do the day/night-cycle / weather controls the owner wants go?
 - **Choice:** An **Environment** panel registered in the overlay (`CallbackTool`) that edits `clock.game_time_of_day` / `game_time_scale` and cycles `sky_system.weather.force_weather(...)`, reading the live `SkyState`. It is registered only when `app.sky_system` is present and is bound defensively (`getattr`/`try`) against the concurrent sky feature.
 - **Why:** The owner explicitly wanted day/night editable "in the game world with the same system." A generic `CallbackTool` surfaces it without coupling `devtools/` to the in-flight `sky` API.
+
+## 2026-06-11 — Faceted terrain + pixel-art ground textures (session 3)
+
+### Terrain mesher is flat-shaded naive surface nets ("faceted"), cubes kept behind a config switch
+- **Q:** The owner wants terrain between Minecraft-blocky and marching-cubes-smooth (Daggerfall Unity feel) — which algorithm?
+- **Choice:** **Naive surface nets** over the binary voxel grid (`terrain/surface_nets.py`, `build_mesh_faceted`): one vertex per surface-straddling 2×2×2 cell at the centroid of its crossing-edge midpoints, one quad per exposed voxel face (the *same* exposure mask as the cube mesher), emitted as two independent flat triangles. No vertex smoothing passes (1-voxel neighbour padding stays sufficient; seams stay byte-identical). `config.mesh_style` selects `"faceted"` (default) or `"blocky"` (old mesher, kept for fixtures/regression).
+- **Why:** Surface nets with binary voxels naturally produces chamfered 45°-ish facets — smooth silhouettes with clearly visible polygons — while keeping flat ground *exactly* planar. Marching cubes would over-smooth; bevelled cubes would not handle crater walls. Sharing the exposure mask keeps the `light_sampler` contract and `face_count` invariants unchanged.
+
+### Facet accent: a fixed normal-based shade term baked into vertex colours
+- **Q:** With scene lighting off (texture × vertex-colour pipeline) adjacent coplanar-ish facets are indistinguishable — how do facets stay readable?
+- **Choice:** The faceted mesher multiplies `(1-s) + s*clamp(n·accent_dir, 0, 1)` (s = `config.facet_shade_strength` = 0.25, accent_dir ≈ high noon SE, a fixed art-direction constant) into the baked light, per triangle.
+- **Why:** Cheap (pure numpy at mesh time), deterministic, and sells the low-poly look. It is NOT the sun: real sunlight still arrives via `light_sampler`; the accent is subtle enough not to fight the day/night colour scale. Revisit when a real sun-angle relight lands.
+
+### Ground materials: grass skin (2) on the baseline's top voxel layer, dirt (1) below
+- **Q:** Separate grass and dirt textures — how does the terrain know which face is which?
+- **Choice:** `generate_chunk` writes `MATERIAL_GRASS` (2) into the topmost solid layer (pure function of world Z) and `MATERIAL_DIRT` (1) below; the faceted mesher tags each face with its solid voxel's material (`MeshArrays.face_materials`); `world/geometry_bridge.to_geom_node` splits each chunk into one Geom per material with that material's texture in a Geom-level RenderState. Brush ADD default material stays dirt.
+- **Why:** Uses the existing `uint8` material storage (no new arrays, saves unchanged), digging naturally exposes dirt, and per-Geom RenderStates avoid texture atlas UV-wrapping headaches at 1 m tiling.
+
+### Ground textures are low-res pixel-art defs; the "blur" was bilinear noise, not the sampler
+- **Q:** Owner: "turn off the bilinear filter so textures are pixelated."
+- **Choice:** The sampler was already nearest-neighbour (`texture_bridge`); the smoothness came from `value_noise`'s bilinear octave upsampling at 256 px/m. Added `pixel_noise` (nearest-upsampled octaves) and two new 64×64 defs `"grass_ground"` / `"dirt_ground"` with hard-threshold palette quantisation (8/6 colours). `"wasteland_ground"` remains as the node-level fallback texture.
+- **Why:** Crisp square texels at 64 px per 1 m tile read correctly through the existing nearest-neighbour pipeline; quantised palettes give the retro look the owner asked for.
+
+## 2026-06-11 — GPU volumetric lighting + physical sky (session 4)
+
+### Lighting goes fully GPU: camera-centered cascaded radiance volumes
+- **Q:** The owner wants Minecraft-shader-style volumetric lighting (GI, bounce, AO, volumetric fog, god rays, point/area lights, voxel shadows) computed on the GPU. What is the data model?
+- **Choice:** Two **camera-centered cascaded 3-D textures** ("radiance cascades"): cascade 0 at **0.25 m texels, 128³ (32 m box)** — the owner's "8 light pixels per 0.5 m voxel" (2× per axis) — and cascade 1 at **1.0 m texels, 128³ (128 m box)**. CPU (numpy, headless `lighting/volume.py`) assembles occupancy/albedo/emission windows from chunk material arrays; windows recenter with hysteresis when the camera crosses half-cell boundaries. ARCHITECTURE §2's "8 terrain voxels per light cell" reading is superseded by the owner's explicit 8-texels-per-voxel request; the old CPU `LightGrid`/`SunlightComputer` (1 m cells, baked vertex colours) is kept as the `lighting_backend = "cpu"` fallback.
+- **Why:** A scrolling window over the camera bounds GPU memory regardless of world size (per-chunk 3-D textures would not), and two cascades give fine light pixelation near the camera with full view-distance coverage at ~75 MB VRAM.
+
+### GI is GPU flood-fill propagation; shadows are voxel raymarches (no shadow maps)
+- **Q:** How are bounce light, AO, and shadows computed?
+- **Choice:** GLSL **430 compute shaders** dispatched via `GraphicsEngine.dispatch_compute` each frame: (1) an *injection* pass writes direct radiance — sun/moon via short occupancy raymarch toward the light, point/area lights with distance falloff + occupancy march, emissive voxels from the palette; (2) an iterative *propagation* pass (ping-pong, N iterations/frame) spreads radiance through air cells and tints bounces by surface albedo — flood-fill GI, which also darkens corners (AO comes free from the same volume plus a 3³ occupancy term at shading). Sun/moon shadows at surfaces are per-fragment occupancy raymarches through the cascades — **no shadow maps anywhere**.
+- **Why:** Flood-fill in a voxel volume is the established "Minecraft shader" GI shape: converges over a few frames, costs a fixed budget independent of light count, and is exactly representable in our occupancy windows. Shadow maps would add an entire second render path for a look the voxel march already gives in the same pixelated aesthetic.
+
+### Volumetric fog is a froxel volume sampled in-shader (no post-process chain)
+- **Q:** How do volumetric fog and god rays composite without a screen-space post pipeline?
+- **Choice:** A camera-frustum-aligned **froxel 3-D texture** (160×90×64, exponential Z out to the fog far range) filled by compute: weather height-fog density, sun scattering with per-froxel occupancy shadow march (→ god rays), point-light and ambient/GI scattering; a second pass integrates along Z into accumulated (inscatter, transmittance). The **terrain and sky fragment shaders sample the integrated froxel texture directly** at their own depth and composite there.
+- **Why:** Panda3D 1.10 has no post chain in this repo; in-shader sampling avoids depth-texture plumbing and a fullscreen pass, and the sky dome (drawn at far depth) gets exactly the same fog for free, so god rays cross the horizon seamlessly.
+
+### Sky upgraded to a physical atmosphere that FEEDS the lighting system
+- **Q:** The owner wants a physically simulated atmosphere (real-looking sunsets, scattered ambient) driving scene lighting, bigger textured sun/moon, fully procedural per seed.
+- **Choice:** New headless `sky/atmosphere.py` (numpy Rayleigh+Mie single scattering) computes per-frame `SkyState` additions — `sun_radiance`, `moon_radiance`, `sky_ambient` (linear HDR RGB) — consumed by the lighting volume as the sun/moon injection colour and the sky-visible-cell ambient term. The dome fragment shader raymarches the same model per pixel (GLSL 330, no LUT buffers). Sun/moon discs ~2.5× larger with procedural textures (moon craters seeded from `world_seed`, phases kept). `SkyRendererComponent(external_lighting=True)` stops writing `terrain_root` colour-scale/Fog — the GPU pipeline owns surface light; `SkyState` remains the only sky↔lighting contract.
+- **Why:** One scattering model evaluated twice (numpy for light values, GLSL for pixels) keeps the sky picture and the scene light physically consistent — sunset turns the *light* orange, not just the backdrop — while staying headless-testable and deterministic from seed.
+
+### Normal/emission maps derive from the existing procedural textures
+- **Q:** Normal mapping and emissive surfaces without hand-authored maps?
+- **Choice:** `procedural` gains height→normal derivation (numpy Sobel on texture luminance) and an optional per-def emission map; the terrain shader builds its TBN analytically from the flat face normal's dominant axis (matching the planar UV projection) and emissive materials inject into the radiance volume via a material→(albedo, emission) palette sampled from each def's average colour.
+- **Why:** Keeps "environment textures are 100 % procedural" intact — no asset files — and flat axis-aligned-ish faces make analytic tangents exact where it matters.
+
+### stream_frame remeshes dirty chunks BEFORE loading missing ones
+- **Q:** Craters stayed invisible for minutes — why?
+- **Choice:** The 2-chunk/frame budget was consumed by missing-chunk loads first (desired set ≈ 1.2k chunks ⇒ ~600 frames of loading), starving dirty remeshes. Reordered: dirty remesh first, then loads.
+- **Why:** Dirty means "an edit or relight the player is looking at"; the docs always promised edits remesh "within a frame or two". Also required for the new brush border-dirty propagation (neighbours of an edit remesh promptly).
+
+---
+
+## 2026-06-11 — GPU grass + zone volumes (session 5)
+
+### Grass volumes are tagged boxes in a new `zones` package
+- **Q:** Where does "grass grows here" live? (Also the foundation for biome regions later.)
+- **Choice:** New foundation-layer package `torn_apart/zones/`: frozen `ZoneVolume` AABBs (tag `"grass"` now, `"biome"` reserved) in a `ZoneStore` registry that is `Saveable` (`save_key="zones"`, full-list delta vs a `mark_baseline()` snapshot). Matches the ZoneVolume concept in ARCHITECTURE §5.2.
+- **Why:** Smallest shape that covers grass today and biome/snow regions next; volumes are a handful of dicts, so full-snapshot deltas beat diff machinery.
+
+### Grass is GPU-only: blades derive from gl_InstanceID, CPU stores none
+- **Q:** Owner wants Daggerfall/Morrowind-style swaying grass as real geometry, "rendered completely on the GPU — the CPU has no idea it exists".
+- **Choice:** One shared 3-crossed-quad tuft Geom per volume drawn with `set_instance_count(density × area)`; the vertex shader hashes `gl_InstanceID` (lowbias32 chain, per-volume seed from `for_domain("zones","grass",id)`) into position/yaw/scale/sway-phase. `zones/grass_placement.py` mirrors the hash line-for-line so placement is headless-testable. The only CPU artifact is a tiny per-volume height-field texture (R = surface Z in the volume's z-window, 255 = no ground → shader-culled), re-baked on `TerrainEditedEvent`/`ChunkLoadedEvent` — craters cull grass. Weather drives sway uniforms (storm = bigger, faster). Distance fade shrinks blades over `[grass_fade_start_m, grass_fade_end_m]`.
+- **Why:** ~10k blades cost one draw call and zero per-frame CPU; the hash mirror keeps Hard-Rule-2 determinism provable without a GPU.
+
+### Grass inherits the terrain's lighting contract by scene-graph parenting
+- **Q:** How does grass get radiance-cascade light + froxel fog without new per-frame plumbing?
+- **Choice:** The grass root is parented under `App.terrain_root`, where `GpuLightingPipeline` already binds/refreshes every cascade/fog/celestial shader input; the grass fragment shader declares the same uniform names and samples GI + voxel-shadowed sun at the blade base, quantised to `light_quant_m`. GPU lighting backend only (component disables itself on "cpu").
+- **Why:** Zero new uniform-sync paths to keep in step; grass light pixels match the terrain's by construction.

@@ -170,6 +170,11 @@ class App(ShowBase):
         # Skip the first mouse-delta sample after capture is (re)enabled so the
         # cursor's pre-capture position doesn't snap the view on frame 1.
         self._skip_mouse_delta = True
+        # Whether the window currently holds OS focus.  Alt-tabbing away drops
+        # the relative-mouse / hidden-cursor window properties, so we reassert
+        # them on focus regain (see ``windowEvent``).  Starts True: the window
+        # opens focused with the cursor captured.
+        self._had_focus = True
 
         # ------------------------------------------------------------------
         # Terrain-render injection slots (set by main.py after construction).
@@ -177,6 +182,11 @@ class App(ShowBase):
         # ------------------------------------------------------------------
         self.chunk_manager = None          # ChunkManager | None
         self.light_sampler = None          # Callable | None
+        # GPU volumetric lighting (Phase 4 GPU backend) — set by main.py when
+        # config.lighting_backend == "gpu".  Driven in step 6 of the frame
+        # task; None keeps the legacy baked-vertex-light path.
+        self.lighting_pipeline = None      # GpuLightingPipeline | None
+        self.sky_system = None             # SkySystem | None (set by main.py)
         # Per-chunk NodePath bookkeeping: coord -> NodePath under terrain_root.
         self._chunk_nodes: dict[tuple[int, int, int], NodePath] = {}
 
@@ -307,6 +317,33 @@ class App(ShowBase):
             self.win.move_pointer(0, cx, cy)
             self._skip_mouse_delta = False
 
+    def windowEvent(self, win) -> None:
+        """
+        Handle Panda3D window events (focus, resize, close).
+
+        Extends ShowBase's default handling to fix a mouse-capture desync: when
+        the window loses OS focus (alt-tab), the platform releases our hidden /
+        relative-mouse cursor properties.  Panda3D does not re-apply them on
+        focus regain, so the engine would think the mouse is captured while the
+        OS shows a free, absolute-mode cursor — free-look stays dead until the
+        next ESC toggle.  Here we detect the focus-regain edge and reassert
+        whatever capture state we want, re-arming the first-frame delta skip so
+        the view doesn't snap.
+
+        Parameters
+        ----------
+        win : panda3d.core.GraphicsWindow
+            The window the event is about (ignored unless it is ``self.win``).
+        """
+        super().windowEvent(win)
+        if win is not self.win:
+            return
+        has_focus = bool(win.get_properties().get_foreground())
+        if has_focus and not self._had_focus:
+            # Regained focus — reapply the capture state the engine believes in.
+            self._set_mouse_capture(self.input_state.mouse_captured)
+        self._had_focus = has_focus
+
     def _set_mouse_capture(self, captured: bool) -> None:
         """
         Lock/unlock the cursor for free-look.
@@ -366,14 +403,19 @@ class App(ShowBase):
         #    pending_meshes / unloaded_this_frame into the scene graph.
         self._stream_and_upload_terrain()
 
-        # 6. integration hook: lighting dirty work (Phase 4)
-        #    No-op: sunlight is event-driven.  SunlightComputer subscribes to
-        #    TerrainEditedEvent / ChunkLoadedEvent on the bus and recomputes the
-        #    affected columns, marking chunks dirty.  The NEXT stream_frame (step
-        #    5 above) remeshes those dirty chunks through the light_sampler, so
-        #    fresh light reaches the GPU as baked vertex colours without any
-        #    per-frame work here.  Intentionally left as a pass.
-        pass
+        # 6. integration hook: lighting (Phase 4)
+        #    CPU backend: no-op — sunlight is event-driven (SunlightComputer
+        #    recomputes columns on bus events; remesh bakes vertex colours).
+        #    GPU backend: drive the volumetric pipeline — cascade windows
+        #    follow the camera, dirty volumes re-upload, compute passes
+        #    (inject / propagate / fog) dispatch, terrain uniforms refresh.
+        if self.lighting_pipeline is not None:
+            sky_state = (self.sky_system.state
+                         if self.sky_system is not None else None)
+            self.lighting_pipeline.update(
+                self.camera_go.transform.position, sky_state, real_dt)
+            self.lighting_pipeline.update_surface_inputs(
+                self.terrain_root, sky_state)
 
         # 7. EventBus drain
         self._event_bus.drain()
@@ -405,22 +447,33 @@ class App(ShowBase):
     # Terrain rendering (Phase 3 integration)
     # ------------------------------------------------------------------
 
-    def setup_terrain_rendering(self, ground_texture=None) -> None:
+    def setup_terrain_rendering(
+        self, ground_texture=None, material_textures=None
+    ) -> None:
         """
         Configure the terrain render state once at boot.
 
-        Call after injecting ``self.chunk_manager``.  Applies the procedural
-        ground texture to ``terrain_root`` and turns Panda3D lighting OFF so the
-        default fixed-function pipeline renders **texture × vertex colour**.  The
+        Call after injecting ``self.chunk_manager``.  Stores the per-material
+        texture map (used by the mesh upload path to texture grass and dirt
+        faces separately), applies the optional fallback ground texture to
+        ``terrain_root``, and turns Panda3D lighting OFF so the default
+        fixed-function pipeline renders **texture × vertex colour**.  The
         mesher has already baked sunlight into the vertex colours (greyscale ×
         light), so adding a Panda3D light would double-light the scene.
 
         Parameters
         ----------
         ground_texture : panda3d.core.Texture | None
-            The ``wasteland_ground`` texture (from
-            ``world.texture_bridge.to_panda_texture``).  If None, only the
-            light-off state is configured (untextured grey terrain).
+            Fallback texture applied at the ``terrain_root`` node level.  It
+            covers blocky-mesher geometry (no ``face_materials``) and any
+            material id missing from ``material_textures``.  If None, no
+            node-level texture is set.
+        material_textures : dict[int, panda3d.core.Texture] | None
+            Material id → texture map for the faceted mesher's per-material
+            Geom split (``{MATERIAL_DIRT: dirt_tex, MATERIAL_GRASS:
+            grass_tex}``).  Forwarded to ``geometry_bridge.to_geom_node`` on
+            every chunk upload.  Geom-level texture states compose over the
+            node-level fallback, so they win where both exist.
 
         Notes
         -----
@@ -430,6 +483,7 @@ class App(ShowBase):
           C4 colour column, so vertex colours are active by default — no
           ``set_color_off`` is issued.
         """
+        self.material_textures = material_textures
         if ground_texture is not None:
             self.terrain_root.set_texture(ground_texture)
         # Baked light lives in vertex colours — disable scene lighting so the
@@ -473,7 +527,11 @@ class App(ShowBase):
             old = self._chunk_nodes.pop(coord, None)
             if old is not None:
                 old.remove_node()
-            geom_node = to_geom_node(mesh, name=f"chunk_{coord[0]}_{coord[1]}_{coord[2]}")
+            geom_node = to_geom_node(
+                mesh,
+                name=f"chunk_{coord[0]}_{coord[1]}_{coord[2]}",
+                material_textures=getattr(self, "material_textures", None),
+            )
             np_node = self.terrain_root.attach_new_node(geom_node)
             # Positions are absolute world meters — no per-chunk offset.
             self._chunk_nodes[coord] = np_node

@@ -34,7 +34,7 @@ from __future__ import annotations
 import numpy as np
 from panda3d.core import Texture, SamplerState  # type: ignore[import]
 
-__all__ = ["to_panda_texture"]
+__all__ = ["to_panda_texture", "to_field_texture", "to_panda_cubemap"]
 
 
 def to_panda_texture(rgba: np.ndarray) -> Texture:
@@ -116,4 +116,89 @@ def to_panda_texture(rgba: np.ndarray) -> Texture:
     tex.set_minfilter(SamplerState.FT_nearest)
     tex.set_magfilter(SamplerState.FT_nearest)
 
+    return tex
+
+
+def to_panda_cubemap(faces: np.ndarray) -> Texture:
+    """
+    Upload a 6-face RGBA cube map (e.g. ``procedural.get("night_sky_cube")``).
+
+    The input must follow the OpenGL cube-map convention produced by
+    ``procedural.textures.night_sky.cube_face_directions``: face order
+    +X, −X, +Y, −Y, +Z, −Z and array row 0 = the ``tc = −1`` texel row.
+    Pages upload in that exact order with NO vertical flip (GL cube faces
+    are t-down, unlike regular GL textures — flipping here would mirror
+    every face), only the engine-wide RGBA→BGRA channel swap.  Sampling
+    ``texture(samplerCube, dir)`` in GLSL then returns the texel that was
+    generated for ``dir``.
+
+    Parameters
+    ----------
+    faces : numpy.ndarray
+        Shape ``(6, S, S, 4)``, dtype ``uint8``, S a power of two.
+
+    Returns
+    -------
+    panda3d.core.Texture
+        Linear-filtered cube map ready for ``set_shader_input``.
+    """
+    if faces.ndim != 4 or faces.shape[0] != 6 or faces.shape[3] != 4 \
+            or faces.shape[1] != faces.shape[2]:
+        raise ValueError(
+            f"to_panda_cubemap expects shape (6, S, S, 4), got {faces.shape}")
+    if faces.dtype != np.uint8:
+        raise ValueError(
+            f"to_panda_cubemap expects dtype uint8, got {faces.dtype}")
+
+    size = faces.shape[1]
+    tex = Texture("cubemap")
+    tex.setup_cube_map(size, Texture.T_unsigned_byte, Texture.F_rgba)
+    bgra = np.ascontiguousarray(faces[..., [2, 1, 0, 3]])   # RGBA -> BGRA
+    tex.set_ram_image(bytes(bgra))
+    tex.set_minfilter(SamplerState.FT_linear)
+    tex.set_magfilter(SamplerState.FT_linear)
+    return tex
+
+
+def to_field_texture(rgba: np.ndarray) -> Texture:
+    """
+    Upload a **data field** (not an image) as a 2-D RGBA8 texture.
+
+    Unlike :func:`to_panda_texture` there is NO vertical flip: array row 0
+    lands at texture V=0, so shaders can sample with
+    ``uv = (world_xy - field_min) / field_size`` and array index
+    ``[iy, ix]`` maps directly to world ``(+y, +x)``.  Filtering is nearest
+    and wrap is clamped — field texels are exact samples (e.g. the grass
+    height field's R channel encodes a height byte; interpolating between a
+    height and the 255 no-ground sentinel would invent garbage heights).
+
+    Parameters
+    ----------
+    rgba : numpy.ndarray
+        Shape ``(H, W, 4)``, dtype ``uint8``.  Channel semantics are the
+        producer's contract (e.g. ``zones.bake_grass_height_field``).
+
+    Returns
+    -------
+    panda3d.core.Texture
+        Nearest-filtered, edge-clamped 2-D texture.
+    """
+    if rgba.ndim != 3 or rgba.shape[2] != 4:
+        raise ValueError(
+            f"to_field_texture expects shape (H, W, 4), got {rgba.shape}"
+        )
+    if rgba.dtype != np.uint8:
+        raise ValueError(
+            f"to_field_texture expects dtype uint8, got {rgba.dtype}"
+        )
+
+    H, W = rgba.shape[:2]
+    tex = Texture("field")
+    tex.setup_2d_texture(W, H, Texture.T_unsigned_byte, Texture.F_rgba)
+    bgra = np.ascontiguousarray(rgba[..., [2, 1, 0, 3]])   # RGBA -> BGRA
+    tex.set_ram_image(bytes(bgra))
+    tex.set_minfilter(SamplerState.FT_nearest)
+    tex.set_magfilter(SamplerState.FT_nearest)
+    tex.set_wrap_u(SamplerState.WM_clamp)
+    tex.set_wrap_v(SamplerState.WM_clamp)
     return tex

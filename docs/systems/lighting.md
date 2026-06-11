@@ -1,182 +1,141 @@
 # lighting — System Doc
-keywords: sun, sunlight, light grid, occupancy, column, ambient, penumbra, blur, vertex color, shadow, LightGrid, SunlightComputer, make_light_sampler, occupancy_from_materials, LIGHT_FULL, LIGHT_AMBIENT, column pass, box blur, diffusion, recompute, dirty, voxel light, light cell, light array, bake, face centers, mesher hook, build_mesh, uint8, float32
+keywords: sun, sunlight, moonlight, light grid, occupancy, ambient, GI, global illumination, bounce, flood fill, radiance cascade, volume, volumetric, fog, god rays, froxel, shadow, voxel shadow, AO, ambient occlusion, point light, area light, torch, emission, emissive, albedo, palette, compute shader, GPU, inject, propagate, LightGrid, SunlightComputer, make_light_sampler, occupancy_from_materials, LIGHT_FULL, LIGHT_AMBIENT, VolumeWindow, GeometryVolume, assemble_geometry, EMISSION_SCALE, MaterialPalette, build_default_palette, PointLight, AreaLight, LightSet, GpuLightingPipeline, lighting_backend, light_quant_m, dispatch_compute, ping pong, cascade, recenter, hysteresis
 
 > One doc per code package; filename matches the package exactly (`docs/systems/lighting.md` ↔ `torn_apart/lighting/`).
 
 ## Role
 
-`lighting/` is the **voxel light grid** package (Layer 1 — Services).  It owns:
+`lighting/` (Layer 1 — Services) owns all scene lighting.  Two backends, selected by `config.lighting_backend`:
 
-- **Occupancy downsampling** — converting a 32³ terrain material array to a 16³ bool occupancy grid (one light cell = 2×2×2 terrain voxels = 1 m³).
-- **Per-chunk light storage** — `LightGrid`: a dict of `uint8 (16, 16, 16)` arrays (one per chunk coord), with valid/dirty bookkeeping.
-- **CPU sunlight column pass** — `SunlightComputer`: for each (cx, cy) column of loaded chunks, stacks occupancy into a tall grid and sweeps cumulative-OR downward from +Z (sunlight source) to classify every cell as full-sun (255) or ambient (40).
-- **Box-blur diffusion** — a 3×3×3 uniform filter that softens the hard sun/shadow boundary into a smooth penumbra, applied to the full column stack before splitting back into per-chunk arrays.
-- **Event subscriptions** — `SunlightComputer` subscribes to `TerrainEditedEvent` and `ChunkLoadedEvent` on the `EventBus` to keep light current without manual polling.
-- **Mesher integration** — `make_light_sampler` returns a callable matching the `build_mesh` `light_sampler` contract: given face-centre world positions `float32 (F, 3)` it returns per-face light `float32 (F,)` in `[0.0, 1.0]`, which the mesher bakes into vertex colours (default Panda3D shader multiplies texture by vertex colour, so darker = shadowed).
+**GPU backend (`"gpu"`, default)** — fully volumetric lighting computed on the GPU each frame:
 
-**Phase 4 v0 scope:** CPU only, numpy-vectorised, no panda3d imports.  No custom GLSL — vertex colours are the full lighting pipeline this phase.  The light array layout is already GPU-uploadable as a 3-D texture for Phase 5+.
+- **Radiance cascades** — two camera-centered 3-D texture windows: cascade 0 at `light_c0_cell_m` = 0.5 m cells (`light_c0_cells` = 96 → a 48 m box) and cascade 1 at 2.0 m cells (192 m box, covers the view distance).  `VolumeWindow` (headless, `volume.py`) owns the grid-snapped window math with recenter hysteresis; `assemble_geometry` slices loaded chunk material arrays into contiguous `uint8` occupancy/albedo/emission blocks (one numpy pass per intersecting chunk, no per-voxel loops).
+- **Material palette** — `MaterialPalette` (`palette.py`): 256-row albedo/emission lookup derived from the procedural ground textures' mean linear RGB (`build_default_palette`).  Emissive materials (`with_emission`) inject light into the world from the volume itself.
+- **GPU passes** (`glsl.py` sources, dispatched by `GpuLightingPipeline` in `gpu.py` via `GraphicsEngine.dispatch_compute`, GLSL 430 compute):
+  1. **INJECT** (on change only) — per cell: occupancy raymarch toward the sun/moon (→ the `u_vis` visibility volume = all voxel shadows), straight-up march (→ skylight from `SkyState.sky_ambient`), first-bounce sunlight off solid neighbours tinted by their albedo, emissive-neighbour leak, and dynamic point/area lights with windowed inverse-square falloff + shadow march.
+  2. **PROPAGATE** (every frame, `light_prop_iters` ping-pong Jacobi iterations) — exponential diffusion `next = direct·(1−decay) + decay·avg₆`; solid neighbours reflect a cell's own light back tinted by albedo (multi-bounce).  This is the flood-fill **GI**: light visibly flows around corners over a few frames and converges to a stable bounded field.
+  3. **FOG_SCATTER / FOG_INTEGRATE** (every frame) — a camera-frustum **froxel** volume (`fog_froxels_x/y/z`, exponential depth slices to `fog_far_m`): weather-driven height fog density, Henyey-Greenstein sun/moon in-scatter shadowed through the cascade occupancy (→ **god rays**), sky/GI ambient scatter; integrated front-to-back into per-slice (accumulated light, transmittance).
+- **Dynamic lights** — `LightSet` (`lights.py`): `PointLight` / `AreaLight` registry with TTL transients (explosion flashes fade and expire), packed to one `float32 (64, 12)` uniform array per change.
+- **Surface contract** — `GpuLightingPipeline.bind_surface_inputs(node)` / `update_surface_inputs(node, sky_state)` feed `world/terrain_shader.py`, which samples the cascades (quantised to `light_quant_m` = 0.25 m → 2×2×2 visible "light pixels" per voxel), reads `u_vis` for celestial shadows, derives AO from occupancy, adds emission, and composites the froxel fog at its own depth.
 
-`lighting/` deliberately does NOT: issue render commands, touch the Panda3D scene graph (those are `world/`'s responsibility), or contain per-cell / per-voxel Python loops (Hard Rule 4 — all hot work is numpy array expressions).
+**CPU backend (`"cpu"`, legacy)** — the Phase-4 v0 baked pipeline, fully retained: `LightGrid` (per-chunk `uint8 (16,16,16)` @ 1 m cells), `SunlightComputer` column pass + 3×3×3 box blur, `make_light_sampler` baking into mesh vertex colours.
+
+`lighting/` is the one non-`world/` package allowed to touch the GPU (ARCHITECTURE §4 rule 4); only `gpu.py` imports panda3d — every other module is headless-testable.
 
 ## Public API
 
-All symbols are re-exported from `torn_apart.lighting` (`__init__.py`).
+Headless symbols re-exported from `torn_apart.lighting`; the GPU pipeline imports explicitly from `torn_apart.lighting.gpu`.
 
 | Symbol | Description |
 |---|---|
-| `LIGHT_FULL: int = 255` | Full sunlight level (no solid above). |
-| `LIGHT_AMBIENT: int = 40` | Ambient/shadowed light level (solid present above). |
-| `occupancy_from_materials(materials: uint8[32,32,32]) -> bool[16,16,16]` | Downsample 32³ terrain to 16³ occupancy.  Cell True = any of its 8 voxels is solid. |
-| `LightGrid()` | Per-chunk `uint8 (16,16,16)` light store. |
-| `LightGrid.get(coord) -> uint8[16,16,16] \| None` | Return stored light array or `None`. |
-| `LightGrid.set(coord, arr)` | Store and mark valid. |
-| `LightGrid.has_valid(coord) -> bool` | True when the stored array is current. |
-| `LightGrid.invalidate(coord)` | Mark stale (keeps array in memory for fallback sampling). |
-| `LightGrid.remove(coord)` | Remove all data for an evicted chunk. |
-| `LightGrid.loaded_coords() -> list[coord]` | All coords with stored light data. |
-| `SunlightComputer(config, chunk_provider, light_grid, bus)` | Column-pass + blur engine; subscribes to bus on construction. |
-| `SunlightComputer.recompute_column(cx, cy)` | Recompute one (cx, cy) column. |
-| `SunlightComputer.recompute_all_loaded()` | Recompute all loaded columns (initial seed at boot or after load). |
-| `make_light_sampler(light_grid, config) -> Callable` | Return a `light_sampler` callable for `build_mesh`. |
+| `VolumeWindow(cells, cell_m, snap_cells=8, margin_cells=8)` | Camera-centered grid-snapped cascade window; `recenter(camera_pos) -> bool`, `world_origin_m`, `size_m`. |
+| `assemble_geometry(window, chunks, palette, chunk_size, voxel_size) -> GeometryVolume` | Slice chunk materials into `albedo_occ`/`emission` `uint8 (N,N,N,4)` blocks (max-material downsample for coarse cascades). |
+| `GeometryVolume` | Packed block + `origin_cell` + `cell_m`. |
+| `EMISSION_SCALE = 8.0` | HDR emission ÷ scale on uint8 pack; × scale in shaders. |
+| `MaterialPalette` | `albedo`/`emission` `float32 (256, 3)` lookups; `with_emission(material, rgb)` copy-with-glow. |
+| `build_default_palette() -> MaterialPalette` | Albedo from `dirt_ground`/`grass_ground` mean linear RGB. |
+| `PointLight(position, color, intensity, radius, ttl_s=None)` | Omni light; HDR intensity (torch ≈ 8, explosion flash ≈ 40). |
+| `AreaLight(center, half_extents, color, intensity, radius, ttl_s=None)` | Axis-aligned emissive box (falloff from the box surface). |
+| `LightSet()` | Registry: `add/remove/clear/update(dt)/pack(max_lights)`; `version` bumps on packed-data change. |
+| `LightGrid`, `SunlightComputer`, `make_light_sampler`, `occupancy_from_materials`, `LIGHT_FULL`, `LIGHT_AMBIENT` | CPU backend — unchanged from Phase 4 v0 (see git history of this doc for the full reference). |
+
+`torn_apart.lighting.gpu` (panda3d — excluded from headless tests):
+
+| Symbol | Description |
+|---|---|
+| `GpuLightingPipeline(config, base, chunk_provider, bus, palette=None)` | Owns cascade textures + compute dispatch; subscribes to `TerrainEditedEvent`/`ChunkLoadedEvent`. |
+| `.update(camera_pos, sky_state, dt)` | Per-frame driver (App frame task step 6): recenter/reassemble → inject (dirty cascades only) → propagate → fog. |
+| `.bind_surface_inputs(node)` / `.update_surface_inputs(node, sky_state)` | Static / per-frame shader-input contract for `world/terrain_shader.py`. |
+| `.lights: LightSet` | Public dynamic-light registry (demo: explosion flash, L-key torches). |
+
+`torn_apart.lighting.glsl` — `INJECT_COMPUTE`, `PROPAGATE_COMPUTE`, `FOG_SCATTER_COMPUTE`, `FOG_INTEGRATE_COMPUTE`, `MAX_LIGHTS = 64` (plain strings, headless-importable).
 
 ## Imports Allowed
 
-Per ARCHITECTURE.md §4a.2, `lighting/` may import:
-- `numpy`, Python standard library
-- `torn_apart.core` (Config, EventBus + events, get_logger)
-- `torn_apart.terrain` (Chunk, occupancy helper) — downward call allowed
-- `panda3d` — allowed (lighting is the GPU-upload exception), but Phase 4 v0 uses no panda3d
-
-**No imports from** `world/`, `buildings/`, simulation layers, or anything higher in the stack.
+- `numpy`, stdlib, `torn_apart.core` everywhere; `torn_apart.procedural` (palette derivation — foundation layer, callable from anywhere); `torn_apart.terrain` (downward).
+- `panda3d` **only in `gpu.py`** — keeps the rest of the package in the headless suite.
+- No imports from `world/` or higher.  `world/terrain_shader.py` imports lighting, never the reverse.
 
 ## Events
 
 ### Subscribed
 | Event | Subscriber | Action |
 |---|---|---|
-| `TerrainEditedEvent(chunk_coords, brush)` | `SunlightComputer._on_terrain_edited` | Recompute light for every (cx,cy) column affected by the edited coords; mark all chunks in those columns `dirty=True` so `stream_frame` remeshes them with fresh light. |
-| `ChunkLoadedEvent(coord)` | `SunlightComputer._on_chunk_loaded` | Recompute the (cx,cy) column containing the newly loaded chunk; mark all chunks in that column dirty. |
+| `TerrainEditedEvent` | `SunlightComputer` (CPU) | Recompute affected columns; mark chunks dirty for remesh. |
+| `TerrainEditedEvent` | `GpuLightingPipeline` (GPU) | Queue the edited chunk coords; intersecting cascades reassemble + re-inject on the next update (immediately, no batching). |
+| `ChunkLoadedEvent` | `SunlightComputer` (CPU) | Recompute the chunk's column. |
+| `ChunkLoadedEvent` | `GpuLightingPipeline` (GPU) | Queue coord; batched reassembly (≥ 0.25 s apart) for cascades the chunk actually intersects — streaming-frontier loads never touch cascade 0. |
 
 ### Published
-None.  The lighting layer notifies of stale state indirectly by setting `chunk.dirty = True`, which triggers remeshing in `ChunkManager.stream_frame`.
+None.
 
 ## Units & Invariants
 
-### Coordinate System
-- **Z-up** (Panda3D native): sunlight travels in the −Z direction (top → bottom).
-- Voxel edge = 0.5 m; **light cell edge = 1.0 m** (`voxel_size * light_grid_scale`).
-- Chunk = 32³ voxels = **16 m³** cube; light grid per chunk = **16³ light cells**.
-- Light-cell index `(lcx, lcy, lcz)` within a chunk: `lcx = voxel_x // 2`, etc. (0..15).
-- World position → chunk coord: `floor(world / 16.0)`.  Chunk origin = `chunk_coord * 16.0 m`.
-- World position → light cell in chunk: `floor((world - chunk_origin) / 1.0)`, clamped 0..15.
-
-### Light Value Constants
-| Constant | Value | Meaning |
-|---|---|---|
-| `LIGHT_FULL` | 255 | No solid voxel at or above this cell in its (cx,cy) column. |
-| `LIGHT_AMBIENT` | 40 | At least one solid voxel at or above this cell. |
-
-After the box blur, intermediate values between 40 and 255 appear in the penumbra zone adjacent to shadow edges.
-
-### Column Pass Algorithm
-1. Collect all loaded chunks for a given (cx, cy), sorted by `cz` ascending (bottom to top).
-2. Compute 16³ bool occupancy for each via `occupancy_from_materials`.
-3. Concatenate along Z axis: shape `(16, 16, T)` where `T = num_chunks * 16`.
-   - Axis 0 = X (light cells across), axis 1 = Y, axis 2 = Z (bottom=0, top=T-1).
-4. Sunlight travels downward (−Z).  A cell is **shadowed** if any cell at the **same or higher Z** in its (X,Y) column is occupied.
-5. Implementation: reverse Z (`[:, :, ::-1]`), apply `np.maximum.accumulate(axis=2)` (cumulative-OR top→bottom), reverse back.  Result is `1` where shadowed, `0` where lit.
-6. Map: `shadowed → LIGHT_AMBIENT`, `not_shadowed → LIGHT_FULL`.
-
-### Box Blur (Penumbra)
-- A 3×3×3 uniform box filter is applied to the full column's float light values **before** converting to `uint8`.
-- Implementation: pad the `(16, 16, T)` float array by 1 on each face (edge-replicate) → `(18, 18, T+2)`, then sum 27 slices (offsets `i,j,k ∈ {0,1,2}`) and divide by 27.  The outer loop runs exactly 27 iterations regardless of scene size (not a per-cell loop).
-- The float result is clamped to `[LIGHT_AMBIENT, LIGHT_FULL]` then rounded to `uint8`.  **Range is conserved:** ambient floor is preserved (shadowed regions never go darker than 40); full ceiling is preserved (fully-lit regions stay at 255).
-- The blur produces a gradient (penumbra) of 1–2 cells wide around each shadow edge.
-
-### make_light_sampler Contract (exact mesher hook)
-```
-sampler(face_centers: float32 (F, 3)) -> float32 (F,)
-```
-- **Input**: face-centre world positions in **meters**, one row per exposed mesh face.
-- **Output**: per-face light in **[0.0, 1.0]** (value is multiplied into greyscale vertex colour by the mesher; alpha = 1.0).
-- **Cell mapping** (vectorised, no per-face loop):
-  1. `chunk_coord = floor(world / 16.0)` per face.
-  2. `chunk_origin = chunk_coord * 16.0`.
-  3. `light_cell = floor((world - chunk_origin) / 1.0)`, clamped to `[0, 15]`.
-  4. Fancy-index `light_grid.get(chunk_coord)[cx, cy, cz]` → `uint8`.
-  5. Divide by 255 → `float32`.
-- **Fallback**: chunks with no computed light array return **1.0 (full bright)** to prevent black flashes on freshly streamed geometry.
-
-### Saveable
-`lighting/` does NOT implement `Saveable` — light is fully recomputed from the terrain data on load.  No save delta needed.
-
-### Determinism
-`occupancy_from_materials` is a pure function of the materials array; the column pass is a pure function of the occupancy stack; the box blur is a pure function of the light column.  Same terrain data → byte-identical light arrays.
+- World meters, Z-up.  Cascade texel `(i,j,k)` covers `[(origin_cell + (i,j,k))·cell_m, +cell_m)`; `origin_cell` snaps to `snap_cells` so consecutive windows align on the cell grid (no sub-cell crawl).
+- Volume arrays are indexed `[x, y, z]`; GPU upload transposes to Panda3D's page-major `(z, y, x)` and reorders RGBA→BGRA (`_upload_volume`).
+- `albedo_occ`: RGB = linear albedo ×255, A = 255 solid / 0 air.  Coarse cascades downsample by **max material id** per block (any solid ⇒ solid; grass skin wins over dirt for bounce colour).
+- `emission`: RGB = linear HDR emission ÷ `EMISSION_SCALE` ×255.
+- Radiance/visibility volumes are `rgba16f`, GPU-resident only (never read back).
+- Propagation is contractive (`decay < 1`, albedo < 1 ⇒ spectral radius < 1): the radiance field is always bounded by the injected sources; reach ≈ `1/(1−decay)` cells (decay = `exp(-cell_m / 4 m)` C0, `exp(-cell_m / 10 m)` C1).
+- Light values are **linear HDR RGB** in SkyState units: noon sun ≈ 3.2, skylight ≈ 0.2–0.7, torch intensity ≈ 8.  The terrain/sky shaders ACES-tonemap with `light_exposure`.
+- Lighting is **not** `Saveable` — fully derived from terrain + clock + lights each run.
+- Determinism (headless half): `assemble_geometry` and `build_default_palette` are pure functions of chunk data/seed — byte-identical across runs (`tests/test_lighting_volume.py`).
+- Config (`[lighting]`/`[fog]` tables): `lighting_backend`, `light_c0_cells/_cell_m`, `light_c1_cells/_cell_m`, `light_quant_m`, `light_prop_iters`, `light_bounce_strength`, `light_ao_strength`, `light_max_point_lights`, `light_exposure`, `fog_enabled`, `fog_froxels_x/y/z`, `fog_far_m`, `fog_anisotropy`.
 
 ## Examples
 
-### Boot sequence (wiring into the orchestrator)
+### Boot wiring (GPU backend — what main.py does)
 ```python
-from torn_apart.core import load_config, EventBus
-from torn_apart.core.rng import set_world_seed
-from torn_apart.terrain import ChunkManager
-from torn_apart.lighting import LightGrid, SunlightComputer, make_light_sampler
+from torn_apart.lighting.gpu import GpuLightingPipeline
+from torn_apart.world.terrain_shader import apply_terrain_shader
 
-set_world_seed(1337)
-cfg = load_config()
-bus = EventBus()
-
-cm = ChunkManager(cfg, bus)
-lg = LightGrid()
-sc = SunlightComputer(cfg, cm, lg, bus)   # subscribes to bus immediately
-
-# After initial streaming:
-sc.recompute_all_loaded()
-sampler = make_light_sampler(lg, cfg)
-
-# Each frame (in the main loop, step Q4→Q5 per ARCHITECTURE.md §4a.1):
-from torn_apart.core.math3d import Vec3
-cm.stream_frame(Vec3(0, 0, 20), light_sampler=sampler)   # light baked into new meshes
-# SunlightComputer auto-handles dirty recomputes via event subscriptions.
+pipeline = GpuLightingPipeline(cfg, app, chunk_manager, bus)
+app.lighting_pipeline = pipeline            # App frame task drives update()
+apply_terrain_shader(app.terrain_root, pipeline)
+# mesher gets light_sampler=None → vertex colours carry only the facet accent
 ```
 
-### Manual column recompute
+### Dynamic lights
 ```python
-sc.recompute_column(cx=3, cy=-2)   # recompute one column without events
+from torn_apart.lighting import PointLight, AreaLight
+
+torch_id = pipeline.lights.add(PointLight(
+    position=(8.0, 8.0, 10.5), color=(1.0, 0.62, 0.28),
+    intensity=8.0, radius=16.0))
+pipeline.lights.add(PointLight(                       # explosion flash
+    position=hit, color=(1.0, 0.55, 0.2), intensity=40.0,
+    radius=18.0, ttl_s=0.5))                          # fades + auto-removes
+pipeline.lights.add(AreaLight(                        # glowing doorway
+    center=(0, 4, 9), half_extents=(0.5, 0.1, 1.0),
+    color=(1.0, 0.8, 0.5), intensity=2.0, radius=10.0))
+pipeline.lights.remove(torch_id)
 ```
 
-### Sampling the light grid directly
+### Emissive material
 ```python
-import numpy as np
-positions = np.array([[8.0, 8.0, 7.5]], dtype=np.float32)   # world meters
-light = sampler(positions)   # float32 (1,) in [0.0, 1.0]
+from torn_apart.lighting import build_default_palette
+palette = build_default_palette().with_emission(7, (2.0, 1.2, 0.4))  # lava-ish
+pipeline = GpuLightingPipeline(cfg, app, chunk_manager, bus, palette=palette)
 ```
 
-### occupancy_from_materials
+### Headless volume assembly (tests / tools)
 ```python
-import numpy as np
-from torn_apart.lighting import occupancy_from_materials
-
-mat = np.zeros((32, 32, 32), dtype=np.uint8)
-mat[0, 0, 0] = 1            # solid voxel in first 2×2×2 block
-occ = occupancy_from_materials(mat)   # bool (16, 16, 16)
-assert occ[0, 0, 0] == True           # light cell (0,0,0) is occupied
+from torn_apart.lighting import VolumeWindow, assemble_geometry, build_default_palette
+win = VolumeWindow(cells=96, cell_m=0.5)
+win.recenter(camera_pos)
+vol = assemble_geometry(win, chunk_manager.chunks, build_default_palette(),
+                        chunk_size=cfg.chunk_size, voxel_size=cfg.voxel_size)
 ```
 
 ## Gotchas
 
-1. **`SunlightComputer` subscribes synchronously on construction.** Construct it *after* the EventBus but *before* publishing `ChunkLoadedEvent` / `TerrainEditedEvent`, or those early events will miss the subscription.  (The startup sequence in ARCHITECTURE.md §4a.1 shows the correct order: lighting is allocated before terrain streaming begins.)
-
-2. **`stream_frame` needs the sampler passed in explicitly.** The `ChunkManager` does not hold a reference to the sampler by default.  The orchestrator calls `cm.stream_frame(camera_pos, light_sampler=sampler)`.  Forgetting the argument produces full-bright terrain (the `None` default), not an error.
-
-3. **Column pass only uses *loaded* chunks.** Chunks above the target chunk that are not yet streamed are treated as air (no occupancy).  This means very tall structures whose top is beyond `view_distance_chunks` will appear lit below in their shadow band — acceptable for v0, fixable in v1 by extending the column buffer above the loaded set.
-
-4. **The 27-iteration blur loop is not a "per-cell loop" (Hard Rule 4).** It iterates 27 times over *constant* neighbourhood offsets, not over terrain cells.  The actual cell work is done by numpy slice operations across the full array.  Do not mistake it for a performance violation.
-
-5. **`make_light_sampler` closes over `light_grid` by reference.** The sampler always reads the current contents of the grid.  Do not replace the `LightGrid` object after creating the sampler — update it in-place via `set()`.
-
-6. **Light arrays are stored by reference in `LightGrid`.** `SunlightComputer` calls `lg.set(coord, arr)` with newly allocated arrays.  Old arrays are garbage-collected.  Do not hold long-lived views into a light array that may be replaced by the next recompute.
-
-7. **`TerrainEditedEvent.chunk_coords` may be a single tuple or a frozenset.** `_on_terrain_edited` handles both cases.  See `core/event_bus.py` for the event definition; `apply_brush` currently emits one event per touched chunk with `chunk_coords` as a single 3-tuple.
-
-8. **Light is not saved.** It is recomputed from terrain on boot and after `apply_delta`.  After `SaveManager.load()`, call `sc.recompute_all_loaded()` (or rely on event-driven recompute as chunks are re-streamed).
+1. **Never import `torn_apart.lighting.gpu` from headless code/tests** — it imports panda3d.  The package `__init__` deliberately does not re-export it.
+2. **The GPU backend bakes NO light into vertex colours** — main.py passes `light_sampler=None`, so vertex colours hold only the facet accent.  Pointing the old CPU sampler at meshes while the GPU shader is active would double-light.
+3. **`SkyRendererComponent` must be constructed with `external_lighting=True`** on the GPU backend, or its `terrain_root.set_color_scale` + Panda3D `Fog` fight the shader.
+4. **Light flows over a few frames** (propagation is iterative).  An explosion flash (`ttl_s=0.5`) is visible because injection re-runs on every lights change; don't expect single-frame convergence of large skylight changes — that's the look, not a bug.
+5. **Sun/moon shadows live in the `u_vis` volume**, recomputed only when sun direction/radiance/volume/lights change (`_changed` eps ≈ 0.004).  At default `game_time_scale=60` that's a few injects per real minute — near-free.  Time-lapse (`game_time_scale=1800`) re-injects often: expect GPU load.
+6. **Hybrid laptops**: Panda3D windows often default to the integrated GPU.  Set python.exe to "High performance" in Windows Graphics Settings to run on the discrete GPU — the difference is ~10×.
+7. **Beyond cascade 1** (> ~96 m from the camera) surfaces fall back to sky-ambient and full sun visibility — distant terrain has no voxel shadows.  Acceptable at current view distances; a third cascade is the upgrade path.
+8. **`assemble_geometry` requires `cell_m` to be an integer multiple of `voxel_size`** and `chunk_size` divisible by the per-cell voxel count — it raises `ValueError` otherwise.
+9. **Area lights shadow-march from the closest box point**, so a box buried in terrain lights nothing — keep emissive boxes in open air, like point lights (a light at exactly ground height is half-buried and mostly shadowed).
+10. **`LightSet.update(dt)` bumps `version` every frame while any TTL light lives** — transient lights deliberately re-inject per frame to animate the fade.  Many simultaneous transients = many injects; cap effects accordingly.

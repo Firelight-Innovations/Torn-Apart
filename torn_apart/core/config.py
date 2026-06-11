@@ -83,6 +83,60 @@ class Config:
                                    renderer fills coverage-fraction of cells.
     sky_star_count       : int   — star count baked into the "night_sky"
                                    procedural texture.
+    mesh_style           : str   — terrain mesher: "faceted" (flat-shaded
+                                   surface nets — the Daggerfall-ish semi-
+                                   smooth look, default) or "blocky" (classic
+                                   culled-face cubes).
+    facet_shade_strength : float — [0,1] strength of the faceted mesher's
+                                   normal-based facet accent shading (0 = off).
+    lighting_backend     : str   — "gpu" (volumetric radiance cascades, GLSL
+                                   compute) or "cpu" (legacy baked-vertex
+                                   sunlight column pass).
+    light_c0_cells       : int   — cascade-0 texels per axis (96 → 48 m box at
+                                   0.5 m cells).
+    light_c0_cell_m      : float — cascade-0 cell edge in meters (0.5 = one
+                                   terrain voxel).
+    light_c1_cells       : int   — cascade-1 texels per axis (96 → 192 m box).
+    light_c1_cell_m      : float — cascade-1 cell edge in meters (2.0).
+    light_quant_m        : float — shading sample-grid quantisation in meters
+                                   (0.25 → 2×2×2 visible light pixels per
+                                   0.5 m voxel — the pixelated-light look).
+    light_prop_iters     : int   — GI flood-fill propagation iterations per
+                                   frame per cascade (light "flows" over a few
+                                   frames after a change).
+    light_bounce_strength: float — [0,1] albedo-tinted bounce gain per
+                                   propagation step.
+    light_ao_strength    : float — [0,1] strength of occupancy-based ambient
+                                   occlusion at surfaces.
+    light_max_point_lights: int  — max simultaneous point/area lights uploaded
+                                   to the GPU.
+    light_exposure       : float — tonemap exposure multiplier for the HDR
+                                   lighting pipeline.
+    exposure_adapt_enabled: bool — auto-exposure (eye adaptation) on/off.
+    exposure_min / exposure_max : float — clamp range of the adaptation
+                                   multiplier (× light_exposure).
+    exposure_key         : float — metering key: target multiplier =
+                                   key / scene luminance (0.18 ≈ photographic
+                                   middle gray; noon open field ≈ 1.0×).
+    exposure_tau_dark_s  : float — adaptation time constant entering darkness
+                                   in seconds (slow, like real eyes).
+    exposure_tau_bright_s: float — adaptation time constant entering bright
+                                   light in seconds (fast stop-down).
+    fog_enabled          : bool  — volumetric froxel fog + god rays on/off.
+    fog_froxels_x/y/z    : int   — froxel grid resolution (screen-aligned X/Y,
+                                   exponential depth slices Z).
+    fog_far_m            : float — far range of the froxel volume in meters.
+    fog_anisotropy       : float — Henyey-Greenstein g for sun scattering
+                                   ([0,1); higher = stronger forward god rays).
+    grass_density_per_m2 : float — default blade tufts per square meter for
+                                   grass volumes lacking a ``density`` param.
+    grass_blade_height_m : float — unscaled tuft height in meters (per-blade
+                                   jitter scales it 0.7–1.3×).
+    grass_fade_start_m   : float — camera distance where blades begin
+                                   shrinking away (meters).
+    grass_fade_end_m     : float — camera distance where blades are fully
+                                   gone (meters).
+    grass_max_instances  : int   — hard cap on instances per grass volume.
     """
 
     world_seed:           int   = 1337
@@ -100,6 +154,36 @@ class Config:
     sky_cloud_thickness_m: float = 8.0
     sky_cloud_cell_m:      float = 12.0
     sky_star_count:        int   = 2500
+    mesh_style:            str   = "faceted"
+    facet_shade_strength:  float = 0.25
+    lighting_backend:      str   = "gpu"
+    light_c0_cells:        int   = 96
+    light_c0_cell_m:       float = 0.5
+    light_c1_cells:        int   = 96
+    light_c1_cell_m:       float = 2.0
+    light_quant_m:         float = 0.25
+    light_prop_iters:      int   = 2
+    light_bounce_strength: float = 0.7
+    light_ao_strength:     float = 0.6
+    light_max_point_lights: int  = 64
+    light_exposure:        float = 0.9
+    exposure_adapt_enabled: bool = True
+    exposure_min:          float = 0.55
+    exposure_max:          float = 5.0
+    exposure_key:          float = 0.18
+    exposure_tau_dark_s:   float = 4.0
+    exposure_tau_bright_s: float = 0.7
+    fog_enabled:           bool  = True
+    fog_froxels_x:         int   = 160
+    fog_froxels_y:         int   = 90
+    fog_froxels_z:         int   = 64
+    fog_far_m:             float = 160.0
+    fog_anisotropy:        float = 0.55
+    grass_density_per_m2:  float = 12.0
+    grass_blade_height_m:  float = 0.6
+    grass_fade_start_m:    float = 60.0
+    grass_fade_end_m:      float = 90.0
+    grass_max_instances:   int   = 200_000
 
     # ------------------------------------------------------------------
     # Derived read-only properties
@@ -128,11 +212,12 @@ def load_config(path: str = "config.toml") -> Config:
     """
     Load engine configuration from a TOML file, returning a frozen ``Config``.
 
-    The TOML file may have ``[debug]`` and ``[sky]`` tables; their keys
-    (``show_fps``, ``show_chunk_borders``, ``show_light_grid``,
+    The TOML file may have ``[debug]``, ``[sky]`` and ``[terrain]`` tables;
+    their keys (``show_fps``, ``show_chunk_borders``, ``show_light_grid``,
     ``sky_cloud_altitude_m``, ``sky_cloud_thickness_m``, ``sky_cloud_cell_m``,
-    ``sky_star_count``) are flattened into the same ``Config`` struct.  Any
-    key absent from the file falls back to the ``Config`` dataclass default.
+    ``sky_star_count``, ``mesh_style``, ``facet_shade_strength``) are
+    flattened into the same ``Config`` struct.  Any key absent from the file
+    falls back to the ``Config`` dataclass default.
 
     If the file does not exist or cannot be read, returns a default ``Config``
     (same as ``Config()``).
@@ -161,8 +246,8 @@ def load_config(path: str = "config.toml") -> Config:
     except (FileNotFoundError, OSError):
         return Config()
 
-    # Flatten [debug] and [sky] tables into top-level dict
-    _TABLES = ("debug", "sky")
+    # Flatten [debug], [sky] and [terrain] tables into top-level dict
+    _TABLES = ("debug", "sky", "terrain", "lighting", "fog", "grass")
     flat: dict = {k: v for k, v in raw.items() if k not in _TABLES}
     for table in _TABLES:
         flat.update(raw.get(table, {}))

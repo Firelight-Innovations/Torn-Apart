@@ -30,6 +30,8 @@ from torn_apart.terrain import (
     raycast_voxel,
 )
 
+from .scene_objects import SceneObjectStore
+
 # Z band of streamed chunks relative to the camera chunk. Mirrors the private
 # band in torn_apart.terrain.chunk_manager (_Z_MIN/_Z_MAX); guarded against
 # drift by tests/editor/test_session.py::test_region_matches_engine_desired_set.
@@ -48,7 +50,8 @@ class EditorSession:
         seed: ``config.world_seed`` (the active world seed).
         cm: ``ChunkManager`` — chunk store, provider, terrain ``Saveable``.
         lg / sc / sampler: light grid, sunlight computer, mesher light sampler.
-        save_manager: ``SaveManager`` with the terrain system registered.
+        scene: ``SceneObjectStore`` — the authoring hierarchy of placeable objects.
+        save_manager: ``SaveManager`` with terrain + scene systems registered.
     """
 
     def __init__(self, config: Config) -> None:
@@ -61,8 +64,12 @@ class EditorSession:
         self.lg = LightGrid()
         self.sc = SunlightComputer(config, self.cm, self.lg, self.bus)
         self.sampler = make_light_sampler(self.lg, config)
+        # Authoring scene graph (placeable objects) — persists in the save after
+        # terrain so deltas apply in a stable order (EDITOR_PRD Phase E2).
+        self.scene = SceneObjectStore()
         self.save_manager = SaveManager(config, self.clock)
         self.save_manager.register(self.cm)
+        self.save_manager.register(self.scene)
 
     # ------------------------------------------------------------------ #
     # Construction

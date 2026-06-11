@@ -68,6 +68,18 @@ export class SceneViewPanel {
   postConfig(config: unknown): void {
     this.panel.webview.postMessage({ type: "config", config });
   }
+  /** Replace the viewport's object gizmos from a scene.tree payload. */
+  postObjects(objects: unknown): void {
+    this.panel.webview.postMessage({ type: "objects", objects });
+  }
+  /** Highlight an object in the viewport (null clears selection). */
+  postSelect(id: number | null): void {
+    this.panel.webview.postMessage({ type: "select", id });
+  }
+  /** Move the camera to frame an object. */
+  postFrame(id: number): void {
+    this.panel.webview.postMessage({ type: "frame", id });
+  }
   reset(): void {
     this.panel.webview.postMessage({ type: "reset" });
   }
@@ -105,16 +117,10 @@ export class SceneViewPanel {
   #palette label { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
   #palette select, #palette input { background: #1a2430; color: #cfe3f2; border: 1px solid #2a3a48; }
   #dirty { color: #e0b341; }
-  #crosshair {
-    position: fixed; top: 50%; left: 50%; width: 10px; height: 10px;
-    transform: translate(-50%, -50%); z-index: 9; pointer-events: none;
-    border: 1px solid #cfe3f2aa; border-radius: 50%; box-shadow: 0 0 2px #000;
-  }
 </style>
 </head>
 <body>
   <div id="stats">waiting for daemon…</div>
-  <div id="crosshair"></div>
   <div id="palette">
     <strong>Brush <span id="dirty"></span></strong>
     <label>shape
@@ -133,7 +139,7 @@ export class SceneViewPanel {
     <label>size <input id="brushSize" type="range" min="0.5" max="8" step="0.5" value="2" /></label>
     <label>material <input id="brushMaterial" type="number" min="0" max="255" value="1" style="width:48px" /></label>
   </div>
-  <div id="hint">click to look · WASD/QE move · Shift fast · click(while looking)=carve at crosshair · Ctrl+Z/Y undo · G wire · B borders</div>
+  <div id="hint">Right-drag look + WASD/QE fly · Middle-drag pan · Scroll zoom · Alt+Left orbit · Left-click select/carve · F frame · Esc deselect · Ctrl+Z/Y undo · G wire · B borders</div>
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;

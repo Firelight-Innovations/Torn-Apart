@@ -50,6 +50,10 @@ from torn_apart.terrain.meshing import (
     WORLD_FLOOR_SOLID,
     build_mesh,
 )
+from torn_apart.terrain.surface_nets import (
+    NEIGHBOR_OFFSETS_26,
+    build_mesh_faceted,
+)
 
 _log = get_logger("terrain.chunk_manager")
 
@@ -200,15 +204,59 @@ class ChunkManager:
                 out[d] = WORLD_FLOOR_SOLID
         return out
 
+    def _neighbor_materials(self, coord: tuple[int, int, int]) -> dict:
+        """
+        Build the ``neighbor_materials`` dict (all 26 offsets) for faceted
+        meshing of ``coord``.
+
+        Loaded neighbours contribute their live (possibly brush-edited)
+        materials.  Unloaded neighbours contribute the deterministic
+        ``generate_chunk`` baseline **without** being inserted into
+        ``self.chunks`` — generation is a pure sub-millisecond function, and
+        baseline data is byte-identical to what that neighbour would hold if
+        loaded, so chunk borders are seam-correct regardless of load order.
+        (Edited neighbours are the only divergence; ``apply_brush`` marks
+        border neighbours dirty so they remesh.)
+
+        No ``WORLD_FLOOR_SOLID`` sentinel is needed here: below-ground
+        neighbour chunks generate fully solid, which culls the world-floor
+        faces naturally.
+        """
+        cx, cy, cz = coord
+        out: dict = {}
+        for off in NEIGHBOR_OFFSETS_26:
+            ncoord = (cx + off[0], cy + off[1], cz + off[2])
+            nb = self.chunks.get(ncoord)
+            if nb is not None:
+                out[off] = nb.materials
+            else:
+                out[off] = generate_chunk(ncoord, self.config)
+        return out
+
     def mesh_chunk(self, coord: tuple[int, int, int], light_sampler=None) -> MeshArrays:
         """
         Build (and store in ``pending_meshes``) the mesh for a loaded chunk.
 
         Clears the chunk's ``dirty`` flag.  ``light_sampler`` is forwarded to
         the mesher (Phase 4 wires sunlight here).
+
+        The mesher is selected by ``config.mesh_style``:
+        ``"faceted"`` (default) → ``build_mesh_faceted`` (flat-shaded surface
+        nets, per-face materials); ``"blocky"`` → the classic culled-face
+        cube mesher ``build_mesh``.
         """
         chunk = self.get_or_create(coord)
-        mesh = build_mesh(chunk, self._neighbor_solids(coord), light_sampler)
+        if getattr(self.config, "mesh_style", "faceted") == "blocky":
+            mesh = build_mesh(chunk, self._neighbor_solids(coord), light_sampler)
+        else:
+            mesh = build_mesh_faceted(
+                chunk,
+                self._neighbor_materials(coord),
+                light_sampler,
+                shade_strength=float(
+                    getattr(self.config, "facet_shade_strength", 0.25)
+                ),
+            )
         self.pending_meshes[coord] = mesh
         chunk.dirty = False
         return mesh
@@ -230,10 +278,13 @@ class ChunkManager:
 
         Behaviour
         ---------
-        - Loads + meshes at most ``_MAX_LOADS_PER_FRAME`` (2) of the desired but
-          not-yet-loaded chunks, nearest-first.
-        - Re-meshes any already-loaded chunk whose ``dirty`` flag is set (within
-          the same 2-chunk budget) so brush edits remesh promptly.
+        - **Re-meshes dirty loaded chunks FIRST** (within the 2-chunk budget):
+          dirty means a brush edit or a relight the player is looking at, so
+          it must never be starved by world loading.  (With ~1.2k chunks in
+          the desired set, loading takes hundreds of frames — if loads ran
+          first, a crater would stay invisible for minutes.)
+        - Then loads + meshes the desired but not-yet-loaded chunks with the
+          remaining budget, nearest-first.
         - Unloads loaded chunks beyond ``view_distance_chunks + 1`` (XY) —
           hysteresis prevents boundary thrash.  Edited chunks are kept in the
           delta via ``get_delta`` regardless (they are still removed from RAM).
@@ -247,25 +298,26 @@ class ChunkManager:
 
         budget = _MAX_LOADS_PER_FRAME
 
-        # 1. Load + mesh nearest missing chunks.
-        missing = [c for c in desired if c not in self.chunks]
-        missing.sort(key=dist2)
-        for coord in missing:
+        # 1. Remesh dirty loaded chunks (brush edits, relights, border
+        #    neighbours of edits) — before loading, so edits show promptly.
+        dirty = [c for c, ch in self.chunks.items() if ch.dirty]
+        dirty.sort(key=dist2)
+        for coord in dirty:
             if budget <= 0:
                 break
-            self.get_or_create(coord)
             self.mesh_chunk(coord, light_sampler)
-            self.bus.publish(ChunkLoadedEvent(coord=coord))
             budget -= 1
 
-        # 2. Remesh dirty loaded chunks (brush edits, neighbour fills).
+        # 2. Load + mesh nearest missing chunks with the remaining budget.
         if budget > 0:
-            dirty = [c for c, ch in self.chunks.items() if ch.dirty]
-            dirty.sort(key=dist2)
-            for coord in dirty:
+            missing = [c for c in desired if c not in self.chunks]
+            missing.sort(key=dist2)
+            for coord in missing:
                 if budget <= 0:
                     break
+                self.get_or_create(coord)
                 self.mesh_chunk(coord, light_sampler)
+                self.bus.publish(ChunkLoadedEvent(coord=coord))
                 budget -= 1
 
         # 3. Unload chunks beyond radius + 1 (hysteresis).

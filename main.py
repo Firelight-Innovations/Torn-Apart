@@ -5,9 +5,11 @@ Run with ``python main.py`` from the repo root.  This orchestrates the boot
 sequence mandated by ARCHITECTURE.md §4a.1 and wires the demo loop described in
 DEVELOPMENT_PLAN.md (Mission):
 
-    Fly a free camera (WASD + mouse) over voxel terrain textured with the
-    ``wasteland_ground`` procedural texture and lit by baked sunlight (dark
-    under overhangs).  Chunks stream in around the camera.
+    Fly a free camera (WASD + mouse) over faceted voxel terrain (flat-shaded
+    surface nets) textured with the pixel-art ``grass_ground`` /
+    ``dirt_ground`` procedural textures (``wasteland_ground`` as fallback)
+    and lit by baked sunlight (dark under overhangs).  Chunks stream in
+    around the camera.
 
     LEFT-CLICK fires an explosion: a camera ray is cast into the voxel field;
     on a hit a SphereBrush(REMOVE) carves a crater.  The brush marks touched
@@ -33,6 +35,8 @@ ShowBase, so ``app.accept(event, fn)`` registers the bindings.
 
 from __future__ import annotations
 
+import math
+import sys
 from pathlib import Path
 
 # --- Foundation layer (panda3d-free) -------------------------------------
@@ -82,6 +86,77 @@ _PREWARM_STREAM_FRAMES = 80    # stream_frame iterations to pre-load spawn area
 _BOOT_TIME_OF_DAY_H = 10.0     # boot the demo mid-morning (game clock starts at
                                # 00:00 otherwise and the sky dims terrain to night)
 
+# GI test-room materials (debug ids far above the terrain materials).  Albedo
+# rows are patched into the lighting palette; flat-colour texture triples are
+# added in _to_material_textures so the surfaces render in matching colours.
+_MAT_GI_WHITE = 200
+_MAT_GI_RED = 201
+_MAT_GI_GREEN = 202
+_MAT_GI_GLOW = 203
+_GI_TEST_ALBEDO: dict[int, tuple[float, float, float]] = {
+    _MAT_GI_WHITE: (0.86, 0.86, 0.86),
+    _MAT_GI_RED:   (0.78, 0.06, 0.05),
+    _MAT_GI_GREEN: (0.07, 0.66, 0.08),
+    _MAT_GI_GLOW:  (0.90, 0.88, 0.84),
+}
+_GI_GLOW_RADIANCE = (8.0, 7.2, 5.6)   # ceiling-panel emission (linear HDR;
+                                      # EMISSION_SCALE=8 is the storage cap)
+
+# Flashlight (F key) tuning.
+_FLASHLIGHT_COLOR = (1.0, 0.96, 0.86)
+_FLASHLIGHT_INTENSITY = 20.0
+_FLASHLIGHT_RADIUS_M = 36.0
+_FLASHLIGHT_CONE_DEG = 38.0
+
+
+def _ensure_dedicated_gpu() -> None:
+    """
+    Register this python.exe for the high-performance GPU (Windows).
+
+    Laptops with hybrid graphics default python.exe to the integrated GPU.
+    Writing ``GpuPreference=2`` ("high performance") under
+    ``HKCU\\Software\\Microsoft\\DirectX\\UserGpuPreferences`` makes Windows
+    hand the process the dedicated GPU instead — the same switch as
+    Settings → Display → Graphics, no admin rights needed.
+
+    CRITICAL: Windows matches the preference by the PROCESS IMAGE path.  A
+    venv's ``python.exe`` is a launcher that spawns the BASE interpreter, so
+    ``sys.executable`` is NOT the running image — register the real image
+    (``GetModuleFileNameW``) plus ``sys.executable``/``sys._base_executable``
+    for good measure.  The preference is read at the process's first GPU
+    context creation, so a fresh write applies from the NEXT launch (check
+    the "Rendering on:" log line).
+
+    No-op (logged, never fatal) on non-Windows or if the registry write fails.
+    """
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        import winreg
+        targets = {sys.executable}
+        base = getattr(sys, "_base_executable", None)
+        if base:
+            targets.add(base)
+        buf = ctypes.create_unicode_buffer(1024)
+        if ctypes.windll.kernel32.GetModuleFileNameW(None, buf, 1024):
+            targets.add(buf.value)            # the actual process image
+        key_path = r"Software\Microsoft\DirectX\UserGpuPreferences"
+        value = "GpuPreference=2;"
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path) as key:
+            for exe in sorted(targets):
+                try:
+                    current, _ = winreg.QueryValueEx(key, exe)
+                except FileNotFoundError:
+                    current = None
+                if current != value:
+                    winreg.SetValueEx(key, exe, 0, winreg.REG_SZ, value)
+                    _log.info(
+                        "Registered %s for the high-performance GPU "
+                        "(applies on next launch)", exe)
+    except OSError as exc:
+        _log.warning("GPU preference registry write failed: %s", exc)
+
 
 def _prewarm_terrain(app, chunk_manager, sunlight, light_sampler) -> None:
     """
@@ -97,14 +172,18 @@ def _prewarm_terrain(app, chunk_manager, sunlight, light_sampler) -> None:
     app : App
         The application (owns terrain_root + the upload path).
     chunk_manager : ChunkManager
-    sunlight : SunlightComputer
-    light_sampler : Callable
+    sunlight : SunlightComputer | None
+        ``None`` on the GPU lighting backend (no CPU column pass to seed —
+        the volumetric pipeline lights everything on the GPU).
+    light_sampler : Callable | None
     """
     spawn = app.camera_go.transform.position
     for _ in range(_PREWARM_STREAM_FRAMES):
         chunk_manager.stream_frame(spawn, light_sampler)
-    # Seed sunlight for all loaded columns (events only covered incremental work).
-    sunlight.recompute_all_loaded()
+    if sunlight is not None:
+        # Seed sunlight for all loaded columns (events only covered
+        # incremental work).
+        sunlight.recompute_all_loaded()
     # One more streaming pass so any chunk marked dirty by the light seed is
     # remeshed with baked light, then upload everything via the App's drain path.
     chunk_manager.stream_frame(spawn, light_sampler)
@@ -150,6 +229,9 @@ def build_demo():
     App
         The fully wired application, ready for ``app.run()``.
     """
+    # 0. Hybrid-graphics laptops: claim the dedicated GPU (next launch).
+    _ensure_dedicated_gpu()
+
     # 1. Config + global seed + logging.
     cfg = load_config()
     set_world_seed(cfg.world_seed)
@@ -167,6 +249,20 @@ def build_demo():
     from torn_apart.world.app import App  # panda3d import lives behind world/
     app = App(cfg, clock, bus)
 
+    # Which GPU did Windows actually give us?  On hybrid laptops an "Intel"
+    # renderer here means the integrated GPU — _ensure_dedicated_gpu() has
+    # registered the fix; it applies on the next launch.
+    try:
+        gsg = app.win.get_gsg()
+        renderer = gsg.get_driver_renderer()
+        _log.info("Rendering on: %s (%s)", renderer, gsg.get_driver_vendor())
+        if "intel" in renderer.lower():
+            _log.warning(
+                "Integrated GPU in use — restart the game to pick up the "
+                "high-performance GPU preference written this boot.")
+    except Exception as exc:  # noqa: BLE001  (diagnostics; never fatal)
+        _log.debug("Renderer query failed: %s", exc)
+
     # 4. Resource manager loaders — register AFTER the window/loader exists.
     from torn_apart.resources import default_manager
     from torn_apart.world.resource_adapter import register_panda_loaders
@@ -176,11 +272,33 @@ def build_demo():
     #    its chunk provider).
     chunk_manager = ChunkManager(cfg, bus)
 
-    # 6. Lighting — light grid + sunlight computer (subscribes to the bus in its
-    #    __init__) + the mesher's light sampler.
-    light_grid = LightGrid()
-    sunlight = SunlightComputer(cfg, chunk_manager, light_grid, bus)
-    light_sampler = make_light_sampler(light_grid, cfg)
+    # 7b. Zone volumes — the demo world's default grass region: a box right in
+    #     front of spawn (camera at (0,-20,10) looking +Y; ground top z=8).
+    #     mark_baseline() makes these defaults the save baseline, so untouched
+    #     worlds keep a ~0-byte "zones" delta.
+    from torn_apart.zones import ZoneStore
+    zone_store = ZoneStore()
+    zone_store.add(
+        "grass",
+        (-12.0, -5.0, 6.0), (12.0, 25.0, 10.0),
+        params={"density": cfg.grass_density_per_m2},
+    )
+    zone_store.mark_baseline()
+
+    # 6. Lighting.  Two backends (config.lighting_backend):
+    #    "gpu" — volumetric radiance cascades; the mesher bakes NO light
+    #            (light_sampler=None → full-bright vertex colours carrying
+    #            only the facet accent) and the GpuLightingPipeline (built
+    #            after terrain, below) lights every fragment on the GPU.
+    #    "cpu" — legacy baked-vertex sunlight column pass.
+    use_gpu_lighting = cfg.lighting_backend == "gpu"
+    if use_gpu_lighting:
+        sunlight = None
+        light_sampler = None
+    else:
+        light_grid = LightGrid()
+        sunlight = SunlightComputer(cfg, chunk_manager, light_grid, bus)
+        light_sampler = make_light_sampler(light_grid, cfg)
 
     # 6b. Sky + weather (Layer 1 service, headless) — constructed after lighting;
     #     the SkyRendererComponent (added below) drives sky_system.update() once
@@ -194,6 +312,7 @@ def build_demo():
     save_manager = SaveManager(cfg, clock)
     save_manager.register(chunk_manager)
     save_manager.register(sky_system.weather)
+    save_manager.register(zone_store)
 
     # 9. Player — attach a FlyController to the camera GameObject.  The App
     #    forwards InputState to all FlyControllers each frame.
@@ -202,8 +321,30 @@ def build_demo():
     # --- Inject terrain-render deps into the App and configure render state ---
     app.chunk_manager = chunk_manager
     app.light_sampler = light_sampler
-    ground_tex = _to_ground_texture()
-    app.setup_terrain_rendering(ground_tex)
+    # GPU lighting: NO node-level fallback texture — the fixed-function
+    # texture stage would steal a texture unit from the shader's 3-D
+    # samplers (albedo arrives via the per-material stage triples instead).
+    ground_tex = None if use_gpu_lighting else _to_ground_texture()
+    app.setup_terrain_rendering(
+        ground_tex, _to_material_textures(triples=use_gpu_lighting))
+
+    # 9b. GPU volumetric lighting pipeline + terrain surface shader.  The
+    #     palette is the default (texture-derived) one plus the GI test-room
+    #     debug materials: bright white/red/green bounce surfaces and an
+    #     emissive ceiling-panel material (tests the emission-map path).
+    lighting_pipeline = None
+    if use_gpu_lighting:
+        from torn_apart.lighting.gpu import GpuLightingPipeline
+        from torn_apart.lighting.palette import build_default_palette
+        from torn_apart.world.terrain_shader import apply_terrain_shader
+        palette = build_default_palette()
+        for mid, rgb in _GI_TEST_ALBEDO.items():
+            palette.albedo[mid] = rgb
+        palette = palette.with_emission(_MAT_GI_GLOW, _GI_GLOW_RADIANCE)
+        lighting_pipeline = GpuLightingPipeline(cfg, app, chunk_manager, bus,
+                                                palette=palette)
+        app.lighting_pipeline = lighting_pipeline
+        apply_terrain_shader(app.terrain_root, lighting_pipeline)
 
     # 10. Pre-stream spawn area + seed sunlight + upload initial meshes.
     _prewarm_terrain(app, chunk_manager, sunlight, light_sampler)
@@ -221,8 +362,27 @@ def build_demo():
         sky_system=sky_system,
         terrain_root=app.terrain_root,
         clock=clock,
+        external_lighting=use_gpu_lighting,
     )
     app.sky_go = sky_go
+
+    # 10c. GPU grass — instanced tufts inside every "grass" zone volume,
+    #      placed entirely on the GPU (gl_InstanceID hash), lit by the same
+    #      radiance cascades as the terrain, swaying with the weather.
+    #      GPU lighting backend only (the component disables itself on cpu).
+    from torn_apart.world.grass_renderer import GrassRendererComponent
+    grass_go = instantiate()
+    grass_go.name = "Grass"
+    grass_go.add_component(
+        GrassRendererComponent,
+        base=app,
+        sky_system=sky_system,
+        zone_store=zone_store,
+        chunk_provider=chunk_manager,
+        lighting_pipeline=lighting_pipeline,
+        bus=bus,
+    )
+    app.grass_go = grass_go
 
     # 11. Resource-manager proof model (non-fatal).
     _load_proof_model(app)
@@ -262,18 +422,34 @@ def build_demo():
             chunk_provider=chunk_manager.get_or_create,
             bus=bus,
         )
+        # Volumetric flash: a brief, bright point light in the radiance
+        # volume — the GI flood fill carries it into the crater and the
+        # froxel fog catches it as a glow.
+        if lighting_pipeline is not None:
+            from torn_apart.lighting.lights import PointLight
+            lighting_pipeline.lights.add(PointLight(
+                position=(hit.point.x, hit.point.y, hit.point.z),
+                color=(1.0, 0.55, 0.2), intensity=40.0, radius=18.0,
+                ttl_s=0.5))
         _log.info("Explosion at %s — %d chunk(s) cratered", hit.point, len(touched))
 
     def on_click() -> None:
         """
         Left-click dispatch.
 
-        When the dev overlay is open with a free cursor, the click is a dev
-        *selection* (handled by the overlay) — picking the object under the
-        cursor and outlining it.  Otherwise (flying, cursor captured, or overlay
-        closed) it keeps its in-game meaning and fires the demo explosion.
+        Priority:
+          1. Dev *selection* — when the overlay is open with a free cursor the
+             click picks/outlines the object or chunk under the cursor.
+          2. Re-capture — when the cursor is free but the overlay is closed
+             (the player pressed ESC, or alt-tabbed back in), a click re-grabs
+             the mouse for free-look, mirroring how FPS games reacquire focus.
+          3. Otherwise (flying, cursor captured) it fires the demo explosion.
         """
         if overlay is not None and overlay.handle_world_click():
+            return
+        if not app.input_state.mouse_captured:
+            app.input_state.mouse_captured = True
+            app._set_mouse_capture(True)
             return
         fire_explosion()
 
@@ -344,6 +520,85 @@ def build_demo():
         _log.info("Game time jumped to day %d, %02d:%02d", clock.game_day,
                   int(new_tod // 3600), int(new_tod % 3600 // 60))
 
+    # --- Dynamic-light dev bindings (L / K) — GPU lighting backend only -----
+    # L drops a warm torch point-light at the camera (watch the GI flood-fill
+    # carry it around corners); K clears all dropped lights.
+    def on_drop_torch() -> None:
+        """L → drop a permanent torch light at the camera position."""
+        if lighting_pipeline is None:
+            return
+        from torn_apart.lighting.lights import PointLight
+        pos = app.camera_go.transform.position
+        lighting_pipeline.lights.add(PointLight(
+            position=(pos.x, pos.y, pos.z),
+            color=(1.0, 0.62, 0.28), intensity=8.0, radius=16.0))
+        _log.info("Torch dropped at %s (%d light(s) active)",
+                  pos, lighting_pipeline.lights.count)
+
+    def on_clear_lights() -> None:
+        """K → remove all dynamic lights."""
+        if lighting_pipeline is None:
+            return
+        lighting_pipeline.lights.clear()
+        _log.info("Dynamic lights cleared")
+
+    # --- Flashlight (F) — a SpotLight glued to the camera ------------------
+    # The follow task only touches the light set when the camera actually
+    # moved/turned (re-injection is the expensive part), and the beam shows
+    # up in the froxel fog automatically (GI radiance feeds the fog scatter).
+    flashlight: dict = {"id": None, "light": None}
+
+    def on_toggle_flashlight() -> None:
+        """F → toggle a camera-mounted flashlight (GPU backend only)."""
+        if lighting_pipeline is None:
+            return
+        from torn_apart.lighting.lights import SpotLight
+        if flashlight["id"] is not None:
+            lighting_pipeline.lights.remove(flashlight["id"])
+            flashlight["id"] = flashlight["light"] = None
+            _log.info("Flashlight OFF")
+            return
+        pos = app.camera_go.transform.position
+        fwd = app.camera_go.transform.forward
+        light = SpotLight(
+            position=(pos.x, pos.y, pos.z),
+            direction=(fwd.x, fwd.y, fwd.z),
+            color=_FLASHLIGHT_COLOR,
+            intensity=_FLASHLIGHT_INTENSITY,
+            radius=_FLASHLIGHT_RADIUS_M,
+            cone_deg=_FLASHLIGHT_CONE_DEG,
+        )
+        flashlight["id"] = lighting_pipeline.lights.add(light)
+        flashlight["light"] = light
+        _log.info("Flashlight ON")
+
+    def _follow_flashlight(task):
+        """Per-frame: keep the flashlight on the camera (move/turn eps)."""
+        light = flashlight["light"]
+        if light is not None:
+            pos = app.camera_go.transform.position
+            fwd = app.camera_go.transform.forward
+            new_pos = (pos.x, pos.y, pos.z)
+            new_dir = (fwd.x, fwd.y, fwd.z)
+            moved = sum((a - b) ** 2 for a, b in
+                        zip(new_pos, light.position)) > 0.15 ** 2
+            turned = sum(a * b for a, b in
+                         zip(new_dir, light.direction)) < math.cos(
+                             math.radians(1.5))
+            if moved or turned:
+                light.position = new_pos
+                light.direction = new_dir
+                lighting_pipeline.lights.notify_changed()
+        return task.cont
+
+    if lighting_pipeline is not None:
+        app.taskMgr.add(_follow_flashlight, "FlashlightFollow")
+
+    app.accept("l", on_drop_torch)
+    app.accept("k", on_clear_lights)
+    app.accept("f", on_toggle_flashlight)
+    app.accept("g", lambda: build_gi_test_room(app))
+
     app.accept("f6", on_cycle_weather)
     app.accept("f7", on_toggle_time_scale)
     app.accept("f8", on_jump_time)
@@ -358,6 +613,8 @@ def build_demo():
     if overlay is not None:
         overlay.actions.add_action("Fire Explosion", fire_explosion)
         app.accept("f1", overlay.toggle)
+        # Releasing the mouse ends an in-progress transform-gizmo drag.
+        app.accept("mouse1-up", overlay.end_gizmo_drag)
         app.dev_overlay = overlay   # exposed for tooling (tools/screenshot.py)
 
     app.accept("mouse1", on_click)
@@ -366,9 +623,79 @@ def build_demo():
 
     _log.info("Demo ready — WASD+mouse to fly, ESC to capture mouse, "
               "left-click to explode, F1 dev overlay, F5 save, F9 load, "
-              "F6 cycle weather, F7 time scale, F8 +6h.")
+              "F6 cycle weather, F7 time scale, F8 +6h, F flashlight, "
+              "G GI test room, L torch, K clear lights.")
 
     return app
+
+
+def build_gi_test_room(app) -> tuple[float, float, float]:
+    """
+    Build a Cornell-style GI test room ~14 m ahead of the camera (G key).
+
+    A hollow white room (interior 9×9×4.5 m, 1 m walls) with a RED wall on
+    one side and a GREEN wall on the other, an emissive ceiling panel (the
+    emission-map path), a 2.5×3 m doorway facing the camera, and a small
+    roof hole for a sun shaft.  Walk in and look at the white surfaces:
+    red/green colour bleed = bounce GI working; the glow panel lights the
+    room with no sky contribution; the roof shaft shows god rays in fog.
+
+    Parameters
+    ----------
+    app : world.app.App
+        The running demo app (uses ``camera_go``, ``chunk_manager``,
+        ``_event_bus``, ``_config``).
+
+    Returns
+    -------
+    tuple[float, float, float] — the room's (cx, cy, floor_z) in meters.
+    """
+    from torn_apart.terrain import BoxBrush
+    chunk_manager = app.chunk_manager
+    bus = app._event_bus
+    cfg = app._config
+    pos = app.camera_go.transform.position
+    fwd = app.camera_go.transform.forward
+    # Axis-align the room on the camera's dominant horizontal axis so the
+    # doorway squarely faces the player.
+    along_x = abs(fwd.x) >= abs(fwd.y)
+    sign = 1.0 if (fwd.x if along_x else fwd.y) >= 0.0 else -1.0
+    cx = pos.x + (14.0 * sign if along_x else 0.0)
+    cy = pos.y + (0.0 if along_x else 14.0 * sign)
+    hit = raycast_voxel(Vec3(cx, cy, pos.z + 40.0), Vec3(0.0, 0.0, -1.0),
+                        chunk_manager.get_or_create, max_distance_m=90.0)
+    z0 = (hit.point.z if hit is not None else cfg.ground_height_m) + 0.5
+    cz = z0 + 2.25                                       # interior mid-height
+
+    def box(half: tuple, at: tuple, mode: BrushMode, material: int = 1):
+        apply_brush(BoxBrush(half_extents_m=Vec3(*half)), Vec3(*at), mode,
+                    material=material,
+                    chunk_provider=chunk_manager.get_or_create, bus=bus)
+
+    # Solid white block, then hollow the interior.
+    box((5.5, 5.5, 3.25), (cx, cy, z0 + 2.25), BrushMode.ADD, _MAT_GI_WHITE)
+    box((4.5, 4.5, 2.25), (cx, cy, cz), BrushMode.REMOVE)
+    # Red / green side walls (overwrite the inner half of the white wall)
+    # on the lateral axis (perpendicular to the doorway axis).
+    if along_x:
+        box((0.5, 4.5, 2.25), (cx, cy - 5.0, cz), BrushMode.ADD, _MAT_GI_RED)
+        box((0.5, 4.5, 2.25), (cx, cy + 5.0, cz), BrushMode.ADD, _MAT_GI_GREEN)
+    else:
+        box((0.5, 4.5, 2.25), (cx - 5.0, cy, cz), BrushMode.ADD, _MAT_GI_RED)
+        box((0.5, 4.5, 2.25), (cx + 5.0, cy, cz), BrushMode.ADD, _MAT_GI_GREEN)
+    # Emissive ceiling panel (protrudes 0.25 m below the ceiling).
+    box((1.5, 1.5, 0.5), (cx, cy, z0 + 4.75), BrushMode.ADD, _MAT_GI_GLOW)
+    # Doorway through the camera-facing wall + a small roof shaft hole.
+    if along_x:
+        box((0.75, 1.25, 1.5), (cx - sign * 5.0, cy, z0 + 1.5),
+            BrushMode.REMOVE)
+    else:
+        box((1.25, 0.75, 1.5), (cx, cy - sign * 5.0, z0 + 1.5),
+            BrushMode.REMOVE)
+    box((0.75, 0.75, 1.0), (cx + 2.8, cy + 2.8, z0 + 5.0), BrushMode.REMOVE)
+    _log.info("GI test room built at (%.1f, %.1f, %.1f) — walk in and watch "
+              "the white walls pick up red/green bounce", cx, cy, z0)
+    return cx, cy, z0
 
 
 def main() -> None:
@@ -396,6 +723,82 @@ def _to_ground_texture():
         return to_panda_texture(rgba)
     except Exception as exc:  # noqa: BLE001
         _log.warning("Ground texture build failed (untextured terrain): %s", exc)
+        return None
+
+
+def _to_material_textures(triples: bool = False):
+    """
+    Build the material id → Panda3D texture map for terrain rendering.
+
+    Grass-skin faces (``MATERIAL_GRASS``, the baseline's top voxel layer) get
+    the pixel-art ``grass_ground`` texture; dirt bulk (``MATERIAL_DIRT``,
+    exposed by digging) gets ``dirt_ground``.  Used by the faceted mesher's
+    per-material Geom split (world/geometry_bridge.to_geom_node).  Returns
+    None (and logs) on any failure so the demo falls back to the node-level
+    ``wasteland_ground`` texture.
+
+    Parameters
+    ----------
+    triples : bool, default False
+        When True (GPU lighting backend), each material maps to an
+        ``(albedo, normal_map, emission_map)`` texture triple for the
+        volumetric terrain shader; normal maps are derived from the albedo
+        luminance (procedural/maps.py), emission defaults to black.
+
+    Returns
+    -------
+    dict[int, panda3d.core.Texture | tuple] | None
+    """
+    try:
+        from torn_apart.world.texture_bridge import to_panda_texture
+        from torn_apart.terrain import MATERIAL_DIRT, MATERIAL_GRASS
+        if not triples:
+            return {
+                MATERIAL_DIRT: to_panda_texture(get_procedural("dirt_ground")),
+                MATERIAL_GRASS: to_panda_texture(get_procedural("grass_ground")),
+            }
+        from torn_apart.procedural.maps import (
+            black_emission_map,
+            derive_normal_map,
+            flat_normal_map,
+        )
+        import numpy as np
+        emis_tex = to_panda_texture(black_emission_map())
+        flat_n_tex = to_panda_texture(flat_normal_map())
+
+        def triple(def_name: str):
+            rgba = get_procedural(def_name)
+            return (to_panda_texture(rgba),
+                    to_panda_texture(derive_normal_map(rgba)),
+                    emis_tex)
+
+        def flat_rgba(rgb_linear, alpha: int = 255) -> np.ndarray:
+            """16×16 solid-colour RGBA from linear RGB (sRGB-encoded)."""
+            srgb = (np.clip(np.asarray(rgb_linear, np.float32), 0.0, 1.0)
+                    ** (1.0 / 2.2) * 255.0).astype(np.uint8)
+            arr = np.empty((16, 16, 4), dtype=np.uint8)
+            arr[..., :3] = srgb
+            arr[..., 3] = alpha
+            return arr
+
+        def flat_triple(material_id: int, emissive: bool = False):
+            alb = to_panda_texture(flat_rgba(_GI_TEST_ALBEDO[material_id]))
+            em = to_panda_texture(flat_rgba((1.0, 0.92, 0.78))) if emissive \
+                else emis_tex
+            return (alb, flat_n_tex, em)
+
+        textures = {
+            MATERIAL_DIRT: triple("dirt_ground"),
+            MATERIAL_GRASS: triple("grass_ground"),
+        }
+        # GI test-room debug materials: flat colours + (for the glow panel)
+        # a bright emission map so the surface itself glows on screen.
+        for mid in (_MAT_GI_WHITE, _MAT_GI_RED, _MAT_GI_GREEN):
+            textures[mid] = flat_triple(mid)
+        textures[_MAT_GI_GLOW] = flat_triple(_MAT_GI_GLOW, emissive=True)
+        return textures
+    except Exception as exc:  # noqa: BLE001
+        _log.warning("Material textures build failed (fallback texture): %s", exc)
         return None
 
 

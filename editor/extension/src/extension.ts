@@ -7,8 +7,9 @@ import * as path from "path";
 import * as vscode from "vscode";
 
 import { DaemonController, DaemonState } from "./daemon";
+import { HierarchyProvider, SceneObjectDTO } from "./hierarchyView";
 import { FireEditorClient, RpcRemoteError } from "./protocol/client";
-import { Method, SchemaId } from "./protocol/generated";
+import { Method, Notification, SchemaId } from "./protocol/generated";
 import { SceneViewPanel } from "./sceneViewPanel";
 
 let output: vscode.OutputChannel;
@@ -19,6 +20,14 @@ let sceneView: SceneViewPanel | undefined;
 let currentConfig: Record<string, unknown> | undefined;
 let worldOpen = false;
 let extensionUri: vscode.Uri;
+
+let hierarchy: HierarchyProvider;
+let hierarchyView: vscode.TreeView<number>;
+// Where newly-created objects spawn: the point the Scene View camera is looking
+// at (reported via the webview's "focus" message). Defaults to the origin.
+let lastFocus = { x: 0, y: 0, z: 0 };
+// Guards selection echo: tree -> viewport -> tree would otherwise loop.
+let syncingSelection = false;
 
 export function activate(context: vscode.ExtensionContext): void {
   extensionUri = context.extensionUri;
@@ -45,13 +54,41 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("fireEditor.openWorldSave", () => openWorldBySave())
   );
 
-  const repoRoot = findRepoRoot();
+  // --- Scene hierarchy (Phase E2) ---
+  hierarchy = new HierarchyProvider();
+  hierarchy.onReparent = (id, parent) =>
+    sceneRequest(Method.SCENE_REPARENT, parent === null ? { id } : { id, parent });
+  hierarchyView = vscode.window.createTreeView("fireEditor.hierarchy", {
+    treeDataProvider: hierarchy,
+    dragAndDropController: hierarchy,
+    showCollapseAll: true,
+  });
+  context.subscriptions.push(
+    hierarchy,
+    hierarchyView,
+    hierarchyView.onDidChangeSelection((e) => {
+      if (syncingSelection) return;
+      sceneView?.postSelect(e.selection.length ? e.selection[0] : null);
+    }),
+    vscode.commands.registerCommand("fireEditor.refreshHierarchy", () => refreshHierarchy()),
+    vscode.commands.registerCommand("fireEditor.createEmpty", () => createObject("empty")),
+    vscode.commands.registerCommand("fireEditor.createCube", () => createObject("cube")),
+    vscode.commands.registerCommand("fireEditor.createSphere", () => createObject("sphere")),
+    vscode.commands.registerCommand("fireEditor.createLight", () => createObject("light")),
+    vscode.commands.registerCommand("fireEditor.createSpawn", () => createObject("spawn")),
+    vscode.commands.registerCommand("fireEditor.renameObject", (id?: number) => renameObject(id)),
+    vscode.commands.registerCommand("fireEditor.deleteObject", (id?: number) => deleteObject(id)),
+    vscode.commands.registerCommand("fireEditor.frameObject", (id?: number) => frameObject(id))
+  );
+
+  const repoRoot = findRepoRoot(context.extensionPath);
   if (!repoRoot) {
     output.appendLine(
-      "[extension] no Torn Apart workspace detected (need torn_apart/ + editor/). Idle."
+      "[extension] no Torn Apart repo detected (need torn_apart/ + editor/fire_editor). Idle."
     );
     return;
   }
+  output.appendLine(`[extension] repo root: ${repoRoot}`);
   if (vscode.workspace.getConfiguration("fireEditor").get<boolean>("autoStart", true)) {
     startDaemon(context, repoRoot);
   }
@@ -94,6 +131,8 @@ async function connectClient(port: number): Promise<void> {
       output.appendLine(`[extension] stream done: sent ${p.sent}, removed ${p.removed}`);
     } else if (method === "edit.state" && sceneView) {
       sceneView.postEditState(p);
+    } else if (method === Notification.SCENE_CHANGED) {
+      applyObjects((p.objects as SceneObjectDTO[]) ?? []);
     }
   };
 
@@ -105,6 +144,16 @@ async function connectClient(port: number): Promise<void> {
         `daemon ${hello.daemon_version}, protocol ${hello.protocol_version}`
     );
     setStatus("listening", true);
+    // First-run UX: pressing F5 should land the user straight in the 3D editor,
+    // not a hidden status-bar item. Auto-open the Scene View once connected
+    // (opt out with fireEditor.autoOpenSceneView = false).
+    if (
+      vscode.workspace
+        .getConfiguration("fireEditor")
+        .get<boolean>("autoOpenSceneView", true)
+    ) {
+      openSceneView();
+    }
   } catch (e) {
     if (e instanceof RpcRemoteError) {
       vscode.window.showErrorMessage(
@@ -131,6 +180,15 @@ function openSceneView(): void {
       case "camera":
         setCenter(Number(msg.x), Number(msg.y), Number(msg.z));
         break;
+      case "focus":
+        lastFocus = { x: Number(msg.x), y: Number(msg.y), z: Number(msg.z) };
+        break;
+      case "selectObject": {
+        // Viewport click -> reveal + select the node in the tree.
+        const id = msg.id === null || msg.id === undefined ? null : Number(msg.id);
+        revealInTree(id);
+        break;
+      }
       case "edit":
         void handleEdit(msg);
         break;
@@ -145,6 +203,7 @@ function openSceneView(): void {
   const onReady = async () => {
     if (!worldOpen) await openWorldBySeed(1337);
     if (currentConfig) sceneView?.postConfig(currentConfig);
+    await refreshHierarchy(); // pushes current objects into the fresh viewport
     setCenter(20, -20, 24); // initial camera spot above the flat ground
   };
   sceneView = SceneViewPanel.createOrShow(extensionUri, onMessage, onReady);
@@ -211,6 +270,7 @@ async function doOpenWorld(params: Record<string, unknown>): Promise<void> {
     currentConfig = res.config;
     sceneView?.reset();
     sceneView?.postConfig(currentConfig);
+    await refreshHierarchy(); // a save may carry placed objects
     output.appendLine(
       `[extension] world open — seed ${res.seed}, edited chunks ${res.edited_chunks}`
     );
@@ -218,6 +278,105 @@ async function doOpenWorld(params: Record<string, unknown>): Promise<void> {
     const msg = e instanceof RpcRemoteError ? e.rpc.message : (e as Error).message;
     vscode.window.showErrorMessage(`Fire Editor: world.open failed — ${msg}`);
   }
+}
+
+// --- Scene hierarchy helpers ---
+
+/** Push a fresh object list to both the tree and the viewport gizmos. */
+function applyObjects(objects: SceneObjectDTO[]): void {
+  hierarchy.setObjects(objects);
+  sceneView?.postObjects(objects);
+}
+
+/** Re-fetch the whole tree from the daemon (after open / on demand). */
+async function refreshHierarchy(): Promise<void> {
+  if (!client || !worldOpen) {
+    applyObjects([]);
+    return;
+  }
+  try {
+    const res = (await client.request(Method.SCENE_TREE, {})) as { objects: SceneObjectDTO[] };
+    applyObjects(res.objects ?? []);
+  } catch (e) {
+    output.appendLine(`[extension] scene.tree failed: ${(e as Error).message}`);
+  }
+}
+
+/** Fire a scene mutation; scene.changed will refresh the tree + viewport. */
+async function sceneRequest(method: string, params: Record<string, unknown>): Promise<unknown> {
+  if (!client) {
+    vscode.window.showWarningMessage("Fire Editor: daemon not connected yet.");
+    return undefined;
+  }
+  try {
+    return await client.request(method, params);
+  } catch (e) {
+    const msg = e instanceof RpcRemoteError ? e.rpc.message : (e as Error).message;
+    vscode.window.showErrorMessage(`Fire Editor: ${method} failed — ${msg}`);
+    return undefined;
+  }
+}
+
+/** The currently-selected tree node id, if any. */
+function selectedId(): number | undefined {
+  return hierarchyView?.selection.length ? hierarchyView.selection[0] : undefined;
+}
+
+async function createObject(kind: string): Promise<void> {
+  // Parent the new object under the current selection (Unity-style), and spawn
+  // it where the camera is looking so it lands in view.
+  const parent = selectedId();
+  const res = (await sceneRequest(Method.SCENE_CREATE, {
+    kind,
+    ...(parent !== undefined ? { parent } : {}),
+    x: lastFocus.x,
+    y: lastFocus.y,
+    z: lastFocus.z,
+  })) as { object?: SceneObjectDTO } | undefined;
+  if (res?.object) {
+    // scene.changed has already refreshed the tree; reveal the newcomer.
+    await refreshHierarchy();
+    revealInTree(res.object.id);
+  }
+}
+
+async function renameObject(id?: number): Promise<void> {
+  const target = id ?? selectedId();
+  if (target === undefined) return;
+  const current = hierarchy.get(target);
+  const name = await vscode.window.showInputBox({
+    prompt: "Rename object",
+    value: current?.name ?? "",
+  });
+  if (name === undefined) return;
+  await sceneRequest(Method.SCENE_RENAME, { id: target, name });
+}
+
+async function deleteObject(id?: number): Promise<void> {
+  const target = id ?? selectedId();
+  if (target === undefined) return;
+  await sceneRequest(Method.SCENE_DELETE, { id: target });
+}
+
+function frameObject(id?: number): void {
+  const target = id ?? selectedId();
+  if (target !== undefined) sceneView?.postFrame(target);
+}
+
+/** Select a node in the tree + viewport without bouncing the echo back. */
+function revealInTree(id: number | null): void {
+  if (id === null || !hierarchy.has(id)) {
+    sceneView?.postSelect(null);
+    return;
+  }
+  syncingSelection = true;
+  hierarchyView
+    .reveal(id, { select: true, focus: false })
+    .then(undefined, () => undefined)
+    .then(() => {
+      syncingSelection = false;
+      sceneView?.postSelect(id);
+    });
 }
 
 function setStatus(state: DaemonState, connected = false): void {
@@ -234,17 +393,28 @@ function setStatus(state: DaemonState, connected = false): void {
   status.tooltip = "Fire Editor daemon — click for status";
 }
 
-function findRepoRoot(): string | undefined {
-  const folders = vscode.workspace.workspaceFolders;
-  if (!folders) return undefined;
-  for (const f of folders) {
-    const root = f.uri.fsPath;
-    if (
-      fs.existsSync(path.join(root, "torn_apart")) &&
-      fs.existsSync(path.join(root, "editor", "fire_editor"))
-    ) {
-      return root;
-    }
+function isRepoRoot(root: string): boolean {
+  return (
+    fs.existsSync(path.join(root, "torn_apart")) &&
+    fs.existsSync(path.join(root, "editor", "fire_editor"))
+  );
+}
+
+/**
+ * Locate the Torn Apart repo root. Prefer an open workspace folder, but fall
+ * back to the extension's own install location (<repo>/editor/extension) so the
+ * daemon still starts when the Extension Development Host launches with no
+ * folder open — which is exactly what happens when ${workspaceFolder} fails to
+ * resolve (e.g. a space in the repo path).
+ */
+function findRepoRoot(extensionPath?: string): string | undefined {
+  for (const f of vscode.workspace.workspaceFolders ?? []) {
+    if (isRepoRoot(f.uri.fsPath)) return f.uri.fsPath;
+  }
+  if (extensionPath) {
+    // <repo>/editor/extension -> up two -> <repo>
+    const derived = path.resolve(extensionPath, "..", "..");
+    if (isRepoRoot(derived)) return derived;
   }
   return undefined;
 }

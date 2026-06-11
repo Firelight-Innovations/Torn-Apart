@@ -174,7 +174,10 @@ def _apply_sky_settings(app, time_of_day_h: float | None,
 def capture(frames: int, out_name: str, explode: bool,
             time_of_day: float | None = None, weather: str | None = None,
             pitch_deg: float = -35.0, yaw_deg: float = 0.0,
-            height_m: float | None = None, stub_sky: bool = False) -> Path:
+            height_m: float | None = None, stub_sky: bool = False,
+            torch: bool = False, game_day: int | None = None,
+            flashlight: bool = False, gi_room: bool = False,
+            move_into_room: bool = False) -> Path:
     """
     Build the demo, step `frames` frames, write the framebuffer to a PNG.
 
@@ -217,6 +220,10 @@ def capture(frames: int, out_name: str, explode: bool,
 
     app = demo.build_demo()
 
+    if game_day is not None:
+        # Set BEFORE the warmup so moon phase / weather schedule match.
+        app._clock.game_day = int(game_day)
+
     # Release mouse capture so PHYSICAL mouse movement during the unattended
     # warmup can't feed deltas into the FlyController and swing the camera.
     app.input_state.mouse_captured = False
@@ -256,6 +263,42 @@ def capture(frames: int, out_name: str, explode: bool,
             chunk_provider=app.chunk_manager.get_or_create,
             bus=app._event_bus,
         )
+
+    if gi_room:
+        # Build the Cornell-style GI test room ahead of the camera; optionally
+        # step inside it (camera at the doorway looking at the far wall).
+        cx, cy, z0 = demo.build_gi_test_room(app)
+        print("GI ROOM at", (cx, cy, z0))
+        if move_into_room:
+            # Just inside the doorway, looking slightly up so the far wall,
+            # both coloured walls and the glow panel are all in frame.
+            app.camera_go.transform.position = Vec3(cx, cy - 4.0, z0 + 1.7)
+            app.camera_go.transform.local_rotation = (
+                Quat.from_axis_angle(Vec3.RIGHT, math.radians(10.0))
+            ).normalized()
+
+    if flashlight and getattr(app, "lighting_pipeline", None) is not None:
+        # Camera-mounted spot light (the F-key flashlight, statically placed).
+        from torn_apart.lighting.lights import SpotLight
+        cam = app.camera_go.transform.position
+        fwd = app.camera_go.transform.forward
+        app.lighting_pipeline.lights.add(SpotLight(
+            position=(cam.x, cam.y, cam.z),
+            direction=(fwd.x, fwd.y, fwd.z),
+            color=(1.0, 0.96, 0.86), intensity=20.0,
+            radius=36.0, cone_deg=38.0))
+        print("FLASHLIGHT on at", (cam.x, cam.y, cam.z))
+
+    if torch and getattr(app, "lighting_pipeline", None) is not None:
+        # Drop a warm torch point-light ahead of the camera (GPU backend
+        # only) so GI flood-fill / volumetric glow can be captured headless.
+        from torn_apart.lighting.lights import PointLight
+        cam = app.camera_go.transform.position
+        pos = (cam.x, cam.y + 8.0, cam.z - 2.5)   # ~2.5 m above the ground
+        app.lighting_pipeline.lights.add(PointLight(
+            position=pos, color=(1.0, 0.62, 0.28),
+            intensity=8.0, radius=16.0))
+        print("TORCH dropped at", pos)
 
     # Step the task manager so chunks stream, remesh, relight, and the sky
     # settles.  Each step runs the frame task AND flips the window, so the
@@ -309,12 +352,29 @@ def main() -> None:
     parser.add_argument("--stub-sky", action="store_true",
                         help="swap a SkyState stub into the sky renderer "
                              "(renderer-only debugging)")
+    parser.add_argument("--torch", action="store_true",
+                        help="drop a warm torch point-light ahead of the "
+                             "camera (GPU lighting backend only)")
+    parser.add_argument("--day", type=int, default=None,
+                        help="game day number (moon phase: day 15 = full)")
+    parser.add_argument("--flashlight", action="store_true",
+                        help="add a camera-mounted spot light (the F-key "
+                             "flashlight; GPU lighting backend only)")
+    parser.add_argument("--gi-room", action="store_true",
+                        help="build the Cornell-style GI test room ahead of "
+                             "the camera before capturing")
+    parser.add_argument("--inside", action="store_true",
+                        help="with --gi-room: move the camera inside the "
+                             "room (doorway view of the far wall)")
     args = parser.parse_args()
 
     path = capture(args.frames, args.out, args.explode,
                    time_of_day=args.time_of_day, weather=args.weather,
                    pitch_deg=args.pitch, yaw_deg=args.yaw,
-                   height_m=args.height, stub_sky=args.stub_sky)
+                   height_m=args.height, stub_sky=args.stub_sky,
+                   torch=args.torch, game_day=args.day,
+                   flashlight=args.flashlight, gi_room=args.gi_room,
+                   move_into_room=args.inside)
     # Report on stdout for CI.
     size = os.path.getsize(path) if path.exists() else 0
     print(f"SCREENSHOT_RESULT wrote {path} ({size} bytes)")

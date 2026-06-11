@@ -35,8 +35,10 @@ class Daemon:
         self._register_core_methods()
         # Services register their own RPC methods onto the shared dispatcher.
         from .services.chunks import ChunkService
+        from .services.scene import SceneService
 
         self.chunks = ChunkService(self)
+        self.scene = SceneService(self)
 
     def _register_core_methods(self) -> None:
         self.dispatcher.register(Method.HELLO, self._hello)

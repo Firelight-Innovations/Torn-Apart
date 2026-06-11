@@ -16,8 +16,46 @@ show_fps = true
 show_chunk_borders = false
 show_light_grid = false
 
+[terrain]
+mesh_style = "faceted"         # "faceted" = flat-shaded surface nets (semi-smooth Daggerfall look); "blocky" = classic cubes
+facet_shade_strength = 0.25    # [0,1] normal-based facet accent shading baked into vertex colors (0 = off)
+
+[lighting]
+lighting_backend = "gpu"       # "gpu" = volumetric radiance cascades (GLSL compute); "cpu" = legacy baked vertex sunlight
+light_c0_cells = 96            # cascade-0 texels per axis (96 x 0.5 m = 48 m box around the camera)
+light_c0_cell_m = 0.5          # cascade-0 cell edge (meters) — one terrain voxel
+light_c1_cells = 96            # cascade-1 texels per axis (96 x 2.0 m = 192 m box, covers view distance)
+light_c1_cell_m = 2.0          # cascade-1 cell edge (meters)
+light_quant_m = 0.25           # shading sample quantisation (meters) → 2x2x2 light pixels per voxel
+light_prop_iters = 2           # GI flood-fill iterations per frame per cascade
+light_bounce_strength = 0.7    # [0,1] albedo-tinted bounce gain
+light_ao_strength = 0.6        # [0,1] voxel ambient-occlusion strength
+light_max_point_lights = 64    # max point/area lights uploaded per frame
+light_exposure = 0.9           # HDR tonemap exposure (base; auto-exposure multiplies it)
+exposure_adapt_enabled = true  # auto-exposure / eye adaptation
+exposure_min = 0.55            # brightest-scene multiplier clamp (midday stop-down)
+exposure_max = 5.0             # darkest-scene multiplier clamp (caves, moonless night)
+exposure_key = 0.18            # metering key (0.18 = photographic middle gray)
+exposure_tau_dark_s = 4.0      # seconds to adapt INTO darkness (slow, like eyes)
+exposure_tau_bright_s = 0.7    # seconds to adapt into bright light (fast)
+
+[fog]
+fog_enabled = true             # volumetric froxel fog + god rays
+fog_froxels_x = 160            # froxel grid width (screen-aligned)
+fog_froxels_y = 90             # froxel grid height
+fog_froxels_z = 64             # exponential depth slices
+fog_far_m = 160.0              # froxel volume far range (meters)
+fog_anisotropy = 0.55          # Henyey-Greenstein g (forward-scatter strength of god rays)
+
+[grass]
+grass_density_per_m2 = 12.0    # default blade tufts per square meter (volumes can override via params.density)
+grass_blade_height_m = 0.6     # unscaled tuft height (meters); per-blade jitter scales 0.7-1.3x
+grass_fade_start_m = 60.0      # camera distance where blades start shrinking away
+grass_fade_end_m = 90.0        # camera distance where blades are fully gone
+grass_max_instances = 200000   # hard cap on instances per grass volume
+
 [sky]
 sky_cloud_altitude_m = 96.0    # cloud layer base altitude (world Z, meters)
 sky_cloud_thickness_m = 8.0    # cloud layer vertical thickness (meters)
 sky_cloud_cell_m = 12.0        # horizontal size of one cloud cell (meters)
-sky_star_count = 2500          # stars baked into the "night_sky" texture
+sky_star_count = 9000          # stars baked into the night-sky cubemap (smaller + denser field)

@@ -5,7 +5,9 @@ terrain/generation.py — Flat, bounded baseline terrain generation.
 array for a chunk.  As of the flat-world rework (DECISIONS.md 2026-06-09) the
 baseline terrain is **completely flat and seed-independent**:
 
-- Solid ground fills everything below ``config.ground_height_m`` (world Z).
+- Solid ground fills everything below ``config.ground_height_m`` (world Z):
+  the topmost solid voxel layer is :data:`MATERIAL_GRASS` (2), everything
+  deeper is :data:`MATERIAL_DIRT` (1).
 - The world has a finite square footprint of ``config.world_size_m`` meters,
   **centred on the origin** — i.e. solid only where world X and Y both lie in
   ``[-world_size_m/2, +world_size_m/2)``.  Outside that footprint the chunk is
@@ -46,7 +48,15 @@ from torn_apart.core import Config
 _FLAT_GROUND_Z_M: float = 8.0       # default flat ground surface height (world Z, meters)
 _DEFAULT_WORLD_SIZE_M: float = 1000.0  # default square footprint side length (meters)
 
-_DEFAULT_MATERIAL: int = 1          # material id written for solid ground
+# ---------------------------------------------------------------------------
+# Material ids (uint8 values stored in Chunk.materials; 0 = air).
+# The renderer maps these to procedural textures (world/app.py):
+#   MATERIAL_DIRT  -> "dirt_ground"
+#   MATERIAL_GRASS -> "grass_ground"
+# ---------------------------------------------------------------------------
+
+MATERIAL_DIRT: int = 1              # bulk solid ground (exposed by digging)
+MATERIAL_GRASS: int = 2             # topmost solid voxel layer of the baseline
 
 
 def _ground_height(config: Config | None) -> float:
@@ -129,8 +139,9 @@ def generate_chunk(coord: tuple[int, int, int], config: Config) -> np.ndarray:
     -------
     numpy.ndarray
         ``uint8`` array of shape ``(chunk_size,)*3`` indexed ``[x, y, z]``.
-        ``0`` = air, ``1`` = solid ground.  Byte-identical for identical
-        ``(coord, config)``.
+        ``0`` = air, :data:`MATERIAL_GRASS` (2) for the topmost solid voxel
+        layer (the surface skin), :data:`MATERIAL_DIRT` (1) for everything
+        solid below it.  Byte-identical for identical ``(coord, config)``.
 
     Behaviour
     ---------
@@ -139,6 +150,13 @@ def generate_chunk(coord: tuple[int, int, int], config: Config) -> np.ndarray:
       - its centre world X and Y both lie within the world footprint
         ``[-world_size_m/2, +world_size_m/2)``.
     Everything else is air.  No hills, no caves.
+
+    The single topmost solid layer (the voxel whose centre is below the ground
+    height but whose +Z neighbour centre is not) is :data:`MATERIAL_GRASS`;
+    all deeper solid voxels are :data:`MATERIAL_DIRT`.  The grass test is a
+    pure function of world Z, so it is identical across chunk borders (a chunk
+    fully buried under another solid chunk gets no grass).  Digging therefore
+    exposes dirt, and rebuilding with the default brush material adds dirt.
 
     Example
     -------
@@ -173,9 +191,15 @@ def generate_chunk(coord: tuple[int, int, int], config: Config) -> np.ndarray:
     # Flat ground: solid below the ground height.
     below = wz_axis < ground_z                     # (n,) over z
 
+    # Topmost solid layer: solid here, but the voxel above would be air.
+    # Pure function of world Z → identical across chunk borders.
+    top_layer = below & (wz_axis + vs >= ground_z)  # (n,) over z
+
     # Solid where in-bounds AND below the ground surface.
     solid = in_bounds[:, :, None] & below[None, None, :]   # (n, n, n) [x, y, z]
+    grass = in_bounds[:, :, None] & top_layer[None, None, :]
 
     materials = np.zeros((n, n, n), dtype=np.uint8)
-    materials[solid] = _DEFAULT_MATERIAL
+    materials[solid] = MATERIAL_DIRT
+    materials[grass] = MATERIAL_GRASS
     return materials

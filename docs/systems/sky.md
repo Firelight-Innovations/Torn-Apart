@@ -1,13 +1,15 @@
 # sky — System Doc
-keywords: sky, skybox, sky dome, day night cycle, daynight, sun, moon, stars, star field, galaxy, milky way, weather, rain, fog, storm, wind, clouds, cloud coverage, celestial, time of day, sunrise, sunset, dawn, dusk, twilight, daylight, moon phase, sky gradient, zenith, horizon, fog color, fog density, terrain light scale, SkyState, SkySystem, WeatherSystem, WeatherType, WeatherParams, sun_direction, moon_direction, force_weather, WeatherChangedEvent, markov, night_sky, rain_streak
+keywords: sky, skybox, sky dome, day night cycle, daynight, sun, moon, stars, star field, galaxy, milky way, weather, rain, fog, storm, wind, clouds, cloud coverage, celestial, time of day, sunrise, sunset, dawn, dusk, twilight, daylight, moon phase, sky gradient, zenith, horizon, fog color, fog density, terrain light scale, SkyState, SkySystem, WeatherSystem, WeatherType, WeatherParams, sun_direction, moon_direction, force_weather, WeatherChangedEvent, markov, night_sky, rain_streak, atmosphere, rayleigh, mie, scattering, transmittance, sun_radiance, moon_radiance, sky_ambient, physical sky, single scattering, earth shadow, moon_surface, external_lighting
 
 > One doc per code package; filename matches the package exactly (`docs/systems/sky.md` ↔ `torn_apart/sky/`).
 
 ## Role
 
-`sky/` is the **headless half of the procedural sky + weather feature** — a Layer 1 Service, peer of `lighting/`.  Once per frame, `SkySystem.update()` reads the game clock and produces a frozen `SkyState` snapshot: sun/moon directions, sky gradient colors, blended weather parameters (clouds, fog, rain, wind), star visibility, and the `terrain_light_scale` RGB multiplier the renderer applies to terrain vertex light.  Weather follows a **deterministic Markov chain** over 2-game-hour segments — the entire schedule is a pure function of `(world_seed, game_day, segment)`, so saves cost ~0 bytes unless a dev override is active.
+`sky/` is the **headless half of the procedural sky + weather feature** — a Layer 1 Service, peer of `lighting/`.  Once per frame, `SkySystem.update()` reads the game clock and produces a frozen `SkyState` snapshot: sun/moon directions, sky gradient colors, blended weather parameters (clouds, fog, rain, wind), star visibility, the legacy `terrain_light_scale` multiplier, and the **HDR radiance contract** (`sun_radiance` / `moon_radiance` / `sky_ambient`) consumed by the GPU volumetric lighting pipeline.  Weather follows a **deterministic Markov chain** over 2-game-hour segments — the entire schedule is a pure function of `(world_seed, game_day, segment)`, so saves cost ~0 bytes unless a dev override is active.
 
-`sky/` deliberately does NOT: import panda3d, issue render commands, draw the sky dome/clouds/rain (that is `world/`'s render half, which consumes `SkyState`), or own the procedural sky textures (`"night_sky"` and `"rain_streak"` live in `procedural/textures/`).
+**The sky is physically simulated** (`sky/atmosphere.py`): an Earth-like Rayleigh + Mie **single-scattering** model (spherical planet, exponential density, nested sun-ray transmittance with planet occlusion → the earth-shadow twilight arch).  It is evaluated twice from the same constants: in numpy here (a boot-time LUT over sun elevation feeds `SkySystem`'s per-frame scalar interpolation) and per pixel in the GLSL dome shader (`world/sky_shaders.py`) — so the *picture* of the sunset and the *light* it casts on terrain agree by construction.  Sunsets turn the actual scene light orange because `sun_radiance` follows the modelled transmittance.
+
+`sky/` deliberately does NOT: import panda3d, issue render commands, draw the sky dome/clouds/rain (that is `world/`'s render half, which consumes `SkyState`), or own the procedural sky textures (`"night_sky"`, `"rain_streak"`, `"moon_surface"` live in `procedural/textures/`).
 
 ## Public API
 
@@ -30,7 +32,10 @@ All symbols below are re-exported from `torn_apart.sky` (`__init__.py`).
 | `.fog_color` | Horizon color blended toward weather gray (dims at night). |
 | `.rain_intensity` | 0–1. |
 | `.wind_dir`, `.wind_speed` | Unit XY tuple; m/s. |
-| `.terrain_light_scale` | RGB multiplier: clear day ≈ (1, 1, 1); night floor ≈ (0.16, 0.19, 0.30); warm (1.0, 0.82, 0.62)-tinted dawn/dusk; ×~0.75 overcast, ×~0.55 storm.  Smooth everywhere. |
+| `.terrain_light_scale` | RGB multiplier: clear day ≈ (1, 1, 1); night floor ≈ (0.16, 0.19, 0.30); warm (1.0, 0.82, 0.62)-tinted dawn/dusk; ×~0.75 overcast, ×~0.55 storm.  Smooth everywhere.  **CPU lighting backend only** — the GPU pipeline reads the three radiance fields below. |
+| `.sun_radiance` | **Linear HDR RGB** direct sun at the ground (atmosphere-transmitted): clear noon ≈ (3.2, 3.0, 2.6); strongly orange + dimmer near sunset (R/B ratio rises monotonically as the sun drops); smooth twilight tail to exactly 0 at −4° elevation; ×(1 − 0.92·coverage·density) under cloud. |
+| `.moon_radiance` | Linear HDR RGB moonlight: pale blue-white, full moon high ≈ (0.06, 0.07, 0.10); × phase illuminated fraction (`0.5·(1−cos 2π·phase)`), × elevation ramp, × cloud attenuation; 0 below the horizon. |
+| `.sky_ambient` | Linear HDR RGB hemispheric skylight irradiance (the GI skylight injection): clear noon ≈ (0.21, 0.40, 0.71); warm-gray sunset; overcast = desaturated at similar luminance; clear moonless night floor ≈ (0.010, 0.012, 0.022) + a small moonlight bump. |
 
 ### SkySystem (`sky/sky_state.py`)
 
@@ -63,9 +68,22 @@ All symbols below are re-exported from `torn_apart.sky` (`__init__.py`).
 | `moon_direction(time_of_day_s) -> Vec3` | Roughly opposite the sun + ~1 h phase lead (both briefly visible at twilight). |
 | `daylight_factor(time_of_day_s) -> float` | Smoothstep on sun elevation; fully 1 ~1 h after sunrise, fully 0 ~1 h after sunset. |
 
+### Atmosphere (`sky/atmosphere.py`) — pure physical model
+
+| Symbol | Description |
+|---|---|
+| `transmittance(view_dirs, samples=64) -> (N, 3)` | Rayleigh+Mie optical-depth transmittance from the ground observer toward each direction (quadratic step spacing — dense near the observer).  Sun/moon disc tint. |
+| `sun_radiance(sun_z, samples=64) -> (3,) or (N, 3)` | `SUN_GROUND_SCALE × transmittance` with a smoothstep twilight fade to 0 at −4° (`SUN_FADE_LO_Z`).  Azimuth-symmetric: takes `sin(elevation)`. |
+| `sky_radiance(view_dirs, sun_dir, steps=16, light_steps=8) -> (N, 3)` | Single-scattered sky radiance: per-sample nested sun-ray march with planet occlusion (earth-shadow arch).  **Quadratic view-step spacing** — linear steps skip the dense low atmosphere on grazing rays and render the day horizon black.  Mirrored exactly by the GLSL dome shader. |
+| `sky_ambient(sun_z, samples=48, ...) -> (3,)` | Cosine-weighted hemispheric irradiance over a fixed Fibonacci direction set, × `AMBIENT_SCALE` (0.4, calibrated to the SkyState contract). |
+| `BETA_RAYLEIGH, BETA_MIE, MIE_G, RAYLEIGH_SCALE_HEIGHT_M, MIE_SCALE_HEIGHT_M, PLANET_RADIUS_M, ATMOSPHERE_TOP_M, SUN_TOA_RADIANCE, ...` | The physical constants — **shared verbatim** with `world/sky_shaders.SKY_DOME_FRAGMENT`; change them in both places or the picture and the light disagree. |
+
+`SkySystem` never calls these per frame: a module-level `_AtmosphereLUT` (56 sun elevations × {sun, ambient, zenith, horizon}) is built once per process (~0.2 s) and interpolated with `np.interp` per frame.
+
 ### Related (owned elsewhere)
 
-- `"night_sky"` / `"rain_streak"` procedural textures — see `docs/systems/procedural.md`.
+- `"night_sky"` / `"rain_streak"` / `"moon_surface"` procedural textures — see `docs/systems/procedural.md`.  The moon disc texture is seeded per world (`for_domain`): every world grows different craters/maria.
+- The render half: dome single-scatter shader, 2.5×-sized limb-darkened sun disc + textured moon disc with phase terminator, cloud/rain renderers, and the `SkyRendererComponent(external_lighting=...)` flag — `world/sky_renderer.py` / `world/sky_shaders.py`.
 - `[sky]` config table (`sky_cloud_altitude_m`, `sky_cloud_thickness_m`, `sky_cloud_cell_m`, `sky_star_count`) — see `docs/systems/core.md`.
 - `clock.game_time_scale` (read/write, dev time scrubbing) — see `docs/systems/core.md`.
 
@@ -171,3 +189,11 @@ dusk_moon = moon_direction(17.5 * 3600.0) # already above the east horizon
 8. **Per-frame cost is scalar-only** (a handful of ramps and lerps) — no arrays are built in `update()`.  Keep it that way; anything per-pixel belongs in textures or shaders.
 
 9. **`night_sky` / `rain_streak` arrive V-FLIPPED at the GPU.**  `world/texture_bridge.to_panda_texture` vertically flips every texture (OpenGL bottom-left UV origin).  The render side compensates (equirect V mapping in the dome shader; mirrored V axis on the rain cylinders) — see `docs/systems/world.md` gotchas 11–14.  Do not "fix" the orientation in the texture defs; you would re-introduce the upward-falling-rain bug.
+
+10. **`_AtmosphereLUT` is module-global and built on first `SkySystem` construction** (~0.2 s).  It is seed-independent physics, so sharing across systems/tests is safe — but a test that monkeypatches atmosphere constants must reset `sky_state._ATMOSPHERE_LUT` to `None` or it will read stale tables.
+
+11. **The GLSL dome shader duplicates the atmosphere math** (`world/sky_shaders.py` mirrors `sky/atmosphere.py` constants and the quadratic step spacing).  Any change to the model MUST be made in both files, or the rendered sky will disagree with `sun_radiance`/`sky_ambient` and terrain lighting drifts out of sync with the picture.
+
+12. **`SkyRendererComponent(external_lighting=True)` is mandatory on the GPU lighting backend** — otherwise the sky renderer's `terrain_root.set_color_scale` and Panda3D `Fog` double-apply on top of the volumetric terrain shader.  main.py wires this from `config.lighting_backend`.
+
+13. **Overcast attenuates `sun_radiance` by ×(1 − 0.92·coverage·density)** — under a storm the direct sun is nearly gone and the scene is lit almost entirely by the (desaturated) `sky_ambient`.  That is intended: overcast light IS diffuse.

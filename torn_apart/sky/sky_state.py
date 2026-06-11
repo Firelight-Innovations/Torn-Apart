@@ -37,7 +37,10 @@ Example
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
+
+import numpy as np
 
 from torn_apart.core.clock import Clock
 from torn_apart.core.config import Config
@@ -55,6 +58,70 @@ from torn_apart.sky.celestial import (
 from torn_apart.sky.weather import WeatherParams, WeatherSystem
 
 __all__ = ["SkyState", "SkySystem", "MOON_CYCLE_DAYS"]
+
+
+# ---------------------------------------------------------------------------
+# Atmosphere lookup table (physical radiance, sampled per frame)
+# ---------------------------------------------------------------------------
+#
+# The single-scattering integrals in sky/atmosphere.py cost milliseconds —
+# fine at boot, not per frame.  Physics is seed-independent, so ONE module-
+# level LUT over sun elevation serves every SkySystem: 56 elevations, each
+# row holding sun_radiance / sky_ambient / zenith / horizon RGB.  Per frame
+# we np.interp three scalars per channel — cheap and smooth.
+
+_LUT_SUN_Z = np.linspace(-0.35, 1.0, 56)
+_NIGHT_AMBIENT = (0.010, 0.012, 0.022)     # clear moonless-night skylight
+_NIGHT_ZENITH = (0.012, 0.016, 0.035)      # display floor for the gradient
+_NIGHT_HORIZON = (0.020, 0.026, 0.046)
+_MOON_BASE_RADIANCE = (0.060, 0.070, 0.100)  # full moon at the zenith
+
+
+class _AtmosphereLUT:
+    """Boot-time table of atmosphere outputs keyed on ``sin(sun elevation)``."""
+
+    def __init__(self) -> None:
+        from torn_apart.sky import atmosphere as atmo
+        zs = _LUT_SUN_Z
+        self.sun = atmo.sun_radiance(zs)                       # (56, 3)
+        # One sky_radiance call per elevation: 48 ambient hemisphere dirs +
+        # 1 zenith + 8 just-above-horizon dirs, split afterwards.
+        hemi = atmo._hemisphere_dirs(48)
+        az = np.radians(np.arange(8) * 45.0)
+        horizon_dirs = np.stack(
+            [np.cos(az) * 0.998, np.sin(az) * 0.998,
+             np.full(8, 0.06)], axis=1)
+        dirs = np.vstack([hemi, [[0.0, 0.0, 1.0]], horizon_dirs])
+        amb_rows, zen_rows, hor_rows = [], [], []
+        for z in zs:
+            sun_dir = np.array(
+                [math.sqrt(max(1.0 - z * z, 0.0)), 0.0, float(z)])
+            L = atmo.sky_radiance(dirs, sun_dir)               # (57, 3)
+            amb = (2.0 * math.pi / 48.0) * np.sum(
+                L[:48] * hemi[:, 2:3], axis=0) * atmo.AMBIENT_SCALE
+            amb_rows.append(amb)
+            zen_rows.append(L[48])
+            hor_rows.append(L[49:].mean(axis=0))
+        self.ambient = np.asarray(amb_rows)                    # (56, 3)
+        self.zenith = np.asarray(zen_rows)
+        self.horizon = np.asarray(hor_rows)
+
+    def sample(self, table: np.ndarray, z: float) -> tuple[float, float, float]:
+        """Linear interpolation of one (56, 3) table at sun elevation ``z``."""
+        return (float(np.interp(z, _LUT_SUN_Z, table[:, 0])),
+                float(np.interp(z, _LUT_SUN_Z, table[:, 1])),
+                float(np.interp(z, _LUT_SUN_Z, table[:, 2])))
+
+
+_ATMOSPHERE_LUT: _AtmosphereLUT | None = None
+
+
+def _get_atmosphere_lut() -> _AtmosphereLUT:
+    """Build (once per process) and return the shared atmosphere LUT."""
+    global _ATMOSPHERE_LUT
+    if _ATMOSPHERE_LUT is None:
+        _ATMOSPHERE_LUT = _AtmosphereLUT()
+    return _ATMOSPHERE_LUT
 
 # ---------------------------------------------------------------------------
 # Tuning constants (documented; palette keyframes key on sun_dir.z)
@@ -202,6 +269,22 @@ class SkyState:
         terrain vertex light: clear day ≈ (1, 1, 1); night floor
         ≈ (0.16, 0.19, 0.30); warm-tinted at dawn/dusk; dimmed further by
         weather (overcast ~0.75×, storm ~0.55×).  Smooth everywhere.
+        Used by the CPU lighting backend only; the GPU volumetric pipeline
+        reads the three HDR radiance fields below instead.
+    sun_radiance : tuple — **linear HDR RGB** direct-sun light reaching the
+        ground (atmosphere-transmitted): clear noon ≈ (3.2, 3.0, 2.6);
+        strongly orange and dimmer near sunset (the R/B ratio rises as the
+        sun drops); smooth twilight tail to exactly 0 at −4° elevation;
+        sharply attenuated by cloud cover.  Consumed by the GPU lighting
+        pipeline as the sun injection color (`lighting/gpu.py`).
+    moon_radiance : tuple — linear HDR RGB moonlight: pale blue-white, full
+        moon high in a clear sky ≈ (0.06, 0.07, 0.10), scaled by the phase's
+        illuminated fraction and elevation; 0 below the horizon.
+    sky_ambient : tuple — linear HDR RGB hemispheric skylight irradiance
+        (the GI skylight injection): clear noon ≈ (0.21, 0.40, 0.71);
+        warm-gray at sunset; overcast = desaturated at similar luminance;
+        clear moonless night ≈ (0.010, 0.012, 0.022) plus a small moonlight
+        bump when the moon is up.
 
     Example
     -------
@@ -231,6 +314,11 @@ class SkyState:
     wind_speed: float
     # lighting integration
     terrain_light_scale: tuple[float, float, float]
+    # HDR radiance contract for the GPU volumetric lighting pipeline
+    # (linear RGB; see the attribute docs above for calibrated ranges).
+    sun_radiance: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    moon_radiance: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    sky_ambient: tuple[float, float, float] = (0.0, 0.0, 0.0)
 
 
 # ---------------------------------------------------------------------------
@@ -272,6 +360,9 @@ class SkySystem:
         #: The weather sub-system (Saveable, ``save_key = "weather"``).
         self.weather: WeatherSystem = WeatherSystem(config, bus)
         self._state: SkyState | None = None
+        # Physical-atmosphere lookup table (built once per process; the
+        # physics is seed-independent).  ~0.2 s at first construction.
+        self._lut = _get_atmosphere_lut()
 
     def update(self) -> SkyState:
         """
@@ -310,8 +401,40 @@ class SkySystem:
         moon_phase = (day % MOON_CYCLE_DAYS) / float(MOON_CYCLE_DAYS)
         star_visibility = (1.0 - daylight) * (1.0 - 0.85 * wp.cloud_coverage)
 
-        zenith = _weathered(color_ramp(z, _ZENITH_RAMP), w)
-        horizon = _weathered(color_ramp(z, _HORIZON_RAMP), w)
+        # Sky gradient from the physical atmosphere (LUT over sun elevation)
+        # with an artistic night floor, then the usual weather grading.
+        # Clamped to [0, 1] — these two stay LDR display colors for the dome
+        # gradient and legacy consumers; HDR lives in the radiance fields.
+        night = 1.0 - daylight
+        atmo_zen = self._lut.sample(self._lut.zenith, z)
+        atmo_hor = self._lut.sample(self._lut.horizon, z)
+        zenith = _weathered(tuple(
+            min(1.0, atmo_zen[i] + _NIGHT_ZENITH[i] * night)
+            for i in range(3)), w)
+        horizon = _weathered(tuple(
+            min(1.0, atmo_hor[i] + _NIGHT_HORIZON[i] * night)
+            for i in range(3)), w)
+
+        # --- HDR radiance contract for the GPU lighting pipeline ---------
+        cloud_block = wp.cloud_coverage * wp.cloud_density
+        sun_clear = self._lut.sample(self._lut.sun, z)
+        sun_atten = 1.0 - 0.92 * cloud_block      # overcast ⇒ diffuse, no disc
+        sun_radiance = tuple(c * sun_atten for c in sun_clear)
+
+        moon_z = float(moon.z)
+        illum = 0.5 * (1.0 - math.cos(2.0 * math.pi * moon_phase))
+        moon_up = smoothstep(moon_z, 0.0, 0.25)
+        moon_atten = 1.0 - 0.90 * cloud_block
+        moon_radiance = tuple(
+            b * illum * moon_up * moon_atten for b in _MOON_BASE_RADIANCE)
+
+        # Skylight: physical ambient, desaturated (not darkened) by overcast,
+        # plus the night floor and a small moonlit-sky bump.
+        amb = self._lut.sample(self._lut.ambient, z)
+        amb = lerp_color(amb, _luminance_gray(amb), 0.8 * w)
+        sky_ambient = tuple(
+            amb[i] + _NIGHT_AMBIENT[i] * night + moon_radiance[i] * 0.18
+            for i in range(3))
 
         # Fog color: horizon hue pulled toward a neutral gray that itself
         # dims at night (fog should never glow in the dark).
@@ -353,6 +476,9 @@ class SkySystem:
             wind_dir=wp.wind_dir,
             wind_speed=float(wp.wind_speed),
             terrain_light_scale=terrain_light_scale,
+            sun_radiance=sun_radiance,
+            moon_radiance=moon_radiance,
+            sky_ambient=sky_ambient,
         )
         return self._state
 

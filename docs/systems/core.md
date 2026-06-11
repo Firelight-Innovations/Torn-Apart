@@ -100,9 +100,11 @@ All symbols below are re-exported from `torn_apart.core` (`__init__.py`).
 | `Config.sky_cloud_thickness_m` | `float` — cloud layer vertical thickness in meters (8.0). |
 | `Config.sky_cloud_cell_m` | `float` — horizontal edge of one cloud cell in meters (12.0); the renderer fills `cloud_coverage` fraction of cells. |
 | `Config.sky_star_count` | `int` — star count for the `"night_sky"` procedural texture (2500). |
+| `Config.mesh_style` | `str` — terrain mesher: `"faceted"` (flat-shaded surface nets, default) or `"blocky"` (culled-face cubes). From the `[terrain]` TOML table (flattened like `[debug]`). |
+| `Config.facet_shade_strength` | `float` — [0,1] strength of the faceted mesher's normal-based facet accent shading (0.25; 0 = off). |
 | `Config.chunk_meters` | property — `chunk_size * voxel_size` (16.0 m) |
 | `Config.light_cell_meters` | property — `voxel_size * light_grid_scale` (1.0 m) |
-| `load_config(path="config.toml") -> Config` | Load from TOML; returns defaults if file missing.  Flattens the `[debug]` and `[sky]` tables. |
+| `load_config(path="config.toml") -> Config` | Load from TOML; returns defaults if file missing.  Flattens the `[debug]`, `[sky]` and `[terrain]` tables. |
 
 ### Clock (`core/clock.py`)
 

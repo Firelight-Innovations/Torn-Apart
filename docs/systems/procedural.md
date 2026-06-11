@@ -1,17 +1,17 @@
-# procedural — System Doc
-keywords: procedural, ProceduralDef, ProceduralTextureDef, register, get, clear_cache, reset_registry, value_noise, wasteland_ground, night_sky, rain_streak, stars, star field, galaxy, equirect, equirectangular, sky texture, rain texture, tileable, seamless, texture, noise, registry, cache, determinism, world_seed, params_digest, for_domain, biome, building, content, authoring, RGBA, uint8, octaves, persistence, lacunarity, base_freq, layered, heightmap
+﻿# procedural â€” System Doc
+keywords: procedural, ProceduralDef, ProceduralTextureDef, register, get, clear_cache, reset_registry, value_noise, pixel_noise, wasteland_ground, night_sky, rain_streak, grass_ground, dirt_ground, grass, dirt, pixel art, pixelated, pixel_noise, posterize, posterise, palette, stars, star field, galaxy, equirect, equirectangular, sky texture, rain texture, tileable, seamless, texture, noise, registry, cache, determinism, world_seed, params_digest, for_domain, biome, building, content, authoring, RGBA, uint8, octaves, persistence, lacunarity, base_freq, layered, heightmap, moon_surface, moon, crater, maria, lunar, normal map, emission map, derive_normal_map, flat_normal_map, black_emission_map, sobel, maps
 
-> One doc per code package; filename matches the package exactly (`docs/systems/procedural.md` ↔ `torn_apart/procedural/`).
+> One doc per code package; filename matches the package exactly (`docs/systems/procedural.md` â†” `torn_apart/procedural/`).
 
 ## Role
 
-`procedural/` is the **content-authoring Foundation layer** — pure Python/numpy, zero panda3d imports, callable from every other layer.  It provides:
+`procedural/` is the **content-authoring Foundation layer** â€” pure Python/numpy, zero panda3d imports, callable from every other layer.  It provides:
 
 - A **`ProceduralDef` base class** and registry so any layer can request generated content by name without knowing which module produced it.
 - A **`ProceduralTextureDef` domain subclass** that generates `(H, W, 4) uint8` RGBA arrays.
-- A **shared layered value-noise helper** (`value_noise`) used by textures and reusable by Phase 3 terrain.
+- **Shared layered noise helpers** (`value_noise` for smooth fields; `pixel_noise` for crisp pixel-art block noise) used by textures and reusable by Phase 3 terrain.
 - A **deterministic cache** keyed by `(def_name, world_seed, sorted_params_digest)` so identical calls always return the same object.
-- Auto-registration of built-in content at import time (currently: `"wasteland_ground"`, `"night_sky"`, `"rain_streak"`).
+- Auto-registration of built-in content at import time (currently: `"wasteland_ground"`, `"night_sky"`, `"rain_streak"`, `"grass_ground"`, `"dirt_ground"`, `"moon_surface"`, `"grass_tuft"`).
 
 `procedural/` deliberately does NOT: render anything, touch the Panda3D scene graph, store game-world state, or do any per-pixel Python loops.
 
@@ -38,19 +38,32 @@ All symbols below are re-exported from `torn_apart.procedural` (`__init__.py`).
 | `clear_cache()` | Flush the generated-result cache; def registry is preserved. |
 | `reset_registry()` | Flush both the def registry and the cache (tests only). |
 
-### Noise helper (`procedural/textures/base.py`)
+### Noise helpers (`procedural/textures/base.py`)
 
 | Symbol | Description |
 |---|---|
-| `value_noise(rng, shape, octaves, persistence, lacunarity, base_freq)` | Layered 2-D value noise → `float32 (H,W)` in `[0,1]`. Pure numpy. |
+| `value_noise(rng, shape, octaves, persistence, lacunarity, base_freq)` | Layered 2-D value noise â†’ `float32 (H,W)` in `[0,1]`. Bilinear upsampling â€” smooth, no visible texels. Use for heightmaps, fog density, continuous fields. Pure numpy. |
+| `pixel_noise(rng, shape, octaves, persistence, lacunarity, base_freq)` | Layered 2-D pixel (nearest-neighbour) noise â†’ `float32 (H,W)` in `[0,1]`. Each octave upsampled with integer index math (`np.repeat`-equivalent) â€” crisp block-edged texels, retro pixel-art look. Use for ground textures, posterised surfaces. Pure numpy. |
 
 ### Built-in texture definitions
 
 | Registered name | File | Output |
 |---|---|---|
-| `"wasteland_ground"` | `procedural/textures/wasteland_ground.py` | `(256,256,4) uint8` RGBA dirt/dead-grass |
+| `"wasteland_ground"` | `procedural/textures/wasteland_ground.py` | `(256,256,4) uint8` RGBA dirt/dead-grass (smooth `value_noise`, bilinear) |
 | `"night_sky"` | `procedural/textures/night_sky.py` | `(512,1024,4) uint8` equirect star field + galaxy band (+Z pole at v=1, U-seamless, alpha = luminance for additive blending).  Params: `width`, `height`, `star_count` (pass `Config.sky_star_count`). |
 | `"rain_streak"` | `procedural/textures/rain_streak.py` | `(512,128,4) uint8` sparse vertical rain streaks, tileable in U and V, alpha = streak intensity.  Params: `width`, `height`, `streak_count`. |
+| `"grass_ground"` | `procedural/textures/grass_ground.py` | `(64,64,4) uint8` crisp pixel-art weathered grass; 8-colour posterised palette; `pixel_noise`-based.  Params: `width`, `height`. |
+| `"dirt_ground"` | `procedural/textures/dirt_ground.py` | `(64,64,4) uint8` crisp pixel-art dry dirt with dark clod clusters; 6-colour posterised palette; `pixel_noise`-based.  Params: `width`, `height`. |
+| `"moon_surface"` | `procedural/textures/moon_surface.py` | `(256,256,4) uint8` lunar disc: pale regolith + dark maria + vectorised crater field (bright rims, shadowed floors); alpha 255 inside the unit disc.  Seeded per world — every world grows a different moon.  Params: `size`, `crater_count`.  Sampled disc-locally by the sky-dome shader; phase terminator applied dynamically (not baked). |
+| `"grass_tuft"` | `procedural/textures/grass_tuft.py` | `(32,32,4) uint8` pixel-art grass-blade silhouette with **binary alpha** (255 on blades, 0 elsewhere — render with discard, never blend).  ~9 leaning blades, dark base → pale dried tip, blade bases on the bottom image row (V=0 after the upload flip).  Mapped onto the GPU grass tuft quads (`world/grass_renderer.py`).  Params: `width`, `height`, `blades`. |
+
+### Derived maps (`procedural/maps.py`)
+
+| Symbol | Description |
+|---|---|
+| `derive_normal_map(rgba, strength=1.4) -> (H,W,4) uint8` | Tangent-space normal map from a texture's luminance gradient (wrap-padded Sobel; brightness-as-height).  Used by main.py to build the GPU terrain shader's per-material normal maps — no hand-authored maps, keeping textures 100 % procedural. |
+| `flat_normal_map(size=4)` | All-(128,128,255) flat normal map (placeholder stage). |
+| `black_emission_map(size=4)` | All-black emission map (placeholder stage). |
 
 ## Imports Allowed
 
@@ -81,7 +94,7 @@ None.  Content generation is triggered by direct `get()` calls, not events.
 ```
 (name: str, world_seed: int, params_digest: str)
 ```
-`params_digest` is `blake2b-8(repr(sorted(params.items()))).hex()` — stable across processes.
+`params_digest` is `blake2b-8(repr(sorted(params.items()))).hex()` â€” stable across processes.
 
 If `set_world_seed()` is called with a new seed between two `get()` calls, the cache key differs and fresh content is generated.
 
@@ -89,10 +102,10 @@ If `set_world_seed()` is called with a new seed between two `get()` calls, the c
 All `ProceduralTextureDef.generate()` implementations must produce:
 - Shape `(H, W, 4)`, dtype `uint8`.
 - Channel order: RGBA (red=0, green=1, blue=2, alpha=3).
-- Alpha channel = 255 (fully opaque) unless the definition explicitly documents partial transparency.  Documented exceptions: `"night_sky"` (alpha = luminance — additive-blend mask) and `"rain_streak"` (alpha = streak intensity).
+- Alpha channel = 255 (fully opaque) unless the definition explicitly documents partial transparency.  Documented exceptions: `"night_sky"` (alpha = luminance â€” additive-blend mask) and `"rain_streak"` (alpha = streak intensity).
 
 ### No Per-Pixel Python Loops
-`value_noise` and all built-in texture defs use only numpy array expressions.  A Python loop over individual pixels is a correctness violation (performance cliff at 256² = 65 k iterations, much worse at 512²).
+`value_noise` and all built-in texture defs use only numpy array expressions.  A Python loop over individual pixels is a correctness violation (performance cliff at 256Â² = 65 k iterations, much worse at 512Â²).
 
 ## Examples
 
@@ -130,7 +143,7 @@ import numpy as np
 set_world_seed(42)
 rng = for_domain("terrain", "height", (cx, cy))  # per-chunk RNG
 heights = value_noise(rng, shape=(32, 32), octaves=6, base_freq=2)
-# Scale to amplitude in voxels: heights * 48  (≈24 m at 0.5 m/voxel)
+# Scale to amplitude in voxels: heights * 48  (â‰ˆ24 m at 0.5 m/voxel)
 assert heights.shape == (32, 32)
 assert heights.dtype == np.float32
 assert 0.0 <= heights.min() and heights.max() <= 1.0
@@ -146,7 +159,7 @@ from torn_apart.procedural.textures.base import ProceduralTextureDef, value_nois
 
 @register_def
 class CrackedRockDef(ProceduralTextureDef):
-    """256×256 grey cracked rock texture."""
+    """256Ã—256 grey cracked rock texture."""
     name = "cracked_rock"
 
     def generate(self, rng: np.random.Generator, **params) -> np.ndarray:
@@ -174,7 +187,7 @@ class CrackedRockDef(ProceduralTextureDef):
 
 ### Bridge to Panda3D (in world/ only)
 ```python
-# Only in world/ — do not call this from procedural/ or tests/
+# Only in world/ â€” do not call this from procedural/ or tests/
 from torn_apart.procedural import get
 from torn_apart.world.texture_bridge import to_panda_texture
 
@@ -185,7 +198,7 @@ node_path.set_texture(tex)
 
 ## Gotchas
 
-1. **Import order for registration**: `@register_def` calls `registry.register()` at decoration time (module import).  The texture module must be imported before `get()` is called.  `torn_apart/procedural/__init__.py` does this automatically by importing `torn_apart.procedural.textures`, which in turn imports each texture module.  If you add a new texture module, add an import line in `procedural/textures/__init__.py`.
+1. **Import order for registration**: `@register_def` calls `registry.register()` at decoration time (module import).  The texture module must be imported before `get()` is called.  `torn_apart/procedural/__init__.py` does this automatically by importing `torn_apart.procedural.textures`, which in turn imports each texture module (`wasteland_ground`, `night_sky`, `rain_streak`, `grass_ground`, `dirt_ground`).  If you add a new texture module, add an import line in `procedural/textures/__init__.py`.
 
 2. **`reset_registry()` is tests-only**: it drops all registered defs.  After calling it, you must re-register any defs you need (or re-import the package).  Never call it in production code.
 
@@ -193,6 +206,6 @@ node_path.set_texture(tex)
 
 4. **`value_noise` consumes `octaves` draws from `rng`**: each octave calls `rng.random((freq_h+1, freq_w+1))`.  The same `rng` object passed to a texture def must not be used for other purposes before or after calling `value_noise`, or determinism breaks within that def.  The registry always provides a fresh `rng` per `get()` call, so this is only relevant if you call `value_noise` outside the registry (e.g. directly in terrain generation with a `for_domain` RNG).
 
-5. **No per-pixel loops**: even `dtype` conversions like `.astype(np.uint8)` are fine; it is the Python `for pixel in array` pattern that is banned.  numpy ufuncs, indexing, broadcasting — all fine.
+5. **No per-pixel loops**: even `dtype` conversions like `.astype(np.uint8)` are fine; it is the Python `for pixel in array` pattern that is banned.  numpy ufuncs, indexing, broadcasting â€” all fine.
 
-6. **Panda3D vertical flip**: `world/texture_bridge.py` flips the array vertically before upload (OpenGL UV origin is bottom-left).  If a texture looks upside-down in-engine but correct in the PNG preview, the flip is the cause — it is correct behaviour, not a bug.
+6. **Panda3D vertical flip**: `world/texture_bridge.py` flips the array vertically before upload (OpenGL UV origin is bottom-left).  If a texture looks upside-down in-engine but correct in the PNG preview, the flip is the cause â€” it is correct behaviour, not a bug.

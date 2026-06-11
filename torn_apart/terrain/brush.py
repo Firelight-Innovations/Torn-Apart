@@ -209,6 +209,13 @@ def apply_brush(
     Per-chunk work is one vectorised mask expression on an ``np.indices`` world
     grid — no per-voxel Python loops (Hard Rule 4).
 
+    **Border remeshing:** when changed voxels touch a chunk boundary, the
+    adjacent chunk's mesh depends on them too (face culling for the blocky
+    mesher; border dual-cell vertex positions for the faceted mesher), so
+    those neighbour chunks are flagged ``dirty`` (remesh) — but NOT
+    ``edited`` (their voxels did not change, they stay out of the save delta)
+    and with no ``TerrainEditedEvent`` (their light columns are unchanged).
+
     Example
     -------
     >>> from torn_apart.core import EventBus
@@ -227,6 +234,7 @@ def apply_brush(
     center_np = center.to_numpy().astype(np.float64)
     mn, mx = brush.aabb(center_np)
     touched: set[tuple[int, int, int]] = set()
+    neighbor_dirty: set[tuple[int, int, int]] = set()
 
     # We need chunk geometry; read it from the first chunk we fetch.
     coords = None
@@ -263,6 +271,32 @@ def apply_brush(
         touched.add(coord)
         if bus is not None:
             bus.publish(TerrainEditedEvent(chunk_coords=coord, brush=brush))
+
+        # Changed voxels on a boundary slab affect the neighbour chunk's mesh
+        # (cross-chunk face culling + faceted border vertices) → queue those
+        # neighbours for a remesh.  Per-axis side flags; diagonal offsets are
+        # included when both/all of their axis sides were touched (slightly
+        # over-marks corner cases — a harmless extra remesh, never a miss).
+        last = n - 1
+        side = {
+            -1: (changed[0, :, :].any(), changed[:, 0, :].any(), changed[:, :, 0].any()),
+            1: (changed[last, :, :].any(), changed[:, last, :].any(), changed[:, :, last].any()),
+        }
+        for ox in (-1, 0, 1):
+            for oy in (-1, 0, 1):
+                for oz in (-1, 0, 1):
+                    if (ox, oy, oz) == (0, 0, 0):
+                        continue
+                    if (
+                        (ox == 0 or side[ox][0])
+                        and (oy == 0 or side[oy][1])
+                        and (oz == 0 or side[oz][2])
+                    ):
+                        neighbor_dirty.add((coord[0] + ox, coord[1] + oy, coord[2] + oz))
+
+    # Flag border neighbours for remesh (dirty only — not edited, no event).
+    for coord in neighbor_dirty - touched:
+        chunk_provider(coord).dirty = True
 
     return touched
 

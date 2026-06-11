@@ -1,8 +1,16 @@
 """
-torn_apart.lighting — Voxel light grid (Phase 4 v0: CPU sunlight).
+torn_apart.lighting — Scene lighting: GPU volumetric cascades + CPU fallback.
 
-Exports
--------
+Two backends (``config.lighting_backend``; see docs/systems/lighting.md):
+
+GPU ("gpu", default) — camera-centered radiance cascades with flood-fill GI,
+voxel-marched sun/moon shadows, dynamic point/area lights, emissive
+materials, and froxel volumetric fog/god rays.  Headless halves exported
+here (``VolumeWindow``, ``assemble_geometry``, ``MaterialPalette``,
+``LightSet``...); the panda3d half lives in ``torn_apart.lighting.gpu``
+(``GpuLightingPipeline``) and is deliberately NOT imported by this package.
+
+CPU ("cpu", legacy) — baked-vertex sunlight:
 LightGrid
     Per-chunk ``uint8 (16, 16, 16)`` light array store.
 occupancy_from_materials
@@ -39,12 +47,43 @@ from torn_apart.lighting.sunlight import (
     SunlightComputer,
     make_light_sampler,
 )
+from torn_apart.lighting.lights import (
+    AreaLight,
+    LightSet,
+    PointLight,
+)
+from torn_apart.lighting.palette import (
+    MaterialPalette,
+    build_default_palette,
+)
+from torn_apart.lighting.volume import (
+    EMISSION_SCALE,
+    GeometryVolume,
+    VolumeWindow,
+    assemble_geometry,
+)
+
+# NOTE: the GPU half (GpuLightingPipeline) lives in torn_apart.lighting.gpu
+# and is deliberately NOT imported here — it imports panda3d, and this
+# package must stay importable in the headless test suite.  Import it
+# explicitly: ``from torn_apart.lighting.gpu import GpuLightingPipeline``.
 
 __all__ = [
+    # legacy CPU backend (lighting_backend = "cpu")
     "LightGrid",
     "occupancy_from_materials",
     "LIGHT_FULL",
     "LIGHT_AMBIENT",
     "SunlightComputer",
     "make_light_sampler",
+    # GPU volumetric backend — headless halves
+    "PointLight",
+    "AreaLight",
+    "LightSet",
+    "MaterialPalette",
+    "build_default_palette",
+    "VolumeWindow",
+    "GeometryVolume",
+    "assemble_geometry",
+    "EMISSION_SCALE",
 ]

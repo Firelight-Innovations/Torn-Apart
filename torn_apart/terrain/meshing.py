@@ -59,30 +59,42 @@ class MeshArrays:
     """
     CPU-side mesh data for one chunk — handed to ``world/geometry_bridge.py``.
 
-    All arrays are contiguous numpy and describe a non-indexed-vertex-shared
-    (flat) triangle list: ``M = N // 4 * 6`` indices, ``N`` unique vertices
-    (4 per quad face, duplicated, never smoothed).
+    All arrays are contiguous numpy and describe a flat (non-vertex-shared)
+    triangle list.  Two producers exist:
+
+    - ``build_mesh`` (blocky): 4 vertices + 2 triangles per exposed face
+      (``verts_per_face = 4``), ``face_materials = None``.
+    - ``build_mesh_faceted`` (surface nets): 6 vertices = 2 *independent*
+      flat triangles per exposed face (``verts_per_face = 6``), and
+      ``face_materials`` set per face for material-split rendering.
 
     Attributes
     ----------
     positions : numpy.ndarray
         ``float32`` ``(N, 3)`` — vertex positions in **world meters** (Z-up).
     normals : numpy.ndarray
-        ``float32`` ``(N, 3)`` — flat per-face normal, identical for the 4
-        vertices of a quad (the retro hard-edge look).
+        ``float32`` ``(N, 3)`` — flat normal, identical for all vertices of a
+        face (blocky) or of a triangle (faceted).  Never smoothed.
     uvs : numpy.ndarray
         ``float32`` ``(N, 2)`` — planar UVs from world coords mod 1 m tile.
     colors : numpy.ndarray
         ``float32`` ``(N, 4)`` — RGBA vertex colours in ``[0, 1]``.  Greyscale
         × baked light (see ``light_sampler``); alpha = 1.0.
     indices : numpy.ndarray
-        ``uint32`` ``(M,)`` — triangle indices, two triangles per quad,
+        ``uint32`` ``(M,)`` — triangle indices, two triangles per face,
         counter-clockwise when viewed from outside (front faces).
+    face_materials : numpy.ndarray | None
+        ``uint8`` ``(F,)`` — material id of each face's solid voxel, in face
+        order.  ``None`` for the blocky mesher (single-texture rendering);
+        set by the faceted mesher so ``world/geometry_bridge.py`` can split
+        the chunk into one Geom per material (grass vs dirt textures).
+    verts_per_face : int
+        Vertices emitted per exposed face: 4 (blocky) or 6 (faceted).
 
     Counts (handy for tests / debug overlays)
     -----------------------------------------
-    ``face_count``  = number of exposed faces (quads)
-    ``vertex_count``= ``4 * face_count``
+    ``face_count``  = number of exposed faces
+    ``vertex_count``= ``verts_per_face * face_count``
     ``tri_count``   = ``2 * face_count``
     """
 
@@ -91,15 +103,17 @@ class MeshArrays:
     uvs: np.ndarray
     colors: np.ndarray
     indices: np.ndarray
+    face_materials: np.ndarray | None = None
+    verts_per_face: int = 4
 
     @property
     def face_count(self) -> int:
-        """Number of exposed quad faces emitted."""
-        return self.positions.shape[0] // 4
+        """Number of exposed faces emitted."""
+        return self.positions.shape[0] // self.verts_per_face
 
     @property
     def vertex_count(self) -> int:
-        """Number of vertices (4 per face)."""
+        """Number of vertices (``verts_per_face`` per face)."""
         return self.positions.shape[0]
 
     @property

@@ -26,9 +26,50 @@ from panda3d.core import (  # type: ignore[import]
     GeomVertexData,
     GeomVertexFormat,
     GeomEnums,
+    RenderState,
+    TextureAttrib,
+    TextureStage,
 )
 
-__all__ = ["to_geom", "to_geom_node", "make_vertex_format"]
+__all__ = ["to_geom", "to_geom_node", "make_vertex_format",
+           "make_material_state"]
+
+# Texture stages for the GPU-lighting terrain shader: sort order maps to
+# p3d_Texture0 (albedo), p3d_Texture1 (normal map), p3d_Texture2 (emission).
+_STAGE_ALBEDO = TextureStage("ta_albedo")
+_STAGE_ALBEDO.set_sort(0)
+_STAGE_NORMAL = TextureStage("ta_normal")
+_STAGE_NORMAL.set_sort(1)
+_STAGE_EMISSION = TextureStage("ta_emission")
+_STAGE_EMISSION.set_sort(2)
+
+
+def make_material_state(entry) -> RenderState:
+    """
+    Build the per-material Geom RenderState from a texture entry.
+
+    Parameters
+    ----------
+    entry : panda3d.core.Texture | tuple | None
+        Either a single albedo ``Texture`` (legacy fixed-function path) or an
+        ``(albedo, normal, emission)`` triple for the GPU terrain shader
+        (``p3d_Texture0/1/2`` by stage sort order).  ``None`` → empty state
+        (inherits any node-level fallback texture).
+
+    Returns
+    -------
+    panda3d.core.RenderState
+    """
+    if entry is None:
+        return RenderState.make_empty()
+    if isinstance(entry, tuple):
+        attrib = TextureAttrib.make()
+        for stage, tex in zip(
+                (_STAGE_ALBEDO, _STAGE_NORMAL, _STAGE_EMISSION), entry):
+            if tex is not None:
+                attrib = attrib.add_on_stage(stage, tex)
+        return RenderState.make(attrib)
+    return RenderState.make(TextureAttrib.make(entry))
 
 
 def make_vertex_format() -> GeomVertexFormat:
@@ -119,22 +160,83 @@ def to_geom(mesh) -> Geom:
     return geom
 
 
-def to_geom_node(mesh, name: str = "terrain_chunk") -> GeomNode:
+def _face_indices(face_count: int, verts_per_face: int) -> np.ndarray:
     """
-    Convenience: wrap :func:`to_geom` output in a named ``GeomNode``.
+    Rebuild the ``uint32`` triangle index array for ``face_count`` contiguous
+    faces of ``verts_per_face`` vertices each.
+
+    Valid because both meshers emit faces as contiguous, non-shared vertex
+    runs: 4 verts/face → quad pattern ``(0,1,2)(0,2,3)``; 6 verts/face →
+    two independent triangles, indices are simply sequential.
+    """
+    if verts_per_face == 6:
+        return np.arange(face_count * 6, dtype=np.uint32)
+    base = (np.arange(face_count, dtype=np.uint32) * verts_per_face)[:, None]
+    quad = np.array([0, 1, 2, 0, 2, 3], dtype=np.uint32)[None, :]
+    return (base + quad).reshape(-1)
+
+
+def to_geom_node(
+    mesh,
+    name: str = "terrain_chunk",
+    material_textures: dict | None = None,
+) -> GeomNode:
+    """
+    Wrap a chunk mesh in a named ``GeomNode``, optionally split per material.
 
     Parameters
     ----------
     mesh : MeshArrays
-        Terrain mesh arrays.
+        Terrain mesh arrays.  When ``mesh.face_materials`` is set (faceted
+        mesher) AND ``material_textures`` is given, the mesh is split into
+        one Geom per material id, each added with a ``RenderState`` carrying
+        that material's texture — so grass faces render with the grass
+        texture and dirt faces with the dirt texture inside a single node.
+        Otherwise one untextured Geom is added (the caller's node-level
+        ``set_texture`` applies, as before).
     name : str, default "terrain_chunk"
         Node name (use the chunk coord string for debugging).
+    material_textures : dict[int, Texture | tuple] | None
+        Material id → albedo ``Texture`` (legacy) or an ``(albedo, normal,
+        emission)`` triple for the GPU terrain shader (see
+        :func:`make_material_state`).  Ids missing from the dict fall back
+        to an empty RenderState (inherits the node-level texture, if any).
 
     Returns
     -------
     panda3d.core.GeomNode
         A GeomNode with the chunk's geometry, ready to parent under a NodePath.
+
+    Notes
+    -----
+    The split is pure-numpy boolean selection on whole faces (vertex runs are
+    contiguous per face) followed by the same bulk-write :func:`to_geom` path
+    — no per-vertex Python loops (Hard Rule 7).  Geom-level RenderStates
+    compose *over* NodePath states, so per-material textures win over any
+    node-level fallback texture.
     """
     node = GeomNode(name)
-    node.add_geom(to_geom(mesh))
+    face_mats = getattr(mesh, "face_materials", None)
+    if face_mats is None or material_textures is None or face_mats.size == 0:
+        node.add_geom(to_geom(mesh))
+        return node
+
+    from torn_apart.terrain.meshing import MeshArrays  # numpy-only dataclass
+
+    vpf = int(mesh.verts_per_face)
+    for mat in np.unique(face_mats):
+        sel = face_mats == mat                      # (F,) whole-face select
+        vsel = np.repeat(sel, vpf)                  # (N,) vertex select
+        count = int(sel.sum())
+        sub = MeshArrays(
+            positions=mesh.positions[vsel],
+            normals=mesh.normals[vsel],
+            uvs=mesh.uvs[vsel],
+            colors=mesh.colors[vsel],
+            indices=_face_indices(count, vpf),
+            face_materials=face_mats[sel],
+            verts_per_face=vpf,
+        )
+        node.add_geom(to_geom(sub),
+                      make_material_state(material_textures.get(int(mat))))
     return node

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import NotRequired, TypedDict
 
-PROTOCOL_VERSION = 3
+PROTOCOL_VERSION = 4
 DAEMON_VERSION = "0.1.0"
 
 # Binary framing: [u32 magic][u32 schema_id][u32 payload_id][payload], little-endian.
@@ -34,6 +34,12 @@ class Method:
     TERRAIN_BRUSH = "terrain.brush"
     EDIT_UNDO = "edit.undo"
     EDIT_REDO = "edit.redo"
+    SCENE_TREE = "scene.tree"
+    SCENE_CREATE = "scene.create"
+    SCENE_RENAME = "scene.rename"
+    SCENE_REPARENT = "scene.reparent"
+    SCENE_SET_TRANSFORM = "scene.set_transform"
+    SCENE_DELETE = "scene.delete"
 
 class Notification:
     LOG = "log"
@@ -41,6 +47,7 @@ class Notification:
     CHUNK_UNLOAD = "chunk.unload"
     STREAM_DONE = "stream.done"
     EDIT_STATE = "edit.state"
+    SCENE_CHANGED = "scene.changed"
 
 class HelloParams(TypedDict):
     protocol_version: int
@@ -145,4 +152,62 @@ class EditRedoResult(TypedDict):
     label: str
     can_undo: bool
     can_redo: bool
+
+class SceneTreeParams(TypedDict):
+    pass
+
+class SceneTreeResult(TypedDict):
+    objects: object
+
+class SceneCreateParams(TypedDict):
+    kind: str
+    parent: NotRequired[int]
+    name: NotRequired[str]
+    x: NotRequired[float]
+    y: NotRequired[float]
+    z: NotRequired[float]
+
+class SceneCreateResult(TypedDict):
+    ok: bool
+    object: object
+
+class SceneRenameParams(TypedDict):
+    id: int
+    name: str
+
+class SceneRenameResult(TypedDict):
+    ok: bool
+    object: object
+
+class SceneReparentParams(TypedDict):
+    id: int
+    parent: NotRequired[int]
+
+class SceneReparentResult(TypedDict):
+    ok: bool
+    object: object
+
+class SceneSetTransformParams(TypedDict):
+    id: int
+    px: NotRequired[float]
+    py: NotRequired[float]
+    pz: NotRequired[float]
+    rw: NotRequired[float]
+    rx: NotRequired[float]
+    ry: NotRequired[float]
+    rz: NotRequired[float]
+    sx: NotRequired[float]
+    sy: NotRequired[float]
+    sz: NotRequired[float]
+
+class SceneSetTransformResult(TypedDict):
+    ok: bool
+    object: object
+
+class SceneDeleteParams(TypedDict):
+    id: int
+
+class SceneDeleteResult(TypedDict):
+    ok: bool
+    removed: object
 

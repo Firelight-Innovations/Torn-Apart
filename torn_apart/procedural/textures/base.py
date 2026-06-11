@@ -43,7 +43,7 @@ import numpy as np
 
 from torn_apart.procedural.defs import ProceduralDef
 
-__all__ = ["ProceduralTextureDef", "value_noise"]
+__all__ = ["ProceduralTextureDef", "value_noise", "pixel_noise"]
 
 
 # ---------------------------------------------------------------------------
@@ -178,6 +178,119 @@ def value_noise(
     # Normalise to [0, 1]
     result = (accumulated / weight_total).astype(np.float32)
     # Clamp for floating-point edge cases
+    np.clip(result, 0.0, 1.0, out=result)
+    return result
+
+
+def pixel_noise(
+    rng: np.random.Generator,
+    shape: tuple[int, int],
+    octaves: int = 3,
+    persistence: float = 0.5,
+    lacunarity: float = 2.0,
+    base_freq: int = 4,
+) -> np.ndarray:
+    """
+    Generate layered 2-D pixel (nearest-neighbour) noise in ``[0, 1]`` (float32).
+
+    Like :func:`value_noise` but each octave's coarse random grid is upsampled
+    with **nearest-neighbour replication** (``np.repeat`` / integer index math)
+    instead of bilinear interpolation.  The result has crisp, block-edged
+    square patches at each frequency — the "pixelated" look of classic retro
+    ground textures (Vintage Story, Daggerfall).
+
+    This function is **pure numpy** — no per-pixel Python loops.
+
+    Parameters
+    ----------
+    rng : numpy.random.Generator
+        A seeded generator (from ``core.rng.for_domain``).  One random draw of
+        shape ``(freq_h, freq_w)`` is consumed per octave.
+    shape : tuple[int, int]
+        Output array shape ``(H, W)``.
+    octaves : int, optional
+        Number of noise octaves to sum.  More octaves → smaller visible blocks
+        overlaid on larger ones.  Default 3.
+    persistence : float, optional
+        Amplitude scale per octave (0 < persistence < 1).  ``0.5`` means each
+        octave has half the weight of the previous.  Default 0.5.
+    lacunarity : float, optional
+        Frequency multiplier per octave.  ``2.0`` doubles the coarse-grid
+        resolution each octave, halving the block size.  Default 2.0.
+    base_freq : int, optional
+        Number of coarse-grid cells along each axis for the first (lowest-
+        frequency) octave.  Default 4.  Increase for finer base blocks.
+
+    Returns
+    -------
+    numpy.ndarray
+        Shape ``(H, W)``, dtype ``float32``, values in ``[0.0, 1.0]``.
+        Normalised by the geometric sum of persistence weights.
+
+    Example
+    -------
+    ::
+
+        from torn_apart.core.rng import set_world_seed, for_domain
+        from torn_apart.procedural.textures.base import pixel_noise
+
+        set_world_seed(42)
+        rng = for_domain("texture", "grass_ground")
+        pn = pixel_noise(rng, shape=(64, 64), octaves=3, base_freq=4)
+        assert pn.shape == (64, 64)
+        assert pn.dtype == np.float32
+        assert 0.0 <= pn.min() and pn.max() <= 1.0
+
+    Notes
+    -----
+    Upsampling is done by mapping each output pixel ``(r, c)`` to the nearest
+    coarse-grid cell via integer division (floor), then indexing directly into
+    the ``(freq_h, freq_w)`` grid — identical to ``np.repeat`` along each axis
+    but expressed as a broadcast index for consistency with ``value_noise``.
+    This guarantees that pixels inside the same coarse cell are identical, giving
+    hard block edges with no smoothing artefacts.
+
+    Use ``pixel_noise`` for ground/terrain surface textures where you want
+    pixel-art aesthetics.  Use ``value_noise`` for smooth continuous fields
+    (heightmaps, fog density) where crisp edges would look wrong.
+    """
+    H, W = shape
+
+    accumulated = np.zeros((H, W), dtype=np.float64)
+    weight_total = 0.0
+    amplitude = 1.0
+    freq = float(base_freq)
+
+    for _ in range(octaves):
+        freq_h = max(1, int(round(freq)))
+        freq_w = max(1, int(round(freq)))
+
+        # Draw random values at coarse-grid cells — shape (freq_h, freq_w).
+        grid = rng.random((freq_h, freq_w))  # float64 in [0, 1)
+
+        # Map each output row / col to the nearest coarse cell (floor division).
+        # r_idx shape (H,), c_idx shape (W,).
+        # np.linspace: the i-th output pixel covers cell floor(i * freq_h / H).
+        r_f = np.linspace(0.0, freq_h, H, endpoint=False)
+        c_f = np.linspace(0.0, freq_w, W, endpoint=False)
+
+        r_idx = r_f.astype(np.int32)   # (H,)  nearest cell row
+        c_idx = c_f.astype(np.int32)   # (W,)  nearest cell col
+
+        # Clamp to valid range (should already be in-range, but guard against
+        # floating-point rounding at the boundary).
+        np.clip(r_idx, 0, freq_h - 1, out=r_idx)
+        np.clip(c_idx, 0, freq_w - 1, out=c_idx)
+
+        # Nearest-neighbour upsample via broadcast index: shape (H, W).
+        octave_val = grid[r_idx[:, None], c_idx[None, :]]
+
+        accumulated += amplitude * octave_val
+        weight_total += amplitude
+        amplitude *= persistence
+        freq *= lacunarity
+
+    result = (accumulated / weight_total).astype(np.float32)
     np.clip(result, 0.0, 1.0, out=result)
     return result
 

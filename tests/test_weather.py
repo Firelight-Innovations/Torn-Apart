@@ -104,7 +104,10 @@ class TestBlendContinuity:
         "cloud_density": 0.08,
         "rain_intensity": 0.08,
         "fog_density": 0.0030,    # full range ≈ 0.024 → max step ≈ 0.0018
-        "wind_speed": 1.2,        # full range ≈ 13 m/s → max step ≈ 0.98
+        # Synoptic wind: state-multiplier range (1.9 − 0.30) × 11 m/s max
+        # ≈ 17.6 m/s full range → max blend step ≈ 1.32, plus ≤ ~0.5 m/s/min
+        # of synoptic speed drift (tested in test_weather_synoptic.py).
+        "wind_speed": 1.8,
     }
 
     def test_no_param_pops_over_three_days(self):

@@ -58,6 +58,7 @@ from fire_engine.core.config import Config
 from fire_engine.core.event_bus import EventBus, WeatherChangedEvent
 from fire_engine.core.rng import for_domain
 from fire_engine.sky.celestial import GAME_SECONDS_PER_DAY, smoothstep
+from fire_engine.weather.synoptic import Synoptic
 
 __all__ = [
     "WeatherType",
@@ -108,16 +109,20 @@ _STATE_ORDER: tuple[WeatherType, ...] = (
 
 #: Per-state parameter targets (documented tuning values):
 #: (cloud_coverage 0–1, cloud_density 0–1, fog_density 1/m, rain 0–1,
-#:  base wind_speed m/s).
+#:  wind multiplier on the synoptic speed).
 #: fog_density is the exponential fog coefficient: ~0.0008 = crisp clear air,
 #: ~0.025 = thick FOG weather (visibility ≈ 3/0.025 = 120 m).
+#: Wind direction + base speed come from the closed-form synoptic flow
+#: (``fire_engine.weather.Synoptic``); the multiplier shapes it per state
+#: (storms gusty ×1.9, fog calm ×0.30).  With the default synoptic band of
+#: 1.5–11 m/s this gives e.g. STORM ≈ 12 m/s typical, FOG ≈ 0.5–3 m/s.
 _STATE_TARGETS: dict[WeatherType, tuple[float, float, float, float, float]] = {
-    WeatherType.CLEAR:    (0.12, 0.35, 0.0008, 0.0,  2.5),
-    WeatherType.CLOUDY:   (0.45, 0.55, 0.0012, 0.0,  3.5),
-    WeatherType.OVERCAST: (0.85, 0.80, 0.0030, 0.0,  4.5),
-    WeatherType.FOG:      (0.55, 0.50, 0.0250, 0.0,  0.8),   # low wind
-    WeatherType.RAIN:     (0.90, 0.85, 0.0060, 0.7,  6.5),
-    WeatherType.STORM:    (0.98, 0.95, 0.0080, 1.0, 12.0),   # high wind
+    WeatherType.CLEAR:    (0.12, 0.35, 0.0008, 0.0, 0.70),
+    WeatherType.CLOUDY:   (0.45, 0.55, 0.0012, 0.0, 0.90),
+    WeatherType.OVERCAST: (0.85, 0.80, 0.0030, 0.0, 1.00),
+    WeatherType.FOG:      (0.55, 0.50, 0.0250, 0.0, 0.30),   # calm
+    WeatherType.RAIN:     (0.90, 0.85, 0.0060, 0.7, 1.25),
+    WeatherType.STORM:    (0.98, 0.95, 0.0080, 1.0, 1.90),   # gusty
 }
 
 #: Markov transition matrix — row = from-state, column = to-state, in
@@ -283,6 +288,11 @@ class WeatherSystem:
         self._config = config
         self._bus = bus
 
+        #: Closed-form synoptic flow: wind direction/speed that drifts
+        #: smoothly over hours, and the displacement D(t) that storm cells
+        #: ride (M2+).  Pure function of (world_seed, game time).
+        self.synoptic: Synoptic = Synoptic(config)
+
         # Memoised discrete schedule: (day, segment) → WeatherType.
         self._sched_cache: dict[tuple[int, int], WeatherType] = {}
 
@@ -339,30 +349,27 @@ class WeatherSystem:
 
         return self._sched_cache[key]
 
-    def _wind_for_day(self, day: int) -> tuple[tuple[float, float], float]:
+    def _target_params(self, state: WeatherType, abs_t: float) -> WeatherParams:
         """
-        Per-day wind: (unit XY direction, speed jitter multiplier).
+        Raw (un-blended) parameter targets for *state* at absolute game time
+        ``abs_t``.
 
-        Direction is uniform on the circle from ``for_domain("weather",
-        "wind", day)``; the jitter multiplier (0.85–1.15) scales each state's
-        base wind speed so days feel different even in the same weather.
+        Wind comes from the synoptic flow evaluated at ``abs_t``: direction
+        is the synoptic direction (drifts smoothly over hours — no per-day
+        snaps), speed is the synoptic speed scaled by the state's multiplier.
+        Because every target queried within one frame uses the same
+        ``abs_t``, blending two targets never lerps across different wind
+        directions — wind stays continuous through every transition.
         """
-        rng = for_domain("weather", "wind", int(day))
-        angle = float(rng.uniform(0.0, 2.0 * math.pi))
-        jitter = float(rng.uniform(0.85, 1.15))
-        return (math.cos(angle), math.sin(angle)), jitter
-
-    def _target_params(self, state: WeatherType, day: int) -> WeatherParams:
-        """Raw (un-blended) parameter targets for *state* on *day*."""
-        cov, den, fog, rain, base_wind = _STATE_TARGETS[state]
-        wind_dir, jitter = self._wind_for_day(day)
+        cov, den, fog, rain, wind_mult = _STATE_TARGETS[state]
+        wind_dir, syn_speed = self.synoptic.wind(abs_t)
         return WeatherParams(
             cloud_coverage=cov,
             cloud_density=den,
             fog_density=fog,
             rain_intensity=rain,
             wind_dir=wind_dir,
-            wind_speed=base_wind * jitter,
+            wind_speed=syn_speed * wind_mult,
         )
 
     def _natural_params(self, day: int, tod: float) -> WeatherParams:
@@ -371,12 +378,15 @@ class WeatherSystem:
 
         During the first ``BLEND_SECONDS`` of each segment the params are
         smoothstep-lerped from the previous segment's targets (previous day's
-        segment 11 across midnight, carrying that day's wind) to the current
-        segment's targets; afterwards they sit at the current targets.
+        segment 11 across midnight) to the current segment's targets;
+        afterwards they sit at the current targets.  Both targets are
+        evaluated with the synoptic wind at *this* instant, so wind never
+        snaps at segment (or midnight) boundaries.
         """
+        abs_t = day * GAME_SECONDS_PER_DAY + tod
         seg = min(int(tod // SEGMENT_SECONDS), SEGMENTS_PER_DAY - 1)
         cur_state = self._scheduled_state(day, seg)
-        cur = self._target_params(cur_state, day)
+        cur = self._target_params(cur_state, abs_t)
 
         if seg == 0:
             prev_day, prev_seg = day - 1, SEGMENTS_PER_DAY - 1
@@ -385,7 +395,7 @@ class WeatherSystem:
         if prev_day < 0:
             return cur     # world start: no previous segment to blend from
         prev_state = self._scheduled_state(prev_day, prev_seg)
-        prev = self._target_params(prev_state, prev_day)
+        prev = self._target_params(prev_state, abs_t)
 
         t_in_seg = tod - seg * SEGMENT_SECONDS
         blend = smoothstep(t_in_seg, 0.0, BLEND_SECONDS)
@@ -439,7 +449,7 @@ class WeatherSystem:
                 self._override_from = (
                     self._last_params if self._last_params is not None else natural
                 )
-            target = self._target_params(self._override, day)
+            target = self._target_params(self._override, abs_t)
             bt = smoothstep(
                 abs_t - self._override_start_abs_t, 0.0, BLEND_SECONDS
             )

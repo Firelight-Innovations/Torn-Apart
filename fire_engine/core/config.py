@@ -593,6 +593,14 @@ class Config:
     wind_leaf_density_per_m2: float = 0.15
     wind_leaf_size_m:         float = 0.12
     wind_leaf_max_instances:  int   = 20_000
+    # --- Weather simulation ([weather] table; consumed by fire_engine/weather/) ---
+    # Synoptic flow: the slow steering current that carries storm cells.
+    # Closed-form pure function of (seed, game time) — see weather/synoptic.py.
+    weather_synoptic_components:   int   = 4      # vector sinusoids in W(t)
+    weather_synoptic_speed_min_ms: float = 1.5    # guaranteed speed band (m/s)
+    weather_synoptic_speed_max_ms: float = 11.0
+    weather_synoptic_period_min_h: float = 2.5    # sinusoid period band (game h)
+    weather_synoptic_period_max_h: float = 14.0
     # --- Graphics quality ([graphics] table; defaults == "high" preset) ---
     gfx_preset:                 str   = "high"
     gfx_post_process:           bool  = True
@@ -653,8 +661,8 @@ def load_config(path: str = "config.toml") -> Config:
 
     The TOML file may have ``[debug]``, ``[sky]``, ``[terrain]``,
     ``[lighting]``, ``[fog]``, ``[grass]``, ``[flora]``, ``[trees]``,
-    ``[wind]`` and ``[graphics]`` tables; their keys are flattened into the
-    same ``Config`` struct.  Any key absent from the file falls back to the
+    ``[wind]``, ``[weather]`` and ``[graphics]`` tables; their keys are
+    flattened into the same ``Config`` struct.  Any key absent from the file falls back to the
     ``Config`` dataclass default.
 
     ``[graphics]`` is special: its ``preset`` key (off/low/medium/high) is
@@ -693,7 +701,7 @@ def load_config(path: str = "config.toml") -> Config:
     # just carry fully-named Config fields; [graphics] is special — its keys go
     # through preset expansion first (see resolve_graphics_preset).
     _TABLES = ("debug", "sky", "terrain", "lighting", "fog", "grass", "flora",
-               "trees", "wind", "graphics")
+               "trees", "wind", "weather", "graphics")
     flat: dict = {k: v for k, v in raw.items() if k not in _TABLES}
     for table in _TABLES:
         if table == "graphics":

@@ -106,6 +106,16 @@ wind_leaf_density_per_m2 = 0.15  # leaf-litter instances per m2 of a "trees" vol
 wind_leaf_size_m = 0.12        # leaf billboard size (meters; WP4)
 wind_leaf_max_instances = 20000  # hard cap on leaf instances per volume (WP4)
 
+[weather]
+# Spatial weather simulation (fire_engine\weather\). Synoptic flow = the slow
+# steering current (hours-scale, closed-form function of seed + game time)
+# that sets the base wind and carries storm cells. Units: m/s, game hours.
+weather_synoptic_components = 4      # vector sinusoids in the flow
+weather_synoptic_speed_min_ms = 1.5  # guaranteed wind-speed band (m/s)
+weather_synoptic_speed_max_ms = 11.0
+weather_synoptic_period_min_h = 2.5  # direction/speed drift period band (game h)
+weather_synoptic_period_max_h = 14.0
+
 [sky]
 sky_cloud_altitude_m = 96.0    # cloud layer base altitude (world Z, meters)
 sky_cloud_thickness_m = 8.0    # cloud layer vertical thickness (meters)

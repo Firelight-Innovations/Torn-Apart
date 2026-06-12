@@ -65,9 +65,12 @@ def apply_terrain_shader(
     """
     Compile and apply the volumetric terrain shader to ``terrain_root``.
 
-    Binds the pipeline's static lighting inputs immediately; the App's frame
-    loop must call ``pipeline.update_surface_inputs(terrain_root, sky_state)``
-    each frame (window origins, radiance ping-pong, sun/moon uniforms).
+    The lighting uniform contract is NOT bound here: main.py binds it once on
+    ``app.render`` (``pipeline.bind_surface_inputs(app.render)``) and the
+    App's frame loop refreshes it there each frame
+    (``pipeline.update_surface_inputs(app.render, sky_state)``) — every
+    lit-surface shader in the graph (terrain, foliage, future buildings/NPCs)
+    inherits it from ``render``.
 
     Also bakes the **world-space procedural ground** palette LUT (one row per
     terrain material, from the ``grass_ground``/``dirt_ground`` colour ramps)
@@ -99,7 +102,9 @@ def apply_terrain_shader(
                          vertex=TERRAIN_VERTEX,
                          fragment=TERRAIN_FRAGMENT)
     terrain_root.set_shader(shader)
-    pipeline.bind_surface_inputs(terrain_root)
+    # The lighting uniform contract itself is bound on ``render`` (main.py
+    # calls ``pipeline.bind_surface_inputs(app.render)``) so EVERY lit-surface
+    # shader in the graph inherits it — terrain only binds what is its own.
     # Terrain always runs the celestial-shadow refinement march (the
     # lit_surface.glsl LIT_REFINE block); foliage roots bind their own
     # value from ``config.gfx_foliage_shadow_refine``.

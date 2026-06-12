@@ -189,8 +189,9 @@ class FloraRendererComponent(Component):
                                    vertex=flora_shaders.FLORA_VERTEX,
                                    fragment=flora_shaders.FLORA_FRAGMENT)
 
-        # Under terrain_root: inherits the cascade/fog/celestial AND wind
-        # shader inputs bound + refreshed there each frame.
+        # Lighting (cascade/fog/celestial) inherits from ``render`` where
+        # GpuLightingPipeline binds the lit-surface contract; the wind
+        # shader inputs inherit from terrain_root.
         self._root = self.base.terrain_root.attach_new_node("flora_root")
         self._root.set_two_sided(True)        # crossed quads face both ways
         # Scalar-fallback sway defaults until the first late_update.

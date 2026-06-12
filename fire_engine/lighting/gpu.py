@@ -12,8 +12,10 @@ The one lighting file allowed to touch the GPU (ARCHITECTURE §4 rule 4:
 - the per-frame schedule: re-assemble/upload only when a cascade window
   recenters or terrain changes; re-inject + re-gather only when the volume,
   sun/moon, sky or dynamic lights changed; fog every frame,
-- the shader-input contract consumed by `world/terrain_shader.py`
-  (`bind_surface_inputs` once + `update_surface_inputs` per frame).
+- the shader-input contract consumed by every lit-surface shader (the GLSL
+  side lives in `world/shaders/lit_surface.glsl`): `bind_surface_inputs`
+  once on ``app.render`` + `update_surface_inputs` there per frame —
+  terrain, foliage and future buildings/NPCs inherit it scene-graph-wide.
 
 Everything headless (window math, assembly, light packing) lives in the
 sibling panda3d-free modules so it stays unit-testable; this module is
@@ -24,6 +26,7 @@ Example (wired by main.py when ``config.lighting_backend == "gpu"``)
     pipeline = GpuLightingPipeline(cfg, app, chunk_manager, bus)
     app.lighting_pipeline = pipeline          # App.update calls it per frame
     apply_terrain_shader(app.terrain_root, pipeline)   # world/terrain_shader
+    pipeline.bind_surface_inputs(app.render)  # lit-surface contract for ALL
 """
 
 from __future__ import annotations
@@ -882,15 +885,18 @@ class GpuLightingPipeline:
             self._fog_integrate_np.get_attrib(ShaderAttrib), gsg)
 
     # ------------------------------------------------------------------
-    # Surface-shader contract (consumed by world/terrain_shader.py)
+    # Surface-shader contract (lit_surface.glsl — every lit-surface shader)
     # ------------------------------------------------------------------
 
     def bind_surface_inputs(self, node: NodePath) -> None:
         """
         Bind the static lighting samplers/uniforms onto a render NodePath.
 
-        Call once after applying the terrain shader; per-frame values are
-        refreshed by :meth:`update_surface_inputs`.
+        Call once at boot with ``app.render`` (main.py does) so every shader
+        that includes ``world/shaders/lit_surface.glsl`` — terrain, foliage,
+        future buildings/NPCs — inherits the contract scene-graph-wide.
+        Per-frame values are refreshed by :meth:`update_surface_inputs`.
+        Shaders that don't declare these uniforms simply ignore them.
         """
         c0, c1, c2 = self.cascades
         node.set_shader_input("u_c0_geom", c0.geom)
@@ -935,7 +941,7 @@ class GpuLightingPipeline:
         Parameters
         ----------
         node : NodePath
-            Same node given to :meth:`bind_surface_inputs` (terrain_root).
+            Same node given to :meth:`bind_surface_inputs` (``app.render``).
         sky_state : SkyState | None
             For sun/moon direction + radiance uniforms.
         """

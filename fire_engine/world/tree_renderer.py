@@ -211,9 +211,10 @@ class TreeRendererComponent(Component):
             vertex=tree_shaders.TREE_IMPOSTOR_VERTEX,
             fragment=flora_shaders.FLORA_FRAGMENT)
 
-        # Under terrain_root: inherits the cascade/fog/celestial AND wind
-        # shader inputs bound + refreshed there each frame.  Two-sided for
-        # the leaf quads (tree.frag flips normals on back faces).
+        # Lighting (cascade/fog/celestial) inherits from ``render`` where
+        # GpuLightingPipeline binds the lit-surface contract; the wind
+        # shader inputs inherit from terrain_root.  Two-sided for the leaf
+        # quads (tree.frag flips normals on back faces).
         self._root = self.base.terrain_root.attach_new_node("tree_root")
         self._root.set_two_sided(True)
         # Scalar-fallback sway defaults until the first late_update.

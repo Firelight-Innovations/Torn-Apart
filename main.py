@@ -411,6 +411,11 @@ def build_demo():
                              seed=ground_seed,
                              texels_per_m=cfg.ground_texels_per_m,
                              extra_materials=_gi_ground_lut_entries())
+        # Bind the lit-surface uniform contract on ``render`` so EVERY shader
+        # that includes lit_surface.glsl — terrain, foliage, future
+        # buildings/NPCs anywhere in the graph — inherits it.  The frame loop
+        # refreshes it there (app.py step 6).
+        lighting_pipeline.bind_surface_inputs(app.render)
 
     # 10. Pre-stream spawn area + seed sunlight + upload initial meshes.
     _prewarm_terrain(app, chunk_manager, sunlight, light_sampler)

@@ -443,14 +443,15 @@ class App(ShowBase):
         #    recomputes columns on bus events; remesh bakes vertex colours).
         #    GPU backend: drive the volumetric pipeline — cascade windows
         #    follow the camera, dirty volumes re-upload, compute passes
-        #    (inject / propagate / fog) dispatch, terrain uniforms refresh.
+        #    (inject / gather / fog) dispatch, and the lit-surface uniforms
+        #    refresh on ``render`` (inherited by every lit shader).
         if self.lighting_pipeline is not None:
             sky_state = (self.sky_system.state
                          if self.sky_system is not None else None)
             self.lighting_pipeline.update(
                 self.camera_go.transform.position, sky_state, real_dt)
             self.lighting_pipeline.update_surface_inputs(
-                self.terrain_root, sky_state)
+                self.render, sky_state)
 
         # 6b. integration hook: HDR post-processing (Phase 2+)
         #     Refresh per-frame post inputs (bloom strength, lens-flare sun

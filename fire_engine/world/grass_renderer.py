@@ -177,8 +177,9 @@ class GrassRendererComponent(Component):
         self._blade_h = float(cfg.grass_blade_height_m)
         self._tuft_geom = _build_tuft_geom(self._blade_h)
 
-        # Under terrain_root: inherits every cascade/fog/celestial shader
-        # input GpuLightingPipeline binds + refreshes there each frame.
+        # The lit-surface lighting contract (cascade/fog/celestial uniforms)
+        # is bound + refreshed on ``render`` by GpuLightingPipeline and
+        # inherited here; terrain_root parenting groups the world geometry.
         self._root = self.base.terrain_root.attach_new_node("grass_root")
         self._shader = Shader.make(Shader.SL_GLSL,
                                    vertex=grass_shaders.GRASS_VERTEX,

@@ -5,9 +5,10 @@ Two render components, both consuming the wind field uploaded on
 ``App.terrain_root`` by ``WindSystemComponent`` (``world/wind_renderer.py``).
 Neither needs any new uniform: parented under ``terrain_root`` they inherit the
 wind contract (``u_wind_tex``/``u_wind_origin``/``u_wind_cell_m``/
-``u_wind_cells``/``u_wind_enabled``), the camera (``u_cam_pos``) and — for
-leaves — the full radiance-cascade + froxel-fog lighting set, all by scene-graph
-inheritance (the same mechanism that lights the grass).  The one uniform NOT
+``u_wind_cells``/``u_wind_enabled``), and — for leaves — the full
+radiance-cascade + froxel-fog lighting set (the lit-surface contract, bound on
+``render`` by GpuLightingPipeline) plus the camera (``u_cam_pos``), all by
+scene-graph inheritance (the same mechanism that lights the grass).  The one uniform NOT
 inherited is the animation clock ``u_time_s``: grass binds it on grass_root (its
 own node), not terrain_root, so each mote component accumulates and binds its
 own ``u_time_s`` in ``late_update`` (the same dt-accumulation grass uses).  Both

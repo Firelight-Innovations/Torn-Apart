@@ -108,6 +108,9 @@ from fire_engine.world.terrain_shader import apply_terrain_shader
 pipeline = GpuLightingPipeline(cfg, app, chunk_manager, bus)
 app.lighting_pipeline = pipeline            # App frame task drives update()
 apply_terrain_shader(app.terrain_root, pipeline)
+pipeline.bind_surface_inputs(app.render)    # lit-surface contract for ALL
+                                            # lit shaders (refreshed on render
+                                            # by the frame task)
 # mesher gets light_sampler=None → vertex colours carry only the facet accent
 ```
 

@@ -187,6 +187,9 @@ class EditorSession:
         before = self.snapshot(coords)
         touched = apply_brush(brush, center, mode, material, chunk_provider=self.cm, bus=self.bus)
         after = self.snapshot(coords)
+        # Same-frame remesh (bypasses the 2-chunk stream budget) so the edit
+        # has no see-through hole while border neighbours wait their turn.
+        self.cm.remesh_edited(touched)
         return coords, touched, before, after
 
     def restore(self, snapshot: dict) -> None:
@@ -197,6 +200,9 @@ class EditorSession:
             chunk.edited = not np.array_equal(mats, generate_chunk(coord, self.config))
             chunk.dirty = True
             self.cm.pending_meshes.pop(coord, None)
+        # Remesh the restored chunks immediately (undo/redo should not show a
+        # hole while the budgeted stream path catches up).
+        self.cm.remesh_edited(snapshot.keys())
 
     def save(self, path: str) -> None:
         """Write a delta save (terrain edits) through the engine SaveManager."""

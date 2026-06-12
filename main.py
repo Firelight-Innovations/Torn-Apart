@@ -439,9 +439,13 @@ def build_demo():
         Builds the camera ray (origin = camera position, direction = camera
         forward), raycasts the voxel field, and on a hit carves a crater at the
         hit point.  apply_brush flags touched chunks dirty + edited and publishes
-        TerrainEditedEvent; the SunlightComputer relights the column; the next
-        stream_frame remeshes → crater + relight appear.  Bound to left-click
-        (while flying) and to the dev overlay's "Fire Explosion" action button.
+        TerrainEditedEvent; remesh_edited then rebuilds the crater chunks (and
+        their border neighbours) immediately — bypassing the 2-chunk streaming
+        budget — so the crater geometry and its relight (the lighting pipeline's
+        own same-frame edit path) appear together on the very next rendered
+        frame, with no see-through hole while neighbours wait their turn.
+        Bound to left-click (while flying) and to the dev overlay's
+        "Fire Explosion" action button.
         """
         origin = app.camera_go.transform.position
         direction = app.camera_go.transform.forward
@@ -464,6 +468,10 @@ def build_demo():
             chunk_provider=chunk_manager.get_or_create,
             bus=bus,
         )
+        # Same-frame remesh: the crater (and the faces it exposed in border
+        # neighbours) must exist before this frame renders, or the player sees
+        # a black hole through the world until the stream budget catches up.
+        chunk_manager.remesh_edited(touched, light_sampler)
         # Volumetric flash: a brief, bright point light in the radiance
         # volume — the GI flood fill carries it into the crater and the
         # froxel fog catches it as a glow.
@@ -709,10 +717,13 @@ def build_gi_test_room(app) -> tuple[float, float, float]:
     z0 = (hit.point.z if hit is not None else cfg.ground_height_m) + 0.5
     cz = z0 + 2.25                                       # interior mid-height
 
+    room_touched: set = set()
+
     def box(half: tuple, at: tuple, mode: BrushMode, material: int = 1):
-        apply_brush(BoxBrush(half_extents_m=Vec3(*half)), Vec3(*at), mode,
-                    material=material,
-                    chunk_provider=chunk_manager.get_or_create, bus=bus)
+        room_touched.update(apply_brush(
+            BoxBrush(half_extents_m=Vec3(*half)), Vec3(*at), mode,
+            material=material,
+            chunk_provider=chunk_manager.get_or_create, bus=bus))
 
     # Solid white block, then hollow the interior.
     box((5.5, 5.5, 3.25), (cx, cy, z0 + 2.25), BrushMode.ADD, _MAT_GI_WHITE)
@@ -735,6 +746,11 @@ def build_gi_test_room(app) -> tuple[float, float, float]:
         box((1.25, 0.75, 1.5), (cx, cy - sign * 5.0, z0 + 1.5),
             BrushMode.REMOVE)
     box((0.75, 0.75, 1.0), (cx + 2.8, cy + 2.8, z0 + 5.0), BrushMode.REMOVE)
+
+    # Same-frame remesh of every chunk the room carved (plus border
+    # neighbours) — one hitch instead of seconds of see-through walls while
+    # the 2-chunk stream budget catches up.
+    chunk_manager.remesh_edited(room_touched, app.light_sampler)
 
     # Co-locate an AreaLight with the emissive ceiling panel.  The voxel
     # emission alone glows but only fills its diffusion reach (~4 m); a real

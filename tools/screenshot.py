@@ -253,10 +253,21 @@ def capture(frames: int, out_name: str, explode: bool,
         _apply_sky_settings(app, time_of_day, weather)
 
     if explode:
-        # Carve a crater straight below the camera so the relit interior shows.
+        # Carve a crater at the terrain surface ahead of the camera so the
+        # relit interior shows.  Raycast down for the surface — a fixed
+        # camera-relative offset misses it entirely at some spawn heights
+        # (the sphere ends up fully in air or fully buried → no visible edit).
+        from fire_engine.terrain import raycast_voxel
         cam = app.camera_go.transform.position
-        center = Vec3(cam.x, cam.y + 10.0, cam.z - 8.0)
-        apply_brush(
+        fwd = app.camera_go.transform.forward
+        # 10 m ahead along the camera's horizontal facing (not a fixed axis).
+        fl = max((fwd.x ** 2 + fwd.y ** 2) ** 0.5, 1e-6)
+        ax, ay = cam.x + 10.0 * fwd.x / fl, cam.y + 10.0 * fwd.y / fl
+        hit = raycast_voxel(
+            Vec3(ax, ay, cam.z + 60.0), Vec3(0.0, 0.0, -1.0),
+            app.chunk_manager.get_or_create, max_distance_m=150.0)
+        center = hit.point if hit is not None else Vec3(ax, ay, cam.z - 8.0)
+        touched = apply_brush(
             SphereBrush(3.0),
             center,
             BrushMode.REMOVE,
@@ -264,6 +275,9 @@ def capture(frames: int, out_name: str, explode: bool,
             chunk_provider=app.chunk_manager.get_or_create,
             bus=app._event_bus,
         )
+        # Same-frame remesh, matching the game's fire_explosion path.
+        app.chunk_manager.remesh_edited(touched, app.light_sampler)
+        print("EXPLODE at", center, "-", len(touched), "chunk(s) touched")
 
     if gi_room:
         # Build the Cornell-style GI test room ahead of the camera; optionally

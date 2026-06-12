@@ -31,10 +31,12 @@ pack_wind_field
     BGRA).
 vertical_profile
     Analytic boundary-layer wind-speed multiplier vs. height above ground.
-
-Note: the venturi terrain-funneling worker (``VenturiWorker`` / ``solve_venturi``)
-is added by WP2; ``WindField`` accepts ``worker=None`` and applies an identity
-correction until then.
+VenturiWorker, VenturiJob, VenturiResult, solve_venturi
+    Off-thread terrain-funneling solver (mirror of the lighting assembly
+    worker): wind speeds up through gaps/canyons and rises over windward
+    obstacles.  ``WindField(cfg, worker)`` consumes a started worker; pass
+    ``chunks`` into ``update()`` on recenter / terrain edits to drive it.
+    ``solve_venturi(job)`` is the pure on-thread core (also used in tests).
 
 Quick-start example
 -------------------
@@ -59,6 +61,8 @@ from fire_engine.wind.field import (
     vertical_profile,
 )
 from fire_engine.wind.modifiers import GustFront, WindModifier
+from fire_engine.wind.venturi import solve_venturi
+from fire_engine.wind.worker import VenturiJob, VenturiResult, VenturiWorker
 
 __all__ = [
     "WindField",
@@ -67,4 +71,8 @@ __all__ = [
     "GustFront",
     "pack_wind_field",
     "vertical_profile",
+    "VenturiWorker",
+    "VenturiJob",
+    "VenturiResult",
+    "solve_venturi",
 ]

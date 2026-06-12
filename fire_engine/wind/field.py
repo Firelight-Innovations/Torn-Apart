@@ -65,6 +65,7 @@ Example
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -72,6 +73,10 @@ from fire_engine.core.config import Config
 from fire_engine.wind.gusts import GustModes, build_modes, eval_gusts
 from fire_engine.wind.modifiers import WindModifier
 from fire_engine.wind.region import WindRegion
+from fire_engine.wind.worker import VenturiJob
+
+if TYPE_CHECKING:
+    from fire_engine.wind.worker import VenturiWorker
 
 __all__ = [
     "WindSnapshot",
@@ -183,10 +188,12 @@ class WindField:
     ----------
     config : Config
         Engine config (all ``wind_*`` fields).
-    worker : object | None, default None
-        Venturi worker (terrain funneling).  **WP1 ships ``None``** — the
-        venturi correction is identity until WP2 wires the worker in at the
-        clearly-marked seam in :meth:`update`.
+    worker : VenturiWorker | None, default None
+        Off-thread terrain-venturi solver
+        (:class:`~fire_engine.wind.worker.VenturiWorker`).  ``None`` ⇒ the
+        venturi correction stays identity (no funneling, ``vz == 0``); pass a
+        started worker and feed ``chunks`` into :meth:`update` to enable wind
+        speeding up through gaps and rising over windward obstacles.
 
     Example
     -------
@@ -198,9 +205,9 @@ class WindField:
     64
     """
 
-    def __init__(self, config: Config, worker: object | None = None) -> None:
+    def __init__(self, config: Config, worker: "VenturiWorker | None" = None) -> None:
         self._cfg = config
-        self._worker = worker          # WP2: VenturiWorker | None
+        self._worker = worker          # VenturiWorker | None (terrain funneling)
         self._region = WindRegion(
             cells=int(config.wind_cells),
             cell_m=float(config.wind_cell_m),
@@ -214,6 +221,21 @@ class WindField:
         self._front: WindSnapshot | None = None
         # Ground height for the vertical profile (flat world baseline).
         self._z_ground = float(config.ground_height_m)
+
+        # --- Venturi (terrain-funneling) state ------------------------------
+        # The applied correction grids and the origin they were solved for.
+        # Identity (no funneling) until the worker returns a matching-origin
+        # result; re-submitted on every recenter (see update()).
+        cells = int(config.wind_cells)
+        self._venturi_speedup = np.ones((cells, cells), dtype=np.float32)
+        self._venturi_deflect = np.zeros((cells, cells, 2), dtype=np.float32)
+        # vz updraft gain per cell: wind_updraft_gain * max(speedup - 1, 0).
+        self._updraft_gain_grid = np.zeros((cells, cells), dtype=np.float32)
+        # Origin the currently-applied correction is valid for (None = identity).
+        self._venturi_origin: tuple[int, int] | None = None
+        # Monotonic job id + whether any job has ever been submitted.
+        self._venturi_seq = 0
+        self._venturi_ever_submitted = False
 
     # ------------------------------------------------------------------
     # Modifiers
@@ -266,8 +288,12 @@ class WindField:
                t_eff      = game_time * (1 + storm_freq_gain*storminess)
 
         3. **Compose** mean wind + gusts + turbulence over the grid.
-        4. **Venturi** terrain-funneling correction (**WP2 seam** — identity in
-           WP1), then run **modifiers**, then publish ``self._front``.
+        4. **Venturi** terrain-funneling correction: orchestrate the off-thread
+           :class:`~fire_engine.wind.worker.VenturiWorker` (submit on
+           recenter / when ``chunks`` is passed, drain + commit the newest
+           matching-origin result), apply ``vx *= speedup;
+           vx += deflect_x*|mean|`` (same for ``y``), then run **modifiers**
+           and publish ``self._front``.  Identity when no worker / no result.
 
         Determinism note on ``t_eff``: scaling game time by storminess means a
         *changing* storminess slightly chirps the gust frequency (the phase
@@ -296,13 +322,17 @@ class WindField:
         player_pos : sequence of floats
             Player/camera world position; only ``[0], [1]`` (XY) are used.
         chunks : dict | None, default None
-            Loaded chunk materials for the venturi solver (**WP2** consumes
-            this; ignored in WP1).
+            Loaded chunks for the venturi solver — ``coord -> Chunk`` (or bare
+            ``materials`` ndarray).  The renderer passes this **only on a
+            recenter or terrain-edit (dirty) event**, so a non-``None`` value is
+            itself the recompute request; ``None`` (the common per-frame case)
+            keeps the previously-committed correction.  Ignored when ``worker``
+            is ``None``.
         """
         cfg = self._cfg
 
         # --- 1. Recenter (free: analytic field, just rebuild meshes) --------
-        self._region.maybe_recenter(player_pos)
+        recentered = self._region.maybe_recenter(player_pos)
         X = self._region.X
         Y = self._region.Y
 
@@ -342,13 +372,20 @@ class WindField:
             turb_amt * (0.5 + 0.5 * np.hypot(gust_x, gust_y))
         ).astype(np.float32)
 
-        # --- 4. Venturi correction (WP2 SEAM — identity until then) ---------
-        # >>> WP2 inserts terrain-funneling here: drain VenturiResults keyed by
-        # >>> highest seq, then  vx *= speedup; vx += deflect_x * |mean|  (same
-        # >>> for y), and feed the analytic updraft to sample().  Until then the
-        # >>> correction is the identity (no-op) and `chunks`/`self._worker` are
-        # >>> unused.  Do NOT change the published-snapshot shape/channels here.
-        # (identity)
+        # --- 4. Venturi terrain-funneling correction ------------------------
+        # Orchestrate the off-thread solver: (a) re-submit on recenter, (b)
+        # submit the first time `chunks` is available, or (c) submit whenever
+        # the caller passes `chunks` (the renderer only passes them on a
+        # dirty/recenter event — see the system doc), then drain + apply the
+        # newest result whose origin matches the CURRENT region origin.  The
+        # correction is the identity until such a result lands.
+        self._venturi_step(recentered, chunks, (mean_x, mean_y))
+        if self._venturi_origin == self._region.origin_cell:
+            mean_mag = float(np.hypot(mean_x, mean_y))
+            vx = (vx * self._venturi_speedup
+                  + self._venturi_deflect[..., 0] * mean_mag).astype(np.float32)
+            vy = (vy * self._venturi_speedup
+                  + self._venturi_deflect[..., 1] * mean_mag).astype(np.float32)
 
         # --- Modifiers (volumetric-weather seam), then atomic publish -------
         for mod in self._modifiers:
@@ -368,6 +405,118 @@ class WindField:
             cells=self._region.cells,
             game_time=float(game_time),
         )
+
+    # ------------------------------------------------------------------
+    # Venturi orchestration (off-thread terrain funneling)
+    # ------------------------------------------------------------------
+
+    def _venturi_step(
+        self,
+        recentered: bool,
+        chunks: dict | None,
+        mean: tuple[float, float],
+    ) -> None:
+        """
+        Submit / drain the venturi worker and update the applied correction.
+
+        Pure orchestration (no field math): decide whether a fresh
+        :class:`~fire_engine.wind.worker.VenturiJob` is warranted, submit it,
+        then drain finished results and commit the newest one whose
+        ``origin_cell`` still matches the region's current origin.
+
+        Submit when (and only when) there is a worker AND any of:
+
+        - the region **recentered** this update (the old grid is for a stale
+          origin — the renderer signals dirt by re-passing ``chunks`` too, but
+          recenter alone is enough to re-solve), OR
+        - ``chunks`` is available and **no job has ever been submitted** (first
+          terrain solve), OR
+        - ``chunks`` is not ``None`` — the renderer passes ``chunks`` *only* on
+          a recenter or terrain-edit (dirty) event, so a non-``None`` ``chunks``
+          is itself the recompute request (keeps ``wind/`` bus-free).
+
+        Origin-match discipline (a Gotcha): a result solved for a previous
+        origin is **discarded**, never shift-applied — the field re-submits on
+        recenter and applies identity in the meantime.  This keeps the applied
+        grid and the cells it scales perfectly aligned with zero index math.
+        """
+        worker = self._worker
+        if worker is None:
+            return
+
+        want_submit = (
+            recentered
+            or (chunks is not None and not self._venturi_ever_submitted)
+            or (chunks is not None)
+        )
+        if want_submit and chunks is not None:
+            self._venturi_seq += 1
+            self._venturi_ever_submitted = True
+            assert self._region.origin_cell is not None
+            ground = self._z_ground
+            job = VenturiJob(
+                origin_cell=self._region.origin_cell,
+                cells=int(self._region.cells),
+                cell_m=float(self._region.cell_m),
+                chunk_size=int(self._cfg.chunk_size),
+                voxel_size=float(self._cfg.voxel_size),
+                ground_band=(ground, ground + float(self._cfg.wind_layer_m)),
+                materials=self._snapshot_materials(chunks),
+                venturi_iters=int(self._cfg.wind_venturi_iters),
+                venturi_max=float(self._cfg.wind_venturi_max),
+                deflect_gain=float(self._cfg.wind_deflect_gain),
+                seq=self._venturi_seq,
+            )
+            worker.submit(job)
+
+        # Drain all finished results; keep only the newest (highest seq).
+        newest = None
+        for res in worker.drain_results():
+            if newest is None or res.seq >= newest.seq:
+                newest = res
+        if newest is not None:
+            self._commit_venturi(newest)
+
+        # A correction solved for an origin we have since moved away from must
+        # not be applied — drop back to identity until a matching result lands.
+        if self._venturi_origin != self._region.origin_cell:
+            self._venturi_speedup.fill(1.0)
+            self._venturi_deflect.fill(0.0)
+            self._updraft_gain_grid.fill(0.0)
+            self._venturi_origin = None
+
+    @staticmethod
+    def _snapshot_materials(chunks: dict) -> dict:
+        """
+        Build the ``coord -> uint8 materials`` snapshot the worker reads.
+
+        Accepts either chunk objects (reads ``.materials``) or bare ndarrays
+        (mirrors ``lighting`` assembly-worker's dual acceptance).  References,
+        not copies — the arrays are treated as immutable for the solve's life.
+        """
+        out: dict = {}
+        for coord, ch in chunks.items():
+            out[coord] = getattr(ch, "materials", ch)
+        return out
+
+    def _commit_venturi(self, res) -> None:
+        """
+        Apply a drained :class:`~fire_engine.wind.worker.VenturiResult`.
+
+        Only commits if the result's ``origin_cell`` matches the region's
+        current origin (else it is a stale result for a window we have left —
+        discard it, identity holds).  Derives the vz updraft-gain grid from the
+        committed speed-up: ``wind_updraft_gain * clip(speedup - 1, 0, None)``.
+        """
+        if res.origin_cell != self._region.origin_cell:
+            return  # stale — discard (origin-match discipline)
+        self._venturi_speedup = res.speedup
+        self._venturi_deflect = res.deflect
+        self._venturi_origin = res.origin_cell
+        self._updraft_gain_grid = (
+            float(self._cfg.wind_updraft_gain)
+            * np.clip(res.speedup - 1.0, 0.0, None)
+        ).astype(np.float32)
 
     # ------------------------------------------------------------------
     # Read paths
@@ -393,7 +542,9 @@ class WindField:
         point's XY (4-corner fancy indexing, indices clamped to the grid so
         out-of-region points clamp to the nearest edge values), scales the
         horizontal velocity by :func:`vertical_profile` at each point's Z, and
-        returns ``vz = 0`` (WP2 adds analytic obstacle updraft here).
+        adds an analytic obstacle **updraft** to ``vz`` (bilinear-sampled from
+        the venturi updraft-gain grid × the local horizontal speed; ``0`` where
+        there is no funnelling / no worker).
 
         Parameters
         ----------
@@ -458,7 +609,33 @@ class WindField:
         prof = vertical_profile(P[:, 2], self._z_ground, self._cfg)  # (N,)
         out[:, 0] = horiz[:, 0] * prof
         out[:, 1] = horiz[:, 1] * prof
-        out[:, 2] = 0.0          # WP2: analytic obstacle updraft
+
+        # Vertical updraft: wind funnelled by a windward obstacle (high venturi
+        # speed-up) rises so motes/leaves lift over it.  vz =
+        #   bilinear(updraft_gain_grid) * horizontal_speed * height_falloff,
+        # where updraft_gain_grid = wind_updraft_gain * max(speedup-1, 0) (set
+        # only for the current origin; zeros = identity / no obstacle).  Kept
+        # intentionally simple — it just needs particles to rise over a
+        # windward constriction, not be physically exact.  Gated on origin
+        # agreement so a snapshot from a just-recentered frame never reads a
+        # stale (other-origin) updraft grid.
+        if self._venturi_origin is not None and \
+                self._venturi_origin == self._region.origin_cell:
+            g = self._updraft_gain_grid
+            u00 = g[i0c, j0c]
+            u10 = g[i1c, j0c]
+            u01 = g[i0c, j1c]
+            u11 = g[i1c, j1c]
+            utop = u00 * (1.0 - tx) + u10 * tx
+            ubot = u01 * (1.0 - tx) + u11 * tx
+            updraft_gain = utop * (1.0 - ty) + ubot * ty       # (N,)
+            horiz_speed = np.hypot(horiz[:, 0], horiz[:, 1])    # (N,) m/s
+            # Rise is strongest near the ground and tapers with the same shear
+            # profile that boosts horizontal wind aloft (1/prof falls with z).
+            out[:, 2] = (updraft_gain * horiz_speed / np.maximum(prof, 1e-3)) \
+                .astype(np.float32)
+        else:
+            out[:, 2] = 0.0
         return out
 
 

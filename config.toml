@@ -16,6 +16,7 @@ msaa_samples = 4           # geometry-edge MSAA (0 = off); texel interiors stay 
 show_fps = true
 show_chunk_borders = false
 show_light_grid = false
+debug_wind_ball = true     # dev wind-field physics proof: a bright ball on the ground near spawn that gusts scoot / storms roll (set false to hide)
 
 [terrain]
 mesh_style = "faceted"         # "faceted" = flat-shaded surface nets (semi-smooth Daggerfall look); "blocky" = classic cubes

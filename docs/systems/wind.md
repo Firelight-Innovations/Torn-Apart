@@ -1,7 +1,7 @@
 # wind — System Doc
 keywords: wind, gust, breeze, storm, brownian, turbulence, venturi, motes, leaves, particles, flag, cloth, advection, spectral, gust front, wind field, vertical profile, boundary layer
 
-> Status: **WP1+WP2+WP3+WP4 shipped** (headless wind core + config; terrain venturi/worker; world-side render component, GPU upload, grass rebind, wiring; dust-mote + leaf-litter particles). WP5 finalizes this doc (physics ball demo + DECISIONS entries + final verification).
+> Status: **shipped** (WP1–WP5). Headless wind core + config; terrain venturi/worker; world-side render component, GPU upload, grass rebind, wiring; dust-mote + leaf-litter particles; the dev wind-ball physics seam proof. The field is the single source of truth for everything wind-driven; future consumers (flags/cloth/hair/water, wind audio) read the same `sample()` / `u_wind_tex` contract documented here.
 
 ## Role
 `fire_engine/wind/` is the single source of truth for everything wind-driven: a player-centred, time-evolving **2.5-D wind velocity field**. A 2-D horizontal grid (64×64 cells × 4 m = 256 m region) of wind velocity is summed from ~12 seeded spectral "Brownian-band" gust modes whose phases advance with game time and **advect downwind** (so gust bands visibly travel across a field), plus an analytic vertical boundary-layer profile for height. It scales with weather (storms = stronger, choppier, gustier), is CPU-sampleable for physics and future audio, and exposes seams for terrain venturi funneling (WP2), GPU upload + grass/particle consumption (WP3/WP4), and localized gust fronts from a future volumetric-weather system (the modifier seam).
@@ -20,8 +20,10 @@ Exports from `fire_engine/wind/__init__.py`:
 - `VenturiWorker()` — off-thread terrain-funneling solver, a structural mirror of `lighting/assembly_worker.CascadeAssemblyWorker`: daemon thread `"WindVenturiWorker"`, in/out `queue.Queue`, idempotent `start()`, `submit(job)`, non-blocking `drain_results()`, `pending()`, `stop(join=True, timeout=2.0)` (None sentinel). A solve that raises logs + posts a valid **identity** result so the consumer never starves.
 - `VenturiJob(origin_cell, cells, cell_m, chunk_size, voxel_size, ground_band, materials, venturi_iters, venturi_max, deflect_gain, seq)` / `VenturiResult(origin_cell, speedup (cells,cells), deflect (cells,cells,2), seq)` — frozen dataclasses; `materials` is a `coord -> uint8 (S,S,S)` snapshot (references, not copies).
 - `solve_venturi(job) -> VenturiResult` — the **pure** on-thread solve (called by the worker and inline in tests). Folds the chunk terrain into a per-cell column solid fraction over the z-band `[ground, ground+wind_layer_m]`, relaxes it into a speed-up + sideways deflection. Deterministic, no RNG.
+- `debug_ball_step(pos, vel, wind_velocity, dt, params) -> (pos, vel)` — the **pure, panda3d-free physics integrator** for the dev wind-ball seam proof (`debug.py`). Drags a ball's horizontal velocity toward the local wind, applies gravity + a ground clamp + friction + a speed clamp, and returns fresh `(pos, vel)` arrays (inputs untouched). Headless-testable (`tests/test_wind_ball.py`); the rendered `world/wind_debug.py::WindBallDebugComponent` is only glue around it.
+- `BallParams(ground_z=8.0, radius_m=0.4, drag=2.5, gravity=9.81, friction=1.5, max_speed=25.0)` — frozen tuning for `debug_ball_step`.
 
-Internal modules: `gusts.py` (`build_modes(cfg)` + `eval_gusts(modes, X, Y, t_eff, mean)`), `region.py` (`WindRegion` recenter window), `venturi.py` (`column_solid_fraction` + `solve_venturi`), `worker.py` (`VenturiWorker`).
+Internal modules: `gusts.py` (`build_modes(cfg)` + `eval_gusts(modes, X, Y, t_eff, mean)`), `region.py` (`WindRegion` recenter window), `venturi.py` (`column_solid_fraction` + `solve_venturi`), `worker.py` (`VenturiWorker`), `debug.py` (`debug_ball_step` + `BallParams`).
 
 ## Imports Allowed
 `fire_engine.core` (config, rng) and numpy only. **No panda3d, no `direct`** (hard rule — a test in `tests/test_wind.py` AST-parses every `wind/*.py` and fails on a panda3d/direct import). Does NOT import `fire_engine.sky` — the weather input is duck-typed (see Units & Invariants).
@@ -42,18 +44,23 @@ Subscribed: none. (WP3's render component in `world/` owns event wiring — it f
 - **Venturi units/invariants:** `speedup` is a multiplier in `[1, wind_venturi_max]` (1 = no funneling); `deflect` is an additive m/s push scaled by `|mean wind|`; both are aligned to the field's `[x, y]` cell layout and a specific `origin_cell`. A wind cell of `cell_m` (4 m) covers `cell_m/voxel_size` (8) voxel columns; the solve folds occupancy over the z-band `[ground, ground+wind_layer_m]`. Cells over unloaded terrain are fully **open** (never fabricate a wall). `solve_venturi` is a pure function of its job — **no RNG**.
 
 ## Examples
-Physics push (a ball on a plane gets shoved by a gust):
+Physics push (a ball on a plane gets shoved by a gust) — the dev wind-ball uses
+exactly this seam (`world/wind_debug.py` + the pure `debug_ball_step`):
 ```python
 import numpy as np
 from fire_engine.core import load_config, set_world_seed
-from fire_engine.wind import WindField
+from fire_engine.wind import WindField, BallParams, debug_ball_step
 
 cfg = load_config(); set_world_seed(cfg.world_seed)
 field = WindField(cfg)
-field.update(dt, game_time, sky_system.state, camera_world_pos)   # once per frame
-v = field.sample(ball_pos[None])[0]            # (vx, vy, 0) m/s at the ball
-ball_vel += (v - ball_vel) * drag * dt
+params = BallParams(ground_z=cfg.ground_height_m)
+pos = np.array([0.0, 0.0, cfg.ground_height_m + params.radius_m]); vel = np.zeros(3)
+
+field.update(dt, game_time, sky_system.state, camera_world_pos)  # once per frame
+v_wind = field.sample(pos[None])[0]            # (vx, vy, vz) m/s at the ball
+pos, vel = debug_ball_step(pos, vel, v_wind, dt, params)   # pure, headless-testable
 ```
+Or roll your own minimal drag: `ball_vel += (field.sample(ball_pos[None])[0] - ball_vel) * drag * dt`.
 Future flag/cloth shader (4-liner, once WP3 uploads `u_wind_tex`):
 ```glsl
 vec2 uv = (world_xy - u_wind_origin) / (u_wind_cell_m * u_wind_cells);
@@ -145,3 +152,10 @@ Two GPU-instanced ambient particle layers consume the wind texture by scene-grap
 - **Shader + `set_instance_count` on the same node** (grass caveat): `set_instance_count` creates a node-level `ShaderAttrib` that *replaces* an inherited one, so the shader must live on the instanced node too. `ShaderInput` attribs *compose*, so the inherited wind/lighting uniforms still arrive — and the leaf component binds `u_time_s` on `leaf_litter_root` (a `ShaderInput`, composes down to the per-volume nodes).
 - Procedural textures are **linear-filtered** on upload (overriding `to_panda_texture`'s nearest default) so the soft dust falloff and leaf edges don't read chunky when billboarded close to the camera.
 - `dust_mote` is **not** a binary cutout (additive blending wants a smooth alpha ramp); `leaf_sprite` **is** ~binary (alpha-test discard) with a soft 1-texel rim. The leaf atlas is `(32, 96, 4)` — one row of 3 hue variants (muted green / ochre / russet, autumn-desaturated).
+
+## Wind debug ball — `world/wind_debug.py` + `wind/debug.py` (WP5, shipped, dev-only)
+A developer **physics seam proof**: a bright procedural sphere resting on the flat ground near spawn that is pushed by the *same* `WindField.sample` future physics/audio will call — it visibly scoots when a gust band crosses it and rolls hard in a storm. Gated behind the `[debug] debug_wind_ball` config flag (default `false` in `core/config.py`; set `true` in `config.toml` for the owner's next run).
+
+- **`wind/debug.py` — `debug_ball_step(pos, vel, wind_velocity, dt, params) -> (pos, vel)`** is the **pure, panda3d-free** integrator (headless-tested in `tests/test_wind_ball.py`): horizontal drag toward the local wind (`vel_xy` relaxes toward `wind_xy` at rate `drag`, clamped stable at any dt), gravity, a hard clamp to the ground plane (`ground_z + radius_m`), ground friction (settles the ball in calm air) and a horizontal speed clamp (a storm can't fling it off the plane). Inputs are not mutated. `BallParams` carries the tuning.
+- **`world/wind_debug.py` — `WindBallDebugComponent`** is only the glue: builds a UV-sphere `Geom` in code (no asset), parents it under `App.render` rendered **unlit/full-bright** (`set_light_off` + `set_color` + `set_shader_off`) so it reads as a gizmo on either lighting backend, then in `fixed_update` (50 Hz, frame-rate-independent) samples the field at the ball and steps `debug_ball_step`. **Does NOT require the GPU lighting pipeline** (unlike grass/motes) — it only needs a `WindField`. On the GPU backend `WindSystemComponent` already calls `wind_field.update()` each frame so the ball just samples (wired with `sky_system=None`); on the CPU backend (where the wind render component disables itself) the ball is wired with `sky_system` so it drives `update()` itself and still has a snapshot to sample.
+- Wired in `main.py` (step 10f) only when `cfg.debug_wind_ball` and a `WindField` exists. It is throwaway diagnostic geometry — deliberately a separate component from the production wind renderer so it never exists unless a developer asks for it.

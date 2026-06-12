@@ -54,6 +54,7 @@ Quick-start example
     v = field.sample(np.array([[0.0, 0.0, 1.0]]))      # wind at a point, m/s
 """
 
+from fire_engine.wind.debug import BallParams, debug_ball_step
 from fire_engine.wind.field import (
     WindField,
     WindSnapshot,
@@ -75,4 +76,6 @@ __all__ = [
     "VenturiJob",
     "VenturiResult",
     "solve_venturi",
+    "BallParams",
+    "debug_ball_step",
 ]

@@ -23,6 +23,7 @@ Debug flags (from [debug] table)
     show_fps             : bool
     show_chunk_borders   : bool
     show_light_grid      : bool
+    debug_wind_ball      : bool  — spawn the dev wind-field physics ball
 
 Sky fields (from [sky] table, flattened like [debug])
 ------------------------------------------------------
@@ -196,6 +197,11 @@ class Config:
     show_fps             : bool  — overlay FPS counter.
     show_chunk_borders   : bool  — debug overlay for chunk boundaries.
     show_light_grid      : bool  — debug overlay for the light grid.
+    debug_wind_ball      : bool  — spawn the dev-only "wind ball": a bright
+                                   procedural sphere on the ground near spawn
+                                   that is pushed by ``WindField.sample`` each
+                                   fixed step (a physics seam proof — it scoots
+                                   on gusts, rolls in storms).  Off by default.
     sky_cloud_altitude_m : float — base altitude of the cloud layer (world Z, m).
     sky_cloud_thickness_m: float — vertical thickness of the cloud layer (m).
     sky_cloud_cell_m     : float — horizontal edge of one cloud cell (m); the
@@ -382,6 +388,7 @@ class Config:
     show_fps:             bool  = True
     show_chunk_borders:   bool  = False
     show_light_grid:      bool  = False
+    debug_wind_ball:      bool  = False
     sky_cloud_altitude_m:  float = 96.0
     sky_cloud_thickness_m: float = 8.0
     sky_cloud_cell_m:      float = 12.0

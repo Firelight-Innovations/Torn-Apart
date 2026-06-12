@@ -505,6 +505,28 @@ def build_demo():
     )
     app.leaf_go = leaf_go
 
+    # 10f. Wind debug ball (dev-only, [debug] debug_wind_ball) — a bright
+    #      procedural sphere on the ground near spawn pushed by WindField.sample
+    #      each fixed step: the physics seam proof (it scoots on gusts, rolls in
+    #      storms).  When the GPU WindSystemComponent is live it already calls
+    #      wind_field.update() each frame, so the ball only SAMPLES (sky_system
+    #      left None to avoid a redundant update); on the CPU backend that
+    #      component disables itself, so the ball drives update() itself (pass
+    #      sky_system) so it still has a field to sample.
+    if cfg.debug_wind_ball and wind_field is not None:
+        from fire_engine.world.wind_debug import WindBallDebugComponent
+        wind_component_active = use_gpu_lighting and lighting_pipeline is not None
+        ball_go = instantiate()
+        ball_go.name = "WindDebugBall"
+        ball_go.add_component(
+            WindBallDebugComponent,
+            base=app,
+            clock=clock,
+            wind_field=wind_field,
+            sky_system=None if wind_component_active else sky_system,
+        )
+        app.wind_ball_go = ball_go
+
     # 11. Resource-manager proof model (non-fatal).
     _load_proof_model(app)
 

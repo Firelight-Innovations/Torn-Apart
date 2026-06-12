@@ -3,7 +3,7 @@ procedural/flora/mesher.py — skeleton + leaves → renderable tree mesh arrays
 
 The shared geometry stage of the 3-D flora pipeline: species scripts grow a
 :class:`~fire_engine.procedural.flora.skeleton.TreeSkeleton` and a
-:class:`~fire_engine.procedural.flora.leaves.LeafClusters`; this module turns
+:class:`~fire_engine.procedural.flora.leaves.Leaves`; this module turns
 them into a :class:`TreeMesh` — pure numpy arrays in EXACTLY the layout of
 the engine's interleaved V3N3T2C4 vertex format
 (``world/geometry_bridge.make_vertex_format``), so the renderer uploads a
@@ -13,9 +13,11 @@ Geometry style (the pixel-art read):
 - **Branches** are tapered square prisms (``sides=4``) with flat per-face
   normals — chunky Minecraft/Vintage-Story wood, one quad per side plus a
   tip cap.
-- **Leaf clusters** are crossed vertical quads plus one horizontal top quad
-  (the top quad catches sun Lambert from real normals so canopies read
-  solid from above), alpha-cutout against the species atlas's leaf region.
+- **Leaves** are INDIVIDUAL small quads — one card per leaf from the CA
+  grower (``leaves.leaves_at_tips``), each with its own upward-biased
+  random orientation so Lambert dapples the canopy leaf by leaf, all
+  alpha-cutout against the species atlas's single-leaf texture and merged
+  into the variant mesh (hundreds of leaves, still ONE draw per variant).
 
 Per-vertex **sway weight** is baked into ``colors[:, 3]``: ≈0 on the trunk
 base, rising along branches, ≈1 on leaves.  ``world/shaders/tree.vert``
@@ -34,14 +36,14 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from fire_engine.procedural.flora.leaves import LeafClusters
+from fire_engine.procedural.flora.leaves import Leaves
 from fire_engine.procedural.flora.skeleton import (
     TreeSkeleton,
     _frames,
     _normalize,
 )
 
-__all__ = ["TreeMesh", "mesh_branches", "mesh_leaf_clusters", "merge_parts"]
+__all__ = ["TreeMesh", "mesh_branches", "mesh_leaves", "merge_parts"]
 
 
 @dataclass
@@ -230,113 +232,86 @@ def mesh_branches(
                     height_m=height, radius_m=radius)
 
 
-def mesh_leaf_clusters(
-    clusters: LeafClusters,
+def mesh_leaves(
+    leaves: Leaves,
     rng: np.random.Generator,
     *,
-    quads: int = 3,
-    top_quad: bool = True,
     uv_rect: tuple[float, float, float, float] = (0.5, 0.0, 1.0, 1.0),
-    size_jitter: tuple[float, float] = (0.8, 1.25),
+    tilt_range_rad: tuple[float, float] = (0.26, 1.22),
+    size_jitter: tuple[float, float] = (0.85, 1.2),
     tint: tuple[float, float, float] = (1.0, 1.0, 1.0),
 ) -> TreeMesh:
     """
-    Mesh leaf clusters as crossed vertical quads (+ one horizontal top quad).
+    Mesh individual leaves as one small oriented quad each.
 
-    Each cluster becomes *quads* vertical square quads fanned evenly around
-    Z at a random base yaw, ``2 × radius × jitter`` wide/tall, centered on
-    the cluster — plus, when *top_quad*, one horizontal quad slightly above
-    center whose +Z normal catches overhead sun (canopies read solid from
-    above instead of as flat fins).  All quads UV-map the full leaf rect of
-    the species atlas (alpha-cutout texels carve the blob shape).
+    Every leaf card gets its OWN orientation: a normal tilted off vertical
+    by a uniform draw from *tilt_range_rad* at a random yaw — mostly
+    sky-facing (canopies light from above) but scattered enough that
+    Lambert shades each leaf differently, the dappled read a single blob
+    billboard can't give.  The card's "up" edge points away from the
+    canopy-local vertical, so the leaf texture's stem-to-tip axis follows
+    the tilt.  All cards UV-map the full single-leaf rect of the species
+    atlas.  4 verts / 2 tris per leaf; the whole canopy merges into the
+    variant mesh — one draw, fully GPU-batched.
 
     Parameters
     ----------
-    clusters : LeafClusters
-        From ``leaves.leaf_clusters_at_tips`` (may be empty).
+    leaves : Leaves
+        From ``leaves.leaves_at_tips`` (may be empty).
     rng : numpy.random.Generator
-        Deterministic generator (per-cluster yaw + size jitter).
-    quads : int
-        Vertical crossed quads per cluster.  Default 3.
-    top_quad : bool
-        Add the horizontal top quad.  Default True.
+        Deterministic generator (per-leaf yaw, tilt, size jitter).
     uv_rect : tuple
         ``(u0, v0, u1, v1)`` leaf sub-rect of the atlas (right half by
         default, per ``atlas.AtlasLayout``).
+    tilt_range_rad : tuple[float, float]
+        Normal tilt off +Z, uniform (radians).  Default (15°, 70°).
     size_jitter : tuple[float, float]
-        Uniform per-cluster size multiplier.  Default (0.8, 1.25).
+        Uniform per-leaf size multiplier on ``leaves.radius``.
     tint : tuple[float, float, float]
         RGB multiplier baked into vertex colors.
 
     Returns
     -------
     TreeMesh
-        ``colors[:, 3]`` carries the cluster sway weight on every vertex.
+        ``colors[:, 3]`` carries the per-leaf sway weight on every vertex.
     """
-    L = clusters.n_clusters
+    L = leaves.n_leaves
     if L == 0:
         return TreeMesh.empty()
     u0, v0, u1, v1 = (float(c) for c in uv_rect)
 
-    half = (clusters.radius
+    half = (leaves.radius
             * rng.uniform(size_jitter[0], size_jitter[1], L)
             ).astype(np.float32)                               # (L,)
-    yaw0 = rng.uniform(0.0, math.pi, L).astype(np.float32)     # (L,)
-    theta = (yaw0[:, None]
-             + (np.arange(quads, dtype=np.float32)
-                * (math.pi / quads))[None, :])                 # (L, quads)
-    c, s = np.cos(theta), np.sin(theta)
-    d = np.stack([c, s, np.zeros_like(c)], axis=-1)            # (L, quads, 3)
-    zhat = np.array([0.0, 0.0, 1.0], dtype=np.float32)
 
-    ctr = clusters.center[:, None, :]                          # (L, 1, 3)
-    hw = half[:, None, None]
-    # Quad corners: center ± d·half, z ± half (square quads).
-    p0 = ctr - d * hw - zhat * hw
-    p1 = ctr + d * hw - zhat * hw
-    p2 = ctr + d * hw + zhat * hw
-    p3 = ctr - d * hw + zhat * hw
-    verts = np.stack([p0, p1, p2, p3], axis=2).astype(np.float32)
-    n = np.stack([-s, c, np.zeros_like(c)], axis=-1)           # horiz normal
-    normals = np.broadcast_to(n[:, :, None, :], verts.shape)
+    # Per-leaf normal: tilt off +Z at a random yaw.
+    yaw = rng.uniform(0.0, 2.0 * math.pi, L).astype(np.float32)
+    tilt = rng.uniform(tilt_range_rad[0], tilt_range_rad[1], L) \
+        .astype(np.float32)
+    st, ct = np.sin(tilt), np.cos(tilt)
+    n = np.stack([st * np.cos(yaw), st * np.sin(yaw), ct], axis=1) \
+        .astype(np.float32)                                    # (L, 3)
+    fu, fv = _frames(n)                                        # card axes
 
-    n_quads_total = L * quads
-    positions = verts.reshape(-1, 3)
-    normals = np.ascontiguousarray(normals.reshape(-1, 3), dtype=np.float32)
+    ctr = leaves.center
+    hw = half[:, None]
+    # Corners CCW around the normal; fv is the stem→tip texture axis (v).
+    p0 = ctr - fu * hw - fv * hw
+    p1 = ctr + fu * hw - fv * hw
+    p2 = ctr + fu * hw + fv * hw
+    p3 = ctr - fu * hw + fv * hw
+    positions = np.stack([p0, p1, p2, p3], axis=1) \
+        .reshape(-1, 3).astype(np.float32)
+    normals = np.repeat(n, 4, axis=0)
+
     uv_quad = np.array([[u0, v0], [u1, v0], [u1, v1], [u0, v1]],
                        dtype=np.float32)
-    uvs = np.tile(uv_quad, (n_quads_total, 1))
-    colors = np.empty((n_quads_total * 4, 4), dtype=np.float32)
+    uvs = np.tile(uv_quad, (L, 1))
+    colors = np.empty((L * 4, 4), dtype=np.float32)
     colors[:, 0:3] = np.asarray(tint, dtype=np.float32)
-    colors[:, 3] = np.repeat(clusters.sway, quads * 4)
+    colors[:, 3] = np.repeat(leaves.sway, 4)
 
-    if top_quad:
-        # Horizontal quad above center, aligned to the cluster's base yaw.
-        dx = np.stack([np.cos(yaw0), np.sin(yaw0),
-                       np.zeros_like(yaw0)], axis=-1)          # (L, 3)
-        dy = np.stack([-np.sin(yaw0), np.cos(yaw0),
-                       np.zeros_like(yaw0)], axis=-1)
-        top_c = clusters.center + zhat[None, :] * (half * 0.35)[:, None]
-        hwl = half[:, None]
-        t0 = top_c - dx * hwl - dy * hwl
-        t1 = top_c + dx * hwl - dy * hwl
-        t2 = top_c + dx * hwl + dy * hwl
-        t3 = top_c - dx * hwl + dy * hwl
-        tverts = np.stack([t0, t1, t2, t3], axis=1) \
-            .reshape(-1, 3).astype(np.float32)
-        tnorms = np.tile(zhat, (L * 4, 1)).astype(np.float32)
-        tuvs = np.tile(uv_quad, (L, 1))
-        tcols = np.empty((L * 4, 4), dtype=np.float32)
-        tcols[:, 0:3] = np.asarray(tint, dtype=np.float32)
-        tcols[:, 3] = np.repeat(clusters.sway, 4)
-
-        positions = np.concatenate([positions, tverts])
-        normals = np.concatenate([normals, tnorms])
-        uvs = np.concatenate([uvs, tuvs])
-        colors = np.concatenate([colors, tcols])
-        n_quads_total += L
-
-    indices = _quad_indices(n_quads_total)
+    indices = _quad_indices(L)
     height, radius = _metadata(positions)
     return TreeMesh(positions=np.ascontiguousarray(positions, np.float32),
                     normals=np.ascontiguousarray(normals, np.float32),
@@ -350,7 +325,7 @@ def merge_parts(*parts: TreeMesh) -> TreeMesh:
     """
     Concatenate mesh parts (offsetting indices) into one draw-ready mesh.
 
-    Typically ``merge_parts(mesh_branches(...), mesh_leaf_clusters(...))`` —
+    Typically ``merge_parts(mesh_branches(...), mesh_leaves(...))`` —
     one tree variant, one Geom, one draw.  Empty parts are skipped;
     ``height_m`` / ``radius_m`` are recomputed over the union.
 

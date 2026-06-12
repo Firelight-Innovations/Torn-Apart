@@ -137,13 +137,19 @@ class TestVariantSetInvariants:
 
     def test_dead_tree_nearly_leafless(self):
         """The leafless species path: snags carry almost no foliage."""
-        vs = get("tree_dead")
-        for m in vs.meshes:
-            # Foliage quads span the leaf half, so only they own u=1.0
-            # corners (bark stops at u=0.5).  2 tufts max → 2 clusters ×
-            # 4 quads × 2 far corners = 16 such verts.
-            foliage_far_corners = int((m.uvs[:, 0] > 0.55).sum())
-            assert foliage_far_corners <= 16
+        dead = get("tree_dead")
+        oak = get("tree_gnarled_oak")
+
+        def leaf_count(m):
+            # Leaf cards span the leaf half, so only they own u=1.0
+            # corners (bark stops at u=0.5): 2 far corners per leaf.
+            return int((m.uvs[:, 0] > 0.55).sum()) // 2
+
+        # Hard cap from the species script (max_leaves=36 per tuft bake)...
+        assert all(leaf_count(m) <= 36 for m in dead.meshes)
+        # ...and an order of magnitude under the living oak's canopy.
+        assert max(leaf_count(m) for m in dead.meshes) \
+            < min(leaf_count(m) for m in oak.meshes) / 3
 
     def test_berry_bush_has_berries(self):
         """Berry speckle pass: the leaf half contains the berry hue."""

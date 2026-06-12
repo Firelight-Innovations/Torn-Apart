@@ -14,7 +14,7 @@ Subclass, set the class attributes, implement :meth:`grow`::
 
     from fire_engine.procedural.defs import register_def
     from fire_engine.procedural.flora import (SkeletonBuilder,
-        TreeSpeciesDef, leaf_clusters_at_tips)
+        TreeSpeciesDef, leaves_at_tips)
 
     @register_def
     class MyTreeDef(TreeSpeciesDef):
@@ -28,7 +28,7 @@ Subclass, set the class attributes, implement :meth:`grow`::
             trunk = sb.trunk(height_m=5.0, base_radius_m=0.25)
             limbs = sb.branches(trunk, ...)
             sk = sb.skeleton()
-            return sk, leaf_clusters_at_tips(sk, limbs, rng)
+            return sk, leaves_at_tips(sk, limbs, rng)
 
 Then ``procedural.get("tree_my_tree")`` does the rest: per-variant child
 rngs, skeleton validation, meshing, atlas composition, impostor raster.
@@ -52,12 +52,12 @@ from fire_engine.procedural.flora.impostor import (
     impostor_atlas,
     rasterize_impostor,
 )
-from fire_engine.procedural.flora.leaves import LeafClusters
+from fire_engine.procedural.flora.leaves import Leaves
 from fire_engine.procedural.flora.mesher import (
     TreeMesh,
     merge_parts,
     mesh_branches,
-    mesh_leaf_clusters,
+    mesh_leaves,
 )
 from fire_engine.procedural.flora.skeleton import (
     TreeSkeleton,
@@ -130,7 +130,7 @@ class TreeSpeciesDef(ProceduralDef):
 
     Hooks
     -----
-    grow(rng, variant) -> (TreeSkeleton, LeafClusters)
+    grow(rng, variant) -> (TreeSkeleton, Leaves)
         REQUIRED — the species recipe (SkeletonBuilder calls).
     palettes(rng) -> dict
         Optional — return ``{"bark": ..., "leaf": ...}`` ramps; override to
@@ -155,7 +155,7 @@ class TreeSpeciesDef(ProceduralDef):
     # ------------------------------------------------------------------
 
     def grow(self, rng: np.random.Generator,
-             variant: int) -> tuple[TreeSkeleton, LeafClusters]:
+             variant: int) -> tuple[TreeSkeleton, Leaves]:
         """
         Grow one variant — THE species recipe.  Override this.
 
@@ -170,10 +170,9 @@ class TreeSpeciesDef(ProceduralDef):
 
         Returns
         -------
-        (TreeSkeleton, LeafClusters)
-            From ``SkeletonBuilder.skeleton()`` and
-            ``leaf_clusters_at_tips`` (``LeafClusters.empty()`` for
-            leafless species).
+        (TreeSkeleton, Leaves)
+            From ``SkeletonBuilder.skeleton()`` and ``leaves_at_tips``
+            (``Leaves.empty()`` for leafless species).
         """
         raise NotImplementedError(
             f"{type(self).__name__}.grow() not implemented — see "
@@ -226,16 +225,16 @@ class TreeSpeciesDef(ProceduralDef):
         grown: list = []
         for v in range(n):                       # pool-size loop (≤ 8)
             vrng = np.random.default_rng(int(grow_seeds[v]))
-            sk, clusters = self.grow(vrng, v)
+            sk, leaves = self.grow(vrng, v)
             validate_skeleton(sk)
             tint = float(vrng.uniform(*self.TINT_RANGE))
             wood = mesh_branches(sk, uv_rect=layout.bark_rect,
                                  tint=(tint, tint, tint))
-            foliage = mesh_leaf_clusters(clusters, vrng,
-                                         uv_rect=layout.leaf_rect,
-                                         tint=(tint, tint, tint))
+            foliage = mesh_leaves(leaves, vrng,
+                                  uv_rect=layout.leaf_rect,
+                                  tint=(tint, tint, tint))
             meshes.append(merge_parts(wood, foliage))
-            grown.append((sk, clusters))
+            grown.append((sk, leaves))
 
         # Pool-common impostor scale: one meters-per-texel for every cell so
         # the renderer's single billboard quad overlays each variant exactly.
@@ -245,12 +244,12 @@ class TreeSpeciesDef(ProceduralDef):
         px_per_m = min((cw - 1) / (2.0 * max(max_r, 0.25) * 1.05),
                        (ch - 1) / (max(max_h, 0.5) * 1.02))
         cells = [
-            rasterize_impostor(sk, clusters, pal["bark"], pal["leaf"],
+            rasterize_impostor(sk, leaves, pal["bark"], pal["leaf"],
                                np.random.default_rng(int(imp_seeds[v])),
                                cell_wh=self.impostor_cell,
                                hole_thresh=self.LEAF_HOLE_THRESH,
                                px_per_m=px_per_m)
-            for v, (sk, clusters) in enumerate(grown)
+            for v, (sk, leaves) in enumerate(grown)
         ]
 
         return TreeVariantSet(

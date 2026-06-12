@@ -25,10 +25,7 @@ import math
 import numpy as np
 
 from fire_engine.procedural.defs import register_def
-from fire_engine.procedural.flora.leaves import (
-    LeafClusters,
-    leaf_clusters_at_tips,
-)
+from fire_engine.procedural.flora.leaves import Leaves, leaves_at_tips
 from fire_engine.procedural.flora.skeleton import SkeletonBuilder, TreeSkeleton
 from fire_engine.procedural.flora.species_def import TreeSpeciesDef
 
@@ -67,7 +64,7 @@ class BerryBushDef(TreeSpeciesDef):
         return {"bark": self.BARK_PALETTE, "leaf": leaf.astype(np.uint8)}
 
     def grow(self, rng: np.random.Generator,
-             variant: int) -> tuple[TreeSkeleton, LeafClusters]:
+             variant: int) -> tuple[TreeSkeleton, Leaves]:
         """Stub trunk → upcurled stems → dense overlapping foliage dome."""
         sb = SkeletonBuilder(rng)
         stub = sb.trunk(height_m=0.12, base_radius_m=0.05, segments=1,
@@ -81,8 +78,10 @@ class BerryBushDef(TreeSpeciesDef):
                             upturn_rad=_D(30),
                             bend_rad=0.2, segments=2)
         sk = sb.skeleton()
-        leaves = leaf_clusters_at_tips(sk, stems, rng,
-                                       radius_m=(0.22, 0.34),
-                                       per_tip=(2, 3),   # dense dome
-                                       offset_frac=0.5, sway_min=0.75)
+        # Dense dome: high density + 2 leaves per cell close ranks.
+        leaves = leaves_at_tips(sk, stems, rng,
+                                cell_m=0.15, rounds=2, density=0.9,
+                                per_cell=(1, 2),
+                                leaf_size_m=(0.06, 0.10),
+                                sway_min=0.75, max_leaves=280)
         return sk, leaves

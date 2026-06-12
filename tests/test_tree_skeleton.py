@@ -16,7 +16,7 @@ import pytest
 from fire_engine.core.rng import for_domain, set_world_seed
 from fire_engine.procedural.flora import (
     SkeletonBuilder,
-    leaf_clusters_at_tips,
+    leaves_at_tips,
     validate_skeleton,
 )
 
@@ -143,26 +143,55 @@ class TestBushPath:
             sb.branches(trunk, yaw_mode="sideways")
 
 
-class TestLeafClusters:
-    def test_clusters_on_tips_only(self):
+class TestLeaves:
+    CELL = 0.26
+    ROUNDS = 3
+
+    def test_leaves_grow_around_tips(self):
         set_world_seed(9)
         rng = for_domain("test", "leaves")
         sk, trunk, limbs, twigs = _grow_oak(rng)
         ids = np.concatenate([limbs, twigs])
-        leaves = leaf_clusters_at_tips(sk, ids, rng, radius_m=(0.6, 1.1),
-                                       offset_frac=0.35)
-        assert leaves.n_clusters > 0
-        # Every cluster sits near SOME tip end point (≤ radius × offset √3).
+        leaves = leaves_at_tips(sk, ids, rng, cell_m=self.CELL,
+                                rounds=self.ROUNDS, density=0.8)
+        assert leaves.n_leaves > 0
+        # Every leaf sits within the CA growth reach of SOME tip end point:
+        # hydration spreads `rounds − 1` cells from the seed cell, plus the
+        # seed-snap and in-cell jitter (≤ ~1 cell each diagonal).
         tips = sk.tip_ids(ids)
         d = np.linalg.norm(leaves.center[:, None, :]
                            - sk.end[tips][None, :, :], axis=2).min(axis=1)
-        assert (d <= leaves.radius * 0.35 * math.sqrt(3.0) + 1e-5).all()
+        reach = (self.ROUNDS + 1.0) * self.CELL * math.sqrt(3.0)
+        assert (d <= reach + 1e-5).all()
         assert (leaves.sway >= 0.85).all() and (leaves.sway <= 1.0).all()
 
-    def test_empty_per_tip_gives_empty(self):
+    def test_canopy_emerges_from_branches(self):
+        # More tips hydrate more cells: a twiggy oak grows strictly more
+        # leaves than a single-limb skeleton under identical CA params.
+        set_world_seed(9)
+        rng = for_domain("test", "leaves")
+        sk, trunk, limbs, twigs = _grow_oak(rng)
+        full = leaves_at_tips(sk, np.concatenate([limbs, twigs]), rng,
+                              cell_m=self.CELL, rounds=self.ROUNDS,
+                              density=0.8, max_leaves=10_000)
+        one = leaves_at_tips(sk, twigs[:1], rng,
+                             cell_m=self.CELL, rounds=self.ROUNDS,
+                             density=0.8, max_leaves=10_000)
+        assert full.n_leaves > one.n_leaves > 0
+
+    def test_zero_rounds_or_density_gives_empty(self):
         set_world_seed(9)
         rng = for_domain("test", "leaves")
         sk, _, limbs, twigs = _grow_oak(rng)
-        leaves = leaf_clusters_at_tips(sk, np.concatenate([limbs, twigs]),
-                                       rng, per_tip=(0, 0))
-        assert leaves.n_clusters == 0
+        ids = np.concatenate([limbs, twigs])
+        assert leaves_at_tips(sk, ids, rng, rounds=0).n_leaves == 0
+        assert leaves_at_tips(sk, ids, rng, density=0.0).n_leaves == 0
+
+    def test_max_leaves_cap(self):
+        set_world_seed(9)
+        rng = for_domain("test", "leaves")
+        sk, _, limbs, twigs = _grow_oak(rng)
+        leaves = leaves_at_tips(sk, np.concatenate([limbs, twigs]), rng,
+                                cell_m=self.CELL, rounds=self.ROUNDS,
+                                density=1.0, per_cell=(2, 2), max_leaves=50)
+        assert leaves.n_leaves == 50

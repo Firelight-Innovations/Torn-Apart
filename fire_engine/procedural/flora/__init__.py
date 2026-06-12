@@ -6,10 +6,12 @@ The species-script pipeline (headless, deterministic, numpy-only):
 1. A **species script** (``flora/species/*.py``) subclasses
    :class:`TreeSpeciesDef` and grows a branch skeleton with
    :class:`SkeletonBuilder` — the "node-graph editor in Python".
-2. :func:`leaf_clusters_at_tips` foliates the branch tips.
-3. The shared mesher (:func:`mesh_branches` / :func:`mesh_leaf_clusters` /
+2. :func:`leaves_at_tips` grows INDIVIDUAL leaves around the branch tips
+   with a cellular automaton (the canopy shape emerges from the wood).
+3. The shared mesher (:func:`mesh_branches` / :func:`mesh_leaves` /
    :func:`merge_parts`) emits :class:`TreeMesh` arrays in the engine's
-   V3N3T2C4 layout, with per-vertex wind-sway weights in ``color.a``.
+   V3N3T2C4 layout, with per-vertex wind-sway weights in ``color.a`` —
+   hundreds of leaf cards batched into ONE mesh per variant.
 4. ``atlas.py`` composes the species' bark + leaf pixel-art texture;
    ``impostor.py`` software-rasterizes far-LOD sprites.
 5. ``registry.get("tree_<species>")`` returns the cached
@@ -26,14 +28,14 @@ from fire_engine.procedural.flora.skeleton import (
     validate_skeleton,
 )
 from fire_engine.procedural.flora.leaves import (
-    LeafClusters,
-    leaf_clusters_at_tips,
+    Leaves,
+    leaves_at_tips,
 )
 from fire_engine.procedural.flora.mesher import (
     TreeMesh,
     merge_parts,
     mesh_branches,
-    mesh_leaf_clusters,
+    mesh_leaves,
 )
 from fire_engine.procedural.flora.atlas import (
     AtlasLayout,
@@ -56,11 +58,11 @@ __all__ = [
     "SkeletonBuilder",
     "TreeSkeleton",
     "validate_skeleton",
-    "LeafClusters",
-    "leaf_clusters_at_tips",
+    "Leaves",
+    "leaves_at_tips",
     "TreeMesh",
     "mesh_branches",
-    "mesh_leaf_clusters",
+    "mesh_leaves",
     "merge_parts",
     "AtlasLayout",
     "bark_texture",

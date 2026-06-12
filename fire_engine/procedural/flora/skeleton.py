@@ -69,7 +69,7 @@ class TreeSkeleton:
     A finalized branch skeleton — struct-of-arrays, one row per segment.
 
     Produced by :meth:`SkeletonBuilder.skeleton`; consumed by
-    ``mesher.mesh_branches``, ``leaves.leaf_clusters_at_tips`` and
+    ``mesher.mesh_branches``, ``leaves.leaves_at_tips`` and
     ``impostor.rasterize_impostor``.
 
     Attributes
@@ -187,7 +187,7 @@ class SkeletonBuilder:
 
     Each grow call returns the **segment ids it created** (``int32`` array);
     pass those ids back into :meth:`branches` to sprout the next level, and
-    into ``leaves.leaf_clusters_at_tips`` to foliate the result.  Call
+    into ``leaves.leaves_at_tips`` to foliate the result.  Call
     :meth:`skeleton` once at the end to finalize.
 
     Every method consumes ``self.rng`` deterministically — same rng state in,
@@ -387,7 +387,7 @@ class SkeletonBuilder:
         -------
         numpy.ndarray
             ``int32`` ids of ALL created sub-segments — feed to the next
-            :meth:`branches` level or ``leaf_clusters_at_tips``.
+            :meth:`branches` level or ``leaves_at_tips``.
         """
         parents = np.asarray(parents, dtype=np.int64)
         if parents.size == 0:

@@ -28,10 +28,7 @@ import math
 import numpy as np
 
 from fire_engine.procedural.defs import register_def
-from fire_engine.procedural.flora.leaves import (
-    LeafClusters,
-    leaf_clusters_at_tips,
-)
+from fire_engine.procedural.flora.leaves import Leaves, leaves_at_tips
 from fire_engine.procedural.flora.skeleton import SkeletonBuilder, TreeSkeleton
 from fire_engine.procedural.flora.species_def import TreeSpeciesDef
 
@@ -60,7 +57,7 @@ class GnarledOakDef(TreeSpeciesDef):
     LEAF_HOLE_THRESH = 0.16
 
     def grow(self, rng: np.random.Generator,
-             variant: int) -> tuple[TreeSkeleton, LeafClusters]:
+             variant: int) -> tuple[TreeSkeleton, Leaves]:
         """Crooked trunk → near-90° limbs (shorter near the crown) → twigs."""
         sb = SkeletonBuilder(rng)
         trunk = sb.trunk(height_m=5.5 + float(rng.uniform(-1.0, 1.5)),
@@ -81,7 +78,9 @@ class GnarledOakDef(TreeSpeciesDef):
                             radius_ratio=0.5,
                             upturn_rad=_D(25))
         sk = sb.skeleton()
-        leaves = leaf_clusters_at_tips(sk, np.concatenate([limbs, twigs]),
-                                       rng, radius_m=(0.6, 1.1),
-                                       per_tip=(1, 2))
+        # CA canopy: each twig tip hydrates a ~0.8 m dome of individual
+        # leaves; the ragged-oak silhouette is the twig layout itself.
+        leaves = leaves_at_tips(sk, np.concatenate([limbs, twigs]), rng,
+                                cell_m=0.26, rounds=3, density=0.85,
+                                leaf_size_m=(0.12, 0.18), max_leaves=420)
         return sk, leaves

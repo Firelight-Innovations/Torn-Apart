@@ -3,8 +3,9 @@ procedural/flora/atlas.py — per-species pixel-art texture atlas helpers.
 
 One tree species = ONE small texture atlas so each variant mesh is a single
 draw: the left half is tileable posterised **bark** (alpha 255), the right
-half a binary-alpha **leaf mass** the foliage quads cut out.  The mesher's
-``uv_rect`` arguments and :class:`AtlasLayout` are the shared contract.
+half a binary-alpha **single leaf** every individual leaf card cuts out
+(hundreds per canopy, one texture).  The mesher's ``uv_rect`` arguments and
+:class:`AtlasLayout` are the shared contract.
 
 These are plain rng-consuming helpers — species defs call them inside
 ``generate`` with the rng the registry injected.  They deliberately do NOT
@@ -117,51 +118,88 @@ def leaf_texture(
     berry_density: float = 0.0,
 ) -> np.ndarray:
     """
-    Ragged binary-alpha leaf mass — ``(H, W, 4) uint8`` blob cutout.
+    ONE pixel-art leaf — ``(H, W, 4) uint8`` binary-alpha cutout.
 
-    An elliptical blob filling the tile, its edge and interior broken by
-    crisp pixel noise (more holes toward the rim), shaded with a posterised
-    ramp that lightens toward the top — the same Vintage-Story read as the
-    old sprite canopies, now wrapped onto 3-D foliage quads.  Optional
-    berry speckles for fruiting species.
+    A single teardrop leaf (stem at the bottom of the tile, tip at the
+    top), drawn for the individual-leaf canopy: the mesher puts this on
+    every leaf card, hundreds per tree.  The silhouette is two mirrored
+    arcs widest below the middle, its edge nibbled by crisp pixel noise
+    (*hole_thresh* — dry species look chewed), shaded with the posterised
+    ramp split along a darker **midrib**: the right side sits one tier
+    lighter than the left, with a top-lit ramp tip-to-stem.  Optional
+    berry speckles for fruiting species ride near the leaf base.
 
     Parameters
     ----------
     rng : numpy.random.Generator
         Deterministic generator.
     width, height : int
-        Output texel size (one half-atlas).
+        Output texel size (one half-atlas, typically 32×64).
     palette : numpy.ndarray
-        ``uint8 (T, 3)`` RGB foliage ramp, dark under-canopy first.
+        ``uint8 (T, 3)`` RGB foliage ramp, dark first.
     hole_thresh : float
-        Noise cut for sky holes; higher = scragglier.  Default 0.18.
+        Edge-raggedness cut; higher = scragglier/dying.  Default 0.18.
     clump_freq : int
-        Noise base frequency — leaf clump size.  Default 5.
+        Noise base frequency for the edge nibble + interior mottle.
     berry_color : tuple[int, int, int] | None
         RGB berry speckle color (e.g. washed red); ``None`` = no berries.
     berry_density : float
-        Per-texel berry probability over opaque texels.  Default 0.
+        Per-texel berry probability over the lower leaf half.  Default 0.
     """
     palette = np.asarray(palette, dtype=np.uint8)
     yy, xx = np.mgrid[0:height, 0:width].astype(np.float32)
-    cx, cy = (width - 1) * 0.5, (height - 1) * 0.5
-    dist = np.sqrt(((xx - cx) / (width * 0.5)) ** 2
-                   + ((yy - cy) / (height * 0.5)) ** 2)
+
+    # Leaf axis: stem at the BOTTOM row (v=0 after the upload flip is the
+    # card's stem end), tip at the top.  t = 0 stem … 1 tip.
+    t = 1.0 - yy / max(height - 1, 1)
+    cx = (width - 1) * 0.5
+
+    # Teardrop half-width profile: widest ~35 % up from the stem, tapering
+    # to a point at the tip and a narrow stem foot.  Slight per-leaf
+    # asymmetry so the species' leaf isn't perfectly mirrored.
+    wmax = width * float(rng.uniform(0.36, 0.46))
+    bulge = float(rng.uniform(0.30, 0.42))            # widest point (t)
+    prof = np.where(
+        t < bulge,
+        0.18 + 0.82 * (t / max(bulge, 1e-3)) ** 0.7,
+        np.clip(1.0 - (t - bulge) / max(1.0 - bulge, 1e-3),
+                0.0, 1.0) ** 1.15)
+    half_w = wmax * prof                              # (H, W) via t
+    skew = (t - 0.5) * width * float(rng.uniform(-0.08, 0.08))
+    dx = xx - (cx + skew)
 
     noise = pixel_noise(rng, (height, width), octaves=3,
                         base_freq=clump_freq)
-    alpha = (dist < 1.0) & (noise > hole_thresh + dist * 0.3)
+    # Edge nibble: noise shrinks the silhouette locally; hole_thresh sets
+    # how deep the bites go.
+    edge = 1.0 - np.clip(noise - (1.0 - hole_thresh * 1.6), 0.0, 1.0) * 2.2
+    alpha = np.abs(dx) <= half_w * np.clip(edge, 0.25, 1.0)
 
-    light = 1.0 - yy / max(height - 1, 1)             # row 0 (top) brightest
-    tier = np.clip(((noise * 0.6 + light * 0.45) * len(palette)),
-                   0, len(palette) - 1).astype(np.intp)
+    # Stem foot: a 1–2 px column at the very bottom so the card reads
+    # attached when it tilts.
+    stem_rows = max(2, height // 12)
+    stem = (yy >= height - stem_rows) & (np.abs(xx - cx) <= max(width / 24.0, 0.6))
+    alpha = alpha | stem
+
+    # Shading: top-lit tip→stem ramp + one-tier midrib split (right of the
+    # midrib lighter), plus noise mottle.
+    side = (dx > 0).astype(np.float32)
+    tier_f = (t * 0.5 + side * 0.22 + noise * 0.38) * len(palette)
+    tier = np.clip(tier_f, 0, len(palette) - 1).astype(np.intp)
 
     rgba = np.zeros((height, width, 4), dtype=np.uint8)
     rgba[..., :3][alpha] = palette[tier][alpha]
     rgba[..., 3][alpha] = 255
 
+    # Midrib: the centreline one tier darker, stem to near-tip.
+    rib = (np.abs(dx) <= max(width / 28.0, 0.55)) & alpha & (t < 0.92)
+    rib_tier = np.maximum(tier - 1, 0)
+    rgba[..., :3][rib] = palette[rib_tier][rib]
+
     if berry_color is not None and berry_density > 0.0:
-        berries = (rng.random((height, width)) < berry_density) & alpha
+        # Berries cluster near the leaf base (they hang at the stem).
+        berries = (rng.random((height, width)) < berry_density * 3.0) \
+            & alpha & (t < 0.45)
         rgba[..., :3][berries] = np.asarray(berry_color, dtype=np.uint8)
     return rgba
 

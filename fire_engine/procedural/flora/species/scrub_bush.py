@@ -25,10 +25,7 @@ import math
 import numpy as np
 
 from fire_engine.procedural.defs import register_def
-from fire_engine.procedural.flora.leaves import (
-    LeafClusters,
-    leaf_clusters_at_tips,
-)
+from fire_engine.procedural.flora.leaves import Leaves, leaves_at_tips
 from fire_engine.procedural.flora.skeleton import SkeletonBuilder, TreeSkeleton
 from fire_engine.procedural.flora.species_def import TreeSpeciesDef
 
@@ -57,7 +54,7 @@ class ScrubBushDef(TreeSpeciesDef):
     LEAF_HOLE_THRESH = 0.22
 
     def grow(self, rng: np.random.Generator,
-             variant: int) -> tuple[TreeSkeleton, LeafClusters]:
+             variant: int) -> tuple[TreeSkeleton, Leaves]:
         """Stub trunk → splayed stems (absolute lengths) → foliage."""
         sb = SkeletonBuilder(rng)
         stub = sb.trunk(height_m=0.15, base_radius_m=0.06, segments=1,
@@ -71,7 +68,9 @@ class ScrubBushDef(TreeSpeciesDef):
                             upturn_rad=_D(20),
                             bend_rad=0.25, segments=2)
         sk = sb.skeleton()
-        leaves = leaf_clusters_at_tips(sk, stems, rng,
-                                       radius_m=(0.22, 0.4),
-                                       per_tip=(1, 2), sway_min=0.8)
+        # Small dry leaves in loose tufts — scrub stays see-through.
+        leaves = leaves_at_tips(sk, stems, rng,
+                                cell_m=0.16, rounds=2, density=0.8,
+                                leaf_size_m=(0.07, 0.11),
+                                sway_min=0.8, max_leaves=240)
         return sk, leaves

@@ -4,9 +4,9 @@ procedural/flora/impostor.py — software-rasterized far-LOD tree sprites.
 Beyond the mesh fade distance the renderer crossfades each tree to an
 instanced crossed-quad billboard — the **impostor**.  This module renders
 those sprites headlessly: an orthographic XZ projection of the SAME skeleton
-and leaf clusters the mesh was built from, colored with the SAME palettes as
-the species atlas, so the handoff at distance is silhouette- and
-hue-consistent without any GPU bake (deterministic, pytest-testable; a
+and individual leaves the mesh was built from, colored with the SAME
+palettes as the species atlas, so the handoff at distance is silhouette-
+and hue-consistent without any GPU bake (deterministic, pytest-testable; a
 boot-time offscreen render bake is the documented upgrade if mismatch ever
 shows at closer ranges).
 
@@ -14,16 +14,17 @@ Conventions match the retired ``tree_sprite`` atlas so the impostor shader
 path stays simple: cells laid left→right, trunk base on the **bottom image
 row** (V = 0 after the upload flip), binary alpha.
 
-Per-segment / per-cluster Python loops here run over *tens* of elements with
-vectorized work inside each bounding box — bounded recipe loops, not
-per-pixel iteration (Hard Rule 4).
+The per-segment branch loop runs over *tens* of elements with vectorized
+work inside each bounding box (a bounded recipe loop, not per-pixel
+iteration — Hard Rule 4); the leaf pass is a fully-vectorized point
+scatter + diamond dilation because leaves number in the hundreds.
 """
 
 from __future__ import annotations
 
 import numpy as np
 
-from fire_engine.procedural.flora.leaves import LeafClusters
+from fire_engine.procedural.flora.leaves import Leaves
 from fire_engine.procedural.flora.skeleton import TreeSkeleton
 from fire_engine.procedural.textures.base import pixel_noise
 
@@ -32,7 +33,7 @@ __all__ = ["rasterize_impostor", "impostor_atlas"]
 
 def rasterize_impostor(
     sk: TreeSkeleton,
-    clusters: LeafClusters,
+    leaves: Leaves,
     bark_palette: np.ndarray,
     leaf_palette: np.ndarray,
     rng: np.random.Generator,
@@ -45,17 +46,19 @@ def rasterize_impostor(
     Render one variant's far-LOD sprite cell — ``(H, W, 4) uint8``.
 
     Orthographic projection onto the XZ plane: branch segments become
-    tapered capsules (bark mid-tone, shadowed left of the trunk axis),
-    leaf clusters become pixel-noise-broken posterised discs drawn over the
-    wood.  Texels are square in meters (aspect-preserving), the trunk axis
-    is horizontally centered and the trunk base touches the bottom row.
+    tapered capsules (bark mid-tone, shadowed left of the trunk axis); the
+    individual leaves scatter as points, dilated to their pixel radius and
+    broken by pixel noise, drawn over the wood — the canopy silhouette at
+    distance is literally the leaf point-cloud's.  Texels are square in
+    meters (aspect-preserving), the trunk axis is horizontally centered
+    and the trunk base touches the bottom row.
 
     Parameters
     ----------
     sk : TreeSkeleton
         The variant's skeleton (same one the mesh was built from).
-    clusters : LeafClusters
-        The variant's foliage (may be empty — dead trees).
+    leaves : Leaves
+        The variant's individual leaves (may be empty — dead trees).
     bark_palette / leaf_palette : numpy.ndarray
         ``uint8 (T, 3)`` ramps — pass the SAME palettes as the atlas so
         mesh and impostor agree at the crossfade.
@@ -87,12 +90,12 @@ def rasterize_impostor(
         reach = np.abs(np.concatenate([sk.start[:, 0:2],
                                        sk.end[:, 0:2]])).max()
         top = float(sk.end[:, 2].max())
-        if clusters.n_clusters:
+        if leaves.n_leaves:
             reach = max(reach,
-                        float((np.abs(clusters.center[:, 0:2]).max(axis=1)
-                               + clusters.radius).max()))
+                        float((np.abs(leaves.center[:, 0:2]).max(axis=1)
+                               + leaves.radius).max()))
             top = max(top,
-                      float((clusters.center[:, 2] + clusters.radius).max()))
+                      float((leaves.center[:, 2] + leaves.radius).max()))
         reach = max(float(reach), 0.25) * 1.05
         top = max(top, 0.5) * 1.02
         px_per_m = min((W - 1) / (2.0 * reach), (H - 1) / top)
@@ -131,32 +134,36 @@ def rasterize_impostor(
         region[..., :3][inside] = bark_palette[shade.astype(np.intp)][inside]
         region[..., 3][inside] = 255
 
-    # --- leaf clusters: noisy posterised discs over the wood -------------
-    if clusters.n_clusters:
+    # --- leaves: vectorized point scatter + diamond dilation -------------
+    if leaves.n_leaves:
+        cols = np.clip(np.round(leaves.center[:, 0] * s
+                                + (W - 1) * 0.5).astype(np.int64), 0, W - 1)
+        rows = np.clip(np.round((H - 1)
+                                - leaves.center[:, 2] * s).astype(np.int64),
+                       0, H - 1)
+        mask = np.zeros((H, W), dtype=bool)
+        mask[rows, cols] = True
+
+        # Dilate each dot to the (median) leaf pixel radius — a diamond
+        # per round, capped tiny: leaves are 1–3 px at impostor scale.
+        r_px = float(np.median(leaves.radius)) * s
+        for _ in range(int(np.clip(round(r_px), 1, 3))):
+            grown = mask.copy()
+            grown[1:, :] |= mask[:-1, :]
+            grown[:-1, :] |= mask[1:, :]
+            grown[:, 1:] |= mask[:, :-1]
+            grown[:, :-1] |= mask[:, 1:]
+            mask = grown
+
         noise = pixel_noise(rng, (H, W), octaves=3, base_freq=5)
-        for j in range(clusters.n_clusters):
-            cx_px, cy_px = px(clusters.center[j])
-            r_px = max(float(clusters.radius[j]) * s, 1.5)
-            lo_x = max(int(cx_px - r_px - 1), 0)
-            hi_x = min(int(cx_px + r_px + 2), W)
-            lo_y = max(int(cy_px - r_px - 1), 0)
-            hi_y = min(int(cy_px + r_px + 2), H)
-            if lo_x >= hi_x or lo_y >= hi_y:
-                continue
-            bx = xx[lo_y:hi_y, lo_x:hi_x]
-            by = yy[lo_y:hi_y, lo_x:hi_x]
-            d = np.hypot(bx - cx_px, by - cy_px) / r_px
-            n = noise[lo_y:hi_y, lo_x:hi_x]
-            inside = (d < 1.0) & (n > hole_thresh + d * 0.25)
-            if not inside.any():
-                continue
-            light = 1.0 - by / max(H - 1, 1)         # higher = lighter
-            tier = np.clip(((n * 0.55 + light * 0.5)
+        inside = mask & (noise > hole_thresh * 0.8)
+        if inside.any():
+            light = 1.0 - yy / max(H - 1, 1)         # higher = lighter
+            tier = np.clip(((noise * 0.55 + light * 0.5)
                             * len(leaf_palette)),
                            0, len(leaf_palette) - 1).astype(np.intp)
-            region = rgba[lo_y:hi_y, lo_x:hi_x]
-            region[..., :3][inside] = leaf_palette[tier][inside]
-            region[..., 3][inside] = 255
+            rgba[..., :3][inside] = leaf_palette[tier][inside]
+            rgba[..., 3][inside] = 255
 
     return rgba
 

@@ -16,10 +16,10 @@ import numpy as np
 from fire_engine.core.rng import for_domain, set_world_seed
 from fire_engine.procedural.flora import (
     SkeletonBuilder,
-    leaf_clusters_at_tips,
+    leaves_at_tips,
     merge_parts,
     mesh_branches,
-    mesh_leaf_clusters,
+    mesh_leaves,
 )
 
 
@@ -33,9 +33,10 @@ def _build(seed: int = 21):
                         pitch_set=(math.radians(85),),
                         length_ratio=(0.4, 0.6), segments=2)
     sk = sb.skeleton()
-    leaves = leaf_clusters_at_tips(sk, limbs, rng, radius_m=(0.5, 0.9))
+    leaves = leaves_at_tips(sk, limbs, rng, cell_m=0.25, rounds=3,
+                            density=0.8)
     wood = mesh_branches(sk)
-    foliage = mesh_leaf_clusters(leaves, rng)
+    foliage = mesh_leaves(leaves, rng)
     return sk, leaves, wood, foliage, merge_parts(wood, foliage)
 
 
@@ -112,9 +113,20 @@ class TestMergeAndEmpty:
         sb.trunk(height_m=4.0, base_radius_m=0.2)
         sk = sb.skeleton()
         wood = mesh_branches(sk)
-        from fire_engine.procedural.flora import LeafClusters
-        foliage = mesh_leaf_clusters(LeafClusters.empty(), rng)
+        from fire_engine.procedural.flora import Leaves
+        foliage = mesh_leaves(Leaves.empty(), rng)
         merged = merge_parts(wood, foliage)
         assert foliage.n_vertices == 0
         assert merged.n_vertices == wood.n_vertices
         assert merged.height_m > 3.0
+
+    def test_one_quad_per_leaf(self):
+        _, leaves, _, foliage, _ = _build()
+        assert foliage.n_vertices == leaves.n_leaves * 4
+        assert foliage.indices.shape[0] == leaves.n_leaves * 6
+
+    def test_leaf_normals_upward_biased(self):
+        # Tilt range caps at 70° off vertical — every leaf normal keeps a
+        # positive Z component (canopies light from above).
+        _, _, _, foliage, _ = _build()
+        assert (foliage.normals[:, 2] > 0.0).all()

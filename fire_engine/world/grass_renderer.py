@@ -190,6 +190,11 @@ class GrassRendererComponent(Component):
                                     float(cfg.grass_fade_start_m))
         self._root.set_shader_input("u_fade_end_m",
                                     float(cfg.grass_fade_end_m))
+        # Shadow-refinement gate (lit_surface.glsl).  Bound HERE, not
+        # inherited: terrain_root above us pins u_refine = 1.0 for the
+        # terrain, foliage follows the graphics preset.
+        self._root.set_shader_input(
+            "u_refine", 1.0 if cfg.gfx_foliage_shadow_refine else 0.0)
         # Wind defaults until the first late_update sees a SkyState.
         self._root.set_shader_input("u_wind_dir", LVecBase2f(1.0, 0.0))
         self._root.set_shader_input("u_sway_base", _SWAY_BASE_MIN_M)

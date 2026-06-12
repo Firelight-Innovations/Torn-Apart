@@ -61,6 +61,22 @@ def test_low_preset_uses_half_res_clouds():
     assert resolved["gfx_fxaa"] is False
 
 
+def test_foliage_refine_preset_wiring():
+    """Foliage shadow refinement: off on iGPU-relief presets, on above."""
+    assert resolve_graphics_preset({"preset": "off"})[
+        "gfx_foliage_shadow_refine"] is False
+    assert resolve_graphics_preset({"preset": "low"})[
+        "gfx_foliage_shadow_refine"] is False
+    assert resolve_graphics_preset({"preset": "medium"})[
+        "gfx_foliage_shadow_refine"] is True
+    assert resolve_graphics_preset({"preset": "high"})[
+        "gfx_foliage_shadow_refine"] is True
+    # Explicit override still wins.
+    assert resolve_graphics_preset(
+        {"preset": "low", "gfx_foliage_shadow_refine": True}
+    )["gfx_foliage_shadow_refine"] is True
+
+
 def test_no_table_defaults_to_high():
     assert resolve_graphics_preset(None)["gfx_preset"] == "high"
     assert resolve_graphics_preset({})["gfx_preset"] == "high"

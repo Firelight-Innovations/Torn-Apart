@@ -201,6 +201,11 @@ class FloraRendererComponent(Component):
         # u_time_s is NOT inherited from terrain_root (grass binds its own on
         # grass_root) — flora accumulates and binds its own, in lockstep.
         self._root.set_shader_input("u_time_s", 0.0)
+        # Shadow-refinement gate (lit_surface.glsl).  Bound HERE, not
+        # inherited: terrain_root above us pins u_refine = 1.0 for the
+        # terrain, foliage follows the graphics preset.
+        self._root.set_shader_input(
+            "u_refine", 1.0 if cfg.gfx_foliage_shadow_refine else 0.0)
 
         for kind in _FLORA_KINDS:
             height = float(getattr(cfg, kind.height_cfg))

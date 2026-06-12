@@ -69,6 +69,7 @@ GRAPHICS_PRESETS: dict[str, dict] = {
         "gfx_lens_flare": False,
         "gfx_clouds": False,
         "gfx_god_rays": False,
+        "gfx_foliage_shadow_refine": False,
     },
     "low": {
         "gfx_post_process": True,
@@ -84,6 +85,7 @@ GRAPHICS_PRESETS: dict[str, dict] = {
         "gfx_cloud_resolution_scale": 0.5,
         "gfx_god_rays": False,
         "gfx_god_ray_samples": 16,
+        "gfx_foliage_shadow_refine": False,
     },
     "medium": {
         "gfx_post_process": True,
@@ -99,6 +101,7 @@ GRAPHICS_PRESETS: dict[str, dict] = {
         "gfx_cloud_resolution_scale": 1.0,
         "gfx_god_rays": True,
         "gfx_god_ray_samples": 24,
+        "gfx_foliage_shadow_refine": True,
     },
     "high": {
         "gfx_post_process": True,
@@ -114,6 +117,7 @@ GRAPHICS_PRESETS: dict[str, dict] = {
         "gfx_cloud_resolution_scale": 1.0,
         "gfx_god_rays": True,
         "gfx_god_ray_samples": 32,
+        "gfx_foliage_shadow_refine": True,
     },
 }
 
@@ -439,6 +443,12 @@ class Config:
     gfx_cloud_max_dist_m  : float — far raymarch distance for clouds (meters).
     gfx_god_rays          : bool  — screen-space crepuscular rays through clouds.
     gfx_god_ray_samples   : int   — radial sample count for god rays.
+    gfx_foliage_shadow_refine : bool — per-fragment celestial-shadow refinement
+                                    march on foliage (grass/flora/trees/
+                                    impostors; the lit_surface.glsl ``u_refine``
+                                    gate).  Terrain always refines; turning
+                                    this off keeps foliage on the cheap
+                                    trilinear cascade shadows (iGPU relief).
     gfx_god_ray_strength  : float — god-ray contribution added at composite.
     gfx_lens_flare_strength : float — lens-flare contribution at composite
                                     (lower = subtler flare).
@@ -590,6 +600,7 @@ class Config:
     gfx_cloud_max_dist_m:       float = 6000.0
     gfx_god_rays:               bool  = True
     gfx_god_ray_samples:        int   = 32
+    gfx_foliage_shadow_refine:  bool  = True
     # Aesthetic tuning — NOT carried by the presets (so they stay consistent
     # across off/low/medium/high); override freely in [graphics] in config.toml.
     gfx_god_ray_strength:       float = 0.4

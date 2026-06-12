@@ -226,6 +226,11 @@ class TreeRendererComponent(Component):
         self._root.set_shader_input("u_time_s", 0.0)
 
         cfg = self.base._config
+        # Shadow-refinement gate (lit_surface.glsl) for BOTH the mesh and
+        # impostor draws.  Bound HERE, not inherited: terrain_root above us
+        # pins u_refine = 1.0 for the terrain, foliage follows the preset.
+        self._root.set_shader_input(
+            "u_refine", 1.0 if cfg.gfx_foliage_shadow_refine else 0.0)
         for kind in _TREE_KINDS:
             kroot = self._root.attach_new_node(f"tree_{kind.tag}")
             # Mesh draws fade OUT across the mesh window; impostor nodes

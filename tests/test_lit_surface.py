@@ -30,11 +30,19 @@ _REPO = pathlib.Path(__file__).resolve().parents[1]
 _WORLD_ANCHOR = str(_REPO / "fire_engine" / "world" / "fake.py")
 _SHADER_DIR = _REPO / "fire_engine" / "world" / "shaders"
 
-# Every fragment shader that draws a lit surface.  Phase-3 foliage rewrites
-# extend this list (grass.frag, flora.frag, tree.frag, mote_leaf.frag).
+# Every fragment shader that draws a lit surface.  flora.frag doubles as
+# the tree-impostor fragment (tree_renderer.py uses it verbatim).
 _LIT_FRAGMENTS = [
     "terrain.frag",
+    "grass.frag",
+    "flora.frag",
+    "tree.frag",
+    "mote_leaf.frag",
 ]
+
+# Cheap-tier fragments: no #define LIT_REFINE — the GLSL preprocessor strips
+# the march + occluder-box arrays at compile, so they pay no uniform budget.
+_CHEAP_FRAGMENTS = ["mote_leaf.frag"]
 
 # Functions owned by lit_surface.glsl — consumers must never define locally.
 _LIBRARY_FUNCTIONS = [
@@ -141,3 +149,23 @@ class TestSamplerBudget:
     def test_all_lit_fragments_within_gl33_minimum(self):
         for name in _LIT_FRAGMENTS:
             assert self._sampler_count(_composed(name)) <= 16, name
+
+
+class TestTierSelection:
+    def test_refine_consumers_define_lit_refine(self):
+        for name in ("terrain.frag", "grass.frag", "flora.frag", "tree.frag"):
+            raw = _raw(name)
+            assert "#define LIT_REFINE 1" in raw, name
+            # The define must precede the include or the guard never fires.
+            assert raw.index("#define LIT_REFINE 1") \
+                < raw.index('//#include "lit_surface.glsl"'), name
+
+    def test_cheap_fragments_skip_lit_refine(self):
+        for name in _CHEAP_FRAGMENTS:
+            assert "#define LIT_REFINE" not in _raw(name), name
+
+    def test_foliage_refine_calls_are_gated(self):
+        # Foliage refinement must sit behind the u_refine preset knob.
+        for name in ("grass.frag", "flora.frag", "tree.frag"):
+            raw = _raw(name)
+            assert "u_refine > 0.5" in raw, name

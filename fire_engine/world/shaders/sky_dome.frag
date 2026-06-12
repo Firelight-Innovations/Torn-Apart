@@ -45,8 +45,8 @@ const float RT      = 6431000.0;          // RP + 60 km
 const float R0      = 6371002.0;          // RP + observer 2 m
 const float SUN_I   = 22.0;               // SUN_TOA_RADIANCE
 const float MIE_G   = 0.76;
-const int   STEPS   = 12;
-const int   LSTEPS  = 4;
+const int   STEPS   = 16;     // view-ray scatter samples (twilight smoothness)
+const int   LSTEPS  = 4;       // sun-ray optical-depth samples per view sample
 
 // Disc angular radii â€” ~2.5x their realistic sizes, per art direction.
 const float SUN_ANG_R  = 0.0218;          // ~1.25 deg
@@ -175,6 +175,25 @@ void main() {
     // transparent.  Accumulated as the max of the sun & moon disc masks.
     float bodyMask = 0.0;
 
+    // --- Volumetric fog over the BACKGROUND sky (GPU froxel far slice) ------
+    // CRITICAL ORDER: fog the BACKGROUND sky here, then add the sun/moon discs
+    // AFTER, attenuated by the fog transmittance ONLY (not buried under the
+    // grey inscatter ``fog.rgb``).  The sky is at infinity so it is correctly
+    // seen through the whole fog column; the discs are bright HDR spikes, so
+    // even multiplied by a low transmittance they survive tonemap + bloom and
+    // PUNCH THROUGH the fog (dimmed, not erased) — fixing the "sun hidden
+    // behind a grey fog layer" look.  (Old order added the disc to ``col``
+    // first, so fog then both attenuated it AND swamped it with inscatter.)
+    float fogA = 1.0;
+    vec3  fogRGB = vec3(0.0);
+    if (u_fog_enabled > 0.5) {
+        vec4 fog = texture(u_fog_integrated,
+                           vec3(gl_FragCoord.xy / u_viewport, 1.0));
+        fogA = fog.a;
+        fogRGB = fog.rgb;
+    }
+    col = col * fogA + fogRGB;
+
     // --- Sun: large limb-darkened disc tinted by its own transmittance -----
     // In HDR the disc is pushed FAR above 1.0 so the bloom pass bleeds it into
     // a soft, edgeless blob (how a real bright sun reads) — clamping the disc
@@ -190,12 +209,12 @@ void main() {
         if (sdisc > 0.0) {
             float limb = sqrt(max(1.0 - sr * sr, 0.0));
             float ld = 0.42 + 0.58 * limb;               // limb darkening
-            col += sunT * (u_sun_intensity * sdisc * ld * discGain);
+            col += sunT * (u_sun_intensity * sdisc * ld * discGain) * fogA;
             bodyMask = max(bodyMask, sdisc);             // sun occludes stars
         }
     }
-    // Forward-Mie halo around the sun.
-    col += sunT * (u_sun_intensity * pow(max(sc, 0.0), 350.0) * haloGain);
+    // Forward-Mie halo around the sun (also fog-attenuated).
+    col += sunT * (u_sun_intensity * pow(max(sc, 0.0), 350.0) * haloGain) * fogA;
 
     // --- Moon: large textured disc with dynamic phase terminator -----------
     float mc = dot(d, u_moon_dir);
@@ -211,20 +230,15 @@ void main() {
             float lit = smoothstep(-0.08, 0.28, dot(vec3(ml, mz), mlight));
             vec3 moonCol = mtex * viewTransmittance(u_moon_dir)
                          * (0.05 + 1.10 * lit) * 1.5;
-            col = mix(col, moonCol, mdisc);               // moon occludes sky
+            col = mix(col, moonCol, mdisc * fogA);        // dims in thick fog
             bodyMask = max(bodyMask, mdisc);              // and occludes stars
         }
     }
     // Faint moon halo, night only.
     col += vec3(0.75, 0.78, 0.85)
-         * (pow(max(mc, 0.0), 1600.0) * 0.10 * (1.0 - u_daylight) * u_moon_glow);
+         * (pow(max(mc, 0.0), 1600.0) * 0.10 * (1.0 - u_daylight) * u_moon_glow)
+         * fogA;
 
-    // --- Volumetric fog composite (GPU backend: froxel far slice) ----------
-    if (u_fog_enabled > 0.5) {
-        vec4 fog = texture(u_fog_integrated,
-                           vec3(gl_FragCoord.xy / u_viewport, 1.0));
-        col = col * fog.a + fog.rgb;
-    }
     // Legacy horizon fog band (CPU backend; u_fog_blend forced 0 on GPU).
     float fog_band = 1.0 - smoothstep(0.0, 0.38, d.z);
     col = mix(col, u_fog_color, u_fog_blend * fog_band);

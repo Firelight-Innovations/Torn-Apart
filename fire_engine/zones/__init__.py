@@ -19,6 +19,14 @@ from fire_engine.zones.grass_placement import (
     grass_instance_count,
     hash_lowbias32,
     instance_attribs,
+    leaf_hash_seed,
+    leaf_instance_count,
+)
+from fire_engine.zones.flora_placement import (
+    FLORA_KINDS,
+    flora_hash_seed,
+    flora_instance_attribs,
+    flora_instance_count,
 )
 
 __all__ = [
@@ -30,4 +38,10 @@ __all__ = [
     "grass_instance_count",
     "hash_lowbias32",
     "instance_attribs",
+    "leaf_hash_seed",
+    "leaf_instance_count",
+    "FLORA_KINDS",
+    "flora_hash_seed",
+    "flora_instance_attribs",
+    "flora_instance_count",
 ]

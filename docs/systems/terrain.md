@@ -46,6 +46,7 @@ All symbols below are re-exported from `fire_engine.terrain` (`__init__.py`).
 | `raycast_voxel(origin, direction, chunk_provider, max_distance_m=100.0) -> Hit \| None` | Voxel DDA raycast. |
 | `Hit` | Dataclass: `point`, `voxel`, `chunk_coord`, `normal`, `distance`. |
 | `ChunkManager(config, event_bus)` | Streaming store, `chunk_provider`, `Saveable("terrain")`. |
+| `ChunkManager.remesh_edited(coords, light_sampler=None) -> int` | Same-frame remesh of brush-edited chunks + their dirty border neighbours, bypassing the `stream_frame` budget. Call right after `apply_brush` with its returned set. |
 
 The render-side bridge `world/geometry_bridge.to_geom(mesh) -> panda3d.core.Geom` (and `to_geom_node`) lives in `world/` (the only file allowed to import panda3d for this handoff).
 
@@ -149,6 +150,7 @@ build_mesh(
 ### Streaming invariants
 - `desired_set(camera_pos)` is a **pure function**: chunks within `view_distance_chunks` (square XY radius) of the camera chunk, Z in `[-2, +4]` relative to it.  Count = `(2r+1)² * 7`.
 - `stream_frame` has a **2-chunk-per-frame budget**: it remeshes **dirty chunks FIRST** (brush edits / relights the player is looking at must never be starved — with ~1.2k chunks in the desired set, loading takes hundreds of frames), then loads/meshes missing desired chunks nearest-first, and unloads chunks beyond `radius + 1` (hysteresis → no boundary thrash).
+- **Interactive brush edits must NOT wait on that budget** — until a border neighbour remeshes, the faces the edit newly exposed in it don't exist, so the player sees a black hole through the world.  Call `remesh_edited(touched)` right after `apply_brush`: it immediately remeshes every still-dirty chunk in the touched set's 26-neighbourhood (typical crater: 1–4 chunks ≈ 10–30 ms, one-frame hitch) and leaves unrelated dirty chunks (e.g. an F9 load) on the budgeted path.
 - `pending_meshes` holds produced `MeshArrays` for the World layer to upload; `unloaded_this_frame` lists coords whose Geoms the World layer must remove.
 
 ### Handoff to `world/`
@@ -180,8 +182,9 @@ set_world_seed(1337)
 cm = ChunkManager(load_config(), EventBus())
 hit = raycast_voxel(Vec3(8, -4, 30), Vec3(0, 0, -1), cm)   # cm is callable as provider
 if hit:
-    apply_brush(SphereBrush(2.5), hit.point, BrushMode.REMOVE,
-                chunk_provider=cm, bus=cm.bus)              # carves + flags dirty/edited
+    touched = apply_brush(SphereBrush(2.5), hit.point, BrushMode.REMOVE,
+                          chunk_provider=cm, bus=cm.bus)    # carves + flags dirty/edited
+    cm.remesh_edited(touched)        # same-frame remesh — no see-through hole
 ```
 
 ### Streaming each frame

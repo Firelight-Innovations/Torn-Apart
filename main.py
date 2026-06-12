@@ -319,6 +319,28 @@ def build_demo():
         (-12.0, -5.0, 6.0), (12.0, 25.0, 10.0),
         params={"density": cfg.grass_density_per_m2},
     )
+    # Demo "trees" volume — the seam the wind system's leaf litter renders on
+    # (no tree system yet; a future forest registers canopy volumes tagged
+    # "trees" and leaves appear with zero wind-system changes).  Placed just to
+    # the +X side of the grass box, ~20×20 m footprint, z 6→14 to straddle the
+    # terrain surface (ground top z=8) and give leaves vertical room to stream.
+    zone_store.add(
+        "trees",
+        (14.0, -5.0, 6.0), (34.0, 15.0, 14.0),
+    )
+    # Flora volumes (world/flora_renderer.py) — wildflowers scattered through
+    # the demo grass box, and a wider band of scrub bushes running from the
+    # meadow into the treeline.  The "trees" volume above is shared
+    # infrastructure: the flora renderer draws tree sprites on it while the
+    # wind system's leaf litter keeps scattering leaves over the same box.
+    zone_store.add(
+        "flowers",
+        (-12.0, -5.0, 6.0), (12.0, 25.0, 10.0),
+    )
+    zone_store.add(
+        "bushes",
+        (-12.0, -5.0, 6.0), (34.0, 25.0, 11.0),
+    )
     zone_store.mark_baseline()
 
     # 6. Lighting.  Two backends (config.lighting_backend):
@@ -408,6 +430,26 @@ def build_demo():
     )
     app.sky_go = sky_go
 
+    # 10b-wind. Wind field — the spatially-varying, time-evolving wind that
+    #      grass (and later flags/cloth/motes) samples instead of one flat
+    #      scalar.  Construct the headless WindField (+ the venturi worker if
+    #      WP2 has landed; it is optional — WindField(cfg, worker=None) runs an
+    #      identity venturi) and seed the boot default u_wind_enabled = 0.0 on
+    #      terrain_root BEFORE any component starts, so grass is valid (scalar
+    #      fallback) until the WindSystemComponent's first upload flips it to 1.
+    from fire_engine.wind import WindField
+    try:
+        from fire_engine.wind import VenturiWorker        # WP2 (may not exist yet)
+        venturi_worker = VenturiWorker()
+        venturi_worker.start()
+    except ImportError:
+        venturi_worker = None
+        _log.info("Venturi worker unavailable (WP2 not landed) — wind runs "
+                  "with identity venturi")
+    wind_field = WindField(cfg, worker=venturi_worker)
+    app.wind_worker = venturi_worker        # exposed so main() can stop it on exit
+    app.terrain_root.set_shader_input("u_wind_enabled", 0.0)
+
     # 10c. GPU grass — instanced tufts inside every "grass" zone volume,
     #      placed entirely on the GPU (gl_InstanceID hash), lit by the same
     #      radiance cascades as the terrain, swaying with the weather.
@@ -426,11 +468,103 @@ def build_demo():
     )
     app.grass_go = grass_go
 
-    # 10d. HDR post-processing pipeline — offscreen linear-HDR scene buffer +
-    #      composite (bloom / lens flare / god rays attach in later phases).
-    #      Built after every render node exists; gated by the [graphics] preset
-    #      (gfx_post_process).  On failure it disables itself and the surface
-    #      shaders keep tonemapping internally (no crash).
+    # 10c2. GPU flora — instanced flowers / bushes / trees inside "flowers" /
+    #      "bushes" / "trees" zone volumes; the grass idiom generalised
+    #      (gl_InstanceID hash placement, baked height fields, cascade
+    #      lighting, wind-texture sway with per-kind gain/pivot, sprite-atlas
+    #      variants).  GPU lighting backend only (disables itself on cpu).
+    from fire_engine.world.flora_renderer import FloraRendererComponent
+    flora_go = instantiate()
+    flora_go.name = "Flora"
+    flora_go.add_component(
+        FloraRendererComponent,
+        base=app,
+        sky_system=sky_system,
+        zone_store=zone_store,
+        chunk_provider=chunk_manager,
+        lighting_pipeline=lighting_pipeline,
+        bus=bus,
+    )
+    app.flora_go = flora_go
+
+    # 10d. Wind system render component — uploads the WindField snapshot as
+    #      u_wind_tex on terrain_root each frame and flips u_wind_enabled to 1
+    #      after the first upload, so grass samples the travelling gust field.
+    #      GPU lighting backend only (disables itself + leaves the scalar
+    #      fallback on cpu); it OWNS the venturi worker and stops it on destroy.
+    from fire_engine.world.wind_renderer import WindSystemComponent
+    wind_go = instantiate()
+    wind_go.name = "Wind"
+    wind_go.add_component(
+        WindSystemComponent,
+        base=app,
+        clock=clock,
+        wind_field=wind_field,
+        worker=venturi_worker,
+        sky_system=sky_system,
+        chunk_provider=chunk_manager,
+        lighting_pipeline=lighting_pipeline,
+        bus=bus,
+    )
+    app.wind_go = wind_go
+
+    # 10e. Wind particles — dust motes + leaf litter, both GPU-instanced with
+    #      zero CPU per-particle state, sampling the inherited u_wind_tex.  Dust
+    #      drifts everywhere (camera-anchored wrapping lattice); leaf litter
+    #      renders on every "trees" zone volume (settles in calm air, streams in
+    #      gusts/storms).  GPU lighting backend only (they disable themselves on
+    #      cpu / when no wind field — same gate as grass + the wind component).
+    from fire_engine.world.mote_renderer import (
+        DustMoteComponent,
+        LeafLitterComponent,
+    )
+    dust_go = instantiate()
+    dust_go.name = "DustMotes"
+    dust_go.add_component(
+        DustMoteComponent,
+        base=app,
+        lighting_pipeline=lighting_pipeline,
+    )
+    app.dust_go = dust_go
+
+    leaf_go = instantiate()
+    leaf_go.name = "LeafLitter"
+    leaf_go.add_component(
+        LeafLitterComponent,
+        base=app,
+        zone_store=zone_store,
+        lighting_pipeline=lighting_pipeline,
+    )
+    app.leaf_go = leaf_go
+
+    # 10f. Wind debug ball (dev-only, [debug] debug_wind_ball) — a bright
+    #      procedural sphere on the ground near spawn pushed by WindField.sample
+    #      each fixed step: the physics seam proof (it scoots on gusts, rolls in
+    #      storms).  When the GPU WindSystemComponent is live it already calls
+    #      wind_field.update() each frame, so the ball only SAMPLES (sky_system
+    #      left None to avoid a redundant update); on the CPU backend that
+    #      component disables itself, so the ball drives update() itself (pass
+    #      sky_system) so it still has a field to sample.
+    if cfg.debug_wind_ball and wind_field is not None:
+        from fire_engine.world.wind_debug import WindBallDebugComponent
+        wind_component_active = use_gpu_lighting and lighting_pipeline is not None
+        ball_go = instantiate()
+        ball_go.name = "WindDebugBall"
+        ball_go.add_component(
+            WindBallDebugComponent,
+            base=app,
+            clock=clock,
+            wind_field=wind_field,
+            sky_system=None if wind_component_active else sky_system,
+        )
+        app.wind_ball_go = ball_go
+
+    # 10g. HDR post-processing pipeline — offscreen linear-HDR scene buffer +
+    #      composite (bloom / lens flare / god rays / FXAA).  Built LAST, after
+    #      every render node (terrain, sky, grass, flora, wind particles) exists,
+    #      since FilterManager redirects the whole scene.  Gated by the
+    #      [graphics] preset (gfx_post_process); on failure it disables itself
+    #      and the surface shaders keep tonemapping internally (no crash).
     from fire_engine.world.post_process import PostProcessPipeline
     app.post_process = PostProcessPipeline(app, cfg)
 
@@ -447,9 +581,13 @@ def build_demo():
         Builds the camera ray (origin = camera position, direction = camera
         forward), raycasts the voxel field, and on a hit carves a crater at the
         hit point.  apply_brush flags touched chunks dirty + edited and publishes
-        TerrainEditedEvent; the SunlightComputer relights the column; the next
-        stream_frame remeshes → crater + relight appear.  Bound to left-click
-        (while flying) and to the dev overlay's "Fire Explosion" action button.
+        TerrainEditedEvent; remesh_edited then rebuilds the crater chunks (and
+        their border neighbours) immediately — bypassing the 2-chunk streaming
+        budget — so the crater geometry and its relight (the lighting pipeline's
+        own same-frame edit path) appear together on the very next rendered
+        frame, with no see-through hole while neighbours wait their turn.
+        Bound to left-click (while flying) and to the dev overlay's
+        "Fire Explosion" action button.
         """
         origin = app.camera_go.transform.position
         direction = app.camera_go.transform.forward
@@ -472,6 +610,10 @@ def build_demo():
             chunk_provider=chunk_manager.get_or_create,
             bus=bus,
         )
+        # Same-frame remesh: the crater (and the faces it exposed in border
+        # neighbours) must exist before this frame renders, or the player sees
+        # a black hole through the world until the stream budget catches up.
+        chunk_manager.remesh_edited(touched, light_sampler)
         # Volumetric flash: a brief, bright point light in the radiance
         # volume — the GI flood fill carries it into the crater and the
         # froxel fog catches it as a glow.
@@ -717,10 +859,13 @@ def build_gi_test_room(app) -> tuple[float, float, float]:
     z0 = (hit.point.z if hit is not None else cfg.ground_height_m) + 0.5
     cz = z0 + 2.25                                       # interior mid-height
 
+    room_touched: set = set()
+
     def box(half: tuple, at: tuple, mode: BrushMode, material: int = 1):
-        apply_brush(BoxBrush(half_extents_m=Vec3(*half)), Vec3(*at), mode,
-                    material=material,
-                    chunk_provider=chunk_manager.get_or_create, bus=bus)
+        room_touched.update(apply_brush(
+            BoxBrush(half_extents_m=Vec3(*half)), Vec3(*at), mode,
+            material=material,
+            chunk_provider=chunk_manager.get_or_create, bus=bus))
 
     # Solid white block, then hollow the interior.
     box((5.5, 5.5, 3.25), (cx, cy, z0 + 2.25), BrushMode.ADD, _MAT_GI_WHITE)
@@ -743,6 +888,11 @@ def build_gi_test_room(app) -> tuple[float, float, float]:
         box((1.25, 0.75, 1.5), (cx, cy - sign * 5.0, z0 + 1.5),
             BrushMode.REMOVE)
     box((0.75, 0.75, 1.0), (cx + 2.8, cy + 2.8, z0 + 5.0), BrushMode.REMOVE)
+
+    # Same-frame remesh of every chunk the room carved (plus border
+    # neighbours) — one hitch instead of seconds of see-through walls while
+    # the 2-chunk stream budget catches up.
+    chunk_manager.remesh_edited(room_touched, app.light_sampler)
 
     # Co-locate an AreaLight with the emissive ceiling panel.  The voxel
     # emission alone glows but only fills its diffusion reach (~4 m); a real
@@ -776,6 +926,13 @@ def main() -> None:
         pipeline = getattr(app, "lighting_pipeline", None)
         if pipeline is not None:
             pipeline.shutdown()
+        # Stop the wind venturi worker thread cleanly on exit (mirrors the
+        # lighting assembly worker shutdown above).  The WindSystemComponent
+        # also stops it in on_destroy, so this is belt-and-suspenders for the
+        # exit path that tears the window down without destroying components.
+        wind_worker = getattr(app, "wind_worker", None)
+        if wind_worker is not None:
+            wind_worker.stop(join=True)
 
 
 def _to_ground_texture():

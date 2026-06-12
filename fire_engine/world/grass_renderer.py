@@ -32,6 +32,15 @@ Per frame (``late_update``) it syncs the weather sway uniforms from
 volume whose terrain was edited (``TerrainEditedEvent``/``ChunkLoadedEvent``
 mark volumes dirty — state-change events only, never per-frame plumbing).
 
+Wind: the ``SkyState`` scalar sway uniforms written here (``u_wind_dir``,
+``u_sway_base``, ``u_sway_gust``, ``u_gust_freq``) are now the documented
+**fallback** path.  When ``WindSystemComponent`` (``world/wind_renderer.py``)
+is live it binds the spatially-varying wind field on ``terrain_root`` and sets
+``u_wind_enabled = 1.0``; ``grass.vert`` then samples ``u_wind_tex`` per blade
+(advecting gust bands travel across the field) and ignores these scalars.  They
+still drive the grass on the CPU lighting backend / when no wind component runs
+(``u_wind_enabled = 0.0``).
+
 Example (wired by main.py)
 --------------------------
     grass_go = instantiate()

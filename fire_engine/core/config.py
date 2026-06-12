@@ -23,6 +23,7 @@ Debug flags (from [debug] table)
     show_fps             : bool
     show_chunk_borders   : bool
     show_light_grid      : bool
+    debug_wind_ball      : bool  — spawn the dev wind-field physics ball
 
 Sky fields (from [sky] table, flattened like [debug])
 ------------------------------------------------------
@@ -196,6 +197,11 @@ class Config:
     show_fps             : bool  — overlay FPS counter.
     show_chunk_borders   : bool  — debug overlay for chunk boundaries.
     show_light_grid      : bool  — debug overlay for the light grid.
+    debug_wind_ball      : bool  — spawn the dev-only "wind ball": a bright
+                                   procedural sphere on the ground near spawn
+                                   that is pushed by ``WindField.sample`` each
+                                   fixed step (a physics seam proof — it scoots
+                                   on gusts, rolls in storms).  Off by default.
     sky_cloud_altitude_m : float — base altitude of the cloud layer (world Z, m).
     sky_cloud_thickness_m: float — vertical thickness of the cloud layer (m).
     sky_cloud_cell_m     : float — horizontal edge of one cloud cell (m); the
@@ -274,6 +280,98 @@ class Config:
                                    gone (meters).
     grass_max_instances  : int   — hard cap on instances per grass volume.
 
+    Flora fields (from [flora] table, prefix ``flora_``)
+    ----------------------------------------------------
+    GPU-instanced flowers / bushes / trees (``world/flora_renderer.py``)
+    inside ``"flowers"`` / ``"bushes"`` / ``"trees"`` zone volumes.  Per kind:
+    ``density_per_m2`` (plants per m², overridable per volume via
+    ``params["density"]``), ``height_m`` (unscaled sprite height; per-plant
+    jitter scales it), ``fade_start_m``/``fade_end_m`` (camera-distance
+    shrink-away window) and ``max_instances`` (hard per-volume cap).
+
+    flora_flower_density_per_m2 : float — wildflowers per m² (1.5).
+    flora_flower_height_m       : float — flower sprite height (0.45 m).
+    flora_flower_fade_start_m   : float — flowers fade like grass (60 m).
+    flora_flower_fade_end_m     : float — fully gone (90 m).
+    flora_flower_max_instances  : int   — per-volume cap (50 000).
+    flora_bush_density_per_m2   : float — bushes per m² (0.08).
+    flora_bush_height_m         : float — bush sprite height (1.3 m).
+    flora_bush_fade_start_m     : float — bushes persist past grass (110 m).
+    flora_bush_fade_end_m       : float — fully gone (150 m).
+    flora_bush_max_instances    : int   — per-volume cap (5 000).
+    flora_tree_density_per_m2   : float — trees per m² (0.02 = 1 per 50 m²).
+    flora_tree_height_m         : float — tree sprite height (7.0 m).
+    flora_tree_fade_start_m     : float — trees are landmarks; they fade
+                                   only near the fog far range (300 m).
+    flora_tree_fade_end_m       : float — fully gone (380 m).
+    flora_tree_max_instances    : int   — per-volume cap (2 000).
+
+    Wind-field fields (from [wind] table, prefix ``wind_``)
+    -------------------------------------------------------
+    These drive the spatially-varying wind field (``fire_engine/wind/``): a
+    64×64-cell × 4 m (256 m) player-centred grid of horizontal wind velocity,
+    summed from ~12 seeded spectral gust modes that advect downwind, plus an
+    analytic vertical boundary-layer profile.  All distances meters, speeds
+    m/s, frequencies rad/s, times seconds.
+
+    wind_time_scale      : float — wind-clock rate in seconds per REAL second
+                                   (1.0).  Gust travel/oscillation are an
+                                   aesthetic real-time effect, deliberately
+                                   independent of the game-clock timescale
+                                   (``Clock.game_time_scale``: 60 today, 30
+                                   later) — at game-time pacing a 60× clock
+                                   would sweep gusts 60× too fast.  Raise for
+                                   faster-evolving wind, lower for lazier.
+    wind_cells           : int   — grid cells per axis (64 → 256 m region at
+                                   4 m cells).
+    wind_cell_m          : float — cell edge in meters (4.0).
+    wind_snap_cells      : int   — origin snap granularity in cells for the
+                                   recenter window (8 → snaps to 32 m).
+    wind_margin_cells    : int   — recenter hysteresis: re-snap only when the
+                                   player drifts past this many cells from the
+                                   region centre (8 → 32 m band).
+    wind_gust_modes      : int   — number of spectral Brownian-band gust modes
+                                   summed per cell (12).
+    wind_gust_wavelen_min/max : float — gust spatial wavelength band in meters
+                                   (20–120 m; big slow gusts dominate).
+    wind_gust_omega_min/max   : float — intrinsic temporal frequency band in
+                                   rad/s (0.15–0.8) — the gust's own pulsing on
+                                   top of downwind advection.
+    wind_gust_base       : float — base gust amplitude gain (calm air, 0.6).
+    wind_gust_storm_gain : float — extra gust amplitude per unit storminess
+                                   (1.4): storms gust much harder.
+    wind_storm_freq_gain : float — temporal-frequency boost per unit storminess
+                                   (0.8): storms are choppier, not just stronger.
+    wind_speed_ref       : float — reference mean wind speed (m/s) at which the
+                                   gust gain reaches full strength (8.0).
+    wind_turb_base       : float — base turbulence channel value, calm (0.2).
+    wind_turb_storm_gain : float — turbulence increase per unit storminess (1.0).
+    wind_shear           : float — vertical-profile shear exponent (0.18): the
+                                   power-law boundary-layer wind shear.
+    wind_profile_z_ref   : float — reference height (m) where the vertical
+                                   profile reaches 1.0 (10.0).
+    wind_profile_floor   : float — minimum profile multiplier at ground level
+                                   (0.35): wind never fully stops at z=ground.
+    wind_profile_cap     : float — maximum profile multiplier high up (1.6).
+    wind_layer_m         : float — vertical band (m) above ground over which
+                                   the venturi solver folds terrain occupancy
+                                   (8.0; WP2 consumes this).
+    wind_venturi_iters   : int   — venturi flux-relaxation iterations (8; WP2).
+    wind_venturi_max     : float — clamp on venturi speed-up multiplier (2.2;
+                                   WP2).
+    wind_deflect_gain    : float — venturi sideways-deflection gain (0.15; WP2).
+    wind_updraft_gain    : float — analytic obstacle-updraft gain (0.4; WP2).
+    wind_mote_count      : int   — dust/pollen mote instance count (1500; WP4).
+    wind_mote_box_m      : float — camera-anchored mote lattice cell size in
+                                   meters (24.0; WP4).
+    wind_mote_size_m     : float — mote billboard size in meters (0.04; WP4).
+    wind_mote_life_s     : float — mote looping lifetime in seconds (6.0; WP4).
+    wind_leaf_density_per_m2 : float — leaf-litter instances per m² of a
+                                   "trees" zone volume (0.15; WP4).
+    wind_leaf_size_m     : float — leaf billboard size in meters (0.12; WP4).
+    wind_leaf_max_instances : int — hard cap on leaf instances per volume
+                                   (20000; WP4).
+
     Graphics-quality fields (from [graphics] table, prefix ``gfx_``)
     ---------------------------------------------------------------
     These drive the HDR post-processing pipeline and volumetric clouds so the
@@ -324,6 +422,7 @@ class Config:
     show_fps:             bool  = True
     show_chunk_borders:   bool  = False
     show_light_grid:      bool  = False
+    debug_wind_ball:      bool  = False
     sky_cloud_altitude_m:  float = 96.0
     sky_cloud_thickness_m: float = 8.0
     sky_cloud_cell_m:      float = 12.0
@@ -361,6 +460,55 @@ class Config:
     grass_fade_start_m:    float = 60.0
     grass_fade_end_m:      float = 90.0
     grass_max_instances:   int   = 200_000
+    # --- Flora ([flora] table; consumed by world/flora_renderer.py) ---
+    flora_flower_density_per_m2: float = 1.5
+    flora_flower_height_m:       float = 0.45
+    flora_flower_fade_start_m:   float = 60.0
+    flora_flower_fade_end_m:     float = 90.0
+    flora_flower_max_instances:  int   = 50_000
+    flora_bush_density_per_m2:   float = 0.08
+    flora_bush_height_m:         float = 1.3
+    flora_bush_fade_start_m:     float = 110.0
+    flora_bush_fade_end_m:       float = 150.0
+    flora_bush_max_instances:    int   = 5_000
+    flora_tree_density_per_m2:   float = 0.02
+    flora_tree_height_m:         float = 7.0
+    flora_tree_fade_start_m:     float = 300.0
+    flora_tree_fade_end_m:       float = 380.0
+    flora_tree_max_instances:    int   = 2_000
+    # --- Wind field ([wind] table; consumed by fire_engine/wind/) ---
+    wind_time_scale:          float = 1.0
+    wind_cells:               int   = 64
+    wind_cell_m:              float = 4.0
+    wind_snap_cells:          int   = 8
+    wind_margin_cells:        int   = 8
+    wind_gust_modes:          int   = 12
+    wind_gust_wavelen_min:    float = 20.0
+    wind_gust_wavelen_max:    float = 120.0
+    wind_gust_omega_min:      float = 0.15
+    wind_gust_omega_max:      float = 0.8
+    wind_gust_base:           float = 0.6
+    wind_gust_storm_gain:     float = 1.4
+    wind_storm_freq_gain:     float = 0.8
+    wind_speed_ref:           float = 8.0
+    wind_turb_base:           float = 0.2
+    wind_turb_storm_gain:     float = 1.0
+    wind_shear:               float = 0.18
+    wind_profile_z_ref:       float = 10.0
+    wind_profile_floor:       float = 0.35
+    wind_profile_cap:         float = 1.6
+    wind_layer_m:             float = 8.0
+    wind_venturi_iters:       int   = 8
+    wind_venturi_max:         float = 2.2
+    wind_deflect_gain:        float = 0.15
+    wind_updraft_gain:        float = 0.4
+    wind_mote_count:          int   = 1500
+    wind_mote_box_m:          float = 24.0
+    wind_mote_size_m:         float = 0.04
+    wind_mote_life_s:         float = 6.0
+    wind_leaf_density_per_m2: float = 0.15
+    wind_leaf_size_m:         float = 0.12
+    wind_leaf_max_instances:  int   = 20_000
     # --- Graphics quality ([graphics] table; defaults == "high" preset) ---
     gfx_preset:                 str   = "high"
     gfx_post_process:           bool  = True
@@ -409,9 +557,9 @@ def load_config(path: str = "config.toml") -> Config:
     Load engine configuration from a TOML file, returning a frozen ``Config``.
 
     The TOML file may have ``[debug]``, ``[sky]``, ``[terrain]``,
-    ``[lighting]``, ``[fog]``, ``[grass]`` and ``[graphics]`` tables; their
-    keys are flattened into the same ``Config`` struct.  Any key absent from
-    the file falls back to the ``Config`` dataclass default.
+    ``[lighting]``, ``[fog]``, ``[grass]``, ``[flora]``, ``[wind]`` and
+    ``[graphics]`` tables; their keys are flattened into the same ``Config`` struct.  Any key
+    absent from the file falls back to the ``Config`` dataclass default.
 
     ``[graphics]`` is special: its ``preset`` key (off/low/medium/high) is
     expanded into the ``gfx_*`` quality fields via
@@ -448,7 +596,8 @@ def load_config(path: str = "config.toml") -> Config:
     # Flatten the organisational tables into one top-level dict.  Most tables
     # just carry fully-named Config fields; [graphics] is special — its keys go
     # through preset expansion first (see resolve_graphics_preset).
-    _TABLES = ("debug", "sky", "terrain", "lighting", "fog", "grass", "graphics")
+    _TABLES = ("debug", "sky", "terrain", "lighting", "fog", "grass", "flora",
+               "wind", "graphics")
     flat: dict = {k: v for k, v in raw.items() if k not in _TABLES}
     for table in _TABLES:
         if table == "graphics":

@@ -261,6 +261,47 @@ class ChunkManager:
         chunk.dirty = False
         return mesh
 
+    def remesh_edited(self, coords, light_sampler=None) -> int:
+        """
+        Remesh brush-edited chunks NOW, bypassing the streaming budget.
+
+        ``stream_frame``'s 2-chunk budget is sized for background world
+        loading; a brush edit (explosion crater) routed through it appears
+        over several frames — and until a border neighbour remeshes, the
+        faces the edit newly exposed in it don't exist yet, so the player
+        sees a hole through the world.  Call this right after ``apply_brush``
+        with its returned coord set to make the whole edit appear the same
+        frame (typical cost: 1–4 chunks ≈ 10–30 ms, an acceptable one-frame
+        hitch for a discrete edit).
+
+        Remeshes every still-``dirty`` loaded chunk in ``coords`` plus their
+        26-neighbourhood (``apply_brush`` border-flags neighbours as plain
+        ``dirty``).  Untouched dirty chunks elsewhere (e.g. an F9 load) stay
+        on the budgeted ``stream_frame`` path.
+
+        Parameters
+        ----------
+        coords : Iterable[tuple[int, int, int]]
+            Chunk coords the brush changed (``apply_brush``'s return value).
+        light_sampler : Callable | None
+            Forwarded to the mesher (None on the GPU lighting backend).
+
+        Returns
+        -------
+        int
+            Number of chunks remeshed (into ``pending_meshes``).
+        """
+        pending: set[tuple[int, int, int]] = set()
+        for c in coords:
+            for off in ((0, 0, 0),) + NEIGHBOR_OFFSETS_26:
+                n = (c[0] + off[0], c[1] + off[1], c[2] + off[2])
+                ch = self.chunks.get(n)
+                if ch is not None and ch.dirty:
+                    pending.add(n)
+        for c in pending:
+            self.mesh_chunk(c, light_sampler)
+        return len(pending)
+
     # ------------------------------------------------------------------
     # Streaming
     # ------------------------------------------------------------------

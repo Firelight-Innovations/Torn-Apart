@@ -293,3 +293,51 @@ class TestChunkManagerStreaming:
 
     def test_save_key(self):
         assert ChunkManager.save_key == "terrain"
+
+
+class TestRemeshEdited:
+    """remesh_edited: same-frame remesh of brush edits, bypassing the budget."""
+
+    def _crater(self, cm):
+        """Carve a corner-spanning crater; return apply_brush's touched set."""
+        from fire_engine.terrain.brush import apply_brush, SphereBrush, BrushMode
+        return apply_brush(
+            SphereBrush(2.5), Vec3(16.0, 16.0, 8.0), BrushMode.REMOVE,
+            chunk_provider=cm.get_or_create)
+
+    def test_remeshes_all_touched_and_dirty_neighbors_now(self):
+        set_world_seed(1337)
+        cfg = load_config()
+        cm = ChunkManager(cfg, EventBus())
+        touched = self._crater(cm)
+        assert len(touched) >= 2  # corner hit spans chunks
+
+        n = cm.remesh_edited(touched)
+
+        # Everything the brush dirtied (touched + border neighbours) is
+        # remeshed immediately — no dirty chunk left in the neighbourhood.
+        assert n >= len(touched)
+        assert not any(ch.dirty for ch in cm.chunks.values())
+        for c in touched:
+            assert c in cm.pending_meshes
+
+    def test_unrelated_dirty_chunks_stay_budgeted(self):
+        set_world_seed(1337)
+        cfg = load_config()
+        cm = ChunkManager(cfg, EventBus())
+        touched = self._crater(cm)
+        far = cm.get_or_create((40, 40, 0))   # far outside the crater
+        far.dirty = True
+
+        cm.remesh_edited(touched)
+
+        assert far.dirty is True              # left to stream_frame's budget
+        assert (40, 40, 0) not in cm.pending_meshes
+
+    def test_idempotent_on_clean_chunks(self):
+        set_world_seed(1337)
+        cfg = load_config()
+        cm = ChunkManager(cfg, EventBus())
+        touched = self._crater(cm)
+        cm.remesh_edited(touched)
+        assert cm.remesh_edited(touched) == 0  # nothing dirty → no work

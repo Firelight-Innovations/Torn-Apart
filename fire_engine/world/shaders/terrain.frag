@@ -21,6 +21,8 @@ uniform sampler3D u_c0_radiance;
 uniform sampler3D u_c0_vis;       // r sun, g moon, b sky visibility
 uniform sampler3D u_c0_geom;      // rgb albedo, a occupancy
 uniform sampler3D u_c0_emis;
+uniform sampler3D u_c0_bounce;    // localized direct sources (GI first bounce,
+uniform sampler3D u_c1_bounce;    // emissive leak, dynamic lights — no sky)
 uniform vec3  u_c0_origin_m;
 uniform float u_c0_cell_m;
 uniform float u_c0_cells;
@@ -36,6 +38,13 @@ uniform sampler3D u_c2_geom;
 uniform vec3  u_c2_origin_m;
 uniform float u_c2_cell_m;
 uniform float u_c2_cells;
+
+// Dynamic occluder AABBs (dev cubes, props — objects not in the voxel
+// field).  Same contract as inject.comp: the refinement march must test
+// them analytically or it would erase their shadows in the penumbra band.
+uniform int   u_num_boxes;
+uniform vec4  u_box_min[16];
+uniform vec4  u_box_max[16];
 
 uniform vec3  u_sun_dir;
 uniform vec3  u_sun_radiance;
@@ -146,6 +155,71 @@ void sampleCascades(vec3 wp, out vec3 radiance, out vec3 vis, out float occ) {
     }
 }
 
+// Sample a cascade's occupancy at the CELL CENTRE containing ``p`` (nearest-
+// texel semantics on a linear-filtered texture), so the refinement march
+// below reads the same binary field inject.comp's marchVis sees.
+float occCell(sampler3D gm, vec3 p, vec3 origin, float cell_m, float cells) {
+    vec3 cc = (floor((p - origin) / cell_m) + 0.5) * cell_m + origin;
+    return texture(gm, c_uv(cc, origin, cell_m, cells)).a;
+}
+
+// Analytic ray-vs-AABB shadow test against the dynamic occluder boxes
+// (mirror of inject.comp's boxVis).  0.0 when any box blocks the ray.
+float boxVis(vec3 ro, vec3 rd, float tmax) {
+    for (int i = 0; i < u_num_boxes; i++) {
+        vec3 inv = 1.0 / (rd + vec3(1e-7));
+        vec3 ta = (u_box_min[i].xyz - ro) * inv;
+        vec3 tb = (u_box_max[i].xyz - ro) * inv;
+        vec3 tlo = min(ta, tb);
+        vec3 thi = max(ta, tb);
+        float tn = max(max(tlo.x, tlo.y), tlo.z);
+        float tf = min(min(thi.x, thi.y), thi.z);
+        if (tf >= max(tn, 0.05) && tn < tmax) return 0.0;
+    }
+    return 1.0;
+}
+
+// Per-fragment celestial-shadow REFINEMENT march.  The cascade ``vis``
+// volumes are voxel-crisp DATA, but trilinear sampling smears the shadow
+// edge over one full cell of whichever cascade covers the fragment — 2 m in
+// cascade 1, 8 m in cascade 2 — which renders as big soft boxes (4x4 voxels
+// per c1 cell) even though the compute side is per-voxel.  Wherever the
+// sampled vis is in the penumbra band, re-resolve it by marching the
+// occupancy chain (finest box first, falling through to the coarser ones)
+// from the quantized light-pixel position: the edge then lands per light
+// pixel — rendered resolution == computed resolution at any distance.
+// Full-sun / full-shadow fragments never get here (1 texture tap as before).
+float refineVis(vec3 wp, vec3 dir) {
+    float vis = boxVis(wp, dir, 1e3);          // dynamic occluders (analytic)
+    if (vis < 0.01) return 0.0;
+    vec3 p = wp + dir * (u_c0_cell_m * 1.2);   // hop off the own surface
+    for (int i = 0; i < 28; i++) {             // cascade 0: 0.5 m steps
+        if (!inBox(c_uv(p, u_c0_origin_m, u_c0_cell_m, u_c0_cells), 0.0))
+            break;
+        vis *= 1.0 - occCell(u_c0_geom, p, u_c0_origin_m,
+                             u_c0_cell_m, u_c0_cells);
+        if (vis < 0.01) return 0.0;
+        p += dir * u_c0_cell_m;
+    }
+    for (int i = 0; i < 24; i++) {             // cascade 1: 2 m steps
+        if (!inBox(c_uv(p, u_c1_origin_m, u_c1_cell_m, u_c1_cells), 0.0))
+            break;
+        vis *= 1.0 - occCell(u_c1_geom, p, u_c1_origin_m,
+                             u_c1_cell_m, u_c1_cells);
+        if (vis < 0.01) return 0.0;
+        p += dir * u_c1_cell_m;
+    }
+    for (int i = 0; i < 12; i++) {             // cascade 2: 8 m steps
+        if (!inBox(c_uv(p, u_c2_origin_m, u_c2_cell_m, u_c2_cells), 0.0))
+            break;
+        vis *= 1.0 - occCell(u_c2_geom, p, u_c2_origin_m,
+                             u_c2_cell_m, u_c2_cells);
+        if (vis < 0.01) return 0.0;
+        p += dir * u_c2_cell_m;
+    }
+    return vis;
+}
+
 vec3 acesTonemap(vec3 x) {
     return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14),
                  0.0, 1.0);
@@ -246,6 +320,34 @@ void main() {
     float occ;
     sampleCascades(probe, radiance, vis, occ);
 
+    // Re-resolve the celestial shadow edge at the light-pixel grid wherever
+    // the trilinear cascade sample is in the penumbra band (see refineVis).
+    // The march starts at the quantized probe, so every fragment of one
+    // light pixel computes the same march — crisp retro-blocky edges, no
+    // sub-pixel shimmer, and full-sun/full-shadow stay one tap.
+    if (u_sun_dir.z > -0.05 && vis.r > 0.02 && vis.r < 0.98)
+        vis.r = refineVis(probe, u_sun_dir);
+    if (u_moon_dir.z > -0.05 && vis.g > 0.02 && vis.g < 0.98 &&
+        dot(u_moon_radiance, vec3(1.0)) > 1e-4)
+        vis.g = refineVis(probe, u_moon_dir);
+
+    // Localized direct GI (first bounce / emissive leak / dynamic lights) at
+    // FULL strength from the bounce volumes — the flood-filled ``radiance``
+    // only carries a 3-8x diluted copy of small sources (the diffusion is
+    // contractive), which is why open-world GI was invisible.  Finest-first
+    // cross-fade, same containment weighting as sampleCascades.
+    vec3 bounceD = vec3(0.0);
+    {
+        vec3 buv1 = c_uv(probe, u_c1_origin_m, u_c1_cell_m, u_c1_cells);
+        float bw1 = boxWeight(buv1, 0.12);
+        if (bw1 > 0.0)
+            bounceD = texture(u_c1_bounce, buv1).rgb * bw1;
+        vec3 buv0 = c_uv(probe, u_c0_origin_m, u_c0_cell_m, u_c0_cells);
+        float bw0 = boxWeight(buv0, 0.14);
+        if (bw0 > 0.0)
+            bounceD = mix(bounceD, texture(u_c0_bounce, buv0).rgb, bw0);
+    }
+
     // Voxel AO: occupancy a little farther out along the normal + above.
     vec3 aoR, aoV; float occFar;
     sampleCascades(wq + n * (u_c0_cell_m * 1.6), aoR, aoV, occFar);
@@ -265,45 +367,57 @@ void main() {
     if (an.x >= an.y && an.x >= an.z)      pw = v_world.yz;
     else if (an.y >= an.z)                 pw = v_world.xz;
     else                                   pw = v_world.xy;
-    // Anti-alias the ground.  The albedo is a HARD per-texel hash in world
-    // space, so as the camera moves a pixel sitting on a texel edge — or a
-    // minified sub-pixel texel — flips hash buckets every frame and flickers
-    // ("z-fights" between palette colours).  Filter it analytically:
-    //  1. rotated-grid 2x2 supersample over the screen-space footprint
-    //     (``fwidth(pw)`` = world metres per pixel).  When the ground is
-    //     magnified all four taps fall in one texel so the pixel-art stays
-    //     crisp; when minified the taps straddle the footprint and average,
-    //     killing edge crawl and near-field sparkle.
-    //  2. LOD: each noise octave inside groundNoise() additionally fades by
-    //     its OWN footprint, so as a pixel grows the fine octave drops first,
-    //     then the mid, leaving the macro patches — distant ground stays
-    //     varied (large light/dark grass patches) instead of going flat green.
-    //  3. CRITICAL ORDER: posterise EACH tap through the palette LUT and
-    //     average the resulting COLOURS — never average the noise and
-    //     posterise once.  The LUT is a hard quantiser; feeding it a single
-    //     averaged noise value re-hardens everything step 1+2 smoothed (the
-    //     averaged value hovers near a palette-bucket edge and pops a full
-    //     palette step on any sub-pixel camera move).  Filtering after
-    //     quantisation keeps flips bounded to 1/4 of a palette step.
-    //     Measured (tools/shimmer_probe.py, 0.25 px sweep): far-ground flip
-    //     fraction 0.0080 -> 0.0003 with this ordering.  Up close nothing
-    //     changes: all 4 taps land in one texel, one palette colour, crisp
-    //     pixel art.
-    //  The footprint is the ANALYTIC ``mpp`` from above (isotropic in the
-    //  projection plane) — fwidth() here is exactly the facet-edge garbage
-    //  the header comment forbids, and it was the crater-rim shimmer.
-    vec2  fp   = vec2(mpp);                                // world m / pixel
+    // Anti-alias the ground with ANALYTIC TEXEL-COVERAGE filtering.  The
+    // albedo is a hard per-texel hash posterised by a palette LUT — two
+    // quantisers whose edges sparkle under any naive sampling.  The scheme
+    // that measures temporally silent (tools/shimmer_probe.py):
+    //  1. Evaluate the noise stack ONLY at the 4 nearest fine-texel CENTRES.
+    //     Texel centres are fixed world points, so every octave's hash —
+    //     and therefore each corner's posterised COLOUR — is constant under
+    //     camera motion.  (The previous fixed-offset supersample slid its
+    //     taps continuously through the hash field; on crater walls seen
+    //     head-on — small footprint, no octave fade, full-contrast texels —
+    //     every tap crossing popped a quarter palette step, which the owner
+    //     saw as "z-fighting in the dirt".)
+    //  2. Posterise EACH corner through the LUT and blend the COLOURS by the
+    //     pixel footprint's coverage of each texel (w = box-filtered texel
+    //     edge, transition band ≈ 1 screen pixel).  The result is a
+    //     CONTINUOUS function of surface position: texel edges render as
+    //     crisp 1-px AA ramps that slide smoothly — zero popping by
+    //     construction.  Interiors stay one flat palette colour (w saturates
+    //     0/1 inside a texel), so the pixel-art look is intact up close.
+    //  3. Posterise per corner, never the averaged noise (the LUT is a hard
+    //     quantiser; quantise-after-filter re-hardens what the filter
+    //     smoothed — world.md gotcha 21).
+    //  4. Octave LOD inside groundNoise() still fades each octave by its own
+    //     footprint before its texels alias (coverage support is only 2x2
+    //     fine texels, so content must be band-limited past that).
+    //  ``mpp`` is the analytic footprint from above — never fwidth() (facet-
+    //  edge derivative garbage, world.md gotcha 22).
     int   mat  = int(v_color.a * 255.0 + 0.5);
     float lrow = (float(mat) + 0.5) / u_ground_lut_rows;
-    const vec2 taps[4] = vec2[4](vec2(-0.375, -0.125), vec2( 0.125, -0.375),
-                                 vec2(-0.125,  0.375), vec2( 0.375,  0.125));
-    vec3 alb = vec3(0.0);
-    for (int i = 0; i < 4; ++i) {
-        float g = clamp(groundNoise(pw + taps[i] * fp, mpp), 0.0, 1.0);
-        alb += texture(u_ground_lut,
-                       vec2((g * 255.0 + 0.5) / 256.0, lrow)).rgb;
+    float ftex = u_ground_texels_per_m;
+    vec2  spt  = pw * ftex - 0.5;              // fine-texel space, centred
+    vec2  bt   = floor(spt);
+    vec2  fr   = spt - bt;
+    float cov  = clamp(mpp * ftex, 1e-4, 1.0); // footprint in fine texels
+    vec2  w    = clamp((fr - 0.5) / cov + 0.5, 0.0, 1.0);  // coverage weights
+    vec3 c00, c10, c01, c11;
+    {
+        vec2 p00 = (bt + vec2(0.5, 0.5)) / ftex;
+        vec2 p10 = (bt + vec2(1.5, 0.5)) / ftex;
+        vec2 p01 = (bt + vec2(0.5, 1.5)) / ftex;
+        vec2 p11 = (bt + vec2(1.5, 1.5)) / ftex;
+        float g00 = clamp(groundNoise(p00, mpp), 0.0, 1.0);
+        float g10 = clamp(groundNoise(p10, mpp), 0.0, 1.0);
+        float g01 = clamp(groundNoise(p01, mpp), 0.0, 1.0);
+        float g11 = clamp(groundNoise(p11, mpp), 0.0, 1.0);
+        c00 = texture(u_ground_lut, vec2((g00 * 255.0 + 0.5) / 256.0, lrow)).rgb;
+        c10 = texture(u_ground_lut, vec2((g10 * 255.0 + 0.5) / 256.0, lrow)).rgb;
+        c01 = texture(u_ground_lut, vec2((g01 * 255.0 + 0.5) / 256.0, lrow)).rgb;
+        c11 = texture(u_ground_lut, vec2((g11 * 255.0 + 0.5) / 256.0, lrow)).rgb;
     }
-    alb *= 0.25;
+    vec3 alb = mix(mix(c00, c10, w.x), mix(c01, c11, w.x), w.y);
     vec3 base = pow(alb, vec3(2.2)) * v_color.rgb;
 
     vec3 direct =
@@ -317,7 +431,7 @@ void main() {
         ownEmis = texture(u_c0_emis, uv0).rgb * u_emission_scale;
     vec3 mapEmis = pow(texture(p3d_Texture2, v_uv).rgb, vec3(2.2)) * 4.0;
 
-    vec3 hdr = base * (direct + radiance * ao) + ownEmis + mapEmis;
+    vec3 hdr = base * (direct + (radiance + bounceD) * ao) + ownEmis + mapEmis;
 
     // ------------------------------------------------------------------
     // Volumetric fog composite (one tap into the integrated froxels).

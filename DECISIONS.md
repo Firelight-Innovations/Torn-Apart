@@ -368,3 +368,57 @@ file captures the choices made *underneath* it during implementation.
 - **Q:** The HDR buffer + bloom pyramid + volumetric raymarch are too heavy for the integrated-GPU dev machine at full quality; owner wanted a config to dial it down or off.
 - **Choice:** A `[graphics]` config table with `off/low/medium/high` presets (`core.config.resolve_graphics_preset`) expanding into flat `gfx_*` fields; explicit `gfx_*` keys override the preset. `off` = legacy path (no HDR buffer, no clouds); `low` = HDR+bloom+cheap clouds, no flare/god-rays/FXAA; defaults == `high`. Every effect pass is individually gated and drops its composite contribution to 0 when disabled.
 - **Why:** One knob (`preset`) covers the common case; per-field overrides cover tuning. Verified all three presets render without crashing and degrade as intended.
+
+---
+
+## 2026-06-11 — Crater shimmer round 2: texel-coverage albedo filtering, analytic footprint, MSAA
+
+### Crater dirt walls still boiled after the posterise-per-tap fix; cause was camera-dependent sample positions
+- **Q:** Owner: flat ground and the GI room were fixed, but the dirt walls of a fresh blast crater still "z-fight". Probe isolation (open surface crater 10 m ahead): light quantisation innocent (no-quant identical), constant albedo collapsed the band → albedo again. Crater walls face the camera (cos i ≈ 1 → small footprint → no octave fade), so they render full-contrast hash texels — and the 4 supersample taps SLID continuously through that field with the camera, popping a quarter palette step at every texel crossing. Flat ground had hidden this behind grazing-angle octave fade.
+- **Choice:** Replaced sliding-tap supersampling with **analytic texel-coverage filtering**: evaluate the noise stack only at the 4 nearest fine-texel centres (fixed world points → each corner's posterised colour is camera-invariant), posterise per corner, blend the colours by the pixel footprint's coverage of each texel. Output is a continuous function of surface position — popping is impossible by construction; texel edges become ~1 px AA ramps; interiors saturate to one flat palette colour (pixel art intact, verified by stills). Same cost (4 noise+LUT evaluations). Crater band 0.0663 → 0.0379 (threshold 0.04), flat ground 0.0000.
+- **Why:** Two stacked quantisers (hash texels, palette LUT) can only be temporally stable if every quantiser input is anchored to fixed world points and all camera dependence lives in continuous blend weights.
+
+### fwidth() banned in the terrain shader; footprint is analytic (dist × px-angle / cos i)
+- **Q:** Screen-space derivatives are computed on 2×2 quads; on the faceted mesh, quads straddling facet edges extrapolate the wrong plane and the derivative explodes — every fwidth-driven LOD/AA term popped along the dense small triangles of crater rims.
+- **Choice:** New per-frame uniform `u_px_rad` (lens FOV / window width, set in `update_surface_inputs`); the shader computes `mpp = dist * u_px_rad / max(|dot(view, n)|, 0.18)` — exact for planar facets, stable everywhere. The light-quant LOD snaps to power-of-two multiples of `u_quant_m` from the same `mpp` (nested, world-anchored lattices; a continuously varying cell size re-seats every boundary = its own shimmer).
+- **Why:** The faceted-mesh art style guarantees pathological derivative quads; analytic geometry is exact and free.
+
+### Geometry-edge AA via config `msaa_samples = 4` (overrides the earlier blanket "AA off for retro look")
+- **Q:** With surfaces filtered, the probe's residual was facet-silhouette / horizon twinkle — rasterisation aliasing, even with constant albedo.
+- **Choice:** `msaa_samples` config (default 4, 0 = off): `framebuffer-multisample` PRC before window creation + `AntialiasAttrib.M_multisample`. Edge-only — interiors are single-sample, crop comparison pixel-identical, no measured fps cost at 720p. Crater pops (threshold 0.12) 0.0123 → 0.0090.
+- **Why:** MSAA is the only cheap fix for silhouette aliasing and provably does not soften the pixel-art interiors — the original "AA off" intent (crisp texels) survives. Owner can set 0 to compare.
+
+---
+
+## 2026-06-11 — Wind field system (fire_engine/wind/)
+
+### Spectral seeded gust modes over an accumulated Brownian random walk
+- **Q:** The owner asked for a Brownian-motion wind field driving grass/flags/cloth/particles/physics/audio. A literal accumulated random walk would need its full grid state in every save, desync on reload, be unreproducible in bug reports, and could not recenter analytically as the player moves.
+- **Choice:** The field is a sum of 12 seeded spectral "Brownian-band" modes (wavelengths 20–120 m, amplitudes ∝ 1/λ red-noise) whose phases advance with game time and **advect downwind** — a pure function of (world_seed, game_time, world_position), drawn once from `for_domain("wind", "gusts")`. No Saveable anywhere in `wind/`; the venturi correction is likewise a pure function of (terrain snapshot, region origin).
+- **Why:** Bit-reproducible across processes and save/load with **zero save bytes** (the `sky/weather.py` ethos), free analytic recenter, and visually indistinguishable from true Brownian gusting at these wavelengths — the quasi-periodicity of a 12-mode red-noise sum is imperceptible. Tested: in-process + subprocess determinism, crest advection ≈ `mean·dt`.
+
+### 2.5-D wind field (2-D grid + analytic vertical profile) over a 3-D volume
+- **Q:** Store wind as a coarse full-3-D volume (e.g. 64×64×16) or a 2-D horizontal field?
+- **Choice:** 64×64 × 4 m horizontal grid (256 m region; channels vx/vy/turbulence) + analytic boundary-layer profile `clamp(((z−z_ground)/z_ref)^0.18, 0.35, 1.6)` + analytic venturi updraft. Uploads as one 32 KB RGBA16F texture per frame (`T_half_float` — `T_float` asserts on fp16 buffers).
+- **Why:** Covers every current consumer (ground grass, motes, leaves, ball-on-plane, future tall flags via the profile) at ~1/16 the memory/eval/upload cost of 3-D; nothing samples mid-air detail that a 4 m-per-layer Z axis could resolve anyway. A future 3-D corrector registers as a `WindModifier` without changing the `sample()`/texture contracts — the same seam reserved for volumetric-weather gust fronts.
+
+## 2026-06-11 - Flora system (flowers / bushes / trees)
+
+### Sprite-billboard trees over voxel trees
+- **Q:** Trees could be carved into the voxel terrain as blocks (Minecraft / Vintage Story logs + leaf voxels) or rendered as instanced crossed-quad sprites (Daggerfall billboards).
+- **Choice:** GPU-instanced crossed-quad sprites with seeded procedural atlases (`tree_sprite`, 3 condition variants), placed by the grass hash-chain idiom inside `"trees"` zone volumes; bushes (`"bushes"`, `bush_sprite`) and wildflowers (`"flowers"`, `flower_sprite`) the same way. One table-driven `FloraRendererComponent` renders all three kinds; `flora.vert` = the grass chain + an h5 atlas-variant link (mirror: `zones/flora_placement.py`).
+- **Why:** Daggerfall billboards are literally in the art direction; zero terrain/mesher/save coupling (voxel trees would dirty chunks, deltas and the mesher); zero CPU per-plant state and zero save bytes (pure function of seed + volume); the wind texture sways canopies per-plant with a two-uniform shape change (`u_sway_gain`/`u_sway_pivot`); and `"trees"` volumes already feed the wind system's leaf litter, so a forest gets falling leaves for free. Voxel/destructible trees can land later behind the same volume-registration seam without touching zones/wind contracts.
+
+---
+
+## 2026-06-11 — Lighting: rendered shadow resolution + visible GI
+
+### Boxy 2 m shadows fixed by a penumbra-gated per-fragment refinement march, not by growing cascade 0
+- **Q:** Owner: shadows render as soft ~2 m (4×4-voxel) boxes even though the lighting is computed at 0.5 m — rendered resolution must match computed resolution. GPU readback (`tools/light_probe.py`) proved cascade-0 `u_vis` data is crisp (1.00 → 0.00 across one cell); the boxiness is render-side: beyond ~17 m (cascade-0's cross-fade band, and ALL ground when flying high since the c0 box centres on the camera in 3-D) the surface samples cascade 1's 2 m cells and trilinear filtering smears the edge over a full cell. Options: enlarge c0 / add cascades (memory + assembly cost, only moves the boundary), shadow maps (parallel pipeline, against the voxel-light design), or re-resolve per fragment.
+- **Choice:** `terrain.frag::refineVis` — only when the sampled celestial visibility is in the penumbra band (`vis ∈ (0.02, 0.98)`), march occupancy from the quantized light-pixel probe through the c0→c1→c2 chain (28/24/12 single-cell steps, nearest-cell taps via `occCell`) × the analytic dynamic-occluder `boxVis` (mirror of `inject.comp`; the box uniforms are now also bound to the surface shader, zero-filled when empty — Panda asserts on unbound GLSL arrays).
+- **Why:** The data was never wrong — only the reconstruction. Refining only penumbra pixels makes the cost proportional to shadow-edge screen area (fps unchanged, 41–50 across scenes); shadow edges resolve at the light-pixel grid at ANY distance, which is literally the owner's acceptance criterion. Verified: crisp cube-shadow parallelogram from 45 m altitude, voxel-stepped crater rim shadows at 16:00.
+
+### Invisible GI fixed by splitting bounce into a full-strength direct texture + gain-compensated flood forcing
+- **Q:** First-bounce GI was implemented but invisible (~4 % of ambient; bounce on/off image diff 0.7/255). Root cause: the propagate fixed point passes BROAD fields (skylight) at full strength but squashes LOCALIZED sources by ≈ (1−decay) — 3–8× at c0 — so the bounce was computed, then drowned. Raising `light_bounce_strength` past 1 would be unphysical and still loses the squash-shape; lowering decay changes GI reach everywhere.
+- **Choice:** Two-fold: (a) new per-cascade `bounce_direct` rgba16f volume — INJECT writes the un-gained localized sources (first bounce + emissive leak + dynamic lights), `terrain.frag` samples it (`u_c0_bounce`/`u_c1_bounce`, cross-faded like the cascades) for crisp contact GI; (b) `u_gi_gain = 0.6/(1−decay)` pre-amplifies the GI terms (NOT skylight, NOT dynamic lights) inside the flood-fill forcing so spread GI converges near physical strength. The gain scales the forcing, not the diffusion operator — contraction (spectral radius < 1) and therefore stability are untouched.
+- **Why:** The squash is a property of the diffusion equilibrium, so the only stable lever is the source term; the direct texture restores the high-frequency detail no amount of forcing gain can (diffusion blurs by design). Verified by radiance readback: ground-air bounce contribution red +40 %, green +30 %, blue ~0 with bounce on vs off (was ~+9 %); night torch shows the warm pool + green grass-bounce ambiance. NOTE: auto-exposure normalizes broad ambient shifts, so bright-scene A/B screenshots stay subtle even when the field moves +40 % — judge GI work with `tools/light_probe.py`, not eyeballs.

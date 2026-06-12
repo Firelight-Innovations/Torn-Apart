@@ -55,7 +55,7 @@ from fire_engine.core import (
 )
 from fire_engine.lighting import glsl
 from fire_engine.lighting.exposure import ExposureMeter
-from fire_engine.lighting.lights import LightSet, OccluderSet
+from fire_engine.lighting.lights import LightSet, OccluderSet, MAX_OCCLUDERS
 from fire_engine.lighting.palette import MaterialPalette, build_default_palette
 from fire_engine.lighting.assembly_worker import (
     AssemblyJob,
@@ -159,6 +159,12 @@ class _Cascade:
                                         hdr=True, linear=True)
         self.direct = _make_volume_texture(f"lit_direct_{index}", cells,
                                            hdr=True, linear=True)
+        # Localized injected sources only (first bounce, emissive leak,
+        # dynamic lights — no skylight).  Sampled directly by the surface
+        # shader at full strength so small GI sources survive the contractive
+        # flood fill (which squashes them ~3-8x); see inject.comp.
+        self.bounce_direct = _make_volume_texture(
+            f"lit_bounce_{index}", cells, hdr=True, linear=True)
         self.radiance = [
             _make_volume_texture(f"lit_rad_{index}_a", cells,
                                  hdr=True, linear=True),
@@ -181,9 +187,15 @@ class _Cascade:
         self.inject_np.set_shader_input("u_emis", self.emis)
         self.inject_np.set_shader_input("u_vis", self.vis)
         self.inject_np.set_shader_input("u_direct", self.direct)
+        self.inject_np.set_shader_input("u_bounce_direct", self.bounce_direct)
         self.inject_np.set_shader_input("u_cells", cells)
         self.inject_np.set_shader_input("u_emission_scale",
                                         float(EMISSION_SCALE))
+        # GI flood-forcing compensation (see inject.comp u_gi_gain): the
+        # propagate equilibrium carries localized forcing at (1-decay) of its
+        # injected value, so pre-gain the GI terms; 0.6 trims the broad-sheet
+        # case (open sunlit ground) back to ~physical bounce strength.
+        self.inject_np.set_shader_input("u_gi_gain", 0.6 / (1.0 - decay))
 
         # Two pre-bound propagate nodes: a→b and b→a.
         self.prop_np: list[NodePath] = []
@@ -878,6 +890,8 @@ class GpuLightingPipeline:
         c0, c1, c2 = self.cascades
         node.set_shader_input("u_c0_geom", c0.geom)
         node.set_shader_input("u_c0_vis", c0.vis)
+        node.set_shader_input("u_c0_bounce", c0.bounce_direct)
+        node.set_shader_input("u_c1_bounce", c1.bounce_direct)
         node.set_shader_input("u_c0_cells", float(c0.cells))
         node.set_shader_input("u_c0_cell_m", float(c0.cell_m))
         node.set_shader_input("u_c1_geom", c1.geom)
@@ -937,6 +951,18 @@ class GpuLightingPipeline:
         node.set_shader_input("u_moon_dir", LVecBase3f(*moon_dir))
         node.set_shader_input("u_moon_radiance", LVecBase3f(*moon_rad))
         node.set_shader_input("u_sky_ambient", LVecBase3f(*sky_amb))
+        # Dynamic occluder boxes for the shadow-refinement march (same packed
+        # lists the inject pass uses; ``update`` repacks them on version bump).
+        if self._box_uniforms is not None:
+            box_min, box_max, n_boxes = self._box_uniforms
+        else:
+            box_min, box_max, n_boxes = [], [], 0
+        if not box_min:   # GLSL arrays must always be bound (Panda asserts)
+            box_min = [LVecBase4f(0.0)] * MAX_OCCLUDERS
+            box_max = [LVecBase4f(0.0)] * MAX_OCCLUDERS
+        node.set_shader_input("u_num_boxes", int(n_boxes))
+        node.set_shader_input("u_box_min", box_min)
+        node.set_shader_input("u_box_max", box_max)
         win = self._base.win
         node.set_shader_input(
             "u_viewport", LVecBase2f(float(win.get_x_size()),

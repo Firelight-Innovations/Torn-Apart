@@ -309,9 +309,17 @@ def capture(frames: int, out_name: str, explode: bool,
     if torch and getattr(app, "lighting_pipeline", None) is not None:
         # Drop a warm torch point-light ahead of the camera (GPU backend
         # only) so GI flood-fill / volumetric glow can be captured headless.
+        # Raycast for the surface — a fixed camera-relative offset buries the
+        # torch below ground at some spawn heights (same failure the
+        # --explode path had), which reads as "point lights are broken".
         from fire_engine.lighting.lights import PointLight
+        from fire_engine.terrain import raycast_voxel as _rc_t
         cam = app.camera_go.transform.position
-        pos = (cam.x, cam.y + 8.0, cam.z - 2.5)   # ~2.5 m above the ground
+        t_hit = _rc_t(Vec3(cam.x, cam.y + 8.0, cam.z + 40.0),
+                      Vec3(0.0, 0.0, -1.0),
+                      app.chunk_manager.get_or_create, max_distance_m=90.0)
+        tz = (t_hit.point.z if t_hit is not None else cam.z - 2.5) + 2.0
+        pos = (cam.x, cam.y + 8.0, tz)            # ~2 m above the surface
         app.lighting_pipeline.lights.add(PointLight(
             position=pos, color=(1.0, 0.62, 0.28),
             intensity=8.0, radius=16.0))

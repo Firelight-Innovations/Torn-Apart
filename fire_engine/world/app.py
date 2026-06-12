@@ -70,6 +70,7 @@ from panda3d.core import (  # type: ignore[import]
     LQuaternionf,
     AntialiasAttrib,
     NodePath,
+    loadPrcFileData,
 )
 
 from fire_engine.world.registry import ComponentRegistry, instantiate
@@ -169,6 +170,16 @@ class App(ShowBase):
         if getattr(config, "gfx_post_process", True):
             from panda3d.core import loadPrcFileData  # type: ignore[import]
             loadPrcFileData("torn-apart-hdr", "textures-power-2 none")
+        # MSAA must be requested BEFORE the window is opened (framebuffer
+        # property).  It anti-aliases GEOMETRY edges only — facet silhouettes,
+        # crater rims, the horizon line, which otherwise twinkle in motion —
+        # while every surface interior is still shaded once per pixel, so the
+        # crisp pixel-art texel look is untouched.
+        if int(getattr(config, "msaa_samples", 0)) > 0:
+            loadPrcFileData(
+                "torn-apart-msaa",
+                f"framebuffer-multisample 1\n"
+                f"multisamples {int(config.msaa_samples)}")
         super().__init__()
 
         self._config    = config
@@ -219,8 +230,13 @@ class App(ShowBase):
         # Vsync — Panda3D uses sync-video property
         self.set_sleep(0.0)   # let OS vsync do its job
 
-        # Anti-aliasing off (retro look)
-        self.render.set_antialias(AntialiasAttrib.M_none)
+        # Geometry-edge AA only: with msaa_samples > 0, multisample the
+        # triangle edges (interiors are single-sample — retro texels intact).
+        # msaa_samples = 0 restores the fully unfiltered retro rasterisation.
+        if int(getattr(config, "msaa_samples", 0)) > 0:
+            self.render.set_antialias(AntialiasAttrib.M_multisample)
+        else:
+            self.render.set_antialias(AntialiasAttrib.M_none)
 
         # Default the HDR-output flag OFF so every surface shader tonemaps
         # internally (legacy look) unless the post-process pipeline turns it on.

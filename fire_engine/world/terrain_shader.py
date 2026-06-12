@@ -100,6 +100,10 @@ def apply_terrain_shader(
                          fragment=TERRAIN_FRAGMENT)
     terrain_root.set_shader(shader)
     pipeline.bind_surface_inputs(terrain_root)
+    # Terrain always runs the celestial-shadow refinement march (the
+    # lit_surface.glsl LIT_REFINE block); foliage roots bind their own
+    # value from ``config.gfx_foliage_shadow_refine``.
+    terrain_root.set_shader_input("u_refine", 1.0)
 
     # World-space procedural ground palette LUT (rows indexed by material id).
     entries = {

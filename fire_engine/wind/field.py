@@ -10,8 +10,12 @@ Core design decision — spectral modes, not a random walk
 --------------------------------------------------------
 The field is **not** an accumulated Brownian random walk integrated frame by
 frame.  It is a **sum of seeded spectral gust modes** (``wind/gusts.py``) whose
-phases advance with game time and advect downwind — a **pure function of
-(world_seed, game_time, world_position)**.
+phases advance with the **wind clock** and advect downwind — a **pure function
+of (world_seed, wind_time, world_position)**.  The wind clock runs at
+``config.wind_time_scale`` seconds per REAL second, independent of the game
+clock's timescale (gusts are an aesthetic real-time effect — at 60× game
+pacing they would sweep the world 60× too fast); the render component
+accumulates it from real frame ``dt`` and hands it to :meth:`WindField.update`.
 
 The tradeoff, recorded here because it shapes every guarantee below:
 
@@ -34,7 +38,7 @@ now; WP2 adds analytic obstacle updraft in :meth:`WindField.sample`.
 
 Determinism
 -----------
-Same ``world_seed`` + ``game_time`` + ``SkyState`` + player cell ⇒ a
+Same ``world_seed`` + ``wind_time`` + ``SkyState`` + player cell ⇒ a
 bit-identical :class:`WindSnapshot`.  All randomness flows through
 ``for_domain("wind", ...)``.  No Saveable — the field costs 0 save bytes by
 construction.
@@ -56,7 +60,7 @@ Example
 >>> import numpy as np
 >>> set_world_seed(1337)
 >>> field = WindField(Config())
->>> field.update(dt=0.016, game_time=10.0, sky_state=None, player_pos=(0, 0, 0))
+>>> field.update(dt=0.016, wind_time=10.0, sky_state=None, player_pos=(0, 0, 0))
 >>> v = field.sample(np.array([[0.0, 0.0, 1.0]]))   # one point at z=1 m
 >>> v.shape
 (1, 3)
@@ -107,7 +111,7 @@ class WindSnapshot:
         Cell edge in meters (4.0).
     cells : int
         Cells per axis (64).
-    game_time : float
+    wind_time : float
         Seconds the field was evaluated at (the shared clock value).
 
     Example
@@ -121,7 +125,7 @@ class WindSnapshot:
     origin_m: tuple[float, float]
     cell_m: float
     cells: int
-    game_time: float
+    wind_time: float
 
 
 def vertical_profile(z: np.ndarray, z_ground: float, cfg: Config) -> np.ndarray:
@@ -266,7 +270,7 @@ class WindField:
     def update(
         self,
         dt: float,
-        game_time: float,
+        wind_time: float,
         sky_state: object | None,
         player_pos,
         chunks: dict | None = None,
@@ -285,7 +289,7 @@ class WindField:
                gust_gain  = (base + storm_gain*storminess)
                             * (0.4 + 0.6*wind_speed/speed_ref)
                turb       = turb_base + turb_storm_gain*storminess
-               t_eff      = game_time * (1 + storm_freq_gain*storminess)
+               t_eff      = wind_time * (1 + storm_freq_gain*storminess)
 
         3. **Compose** mean wind + gusts + turbulence over the grid.
         4. **Venturi** terrain-funneling correction: orchestrate the off-thread
@@ -295,13 +299,13 @@ class WindField:
            vx += deflect_x*|mean|`` (same for ``y``), then run **modifiers**
            and publish ``self._front``.  Identity when no worker / no result.
 
-        Determinism note on ``t_eff``: scaling game time by storminess means a
+        Determinism note on ``t_eff``: scaling the wind clock by storminess means a
         *changing* storminess slightly chirps the gust frequency (the phase
         argument's time-derivative shifts as storminess blends).  This is
         deliberate and harmless: weather storminess only moves over the sky
         system's 20-game-minute blends (very slow), so the chirp is far below
         perceptual and the field stays a pure function of
-        ``(game_time, storminess)``.  We keep this closed form rather than an
+        ``(wind_time, storminess)``.  We keep this closed form rather than an
         accumulated effective-time integral precisely because the integral
         would make the field history-dependent and break determinism /
         zero-byte saves.
@@ -310,10 +314,18 @@ class WindField:
         ----------
         dt : float
             Frame delta in seconds (currently unused — the field is a pure
-            function of ``game_time``; accepted for API symmetry and future
+            function of ``wind_time``; accepted for API symmetry and future
             modifiers that want it).
-        game_time : float
-            Absolute game time in seconds (the shared ``u_time_s`` clock).
+        wind_time : float
+            The **wind clock** in seconds — monotonic, and advancing at
+            ``config.wind_time_scale`` seconds per REAL second regardless of
+            the game-clock timescale (``Clock.game_time_scale``: 60 today, 30
+            later, 1800 on the F7 dev toggle).  Gust travel and oscillation
+            are an aesthetic real-time effect: at game-time pacing a 60×
+            timescale would sweep crests across the grass 60× too fast.  The
+            render component accumulates this clock from real frame ``dt``
+            (``wind_renderer.py``); headless callers may pass any monotonic
+            value — the field is a pure function of whatever it is handed.
         sky_state : object | None
             Weather source, duck-typed: reads ``wind_dir`` (unit XY tuple),
             ``wind_speed`` (m/s), ``rain_intensity``, ``cloud_coverage``,
@@ -356,7 +368,7 @@ class WindField:
             * (0.4 + 0.6 * wind_speed / max(cfg.wind_speed_ref, 1e-6))
         )
         turb_amt = cfg.wind_turb_base + cfg.wind_turb_storm_gain * storminess
-        t_eff = float(game_time) * (1.0 + cfg.wind_storm_freq_gain * storminess)
+        t_eff = float(wind_time) * (1.0 + cfg.wind_storm_freq_gain * storminess)
 
         mean_x = wind_dir[0] * wind_speed
         mean_y = wind_dir[1] * wind_speed
@@ -389,7 +401,7 @@ class WindField:
 
         # --- Modifiers (volumetric-weather seam), then atomic publish -------
         for mod in self._modifiers:
-            mod.apply(X, Y, float(game_time), vx, vy, turb)
+            mod.apply(X, Y, float(wind_time), vx, vy, turb)
 
         field = np.empty((self._region.cells, self._region.cells, 4),
                          dtype=np.float32)
@@ -403,7 +415,7 @@ class WindField:
             origin_m=self._region.origin_m,
             cell_m=self._region.cell_m,
             cells=self._region.cells,
-            game_time=float(game_time),
+            wind_time=float(wind_time),
         )
 
     # ------------------------------------------------------------------

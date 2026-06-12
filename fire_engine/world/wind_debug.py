@@ -113,6 +113,7 @@ class WindBallDebugComponent(Component):
         self._params: BallParams | None = None
         self._pos = np.zeros(3, dtype=np.float64)
         self._vel = np.zeros(3, dtype=np.float64)
+        self._wind_time: float | None = None   # seeded on first CPU-path update
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -165,10 +166,19 @@ class WindBallDebugComponent(Component):
         # and we just sample it.  Sampling needs a published snapshot — guard so
         # a frame before the first wind update is a harmless no-op.
         if self.sky_system is not None and self.clock is not None:
-            game_time = (float(self.clock.game_day) * 86400.0
-                         + float(self.clock.game_time_of_day))
+            # Wind clock: real seconds × wind_time_scale, independent of the
+            # game timescale (mirror of wind_renderer.py — gusts are an
+            # aesthetic real-time effect).  Seeded once from the game clock so
+            # a loaded save resumes at a deterministic phase.
+            rate = float(self.base._config.wind_time_scale)
+            if self._wind_time is None:
+                game_s = (float(self.clock.game_day) * 86400.0
+                          + float(self.clock.game_time_of_day))
+                scale = max(float(self.clock.game_time_scale), 1e-6)
+                self._wind_time = game_s / scale * rate
+            self._wind_time += float(dt) * rate
             sky_state = getattr(self.sky_system, "state", None)
-            self.wind_field.update(dt, game_time, sky_state,
+            self.wind_field.update(dt, self._wind_time, sky_state,
                                    (float(self._pos[0]), float(self._pos[1]),
                                     float(self._pos[2])))
         try:

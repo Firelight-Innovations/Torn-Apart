@@ -288,6 +288,14 @@ class Config:
     analytic vertical boundary-layer profile.  All distances meters, speeds
     m/s, frequencies rad/s, times seconds.
 
+    wind_time_scale      : float — wind-clock rate in seconds per REAL second
+                                   (1.0).  Gust travel/oscillation are an
+                                   aesthetic real-time effect, deliberately
+                                   independent of the game-clock timescale
+                                   (``Clock.game_time_scale``: 60 today, 30
+                                   later) — at game-time pacing a 60× clock
+                                   would sweep gusts 60× too fast.  Raise for
+                                   faster-evolving wind, lower for lazier.
     wind_cells           : int   — grid cells per axis (64 → 256 m region at
                                    4 m cells).
     wind_cell_m          : float — cell edge in meters (4.0).
@@ -427,6 +435,7 @@ class Config:
     grass_fade_end_m:      float = 90.0
     grass_max_instances:   int   = 200_000
     # --- Wind field ([wind] table; consumed by fire_engine/wind/) ---
+    wind_time_scale:          float = 1.0
     wind_cells:               int   = 64
     wind_cell_m:              float = 4.0
     wind_snap_cells:          int   = 8

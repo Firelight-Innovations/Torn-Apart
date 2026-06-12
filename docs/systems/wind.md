@@ -4,15 +4,15 @@ keywords: wind, gust, breeze, storm, brownian, turbulence, venturi, motes, leave
 > Status: **shipped** (WP1–WP5). Headless wind core + config; terrain venturi/worker; world-side render component, GPU upload, grass rebind, wiring; dust-mote + leaf-litter particles; the dev wind-ball physics seam proof. The field is the single source of truth for everything wind-driven; future consumers (flags/cloth/hair/water, wind audio) read the same `sample()` / `u_wind_tex` contract documented here.
 
 ## Role
-`fire_engine/wind/` is the single source of truth for everything wind-driven: a player-centred, time-evolving **2.5-D wind velocity field**. A 2-D horizontal grid (64×64 cells × 4 m = 256 m region) of wind velocity is summed from ~12 seeded spectral "Brownian-band" gust modes whose phases advance with game time and **advect downwind** (so gust bands visibly travel across a field), plus an analytic vertical boundary-layer profile for height. It scales with weather (storms = stronger, choppier, gustier), is CPU-sampleable for physics and future audio, and exposes seams for terrain venturi funneling (WP2), GPU upload + grass/particle consumption (WP3/WP4), and localized gust fronts from a future volumetric-weather system (the modifier seam).
+`fire_engine/wind/` is the single source of truth for everything wind-driven: a player-centred, time-evolving **2.5-D wind velocity field**. A 2-D horizontal grid (64×64 cells × 4 m = 256 m region) of wind velocity is summed from ~12 seeded spectral "Brownian-band" gust modes whose phases advance with the **wind clock** and **advect downwind** (so gust bands visibly travel across a field), plus an analytic vertical boundary-layer profile for height. The wind clock runs at `wind_time_scale` seconds per REAL second, deliberately independent of the game-clock timescale (`Clock.game_time_scale`: 60 today, 30 later) — gust travel is an aesthetic real-time effect, and at game-time pacing a 60× clock would sweep crests 60× too fast. It scales with weather (storms = stronger, choppier, gustier), is CPU-sampleable for physics and future audio, and exposes seams for terrain venturi funneling (WP2), GPU upload + grass/particle consumption (WP3/WP4), and localized gust fronts from a future volumetric-weather system (the modifier seam).
 
 It is **headless** — numpy + `core` only, **no panda3d** (the upload/render half lives in `world/`). It deliberately does NOT: render anything, hold any Saveable state (the field is a pure function of seed/time/weather/player-cell, so it costs **zero save bytes**), integrate any per-frame random walk, or own event wiring (the renderer forwards terrain edits into `update()`).
 
 ## Public API
 Exports from `fire_engine/wind/__init__.py`:
 
-- `WindField(config, worker=None)` — the field. `update(dt, game_time, sky_state, player_pos, chunks=None)` once per frame (sub-ms, main thread); `sample(positions (N,3)) -> (N,3)` m/s, vectorized; `snapshot` property; `add_modifier(m)` / `remove_modifier(m)`.
-- `WindSnapshot` — frozen atomically-published field state: `field` (`float32 (cells, cells, 4)` `[x, y]`: vx, vy, turb, reserved), `origin_m`, `cell_m`, `cells`, `game_time`.
+- `WindField(config, worker=None)` — the field. `update(dt, wind_time, sky_state, player_pos, chunks=None)` once per frame (sub-ms, main thread); `sample(positions (N,3)) -> (N,3)` m/s, vectorized; `snapshot` property; `add_modifier(m)` / `remove_modifier(m)`.
+- `WindSnapshot` — frozen atomically-published field state: `field` (`float32 (cells, cells, 4)` `[x, y]`: vx, vy, turb, reserved), `origin_m`, `cell_m`, `cells`, `wind_time`.
 - `WindModifier` — in-place modifier `Protocol`: `apply(X, Y, t, vx, vy, turb) -> None`. The volumetric-weather seam.
 - `GustFront(seed_key, direction, speed, strength, width_m, period_m=400.0, turb_gain=0.6)` — a working moving-line-front modifier; pure function of `(seed_key, t)`.
 - `pack_wind_field(snap) -> bytes` — pack a snapshot to Panda3D 2-D-texture RAM bytes (float16, row-major `(y, x)`, BGRA: B=turb, G=vy, R=vx, A=horizontal speed). Mirrors `lighting/volume.pack_volume`.
@@ -36,7 +36,7 @@ Subscribed: none. (WP3's render component in `world/` owns event wiring — it f
 - World space **meters**, Z-up. Velocities **m/s**. `turb` channel dimensionless (~0..3). Frequencies rad/s, wavevectors rad/m, time seconds.
 - `field` array is indexed `[x, y]` (matching `WindRegion.X/Y` meshgrid `ij` order). Channels: `vx, vy, turb, reserved`.
 - `origin_m` is the world XY of cell `(0,0)`'s **corner** (the texel-(0,0)-corner convention the GPU binds as `u_wind_origin`). Cell `(i,j)`'s **centre** is at `(origin_cell + (i,j) + 0.5) * cell_m`.
-- **Determinism:** same `world_seed` + `game_time` + `sky_state` + player cell ⇒ bit-identical `WindSnapshot` (in-process and cross-process). All randomness via `for_domain("wind", "gusts")` (drawn once at construction). **No Saveable** — zero save bytes by construction.
+- **Determinism:** same `world_seed` + `wind_time` + `sky_state` + player cell ⇒ bit-identical `WindSnapshot` (in-process and cross-process). The wind clock itself is as deterministic as the game clock (both accumulate the same real frame `dt` stream). All randomness via `for_domain("wind", "gusts")` (drawn once at construction). **No Saveable** — zero save bytes by construction.
 - **sky_state is duck-typed:** `update()` reads `.wind_dir` (unit XY), `.wind_speed` (m/s), `.rain_intensity`, `.cloud_coverage`, `.cloud_density` (all 0..1). `sky_state=None` ⇒ calm defaults (light +X breeze) so headless tests need no sky package.
 - Internal field is **float32**; **float16** only at `pack_wind_field` time.
 - `vertical_profile` is monotone non-decreasing in z between `floor` and `cap`; never returns below `floor` (wind never fully dies at ground level) nor above `cap`.
@@ -56,7 +56,7 @@ field = WindField(cfg)
 params = BallParams(ground_z=cfg.ground_height_m)
 pos = np.array([0.0, 0.0, cfg.ground_height_m + params.radius_m]); vel = np.zeros(3)
 
-field.update(dt, game_time, sky_system.state, camera_world_pos)  # once per frame
+field.update(dt, wind_time, sky_system.state, camera_world_pos)   # wind_time accumulates real dt * cfg.wind_time_scale
 v_wind = field.sample(pos[None])[0]            # (vx, vy, vz) m/s at the ball
 pos, vel = debug_ball_step(pos, vel, v_wind, dt, params)   # pure, headless-testable
 ```
@@ -80,7 +80,7 @@ field.add_modifier(GustFront(("storm", 1), direction=(1, 0), speed=14.0,
 ## Gotchas
 - **Committed-origin discipline (WP3):** the GPU's `u_wind_origin` must be refreshed only together with a texture upload — never on a bare recenter — or the texels and origin disagree for a frame. (Mirror `lighting/gpu.py::_commit_assembly_result`.)
 - **fp16 pack layout is PINNED:** `pack_wind_field` transposes `[x,y]→[y,x]` (row-major) and swaps RGBA→BGRA (B=turb, G=vy, R=vx, A=speed). A test asserts it. Changing the transpose/channel map means updating the GPU uniform contract and the shader decode together.
-- **`t_eff` frequency chirp:** `t_eff = game_time * (1 + storm_freq_gain*storminess)` slightly chirps gust frequency while storminess changes. This is intentional and sub-perceptual (storminess only moves over the sky's 20-game-minute blends). It is kept as a closed form rather than an accumulated integral precisely to preserve determinism / zero-byte saves.
+- **`t_eff` frequency chirp:** `t_eff = wind_time * (1 + storm_freq_gain*storminess)` slightly chirps gust frequency while storminess changes. This is intentional and sub-perceptual (storminess only moves over the sky's 20-game-minute blends). It is kept as a closed form rather than an accumulated integral precisely to preserve determinism / zero-byte saves.
 - **No `np.roll` in the venturi solver:** roll wraps the grid edges and would leak crowding/flux across the world — `venturi.py` uses edge-replicate padded slicing for every neighbour mean and box blur.
 - **Venturi origin-match discard rule:** a `VenturiResult` is committed **only** when its `origin_cell` still equals the region's current origin. A result solved for a window the player has since left is *discarded* (never index-shifted to the new window); the field re-submits a fresh job on every recenter and applies the **identity** correction in the meantime. This keeps the applied `speedup`/`deflect`/`updraft` grids and the cells they scale perfectly aligned with zero index math, at the cost of a 1–2-frame identity flash right after a recenter (sub-perceptual — the gust field itself is continuous).
 - **Venturi model deviation:** the plan sketched `flux = passw·neighbour-mean + (1−passw)·flux` with `speedup = flux/passw`. That is a Laplace smoothing that relaxes an open gap *toward its zero-flux walls* → `speedup ≤ 1` (no acceleration), so it cannot meet the gap-`>1.3` acceptance. `venturi.py` instead diffuses the **solid** field outward (blockage crowding) and accelerates open cells sitting in a crowded neighbourhood — same ingredients (occupancy fold → bounded padded Jacobi → speed-up → 3×3 blur → openness-gradient deflect), genuine funneling, exact identity on open terrain. See `venturi.py`'s module docstring.
@@ -99,7 +99,7 @@ Wind speeds up through gaps/canyons/tunnels and rises over windward obstacles, c
 
 ### Component (`add_component` kwargs)
 - `base` — the `App` (provides `terrain_root`, `camera_go`, `lighting_pipeline`).
-- `clock` — the shared `Clock`; monotonic absolute game time `= game_day*86400 + game_time_of_day` (the gust phases advect off this — it must not wrap, hence the day fold).
+- `clock` — the shared `Clock`; used only to **seed** the wind clock at `start()` (absolute game seconds ÷ `clock.game_time_scale` × `wind_time_scale`) so a loaded save resumes at a deterministic gust phase. Per frame the component advances its own wind clock by **real** `dt × config.wind_time_scale` — gust travel is an aesthetic real-time effect, independent of the game timescale (60× today, 30× later, 1800× on F7; none of these change how fast gusts sweep the grass).
 - `wind_field` — the headless `WindField`; `None` disables the component.
 - `worker` — the `VenturiWorker` (or `None`); **the component owns it and stops it in `on_destroy`** (`main()` also stops it on the window-teardown exit path).
 - `sky_system` — read-only weather source; its `.state` is passed straight into `WindField.update`.

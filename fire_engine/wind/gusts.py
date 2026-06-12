@@ -6,7 +6,7 @@ walk.  It is a sum of ``cfg.wind_gust_modes`` (~12) sinusoidal modes whose
 wavevectors, phases and intrinsic frequencies are drawn **once** from
 ``core.rng.for_domain("wind", "gusts")`` and then evaluated analytically at
 any (world position, time).  This makes the whole field a pure function of
-``(world_seed, game_time, world_position)``: bit-reproducible, zero save
+``(world_seed, wind_time, world_position)``: bit-reproducible, zero save
 bytes, free to recenter (no history to carry), and visually indistinguishable
 from real Brownian gusting at 20–120 m wavelengths.
 

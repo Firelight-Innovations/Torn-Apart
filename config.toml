@@ -64,6 +64,10 @@ grass_max_instances = 200000   # hard cap on instances per grass volume
 # player-centred grid of horizontal wind velocity built from seeded spectral
 # gust modes that advect downwind, plus an analytic vertical profile.
 # Units: meters, m/s, rad/s, seconds.
+wind_time_scale = 1.0          # wind-clock seconds per REAL second - gust travel is
+                               # an aesthetic real-time effect, independent of the
+                               # game timescale (60x today, 30x later); raise for
+                               # faster-evolving wind, lower for lazier
 wind_cells = 64                # grid cells per axis (64 x 4 m = 256 m region)
 wind_cell_m = 4.0              # cell edge (meters)
 wind_snap_cells = 8            # recenter origin snap granularity (cells -> 32 m)

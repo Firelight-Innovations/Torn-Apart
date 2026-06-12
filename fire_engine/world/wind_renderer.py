@@ -99,9 +99,9 @@ __all__ = ["WindSystemComponent"]
 _log = get_logger("world.wind")
 
 # Monotonic absolute game time = day * this + game_time_of_day.  Mirrors
-# clock.py::_GAME_SECONDS_PER_DAY (module-private there); the gust phases advect
-# off this, so it MUST be monotonic per frame (game_time_of_day alone wraps
-# every game day and would snap the whole field backwards at midnight).
+# clock.py::_GAME_SECONDS_PER_DAY (module-private there).  Used only to SEED
+# the wind clock at start() so a loaded save resumes at a deterministic gust
+# phase; per-frame the wind clock accumulates real dt (see late_update).
 _GAME_SECONDS_PER_DAY: float = 24.0 * 3600.0
 
 
@@ -115,9 +115,13 @@ class WindSystemComponent(Component):
         The application — provides ``terrain_root``, ``camera_go`` and
         ``lighting_pipeline``.
     clock : fire_engine.core.Clock
-        The shared game clock; ``game_day`` + ``game_time_of_day`` give the
-        monotonic absolute game time the gust phases advect off of (the same
-        clock the sky renderer reads).
+        The shared game clock — used only to SEED the wind clock at start()
+        (converted through ``clock.game_time_scale``) so a loaded save resumes
+        at a deterministic gust phase.  Per frame the wind clock accumulates
+        **real** ``dt`` × ``config.wind_time_scale``: gust travel is an
+        aesthetic real-time effect, deliberately independent of the game
+        timescale (60× today, 30× later, 1800× on the F7 dev toggle — none of
+        which should change how fast gusts sweep the grass).
     wind_field : fire_engine.wind.WindField | None
         The headless field.  ``None`` disables the component (grass keeps its
         scalar sway fallback).
@@ -160,6 +164,7 @@ class WindSystemComponent(Component):
         self._cells: int = 0
         self._chunks_dirty: bool = True      # first update feeds chunks (venturi init)
         self._uploaded_once: bool = False
+        self._wind_time: float = 0.0         # seeded in start(), then += real dt
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -222,9 +227,20 @@ class WindSystemComponent(Component):
             self.bus.subscribe(TerrainEditedEvent, self._on_terrain_edited)
             self.bus.subscribe(ChunkLoadedEvent, self._on_chunk_loaded)
 
-        _log.info("Wind system online: %dx%d field, %.1f m cells (%.0f m region)",
+        # Seed the wind clock from the game clock, converted to real-time
+        # seconds through the CURRENT timescale, then scaled by the wind rate.
+        # This makes a loaded save resume at a deterministic gust phase while
+        # per-frame advancement (below) stays real-time and timescale-free.
+        game_s = (float(self.clock.game_day) * _GAME_SECONDS_PER_DAY
+                  + float(self.clock.game_time_of_day))
+        scale = max(float(self.clock.game_time_scale), 1e-6)
+        self._wind_time = game_s / scale * float(cfg.wind_time_scale)
+
+        _log.info("Wind system online: %dx%d field, %.1f m cells (%.0f m "
+                  "region), wind clock %.2f s/s (real-time, timescale-free)",
                   self._cells, self._cells, float(cfg.wind_cell_m),
-                  self._cells * float(cfg.wind_cell_m))
+                  self._cells * float(cfg.wind_cell_m),
+                  float(cfg.wind_time_scale))
 
     def late_update(self, dt: float) -> None:
         """Update the field, upload it, and refresh the origin (same frame)."""
@@ -232,11 +248,12 @@ class WindSystemComponent(Component):
             return
 
         base = self.base
-        clock = self.clock
-        # Monotonic absolute game seconds (gust phases advect off this — it must
-        # not wrap, so we fold in the day counter).
-        game_time = (float(clock.game_day) * _GAME_SECONDS_PER_DAY
-                     + float(clock.game_time_of_day))
+        # Advance the wind clock by REAL frame time × the configured rate.
+        # Deliberately NOT the game clock: gust travel/oscillation are an
+        # aesthetic real-time effect, and at game-time pacing a 60× timescale
+        # (or the F7 1800× toggle) would sweep gust crests across the grass
+        # 60×/1800× too fast.  Monotonic by construction (dt ≥ 0).
+        self._wind_time += float(dt) * float(base._config.wind_time_scale)
 
         sky_state = getattr(self.sky_system, "state", None) \
             if self.sky_system is not None else None
@@ -253,7 +270,8 @@ class WindSystemComponent(Component):
             chunks = getattr(self.chunk_provider, "chunks", None)
             self._chunks_dirty = False
 
-        self.wind_field.update(dt, game_time, sky_state, cam_pos, chunks=chunks)
+        self.wind_field.update(dt, self._wind_time, sky_state, cam_pos,
+                               chunks=chunks)
 
         # Pack (64x64 fp16 ~= 32 KB — cheap on the main thread) and upload.
         snap = self.wind_field.snapshot

@@ -8,7 +8,7 @@ procedural wind audio).  A player-centred 2.5-D field: a 64×64-cell × 4 m
 modes that **advect downwind** (so gust bands visibly travel), plus an analytic
 vertical boundary-layer profile.
 
-The field is a **pure function of (world_seed, game_time, weather, player
+The field is a **pure function of (world_seed, wind_time, weather, player
 cell)** — bit-reproducible, **zero save bytes** (no Saveable, same ethos as
 ``sky/weather.py``), and free to recenter as the player moves.  This package is
 headless: numpy + core only, **no panda3d** (the upload/render half lives in
@@ -17,12 +17,12 @@ headless: numpy + core only, **no panda3d** (the upload/render half lives in
 Public API summary
 ------------------
 WindField
-    The field.  ``update(dt, game_time, sky_state, player_pos, chunks=None)``
+    The field.  ``update(dt, wind_time, sky_state, player_pos, chunks=None)``
     once per frame; ``sample(positions (N,3)) -> (N,3)`` m/s for physics/audio;
     ``snapshot`` for the current state; ``add_modifier`` / ``remove_modifier``.
 WindSnapshot
     Frozen atomically-published field state (``field``, ``origin_m``,
-    ``cell_m``, ``cells``, ``game_time``).
+    ``cell_m``, ``cells``, ``wind_time``).
 WindModifier, GustFront
     In-place modifier protocol (the volumetric-weather seam) + a working moving
     gust-front example.
@@ -49,7 +49,7 @@ Quick-start example
     cfg = load_config()
     set_world_seed(cfg.world_seed)
     field = WindField(cfg)
-    field.update(dt=0.016, game_time=12.0, sky_state=None,
+    field.update(dt=0.016, wind_time=12.0, sky_state=None,
                  player_pos=(0.0, 0.0, 0.0))           # once per frame
     v = field.sample(np.array([[0.0, 0.0, 1.0]]))      # wind at a point, m/s
 """

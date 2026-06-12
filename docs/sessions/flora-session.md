@@ -1,5 +1,10 @@
 # Session — Flora system (flowers, bushes, trees)
 
+> **Superseded for trees/bushes (2026-06-12):** the sprite trees/bushes
+> described below were replaced by real 3-D meshes — see
+> `tree-3d-session.md` and `docs/content/tree_species_authoring.md`.
+> Flowers still work exactly as written here.
+
 date: 2026-06-11
 keywords: flora, flowers, bushes, trees, sprites, atlas, wind, instancing, FloraRendererComponent, flora_placement, flower_sprite, bush_sprite, tree_sprite
 

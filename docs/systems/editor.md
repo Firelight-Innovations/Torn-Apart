@@ -82,6 +82,24 @@ reparents (`scene.reparent`); context menu creates/renames/deletes; selection is
 synced both ways with the viewport (tree select → highlight gizmo; gizmo click →
 `reveal` the node).
 
+**Extension inspector (properties panel):** `editor/extension/src/inspectorViewProvider.ts`
+(a `WebviewView` below the Hierarchy) + `src/webview/inspector.ts` (plain-DOM
+form bundled to `media/inspector.js`). Shows the selected object's name,
+kind/id, position (m), rotation (XYZ Euler **degrees** — converted to/from the
+wire's scalar-first quaternion by `src/webview/inspectorMath.ts`, unit-tested),
+and scale with a uniform-lock. Edits commit on change/Enter/blur →
+`scene.rename` / `scene.set_transform`; incoming `scene.changed` refreshes the
+form but never clobbers the field being typed in (echo guard). Selection is
+centralised in `extension.ts::setSelection` — tree click ↔ viewport click ↔
+inspector always agree.
+
+**Save Scene:** command `fireEditor.saveScene` (+ `saveSceneAs`), bound to
+**Ctrl+S** when the Scene View panel or Hierarchy view is focused. First save
+opens a dialog defaulting to `scenes/` at the repo root (committed authored
+content — DECISIONS.md 2026-06-12); `Open World from Save` primes the same path
+so Ctrl+S round-trips the opened file. Load the result in the game with
+`python main.py --load scenes/<file>.ta`.
+
 **CLI:** `python -m fire_editor --port <p> [--host 127.0.0.1] [--log-level info]`
 — announces `{"event":"listening","port":N}` on stdout; logs to stderr.
 

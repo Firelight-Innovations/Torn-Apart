@@ -30,7 +30,9 @@ function listTestEntries() {
     .map((f) => path.join(dir, f));
 }
 
-// Webview bundle runs in the browser context: bundle three.js, no node externals.
+// Webview bundles run in the browser context: bundle three.js, no node
+// externals. Multi-entry: each webview (3D viewport, inspector form) gets its
+// own IIFE bundle in media/.
 const webviewConfig = {
   bundle: true,
   platform: "browser",
@@ -38,8 +40,8 @@ const webviewConfig = {
   format: "iife",
   sourcemap: true,
   logLevel: "info",
-  entryPoints: ["src/webview/sceneView.ts"],
-  outfile: "media/sceneView.js",
+  entryPoints: ["src/webview/sceneView.ts", "src/webview/inspector.ts"],
+  outdir: "media",
   minify: production,
 };
 

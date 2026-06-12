@@ -8,6 +8,7 @@ import * as vscode from "vscode";
 
 import { DaemonController, DaemonState } from "./daemon";
 import { HierarchyProvider, SceneObjectDTO } from "./hierarchyView";
+import { InspectorViewProvider } from "./inspectorViewProvider";
 import { FireEditorClient, RpcRemoteError } from "./protocol/client";
 import { Method, Notification, SchemaId } from "./protocol/generated";
 import { SceneViewPanel } from "./sceneViewPanel";
@@ -20,14 +21,20 @@ let sceneView: SceneViewPanel | undefined;
 let currentConfig: Record<string, unknown> | undefined;
 let worldOpen = false;
 let extensionUri: vscode.Uri;
+let repoRootPath: string | undefined;
+// The scene file Ctrl+S writes to: set by Open World from Save / first Save As.
+let currentSavePath: string | undefined;
 
 let hierarchy: HierarchyProvider;
 let hierarchyView: vscode.TreeView<number>;
+let inspector: InspectorViewProvider;
 // Where newly-created objects spawn: the point the Scene View camera is looking
 // at (reported via the webview's "focus" message). Defaults to the origin.
 let lastFocus = { x: 0, y: 0, z: 0 };
 // Guards selection echo: tree -> viewport -> tree would otherwise loop.
 let syncingSelection = false;
+// The one selection shared by tree, viewport and inspector (the selection hub).
+let selectedObjectId: number | null = null;
 
 export function activate(context: vscode.ExtensionContext): void {
   extensionUri = context.extensionUri;
@@ -51,7 +58,33 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
     vscode.commands.registerCommand("fireEditor.openSceneView", () => openSceneView()),
     vscode.commands.registerCommand("fireEditor.openWorldSeed", () => openWorldBySeed()),
-    vscode.commands.registerCommand("fireEditor.openWorldSave", () => openWorldBySave())
+    vscode.commands.registerCommand("fireEditor.openWorldSave", () => openWorldBySave()),
+    vscode.commands.registerCommand("fireEditor.saveScene", () => saveScene()),
+    vscode.commands.registerCommand("fireEditor.saveSceneAs", () => saveScene(true))
+  );
+
+  // --- Inspector (properties panel, below the Hierarchy) ---
+  inspector = new InspectorViewProvider(extensionUri, (msg) => {
+    switch (msg.type) {
+      case "rename":
+        void sceneRequest(Method.SCENE_RENAME, { id: msg.id, name: msg.name });
+        break;
+      case "setTransform": {
+        const p = msg.position as number[];
+        const r = msg.rotation as number[]; // (w, x, y, z)
+        const s = msg.scale as number[];
+        void sceneRequest(Method.SCENE_SET_TRANSFORM, {
+          id: msg.id,
+          px: p[0], py: p[1], pz: p[2],
+          rw: r[0], rx: r[1], ry: r[2], rz: r[3],
+          sx: s[0], sy: s[1], sz: s[2],
+        });
+        break;
+      }
+    }
+  });
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(InspectorViewProvider.viewId, inspector)
   );
 
   // --- Scene hierarchy (Phase E2) ---
@@ -68,7 +101,7 @@ export function activate(context: vscode.ExtensionContext): void {
     hierarchyView,
     hierarchyView.onDidChangeSelection((e) => {
       if (syncingSelection) return;
-      sceneView?.postSelect(e.selection.length ? e.selection[0] : null);
+      setSelection(e.selection.length ? e.selection[0] : null, "tree");
     }),
     vscode.commands.registerCommand("fireEditor.refreshHierarchy", () => refreshHierarchy()),
     vscode.commands.registerCommand("fireEditor.createEmpty", () => createObject("empty")),
@@ -88,6 +121,7 @@ export function activate(context: vscode.ExtensionContext): void {
     );
     return;
   }
+  repoRootPath = repoRoot;
   output.appendLine(`[extension] repo root: ${repoRoot}`);
   if (vscode.workspace.getConfiguration("fireEditor").get<boolean>("autoStart", true)) {
     startDaemon(context, repoRoot);
@@ -184,9 +218,22 @@ function openSceneView(): void {
         lastFocus = { x: Number(msg.x), y: Number(msg.y), z: Number(msg.z) };
         break;
       case "selectObject": {
-        // Viewport click -> reveal + select the node in the tree.
+        // Viewport click -> reveal + select the node in the tree + inspector.
         const id = msg.id === null || msg.id === undefined ? null : Number(msg.id);
-        revealInTree(id);
+        setSelection(id, "viewport");
+        break;
+      }
+      case "transform": {
+        // Gizmo drag (throttled) -> authoritative transform on the daemon.
+        const p = msg.position as number[];
+        const r = msg.rotation as number[]; // (w, x, y, z)
+        const s = msg.scale as number[];
+        void sceneRequest(Method.SCENE_SET_TRANSFORM, {
+          id: msg.id,
+          px: p[0], py: p[1], pz: p[2],
+          rw: r[0], rx: r[1], ry: r[2], rz: r[3],
+          sx: s[0], sy: s[1], sz: s[2],
+        });
         break;
       }
       case "edit":
@@ -256,6 +303,7 @@ async function openWorldBySave(): Promise<void> {
   });
   if (!uri || uri.length === 0) return;
   await doOpenWorld({ save_path: uri[0].fsPath });
+  currentSavePath = uri[0].fsPath; // Ctrl+S round-trips the opened file
 }
 
 async function doOpenWorld(params: Record<string, unknown>): Promise<void> {
@@ -282,10 +330,64 @@ async function doOpenWorld(params: Record<string, unknown>): Promise<void> {
 
 // --- Scene hierarchy helpers ---
 
-/** Push a fresh object list to both the tree and the viewport gizmos. */
+/** Push a fresh object list to the tree, the viewport gizmos and the inspector. */
 function applyObjects(objects: SceneObjectDTO[]): void {
   hierarchy.setObjects(objects);
   sceneView?.postObjects(objects);
+  // Keep the inspector tracking daemon-side changes (gizmo drags, renames).
+  if (selectedObjectId !== null && !hierarchy.has(selectedObjectId)) {
+    selectedObjectId = null;
+  }
+  inspector.postObject(selectedObjectId !== null ? hierarchy.get(selectedObjectId) ?? null : null);
+}
+
+/**
+ * The selection hub: tree click, viewport click and programmatic selection all
+ * funnel here, then fan out to the other two surfaces + the inspector.
+ */
+function setSelection(id: number | null, source: "tree" | "viewport" | "code"): void {
+  selectedObjectId = id !== null && hierarchy.has(id) ? id : null;
+  if (source !== "viewport") sceneView?.postSelect(selectedObjectId);
+  if (source !== "tree") revealInTree(selectedObjectId);
+  inspector.postObject(selectedObjectId !== null ? hierarchy.get(selectedObjectId) ?? null : null);
+}
+
+// --- Save Scene (Ctrl+S in the Scene View / Hierarchy) ---
+
+async function saveScene(forceDialog = false): Promise<void> {
+  if (!client || !worldOpen) {
+    vscode.window.showWarningMessage("Fire Editor: no world open to save.");
+    return;
+  }
+  let target = currentSavePath;
+  if (forceDialog || !target) {
+    // Authored scenes belong in scenes/ (committed content), not saves/
+    // (gitignored player state) — DECISIONS.md 2026-06-12.
+    const defaultDir = repoRootPath ? path.join(repoRootPath, "scenes") : undefined;
+    const uri = await vscode.window.showSaveDialog({
+      title: "Save Fire Editor scene",
+      filters: { "Torn Apart saves": ["ta"] },
+      defaultUri: defaultDir
+        ? vscode.Uri.file(path.join(defaultDir, "scene.ta"))
+        : undefined,
+    });
+    if (!uri) return;
+    target = uri.fsPath;
+  }
+  try {
+    const res = (await client.request(Method.WORLD_SAVE, { path: target })) as {
+      ok: boolean;
+      edited_chunks: number;
+    };
+    currentSavePath = target;
+    vscode.window.setStatusBarMessage(
+      `Fire Editor: saved ${path.basename(target)} (${res.edited_chunks} edited chunk${res.edited_chunks === 1 ? "" : "s"})`,
+      4000
+    );
+  } catch (e) {
+    const msg = e instanceof RpcRemoteError ? e.rpc.message : (e as Error).message;
+    vscode.window.showErrorMessage(`Fire Editor: save failed — ${msg}`);
+  }
 }
 
 /** Re-fetch the whole tree from the daemon (after open / on demand). */

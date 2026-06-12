@@ -46,6 +46,17 @@
         "category": "Fire Editor"
       },
       {
+        "command": "fireEditor.saveScene",
+        "title": "Fire Editor: Save Scene",
+        "category": "Fire Editor",
+        "icon": "$(save)"
+      },
+      {
+        "command": "fireEditor.saveSceneAs",
+        "title": "Fire Editor: Save Scene As…",
+        "category": "Fire Editor"
+      },
+      {
         "command": "fireEditor.refreshHierarchy",
         "title": "Refresh",
         "category": "Fire Editor",
@@ -112,9 +123,30 @@
           "name": "Hierarchy",
           "icon": "media/flame.svg",
           "contextualTitle": "Fire Editor Hierarchy"
+        },
+        {
+          "id": "fireEditor.inspector",
+          "type": "webview",
+          "name": "Inspector",
+          "icon": "media/flame.svg",
+          "contextualTitle": "Fire Editor Inspector"
         }
       ]
     },
+    "keybindings": [
+      {
+        "command": "fireEditor.saveScene",
+        "key": "ctrl+s",
+        "mac": "cmd+s",
+        "when": "activeWebviewPanelId == 'fireEditor.sceneView'"
+      },
+      {
+        "command": "fireEditor.saveScene",
+        "key": "ctrl+s",
+        "mac": "cmd+s",
+        "when": "focusedView == 'fireEditor.hierarchy'"
+      }
+    ],
     "submenus": [
       {
         "id": "fireEditor.createMenu",

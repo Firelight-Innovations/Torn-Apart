@@ -10,10 +10,11 @@ its per-frame ``SkyState``:
   ``"night_sky_cube"`` star/galaxy CUBE MAP (per-star twinkle, no pole
   distortion) rotating about a seed-derived TILTED celestial axis, and
   deterministic shooting stars.
-* **Boxy raymarched clouds** — two camera-following horizontal quads (slab
-  bottom + top) DDA-raymarching a grid of ``sky_cloud_cell_m`` cells in the
-  slab ``[sky_cloud_altitude_m, +sky_cloud_thickness_m]``; crisp Minecraft-style
-  boxes, flat-face lit, wind-drifted, correct from below/inside/above.
+* **Volumetric clouds** — a second camera-centred inverted sphere whose
+  fragment shader (``sky_shaders.CLOUD_VOLUMETRIC_FRAGMENT``) raymarches the
+  cloud slab sampling the baked tileable 3-D noise (``sky.cloud_noise``):
+  self-shadowed (Beer + powder), HG forward-scatter silver lining, premultiplied
+  OVER the sky so a bright sun bleeds through thin cloud.  Gated by ``gfx_clouds``.
 * **Rain** — three nested camera-following open cylinders textured with the
   ``"rain_streak"`` texture, UV-scrolled at per-layer rates for parallax,
   additively blended, hidden when ``rain_intensity < 0.05``.
@@ -97,9 +98,6 @@ _DOME_RADIUS_M:        float = 800.0   # sky-dome sphere radius (meters)
 _DOME_STACKS:          int   = 24      # dome latitude divisions
 _DOME_SLICES:          int   = 48      # dome longitude divisions
 _CAMERA_FAR_M:         float = 4000.0  # minimum camera far plane (meters)
-_CLOUD_QUAD_SIDE_M:    float = 2400.0  # cloud slab quad side length (meters)
-_CLOUD_FADE_FRACTION:  float = 0.92    # fade distance as a fraction of half-side
-
 # Volumetric cloud layer (raymarched; replaces the boxy slab quads).
 _VCLOUD_ALT_M:         float = 500.0   # cloud slab bottom altitude (world Z, m)
 _VCLOUD_THICK_M:       float = 400.0   # slab thickness (m)
@@ -134,9 +132,6 @@ _GAME_SECONDS_PER_DAY: float = 86400.0
 # Contract defaults for the sky config keys (the sky package adds them to
 # core.config; fall back to the frozen-contract values when running against a
 # pre-sky Config so the renderer works mid-integration).
-_DEFAULT_CLOUD_ALTITUDE_M:  float = 96.0
-_DEFAULT_CLOUD_THICKNESS_M: float = 8.0
-_DEFAULT_CLOUD_CELL_M:      float = 12.0
 _DEFAULT_STAR_COUNT:        int   = 2500
 
 
@@ -279,32 +274,6 @@ def _build_dome_node(radius_m: float, stacks: int, slices: int) -> GeomNode:
                            tris.reshape(-1), "sky_dome")
 
 
-def _build_cloud_node(side_m: float, thickness_m: float) -> GeomNode:
-    """
-    Build the cloud-layer coverage geometry: two horizontal quads in one
-    GeomNode — model z=0 (slab bottom) and z=*thickness_m* (slab top).  The
-    owning NodePath is placed at z = ``sky_cloud_altitude_m`` so world heights
-    line up with the raymarch slab; the fragment shader identifies the plane
-    from the interpolated world z and discards duplicate coverage.
-
-    Parameters
-    ----------
-    side_m      : float — quad side length in meters (camera-following in XY).
-    thickness_m : float — slab thickness in meters (top-quad model height).
-    """
-    h = side_m * 0.5
-    t = thickness_m
-    pos = np.array(
-        [
-            [-h, -h, 0.0], [h, -h, 0.0], [h, h, 0.0], [-h, h, 0.0],
-            [-h, -h, t],   [h, -h, t],   [h, h, t],   [-h, h, t],
-        ],
-        dtype=np.float32,
-    )
-    idx = np.array([0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7], dtype=np.uint32)
-    return _make_geom_node(pos, GeomVertexFormat.get_v3(), idx, "cloud_layer")
-
-
 def _build_rain_cylinder(radius_m: float, height_m: float,
                          segments: int) -> GeomNode:
     """
@@ -360,68 +329,6 @@ def _build_rain_cylinder(radius_m: float, height_m: float,
 # ---------------------------------------------------------------------------
 # Texture acquisition (registry first, deterministic fallback second)
 # ---------------------------------------------------------------------------
-
-def _cloud_value_quantiles(seed: float, sample_cells: int = 192) -> np.ndarray:
-    """
-    Empirical quantile table of the cloud shader's per-cell occupancy value.
-
-    The GLSL ``cell_value`` (2-octave value noise + per-cell hash; see
-    ``sky_shaders.CLOUD_FRAGMENT``) is bell-shaped around ~0.5, NOT uniform —
-    thresholding it directly with ``cloud_coverage`` would give almost no
-    clouds below ~0.3 coverage.  This numpy float32 port evaluates the same
-    formulas over a ``sample_cells``² cell grid and returns the SORTED values;
-    indexing the array at ``coverage * (n-1)`` yields the threshold that makes
-    *coverage* the actual fill fraction.
-
-    Parameters
-    ----------
-    seed : float
-        The same world-seed-derived value passed to the shader as ``u_seed``.
-    sample_cells : int
-        Sample grid edge (cells); 192² ≈ 37k samples is plenty for quantiles.
-
-    Returns
-    -------
-    np.ndarray — sorted float64 occupancy values (ascending).
-    """
-    s = np.float32(seed)
-    c33 = np.float32(33.33)
-
-    def hash21(x: np.ndarray, y: np.ndarray) -> np.ndarray:
-        # GLSL: p3 = fract(p.xyx * 0.1031 + seed); p3 += dot(p3, p3.yzx + 33.33);
-        #       return fract((p3.x + p3.y) * p3.z);
-        px = x * np.float32(0.1031) + s
-        px -= np.floor(px)
-        py = y * np.float32(0.1031) + s
-        py -= np.floor(py)
-        pz = px                                   # p.xyx → z component == x component
-        d = px * (py + c33) + py * (pz + c33) + pz * (px + c33)
-        r = ((px + d) + (py + d)) * (pz + d)
-        return r - np.floor(r)
-
-    def vnoise(x: np.ndarray, y: np.ndarray) -> np.ndarray:
-        ix, iy = np.floor(x), np.floor(y)
-        fx, fy = x - ix, y - iy
-        fx = fx * fx * (3.0 - 2.0 * fx)
-        fy = fy * fy * (3.0 - 2.0 * fy)
-        a = hash21(ix, iy)
-        b = hash21(ix + 1.0, iy)
-        c = hash21(ix, iy + 1.0)
-        e = hash21(ix + 1.0, iy + 1.0)
-        return (a * (1.0 - fx) + b * fx) * (1.0 - fy) + \
-               (c * (1.0 - fx) + e * fx) * fy
-
-    half = sample_cells // 2
-    cx, cy = np.meshgrid(
-        np.arange(-half, half, dtype=np.float32),
-        np.arange(-half, half, dtype=np.float32),
-        indexing="ij",
-    )
-    vals = (0.55 * vnoise(cx / np.float32(6.0), cy / np.float32(6.0))
-            + 0.30 * vnoise(cx / np.float32(2.2), cy / np.float32(2.2))
-            + 0.15 * hash21(cx + np.float32(17.0), cy + np.float32(17.0)))
-    return np.sort(vals.ravel().astype(np.float64))
-
 
 def _fallback_star_cube(star_count: int) -> np.ndarray:
     """
@@ -588,15 +495,6 @@ class SkyRendererComponent(Component):
         self._rain_visible: bool = False
         self._fog: Fog | None = None
 
-        # coverage → threshold quantiles (filled by _build_clouds; identity ramp
-        # until then so late_update is safe pre-start)
-        self._cloud_quantiles: np.ndarray = np.linspace(0.0, 1.0, 2)
-
-        # Cloud slab parameters (resolved from config in start())
-        self._cloud_alt_m: float = _DEFAULT_CLOUD_ALTITUDE_M
-        self._cloud_thick_m: float = _DEFAULT_CLOUD_THICKNESS_M
-        self._cloud_cell_m: float = _DEFAULT_CLOUD_CELL_M
-
         # Shooting-star animation state
         self._ss_slot: tuple[int, int] | None = None   # (game_day, slot)
         self._ss_progress: float = -1.0                # < 0 → inactive
@@ -613,16 +511,10 @@ class SkyRendererComponent(Component):
             return
 
         cfg = getattr(self.base, "_config", None)
-        self._cloud_alt_m = float(getattr(cfg, "sky_cloud_altitude_m",
-                                          _DEFAULT_CLOUD_ALTITUDE_M))
-        self._cloud_thick_m = float(getattr(cfg, "sky_cloud_thickness_m",
-                                            _DEFAULT_CLOUD_THICKNESS_M))
-        self._cloud_cell_m = float(getattr(cfg, "sky_cloud_cell_m",
-                                           _DEFAULT_CLOUD_CELL_M))
         star_count = int(getattr(cfg, "sky_star_count", _DEFAULT_STAR_COUNT))
 
-        # Far plane must cover the dome (800 m) and the cloud-quad corners
-        # (~1.7 km horizontally).
+        # Far plane must cover the sky dome (800 m); the volumetric cloud slab
+        # is intersected analytically in the shader, so it needs no geometry.
         lens = self.base.camLens
         if lens.get_far() < _CAMERA_FAR_M:
             lens.set_far(_CAMERA_FAR_M)

@@ -66,39 +66,22 @@ Uniforms (set per frame unless noted):
                       against u_ss_start on the CPU).
     u_ss_progress     float — 0-1 animation progress along the great circle.
 
-BOXY CLOUDS (``CLOUD_VERTEX`` / ``CLOUD_FRAGMENT``)
-----------------------------------------------------
-Raymarched Minecraft-style box clouds: a 2D DDA walks a grid of
-``u_cell``-sized cells through the slab ``[u_altitude, u_altitude+u_thickness]``;
-occupied cells are crisp axis-aligned boxes with per-cell height variation.
-Drawn on two camera-following horizontal quads (slab bottom + slab top) so
-fragments exist whether the camera is below, inside, or above the layer;
-duplicate plane coverage is discarded in the shader.
+VOLUMETRIC CLOUDS (``CLOUD_VOLUMETRIC_VERTEX`` / ``CLOUD_VOLUMETRIC_FRAGMENT``)
+------------------------------------------------------------------------------
+A true 3-D raymarched cloud layer on a second camera-centred inverted sphere
+(the model-space vertex IS the world view direction).  The fragment shader
+analytically intersects the horizontal slab ``[u_altitude, +u_thickness]`` and
+ray-marches it sampling the baked tileable 3-D noise (``sky.cloud_noise``):
+a Perlin-Worley base eroded by Worley octaves + a detail volume, gated by a
+height profile and ``u_coverage``.  Each lit sample marches a few steps toward
+the sun for self-shadow (Beer + powder) with a Henyey-Greenstein phase (silver
+lining).  Output is premultiplied ``(scattered_radiance, transmittance)`` for a
+``src + dst·srcAlpha`` over-blend, so a bright sun bleeds through thin cloud and
+thick cloud occludes it.  See ``docs/systems/world.md`` for the full uniform
+list; the GLSL lives in ``world/shaders/cloud_volumetric.{vert,frag}``.
 
-Uniforms:
-    u_cam_pos       vec3  — camera world position, meters (per frame).
-    u_altitude      float — slab bottom Z, meters (set once; config
-                    sky_cloud_altitude_m).
-    u_thickness     float — slab thickness, meters (set once; config
-                    sky_cloud_thickness_m).
-    u_cell          float — cell edge, meters (set once; config sky_cloud_cell_m).
-    u_seed          float — world-seed-derived hash offset (set once; from
-                    core.rng.for_domain("sky", "clouds")).
-    u_coverage      float — 0-1 fill fraction threshold (SkyState.cloud_coverage).
-    u_opacity       float — 0-1 overall alpha scale (from SkyState.cloud_density).
-    u_wind_offset   vec2  — accumulated wind drift, meters (CPU integrates
-                    wind_dir * wind_speed * dt each frame).
-    u_top_color     vec3  — flat-face colour for box tops (sunlit, computed CPU-side).
-    u_side_color    vec3  — flat-face colour for box sides.
-    u_bottom_color  vec3  — flat-face colour for box bottoms (darkest; storm-gray
-                    when density is high).
-    u_fade_dist     float — meters; clouds fade to transparent approaching this.
-
-The fragment colour is emitted non-premultiplied for standard M_alpha blending.
-
-The GLSL source now lives in ``world/shaders/*.vert`` / ``*.frag`` (loaded
-verbatim via ``load_glsl``) so editors get syntax highlighting + LSP support;
-the loaded strings are byte-identical to the previous inline constants.
+The GLSL source lives in ``world/shaders/*.vert`` / ``*.frag`` (loaded verbatim
+via ``load_glsl``) so editors get syntax highlighting + LSP support.
 """
 
 from __future__ import annotations
@@ -108,8 +91,6 @@ from fire_engine.core.shader_source import load_glsl
 __all__ = [
     "SKY_DOME_VERTEX",
     "SKY_DOME_FRAGMENT",
-    "CLOUD_VERTEX",
-    "CLOUD_FRAGMENT",
     "CLOUD_VOLUMETRIC_VERTEX",
     "CLOUD_VOLUMETRIC_FRAGMENT",
 ]
@@ -126,17 +107,7 @@ SKY_DOME_FRAGMENT: str = load_glsl(__file__, "sky_dome.frag")
 
 
 # ---------------------------------------------------------------------------
-# Boxy raymarched clouds
-# ---------------------------------------------------------------------------
-
-CLOUD_VERTEX: str = load_glsl(__file__, "cloud.vert")
-
-
-CLOUD_FRAGMENT: str = load_glsl(__file__, "cloud.frag")
-
-
-# ---------------------------------------------------------------------------
-# Volumetric raymarched clouds (replaces the boxy clouds)
+# Volumetric raymarched clouds
 # ---------------------------------------------------------------------------
 
 CLOUD_VOLUMETRIC_VERTEX: str = load_glsl(__file__, "cloud_volumetric.vert")

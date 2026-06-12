@@ -83,6 +83,6 @@ preset = "high"
 # gfx_cloud_steps = 96           # primary raymarch samples (quality)
 # gfx_cloud_light_steps = 8      # sun light-march steps (self-shadow; main cost)
 # gfx_cloud_resolution_scale = 1.0  # 0.5 = half-res clouds (big iGPU win)
-# gfx_cloud_max_dist_m = 2400.0  # far raymarch distance for clouds (meters)
+# gfx_cloud_max_dist_m = 6000.0  # far raymarch distance for clouds (meters)
 # gfx_god_rays = true            # crepuscular rays through clouds
 # gfx_god_ray_samples = 32       # radial god-ray samples

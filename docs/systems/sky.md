@@ -1,5 +1,5 @@
 # sky — System Doc
-keywords: sky, skybox, sky dome, day night cycle, daynight, sun, moon, stars, star field, galaxy, milky way, weather, rain, fog, storm, wind, clouds, cloud coverage, celestial, time of day, sunrise, sunset, dawn, dusk, twilight, daylight, moon phase, sky gradient, zenith, horizon, fog color, fog density, terrain light scale, SkyState, SkySystem, WeatherSystem, WeatherType, WeatherParams, sun_direction, moon_direction, force_weather, WeatherChangedEvent, markov, night_sky, rain_streak, atmosphere, rayleigh, mie, scattering, transmittance, sun_radiance, moon_radiance, sky_ambient, physical sky, single scattering, earth shadow, moon_surface, external_lighting
+keywords: sky, skybox, sky dome, day night cycle, daynight, sun, moon, stars, star field, galaxy, milky way, weather, rain, fog, storm, wind, clouds, cloud coverage, celestial, time of day, sunrise, sunset, dawn, dusk, twilight, daylight, moon phase, sky gradient, zenith, horizon, fog color, fog density, terrain light scale, SkyState, SkySystem, WeatherSystem, WeatherType, WeatherParams, sun_direction, moon_direction, force_weather, WeatherChangedEvent, markov, night_sky, rain_streak, atmosphere, rayleigh, mie, scattering, transmittance, sun_radiance, moon_radiance, sky_ambient, physical sky, single scattering, earth shadow, moon_surface, external_lighting, cloud_noise, bake_shape_noise, bake_detail_noise, worley, perlin-worley, volumetric clouds, 3d noise, tileable noise, to_panda_texture_3d, sampler3D, cloud density field
 
 > One doc per code package; filename matches the package exactly (`docs/systems/sky.md` ↔ `fire_engine/sky/`).
 
@@ -79,6 +79,15 @@ All symbols below are re-exported from `fire_engine.sky` (`__init__.py`).
 | `BETA_RAYLEIGH, BETA_MIE, MIE_G, RAYLEIGH_SCALE_HEIGHT_M, MIE_SCALE_HEIGHT_M, PLANET_RADIUS_M, ATMOSPHERE_TOP_M, SUN_TOA_RADIANCE, ...` | The physical constants — **shared verbatim** with `world/sky_shaders.SKY_DOME_FRAGMENT`; change them in both places or the picture and the light disagree. |
 
 `SkySystem` never calls these per frame: a module-level `_AtmosphereLUT` (56 sun elevations × {sun, ambient, zenith, horizon}) is built once per process (~0.2 s) and interpolated with `np.interp` per frame.
+
+### Cloud noise (`sky/cloud_noise.py`) — pure deterministic bake
+
+| Symbol | Description |
+|---|---|
+| `bake_shape_noise(size=64) -> (N,N,N,4) uint8` | Cloud SHAPE volume: R = Perlin-Worley billowy base (the cloud bulk); G/B/A = increasing-frequency inverted-Worley FBM octaves the raymarch uses to erode the base into wisps.  Deterministic (`for_domain("sky","cloud_shape")`), **tileable** (every octave's lattice period divides the texture, so `WM_repeat` never seams).  64³ ≈ 1.7 s; 128³ is sharper but ~30 s → disk-cache it (deterministic ⇒ the cache is always valid). |
+| `bake_detail_noise(size=32) -> (N,N,N,4) uint8` | High-frequency Worley FBM packed across R/G/B for fine edge detail.  Same determinism/tileability. |
+
+Headless numpy (no panda3d); `world/texture_bridge.to_panda_texture_3d` uploads the arrays as `sampler3D`s for `world/shaders/cloud_volumetric.frag`.  Arrays are page-major `[z,y,x,c]`.
 
 ### Related (owned elsewhere)
 

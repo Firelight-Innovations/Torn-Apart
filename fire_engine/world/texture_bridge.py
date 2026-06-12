@@ -34,7 +34,8 @@ from __future__ import annotations
 import numpy as np
 from panda3d.core import Texture, SamplerState  # type: ignore[import]
 
-__all__ = ["to_panda_texture", "to_field_texture", "to_panda_cubemap"]
+__all__ = ["to_panda_texture", "to_field_texture", "to_panda_cubemap",
+           "to_panda_texture_3d"]
 
 
 def to_panda_texture(rgba: np.ndarray) -> Texture:
@@ -160,6 +161,55 @@ def to_panda_cubemap(faces: np.ndarray) -> Texture:
     tex.set_ram_image(bytes(bgra))
     tex.set_minfilter(SamplerState.FT_nearest)
     tex.set_magfilter(SamplerState.FT_nearest)
+    return tex
+
+
+def to_panda_texture_3d(volume: np.ndarray, *, linear: bool = True,
+                        repeat: bool = True) -> Texture:
+    """
+    Upload a ``(N, N, N, 4) uint8`` volume as a Panda3D 3-D ``Texture``.
+
+    Used for the baked volumetric-cloud noise (``sky.cloud_noise``).  The array
+    is page-major — index ``[z, y, x, c]`` (page ``z``, row ``y``, column
+    ``x``) — which is Panda3D's native 3-D texture page order, so no transpose
+    is needed; only the engine-wide RGBA→BGRA channel swap.  One bulk
+    ``set_ram_image`` write, no per-voxel loop.
+
+    Parameters
+    ----------
+    volume : numpy.ndarray
+        Shape ``(N, N, N, 4)``, dtype ``uint8``, RGBA channel order, indexed
+        ``[z, y, x, channel]``.
+    linear : bool, default True
+        Linear filtering (smooth cloud density) vs nearest.
+    repeat : bool, default True
+        Wrap mode: ``WM_repeat`` (tileable noise — the default for clouds) vs
+        ``WM_clamp``.  Tileable bakes wrap seamlessly, so repeat never seams.
+
+    Returns
+    -------
+    panda3d.core.Texture
+        A 3-D ``F_rgba`` texture ready for ``set_shader_input`` (sampler3D).
+    """
+    if volume.ndim != 4 or volume.shape[3] != 4:
+        raise ValueError(
+            f"to_panda_texture_3d expects shape (N, N, N, 4), got {volume.shape}")
+    if volume.dtype != np.uint8:
+        raise ValueError(
+            f"to_panda_texture_3d expects dtype uint8, got {volume.dtype}")
+
+    d, h, w = volume.shape[:3]
+    tex = Texture("volume3d")
+    tex.setup_3d_texture(w, h, d, Texture.T_unsigned_byte, Texture.F_rgba)
+    bgra = np.ascontiguousarray(volume[..., [2, 1, 0, 3]])   # RGBA -> BGRA
+    tex.set_ram_image(bytes(bgra))
+    filt = SamplerState.FT_linear if linear else SamplerState.FT_nearest
+    tex.set_minfilter(filt)
+    tex.set_magfilter(filt)
+    wrap = SamplerState.WM_repeat if repeat else SamplerState.WM_clamp
+    tex.set_wrap_u(wrap)
+    tex.set_wrap_v(wrap)
+    tex.set_wrap_w(wrap)
     return tex
 
 

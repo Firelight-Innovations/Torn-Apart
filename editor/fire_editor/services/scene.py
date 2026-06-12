@@ -5,17 +5,28 @@ delete placeable objects in the open world's :class:`SceneObjectStore`. Every
 mutation broadcasts a ``scene.changed`` notification carrying the full object
 list, so the sidebar tree and the 3D viewport stay in sync without each having
 to diff. Pure control-channel JSON — no binary frames here.
+
+Every mutation also pushes a :class:`~fire_editor.commands.SceneCommand` onto
+the daemon's single undo stack (shared with terrain brushes), so Ctrl+Z walks
+scene and terrain edits chronologically. Rapid same-object ``set_transform``
+calls coalesce into one command — a throttled gizmo drag undoes in one step.
 """
 from __future__ import annotations
 
 import logging
+import time
 
 from .._generated import ErrorCode, Method, Notification
+from ..commands import SceneCommand
 from ..rpc import RpcError
 from ..scene_objects import SceneError
 from ..session import EditorSession
 
 log = logging.getLogger("fire_editor.scene")
+
+# set_transform commands with the same label arriving within this window merge
+# into the previous command (drag coalescing).
+_COALESCE_WINDOW_S = 1.0
 
 
 class SceneService:
@@ -49,6 +60,7 @@ class SceneService:
             float(params.get("z") or 0.0),
         )
         parent = params.get("parent")
+        before = store.get_delta()
         try:
             obj = store.create(
                 str(params["kind"]),
@@ -58,25 +70,30 @@ class SceneService:
             )
         except SceneError as e:
             raise RpcError(ErrorCode.INVALID_PARAMS, str(e))
+        self._push_history(f"create {obj['kind']}", before, store.get_delta())
         await self._broadcast_changed(store)
         return {"ok": True, "object": obj}
 
     async def rename(self, params: dict) -> dict:
         store = self._require_session().scene
+        before = store.get_delta()
         try:
             obj = store.rename(int(params["id"]), str(params["name"]))
         except SceneError as e:
             raise RpcError(ErrorCode.INVALID_PARAMS, str(e))
+        self._push_history(f"rename {obj['id']}", before, store.get_delta())
         await self._broadcast_changed(store)
         return {"ok": True, "object": obj}
 
     async def reparent(self, params: dict) -> dict:
         store = self._require_session().scene
         parent = params.get("parent")
+        before = store.get_delta()
         try:
             obj = store.reparent(int(params["id"]), None if parent is None else int(parent))
         except SceneError as e:
             raise RpcError(ErrorCode.INVALID_PARAMS, str(e))
+        self._push_history(f"reparent {obj['id']}", before, store.get_delta())
         await self._broadcast_changed(store)
         return {"ok": True, "object": obj}
 
@@ -85,27 +102,51 @@ class SceneService:
         position = _vec3(params, "px", "py", "pz")
         rotation = _quat(params, "rw", "rx", "ry", "rz")
         scale = _vec3(params, "sx", "sy", "sz")
+        before = store.get_delta()
         try:
             obj = store.set_transform(
                 int(params["id"]), position=position, rotation=rotation, scale=scale
             )
         except SceneError as e:
             raise RpcError(ErrorCode.INVALID_PARAMS, str(e))
+        self._push_history(f"transform {obj['id']}", before, store.get_delta(),
+                           coalesce=True)
         await self._broadcast_changed(store)
         return {"ok": True, "object": obj}
 
     async def delete(self, params: dict) -> dict:
         store = self._require_session().scene
+        before = store.get_delta()
         try:
             removed = store.delete(int(params["id"]))
         except SceneError as e:
             raise RpcError(ErrorCode.INVALID_PARAMS, str(e))
+        self._push_history(f"delete {params['id']}", before, store.get_delta())
         await self._broadcast_changed(store)
         return {"ok": True, "removed": removed}
 
     # ------------------------------------------------------------------ #
     # Internals
     # ------------------------------------------------------------------ #
+    def _push_history(self, label: str, before: dict, after: dict,
+                      coalesce: bool = False) -> None:
+        """Record a scene mutation on the daemon's shared undo stack.
+
+        With ``coalesce=True`` a command whose label matches the stack top
+        within :data:`_COALESCE_WINDOW_S` merges into it (keep the oldest
+        ``before``, take the newest ``after``) so a stream of throttled gizmo
+        ``set_transform`` calls undoes as one step.
+        """
+        history = self.daemon.chunks.history
+        now = time.monotonic()
+        if coalesce:
+            top = history.peek()
+            if (isinstance(top, SceneCommand) and top.label == label
+                    and now - top.timestamp <= _COALESCE_WINDOW_S):
+                history.replace_top(SceneCommand(label, top.before_delta, after, now))
+                return
+        history.push(SceneCommand(label, before, after, now))
+
     async def _broadcast_changed(self, store) -> None:
         await self.daemon.server.broadcast_notification(
             Notification.SCENE_CHANGED, {"objects": store.tree()}

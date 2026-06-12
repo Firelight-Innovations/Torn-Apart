@@ -1,5 +1,5 @@
 # editor — System Doc
-keywords: editor, fire editor, daemon, fire_editor, extension, vscode, cursor, websocket, json-rpc, protocol, schema, codegen, binary frame, handshake, hello, scene view, hierarchy, inspector, gizmo, texture lab, model workspace
+keywords: editor, fire editor, daemon, fire_editor, extension, vscode, cursor, websocket, json-rpc, protocol, schema, codegen, binary frame, handshake, hello, scene view, hierarchy, inspector, properties panel, gizmo, transform controls, texture lab, model workspace, ground lut, textured terrain, scene undo, save scene, scenes folder, resend
 
 > Documents the `editor/` tree: the headless Python daemon `editor/fire_editor/`,
 > the TypeScript VS Code/Cursor extension `editor/extension/`, and the shared
@@ -37,19 +37,25 @@ The editor is a standalone tool, not an importable engine package. Its surfaces:
 - `Daemon` — builds the JSON-RPC dispatcher + WebSocket server, registers core + service methods, holds the open `EditorSession`, `run(port)`.
 - `Dispatcher` / `RpcError` — transport-agnostic JSON-RPC 2.0 dispatch; handlers are `async (params) -> result`.
 - `EditorSession` — one open world: terrain `ChunkManager`, `LightGrid` + `SunlightComputer`, `SaveManager`, and the authoring `scene` (`SceneObjectStore`). `from_seed`, `from_save`, `region_coords`, `ensure_loaded`, `relight`, `mesh`, `raycast`, `save`.
-- `scene_objects.SceneObjectStore` / `SceneObject` — the authoring hierarchy of placeable objects (kinds `empty|cube|sphere|light|spawn`). Deterministic integer ids (monotonic counter, no RNG); `create`, `rename`, `reparent` (cycle-rejecting), `set_transform`, `delete` (cascades), `tree` (flat DFS). Implements `Saveable` (`save_key="editor_scene"`) so the scene persists as a delta — an empty scene saves nothing.
+- `scene_objects` — a re-export **shim**: the authoring hierarchy now lives in the ENGINE at `fire_engine/scene/objects.py` (`SceneObjectStore` / `SceneObject`, kinds `empty|cube|sphere|light|spawn`) so the game's `SceneRuntime` consumes the identical schema (DECISIONS.md 2026-06-12). Deterministic integer ids (monotonic counter, no RNG); `create`, `rename`, `reparent` (cycle-rejecting), `set_transform`, `delete` (cascades), `tree` (flat DFS). Implements `Saveable` (`save_key="editor_scene"`) so the scene persists as a delta — an empty scene saves nothing.
 - `encode_frame` / `decode_frame` — protocol binary framing.
 - `encode_mesh_payload(coord, mesh)` / `decode_mesh_payload(bytes)` — MESH payload codec.
+- `texturecodec.encode_texture_payload(rgba)` / `decode_texture_payload(bytes)` — TEXTURE payload codec (`[u32 width][u32 height][rgba8]`); used by `world.ground_lut`.
 - `EditorServer` — `websockets` transport; `broadcast_binary`, `broadcast_notification`.
-- `services.chunks.ChunkService` — registers `world.open/save`, `chunks.set_center`, `scene.stats`, `terrain.raycast`, `terrain.brush`, `edit.undo/redo`; streams MESH frames and drives the undo stack.
-- `services.scene.SceneService` — registers `scene.tree/create/rename/reparent/set_transform/delete`; mutates `session.scene` and broadcasts `scene.changed` (full object list) after every change.
-- `commands.UndoStack` / `EditCommand` — editor-side undo/redo: per-edit before/after material snapshots over the brush AABB chunks (EDITOR_PRD §5.4).
+- `services.chunks.ChunkService` — registers `world.open/save`, `world.ground_lut`, `chunks.set_center`, `scene.stats`, `terrain.raycast`, `terrain.brush`, `edit.undo/redo`; streams MESH frames and drives the undo stack. `EditorSession.ground_seed` (same `for_domain("terrain","ground")` derivation as main.py) and `ground_texels_per_m` ride in the `world.open` result config.
+- `services.scene.SceneService` — registers `scene.tree/create/rename/reparent/set_transform/delete`; mutates `session.scene`, pushes a `SceneCommand` onto the shared undo stack, and broadcasts `scene.changed` (full object list) after every change.
+- `commands.UndoStack` / `EditCommand` / `SceneCommand` — ONE chronological undo/redo stack for both edit types: `EditCommand` snapshots before/after material arrays over the brush AABB chunks (EDITOR_PRD §5.4); `SceneCommand` snapshots the full scene delta (tiny dicts). Consecutive `transform <id>` scene commands within ~1 s coalesce, so a throttled gizmo drag undoes in one step.
 - Generated constants in `fire_editor._generated` (`PROTOCOL_VERSION`, `BINARY_MAGIC`, `SchemaId`, `ErrorCode`, `Method`, `Notification`, typed param/result `TypedDict`s).
 
-**Methods (protocol_version 4):** `hello`, `ping`, `world.open {seed|save_path}`,
-`world.save {path}`, `chunks.set_center {x,y,z,radius?}`, `scene.stats`,
+**Methods (protocol_version 5):** `hello`, `ping`, `world.open {seed|save_path}`,
+`world.save {path}`, `world.ground_lut {}` (announces a TEXTURE binary frame
+carrying the procedural-ground palette LUT; result also returns
+`ground_seed`/`ground_texels_per_m` for the client-side ground shader),
+`chunks.set_center {x,y,z,radius?,resend?}` (`resend: true` clears the daemon's
+sent-chunk cache so a freshly attached client gets the full region), `scene.stats`,
 `terrain.raycast {o*,d*,max_distance?}`, `terrain.brush {shape,x,y,z,mode,…}`,
-`edit.undo`, `edit.redo`, `scene.tree`, `scene.create {kind,parent?,name?,x?,y?,z?}`,
+`edit.undo`, `edit.redo` (terrain AND scene ops — one chronological stack),
+`scene.tree`, `scene.create {kind,parent?,name?,x?,y?,z?}`,
 `scene.rename {id,name}`, `scene.reparent {id,parent?}`,
 `scene.set_transform {id,p*?,r*?,s*?}`, `scene.delete {id}`. Notifications: `log`,
 `chunk.ready`, `chunk.unload`, `stream.done`, `edit.state`, `scene.changed`. Full

@@ -16,8 +16,9 @@ from fire_engine.terrain import BrushMode
 
 from .._generated import ErrorCode, Method, Notification, SchemaId
 from ..binary import encode_frame
-from ..commands import EditCommand, UndoStack
+from ..commands import EditCommand, SceneCommand, UndoStack
 from ..meshcodec import encode_mesh_payload
+from ..texturecodec import encode_texture_payload
 from ..rpc import RpcError
 from ..session import EditorSession
 
@@ -42,6 +43,7 @@ class ChunkService:
         d = self.daemon.dispatcher
         d.register(Method.WORLD_OPEN, self.world_open)
         d.register(Method.WORLD_SAVE, self.world_save)
+        d.register(Method.WORLD_GROUND_LUT, self.ground_lut)
         d.register(Method.CHUNKS_SET_CENTER, self.set_center)
         d.register(Method.SCENE_STATS, self.scene_stats)
         d.register(Method.TERRAIN_RAYCAST, self.raycast)
@@ -84,6 +86,8 @@ class ChunkService:
                 "view_distance_chunks": int(cfg.view_distance_chunks),
                 "world_size_m": float(cfg.world_size_m),
                 "ground_height_m": float(cfg.ground_height_m),
+                "ground_seed": float(session.ground_seed),
+                "ground_texels_per_m": float(cfg.ground_texels_per_m),
             },
         }
 
@@ -96,6 +100,24 @@ class ChunkService:
             raise RpcError(ErrorCode.APP_ERROR, f"save failed: {e}")
         return {"ok": True, "path": path, "edited_chunks": session.edited_chunk_count()}
 
+    async def ground_lut(self, params: dict) -> dict:
+        """Ship the procedural-ground palette LUT as a TEXTURE binary frame."""
+        session = self._require_session()
+        lut = session.ground_lut()
+        self._payload_seq += 1
+        pid = self._payload_seq
+        await self.daemon.server.broadcast_binary(
+            encode_frame(SchemaId.TEXTURE, pid, encode_texture_payload(lut))
+        )
+        return {
+            "ok": True,
+            "payload_id": pid,
+            "width": int(lut.shape[1]),
+            "height": int(lut.shape[0]),
+            "ground_seed": float(session.ground_seed),
+            "ground_texels_per_m": float(session.config.ground_texels_per_m),
+        }
+
     # ------------------------------------------------------------------ #
     # Streaming
     # ------------------------------------------------------------------ #
@@ -105,6 +127,10 @@ class ChunkService:
         radius = int(params.get("radius") or session.config.view_distance_chunks)
         coords = session.region_coords(center, radius)
         self._cancel_stream()
+        if params.get("resend"):
+            # A fresh client attached to a running daemon: forget what previous
+            # clients were sent so everything in range streams again.
+            self._client_chunks.clear()
         self._stream_task = asyncio.create_task(self._stream(session, coords))
         return {"ok": True, "requested": len(coords)}
 
@@ -219,6 +245,8 @@ class ChunkService:
         if cmd is None:
             return {"ok": False, "touched": 0, "label": "",
                     "can_undo": False, "can_redo": self.history.can_redo}
+        if isinstance(cmd, SceneCommand):
+            return await self._apply_scene_command(session, cmd, cmd.before_delta)
         session.restore(cmd.before)
         await self._remesh_and_push(session, cmd.coords)
         await self._emit_edit_state(session)
@@ -231,10 +259,23 @@ class ChunkService:
         if cmd is None:
             return {"ok": False, "touched": 0, "label": "",
                     "can_undo": self.history.can_undo, "can_redo": False}
+        if isinstance(cmd, SceneCommand):
+            return await self._apply_scene_command(session, cmd, cmd.after_delta)
         session.restore(cmd.after)
         await self._remesh_and_push(session, cmd.coords)
         await self._emit_edit_state(session)
         return {"ok": True, "touched": len(cmd.coords), "label": cmd.label,
+                "can_undo": self.history.can_undo, "can_redo": self.history.can_redo}
+
+    async def _apply_scene_command(self, session: EditorSession,
+                                   cmd: SceneCommand, delta: dict) -> dict:
+        """Restore a scene-hierarchy snapshot (undo/redo of a scene op)."""
+        session.scene.apply_delta(delta)
+        await self.daemon.server.broadcast_notification(
+            Notification.SCENE_CHANGED, {"objects": session.scene.tree()}
+        )
+        await self._emit_edit_state(session)
+        return {"ok": True, "touched": 0, "label": cmd.label,
                 "can_undo": self.history.can_undo, "can_redo": self.history.can_redo}
 
     # ------------------------------------------------------------------ #

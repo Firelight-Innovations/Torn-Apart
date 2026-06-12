@@ -56,18 +56,29 @@ Codec: `editor/fire_editor/meshcodec.py` (encode) ↔
 `editor/extension/src/protocol/meshPayload.ts` (decode). Positions are absolute
 world meters, so the viewport attaches every chunk at the origin.
 
-## Methods (protocol_version 4)
+### TEXTURE payload (after the 12-byte frame header), little-endian
+```
+u32 width
+u32 height
+u8[height*width*4] rgba       # row-major, row 0 first
+```
+Codec: `editor/fire_editor/texturecodec.py`. Currently carries the
+procedural-ground palette LUT announced by `world.ground_lut` (row = material
+id, 256 columns of posterised palette colour).
+
+## Methods (protocol_version 5)
 | Method | Params | Result |
 |---|---|---|
 | `hello` | `protocol_version:int, client:str` | `ok:bool, protocol_version:int, engine_version:str, daemon_version:str` |
 | `ping` | — | `pong:bool` |
-| `world.open` | `seed?:int, save_path?:str` (exactly one) | `ok:bool, seed:int, config:any, edited_chunks:int` |
+| `world.open` | `seed?:int, save_path?:str` (exactly one) | `ok:bool, seed:int, config:any, edited_chunks:int` (config includes `ground_seed`, `ground_texels_per_m`) |
 | `world.save` | `path:str` | `ok:bool, path:str, edited_chunks:int` |
-| `chunks.set_center` | `x:float, y:float, z:float, radius?:int` | `ok:bool, requested:int` |
+| `world.ground_lut` | — | `ok:bool, payload_id:int, width:int, height:int, ground_seed:float, ground_texels_per_m:float` — a TEXTURE binary frame (`payload_id`) follows |
+| `chunks.set_center` | `x:float, y:float, z:float, radius?:int, resend?:bool` | `ok:bool, requested:int` (`resend` clears the sent-chunk cache for fresh clients) |
 | `scene.stats` | — | `chunks_loaded:int, meshed:int, vertices:int, triangles:int` |
 | `terrain.raycast` | `ox,oy,oz,dx,dy,dz:float, max_distance?:float` | `hit:any` (null or `{point,normal,voxel,chunk,distance}`) |
 | `terrain.brush` | `shape:str, x,y,z:float, mode:str, material?,radius?,hx?,hy?,hz?,height?` | `ok:bool, touched:int, can_undo:bool, can_redo:bool` |
-| `edit.undo` | — | `ok:bool, touched:int, label:str, can_undo:bool, can_redo:bool` |
+| `edit.undo` | — | `ok:bool, touched:int, label:str, can_undo:bool, can_redo:bool` (terrain AND scene ops, one chronological stack; scene undos broadcast `scene.changed`, `touched` = 0) |
 | `edit.redo` | — | `ok:bool, touched:int, label:str, can_undo:bool, can_redo:bool` |
 | `scene.tree` | — | `objects:any` (flat DFS list of `{id,name,kind,parent,position,rotation,scale}`) |
 | `scene.create` | `kind:str, parent?:int, name?:str, x?,y?,z?:float` | `ok:bool, object:any` |

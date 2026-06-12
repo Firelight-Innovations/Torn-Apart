@@ -16,7 +16,7 @@ import numpy as np
 from fire_engine.core import Clock, EventBus, load_config
 from fire_engine.core.config import Config
 from fire_engine.core.math3d import Vec3
-from fire_engine.core.rng import set_world_seed
+from fire_engine.core.rng import for_domain, set_world_seed
 from fire_engine.lighting import LightGrid, SunlightComputer, make_light_sampler
 from fire_engine.save import SaveManager
 from fire_engine.terrain import (
@@ -70,6 +70,33 @@ class EditorSession:
         self.save_manager = SaveManager(config, self.clock)
         self.save_manager.register(self.cm)
         self.save_manager.register(self.scene)
+        # Per-world hash offset for the procedural ground pattern — the SAME
+        # derivation as main.py's terrain-shader setup (for_domain is seeded by
+        # set_world_seed above), so the editor viewport's ground matches the
+        # game's for the same seed.
+        self.ground_seed = float(for_domain("terrain", "ground").integers(0, 65536))
+        self._ground_lut: np.ndarray | None = None
+
+    def ground_lut(self) -> np.ndarray:
+        """The posterised ground palette LUT ``(rows, 256, 4) uint8`` (cached).
+
+        Built from the same grass/dirt palettes the game's terrain shader bakes
+        (world/terrain_shader.py), minus the demo-only GI test-room rows. Pure
+        numpy — never import ``world.terrain_shader`` here (it pulls panda3d).
+        """
+        if self._ground_lut is None:
+            from fire_engine.procedural.textures.dirt_ground import (
+                DIRT_PALETTE, DIRT_THRESHOLDS)
+            from fire_engine.procedural.textures.grass_ground import (
+                GRASS_PALETTE, GRASS_THRESHOLDS)
+            from fire_engine.procedural.textures.ground_lut import build_ground_lut
+            from fire_engine.terrain import MATERIAL_DIRT, MATERIAL_GRASS
+
+            self._ground_lut = build_ground_lut({
+                MATERIAL_DIRT: (DIRT_PALETTE, DIRT_THRESHOLDS),
+                MATERIAL_GRASS: (GRASS_PALETTE, GRASS_THRESHOLDS),
+            })
+        return self._ground_lut
 
     # ------------------------------------------------------------------ #
     # Construction

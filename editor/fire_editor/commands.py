@@ -1,12 +1,17 @@
 """Editor undo/redo command stack (EDITOR_PRD §5.4, Phase E3).
 
-Editor-side (not an engine concern): a bounded stack of reversible edits. Each
-command snapshots the pre- and post-edit material arrays of the chunks it
-touched; undo writes the ``before`` snapshot back, redo writes ``after``. Brushes
-are local, so a command holds only a handful of 32 KB chunk arrays.
+Editor-side (not an engine concern): a bounded stack of reversible edits.
+Terrain edits (:class:`EditCommand`) snapshot the pre- and post-edit material
+arrays of the chunks they touched; undo writes the ``before`` snapshot back,
+redo writes ``after``. Brushes are local, so a command holds only a handful of
+32 KB chunk arrays. Scene ops (:class:`SceneCommand`) snapshot the whole
+authoring hierarchy delta — scenes are tiny dicts, so full snapshots are cheap.
+Both command types share ONE stack, so Ctrl+Z walks terrain and scene edits in
+true chronological order.
 
 This module is pure data + numpy; applying a command back onto the live session
-(remesh/relight/restream) is the caller's job (see ``services/chunks.py``).
+(remesh/relight/restream or scene apply_delta) is the caller's job (see
+``services/chunks.py``).
 """
 from __future__ import annotations
 
@@ -40,8 +45,26 @@ class EditCommand:
         return list(self.after.keys())
 
 
+@dataclass
+class SceneCommand:
+    """One reversible scene-hierarchy edit (create/rename/reparent/transform/delete).
+
+    Attributes:
+        label: Human-readable description (e.g. ``"transform 7"``, ``"create cube"``).
+        before_delta: Full ``SceneObjectStore.get_delta()`` snapshot pre-edit.
+        after_delta: Full snapshot post-edit.
+        timestamp: ``time.monotonic()`` at push — used to coalesce rapid
+            same-label edits (a throttled gizmo drag becomes one undo step).
+    """
+
+    label: str
+    before_delta: dict
+    after_delta: dict
+    timestamp: float
+
+
 class UndoStack:
-    """Bounded undo/redo stack of :class:`EditCommand`.
+    """Bounded undo/redo stack of :class:`EditCommand` / :class:`SceneCommand`.
 
     Pushing a new command clears the redo stack (standard editor semantics).
 
@@ -54,9 +77,13 @@ class UndoStack:
     """
 
     def __init__(self, max_history: int = MAX_HISTORY) -> None:
-        self._undo: list[EditCommand] = []
-        self._redo: list[EditCommand] = []
+        self._undo: list = []
+        self._redo: list = []
         self._max = max_history
+
+    def peek(self):
+        """The most recent undoable command, or ``None`` (no state change)."""
+        return self._undo[-1] if self._undo else None
 
     @property
     def can_undo(self) -> bool:
@@ -66,14 +93,18 @@ class UndoStack:
     def can_redo(self) -> bool:
         return bool(self._redo)
 
-    def push(self, command: EditCommand) -> None:
+    def push(self, command: "EditCommand | SceneCommand") -> None:
         """Record a freshly applied command; clears the redo history."""
         self._undo.append(command)
         self._redo.clear()
         if len(self._undo) > self._max:
             self._undo.pop(0)  # LRU-drop the oldest
 
-    def undo(self) -> EditCommand | None:
+    def replace_top(self, command: "EditCommand | SceneCommand") -> None:
+        """Swap the most recent command in place (coalescing); requires one."""
+        self._undo[-1] = command
+
+    def undo(self) -> "EditCommand | SceneCommand | None":
         """Pop the last command to the redo stack and return it (or ``None``)."""
         if not self._undo:
             return None
@@ -81,7 +112,7 @@ class UndoStack:
         self._redo.append(cmd)
         return cmd
 
-    def redo(self) -> EditCommand | None:
+    def redo(self) -> "EditCommand | SceneCommand | None":
         """Pop the last undone command back to the undo stack and return it."""
         if not self._redo:
             return None

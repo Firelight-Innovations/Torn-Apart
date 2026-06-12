@@ -1,6 +1,6 @@
 {
   "$comment": "SINGLE SOURCE OF TRUTH for the Fire Editor wire protocol. Both editor/fire_editor/_generated.py and editor/extension/src/protocol/generated.ts are produced from this file by codegen.py. Never hand-edit the generated files. Bump protocol_version on ANY incompatible change and regenerate both bindings in the same commit (EDITOR_PRD hard rule 6).",
-  "protocol_version": 4,
+  "protocol_version": 5,
   "daemon_version": "0.1.0",
   "binary": {
     "magic_hex": "0x46495245",
@@ -41,9 +41,14 @@
       "result": { "ok": "bool", "path": "str", "edited_chunks": "int" }
     },
     "chunks.set_center": {
-      "doc": "Set the editor camera center; daemon streams chunk meshes (binary MESH frames) for the surrounding region and unloads far chunks.",
-      "params": { "x": "float", "y": "float", "z": "float", "radius?": "int" },
+      "doc": "Set the editor camera center; daemon streams chunk meshes (binary MESH frames) for the surrounding region and unloads far chunks. resend=true clears the daemon's sent-chunk cache first so everything in range streams again (use when a fresh client attaches to a running daemon).",
+      "params": { "x": "float", "y": "float", "z": "float", "radius?": "int", "resend?": "bool" },
       "result": { "ok": "bool", "requested": "int" }
+    },
+    "world.ground_lut": {
+      "doc": "Request the procedural-ground palette LUT for the open world. The result announces a TEXTURE binary frame (payload_id) that follows on the socket; payload layout: [u32 width][u32 height][rgba8 height*width*4 row-major]. ground_seed/ground_texels_per_m drive the client-side world-space ground shader (must match the game's terrain.frag inputs).",
+      "params": {},
+      "result": { "ok": "bool", "payload_id": "int", "width": "int", "height": "int", "ground_seed": "float", "ground_texels_per_m": "float" }
     },
     "scene.stats": {
       "doc": "Aggregate counters for overlays.",
@@ -61,12 +66,12 @@
       "result": { "ok": "bool", "touched": "int", "can_undo": "bool", "can_redo": "bool" }
     },
     "edit.undo": {
-      "doc": "Undo the most recent edit; affected chunks remesh and stream back.",
+      "doc": "Undo the most recent edit (terrain brush or scene op — one chronological stack). Terrain undos remesh + stream affected chunks; scene undos broadcast scene.changed.",
       "params": {},
       "result": { "ok": "bool", "touched": "int", "label": "str", "can_undo": "bool", "can_redo": "bool" }
     },
     "edit.redo": {
-      "doc": "Redo the most recently undone edit.",
+      "doc": "Redo the most recently undone edit (terrain or scene op).",
       "params": {},
       "result": { "ok": "bool", "touched": "int", "label": "str", "can_undo": "bool", "can_redo": "bool" }
     },

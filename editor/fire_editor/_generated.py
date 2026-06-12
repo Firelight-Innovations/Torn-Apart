@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import NotRequired, TypedDict
 
-PROTOCOL_VERSION = 4
+PROTOCOL_VERSION = 5
 DAEMON_VERSION = "0.1.0"
 
 # Binary framing: [u32 magic][u32 schema_id][u32 payload_id][payload], little-endian.
@@ -29,6 +29,7 @@ class Method:
     WORLD_OPEN = "world.open"
     WORLD_SAVE = "world.save"
     CHUNKS_SET_CENTER = "chunks.set_center"
+    WORLD_GROUND_LUT = "world.ground_lut"
     SCENE_STATS = "scene.stats"
     TERRAIN_RAYCAST = "terrain.raycast"
     TERRAIN_BRUSH = "terrain.brush"
@@ -88,10 +89,22 @@ class ChunksSetCenterParams(TypedDict):
     y: float
     z: float
     radius: NotRequired[int]
+    resend: NotRequired[bool]
 
 class ChunksSetCenterResult(TypedDict):
     ok: bool
     requested: int
+
+class WorldGroundLutParams(TypedDict):
+    pass
+
+class WorldGroundLutResult(TypedDict):
+    ok: bool
+    payload_id: int
+    width: int
+    height: int
+    ground_seed: float
+    ground_texels_per_m: float
 
 class SceneStatsParams(TypedDict):
     pass

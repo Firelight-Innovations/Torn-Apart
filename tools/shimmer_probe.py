@@ -217,11 +217,12 @@ def probe(args) -> float:
         step(args.settle)
         frames.append(_grab(cap, w, h))
 
-    fulls, b0s, b1s, b2s = [], [], [], []
+    fulls, b0s, b1s, b2s, means = [], [], [], [], []
     heat = np.zeros((h, w), dtype=np.float32)
     for a, b in zip(frames, frames[1:]):
         full, bot, mid, top = _flip_fraction(a, b, args.threshold)
         fulls.append(full); b0s.append(bot); b1s.append(mid); b2s.append(top)
+        means.append(float(np.abs(a - b).mean()))
         heat = np.maximum(heat, np.abs(a - b).max(axis=2))
 
     say("")
@@ -231,6 +232,9 @@ def probe(args) -> float:
     say(f"  flip fraction  middle {np.mean(b1s):.5f}   (far ground)")
     say(f"  flip fraction  top    {np.mean(b2s):.5f}   (horizon/sky)")
     say(f"  static floor          {static_frac:.5f}")
+    say(f"  mean |diff| per step  {np.mean(means):.6f}   "
+        f"(low mean + low flips = smooth; high flips + low mean = "
+        f"broad small-amplitude change, check capture path)")
 
     # ---- artifacts ---------------------------------------------------------
     out_dir = _REPO_ROOT / "tools" / "out" / args.out

@@ -51,6 +51,58 @@ this, and the lever is MSAA (`framebuffer-multisample`/`multisamples` PRC +
 `M_multisample`), an owner aesthetic call.  Hypothesis C (cascade handoff
 popping) and symptoms 3–6 remain open.
 
+### Round 2 (same day) — craters still shimmered; two more root causes
+
+Owner: flat ground + Cornell fixed, but the dirt walls of a fresh crater
+("whenever I shoot a hole") still boiled.  Probe reproduction needs an OPEN
+crater: `shimmer_probe.py --explode` carves at ground height (screenshot.py's
+`cam.z-8` placement carves a sealed underground cave — invisible).  Camera
+spawns only 2 m above ground; use `--pitch -16` to frame a crater 10 m out.
+
+Measured (crater scene, threshold 0.04 / 0.12): baseline middle band
+0.0663/0.0123 → texel-coverage albedo + analytic footprint + MSAA 4×:
+0.0319/0.0090, flat ground now 0.0000 in both ground bands.
+
+Why craters were special, in order discovered:
+1. quant grid + no-quant isolation: **both unchanged** — light quantisation
+   innocent here too (its LOD now snaps power-of-two anyway, world.md g22).
+2. constant albedo collapsed the band → albedo path again.  Crater WALLS
+   face the camera (cos i ≈ 1 → small footprint → **no octave fade**), so
+   they show full-contrast hash texels the sliding supersample taps popped
+   through; flat ground hid this behind grazing-angle fade.  Fix: analytic
+   texel-coverage filtering (world.md gotcha 21 — corners at fixed texel
+   centres, posterise per corner, blend colours by coverage).
+3. `fwidth()` on the faceted mesh is quad-straddle garbage at facet edges —
+   replaced with the analytic footprint `dist * u_px_rad / cos i`
+   (world.md gotcha 22, `u_px_rad` from `update_surface_inputs`).
+4. The remaining wireframe-pattern flicker (visible even with constant
+   albedo) is facet-silhouette rasterisation — fixed by `msaa_samples = 4`
+   (world.md gotcha 23; edge-only, texels stay crisp, no measured fps cost).
+
+Caveat for future probe runs: the FIRST boot after a framebuffer-config
+change can yield one wild anomalous sweep (driver recompile mid-run) —
+always re-run before believing it.
+
+### Round 3 (same day) — symptom 6 resolved + boxy shadows resolved
+
+Symptom 6 (no visible open-world GI) is CLOSED: the first bounce was
+computed but squashed 3–8× by the contractive flood fill (localized
+sources equilibrate at ≈ (1−decay); broad skylight passes at full
+strength).  Fixed with the `u_bounce_direct` texture (full-strength
+contact GI sampled by `terrain.frag`) + `u_gi_gain = 0.6/(1−decay)`
+forcing compensation — see lighting.md gotcha 14 and the 2026-06-11
+"rendered shadow resolution + visible GI" DECISIONS entries.  Verified by
+`tools/light_probe.py` radiance readback (+40 % red / +30 % green in the
+ground-air band with bounce on), NOT by screenshots — auto-exposure hides
+broad ambient changes on screen.
+
+The related owner report "shadows are soft 2 m boxes" (4×4 voxels) was
+the cascade-1 trilinear reconstruction, not the data (c0 `u_vis` is crisp
+at 0.5 m).  Fixed by the penumbra-gated per-fragment refinement march
+(`terrain.frag::refineVis`, lighting.md surface-contract section); it
+must mirror inject's analytic `boxVis` or dynamic-occluder shadows get
+erased (lighting.md gotcha 15).
+
 ---
 
 ## Symptoms (owner, observed in-motion in `python main.py`)

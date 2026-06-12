@@ -426,6 +426,14 @@ def build_demo():
     )
     app.grass_go = grass_go
 
+    # 10d. HDR post-processing pipeline — offscreen linear-HDR scene buffer +
+    #      composite (bloom / lens flare / god rays attach in later phases).
+    #      Built after every render node exists; gated by the [graphics] preset
+    #      (gfx_post_process).  On failure it disables itself and the surface
+    #      shaders keep tonemapping internally (no crash).
+    from fire_engine.world.post_process import PostProcessPipeline
+    app.post_process = PostProcessPipeline(app, cfg)
+
     # 11. Resource-manager proof model (non-fatal).
     _load_proof_model(app)
 

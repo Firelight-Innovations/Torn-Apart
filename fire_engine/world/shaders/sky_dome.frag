@@ -18,6 +18,7 @@ uniform float u_time;
 uniform float u_daylight;           // SkyState.daylight (night-floor blend)
 uniform float u_weather_gray;       // 0-1 overcast desaturation weight
 uniform float u_exposure;           // tonemap exposure (match terrain shader)
+uniform float u_hdr_output;         // 1.0 → linear HDR out (post tonemaps); 0.0 → tonemap here
 uniform vec3  u_fog_color;
 uniform float u_fog_blend;          // legacy horizon fog (CPU backend; 0 on GPU)
 uniform sampler3D u_fog_integrated; // froxel fog (GPU backend)
@@ -222,10 +223,7 @@ void main() {
     float fog_band = 1.0 - smoothstep(0.0, 0.38, d.z);
     col = mix(col, u_fog_color, u_fog_blend * fog_band);
 
-    // --- Tonemap to match the terrain shader -------------------------------
-    vec3 ldr = pow(acesTonemap(col * u_exposure), vec3(1.0 / 2.2));
-
-    // --- Night sky art (stars/galaxy/twinkle) added in LDR, post-tonemap ---
+    // --- Night sky art (stars/galaxy/twinkle) ------------------------------
     // The whole celestial sphere rotates about the TILTED celestial axis
     // (Polaris elevation = the world's latitude), not world +Z â€” so the
     // stars rise in the east and set in the west instead of pinwheeling
@@ -245,9 +243,9 @@ void main() {
     vec3 stars = night.rgb * twinkle * u_star_visibility;
     stars *= smoothstep(-0.06, 0.18, d.z);              // sink into horizon haze
     stars *= 1.0 - clamp(bodyMask, 0.0, 1.0);           // sun/moon in front of sky
-    ldr += stars;
 
     // --- Shooting star: bright fading streak along a great circle ----------
+    vec3 ss = vec3(0.0);
     if (u_ss_active > 0.5) {
         vec3 s = u_ss_start;
         vec3 tv = u_ss_travel;
@@ -260,9 +258,20 @@ void main() {
         float tail_lum = (behind >= 0.0) ? exp(-behind * 30.0) : 0.0;
         float width = exp(-(dist_plane * dist_plane) / (2.0 * 0.003 * 0.003));
         float fade = sin(PI * clamp(u_ss_progress, 0.0, 1.0));
-        ldr += vec3(1.0, 0.97, 0.88) * tail_lum * width * fade * 1.8
-             * u_star_visibility;
+        ss = vec3(1.0, 0.97, 0.88) * tail_lum * width * fade * 1.8
+           * u_star_visibility;
     }
 
-    frag_color = vec4(ldr, 1.0);
+    // --- Output ------------------------------------------------------------
+    // HDR path: the sky+disc go out linear (exposure applied) for the post
+    // chain to tonemap, so the bright sun survives into bloom.  Stars + the
+    // shooting star are display-referred emissive detail added on top; they
+    // ride along into the tonemap (they bloom nicely once that phase lands).
+    // Legacy path: tonemap here, then add the LDR night art exactly as before.
+    if (u_hdr_output > 0.5) {
+        frag_color = vec4(col * u_exposure + stars + ss, 1.0);
+    } else {
+        vec3 ldr = pow(acesTonemap(col * u_exposure), vec3(1.0 / 2.2));
+        frag_color = vec4(ldr + stars + ss, 1.0);
+    }
 }

@@ -1,0 +1,29 @@
+"""
+world/post_shaders.py — GLSL sources for the HDR post-processing chain.
+
+Pure string constants (NO panda3d imports — importable headless; only
+``world/post_process.py`` compiles them via ``panda3d.core.Shader.make``).
+All passes share ``fullscreen.vert`` (a screen-spanning card emitting a [0,1]
+UV) and read from RGBA16F float textures produced by ``FilterManager``.
+
+Passes (added across phases; the loader lists only what exists today):
+    POST_FULLSCREEN_VERTEX  — shared fullscreen-quad vertex shader.
+    COMPOSITE_FRAGMENT      — scene HDR (+ bloom) → ACES tonemap → sRGB gamma.
+
+The GLSL lives in ``world/shaders/*.vert`` / ``*.frag`` (loaded via
+``load_glsl``) so editors get syntax highlighting + LSP.
+"""
+from __future__ import annotations
+
+from fire_engine.core.shader_source import load_glsl
+
+__all__ = [
+    "POST_FULLSCREEN_VERTEX",
+    "COMPOSITE_FRAGMENT",
+]
+
+
+POST_FULLSCREEN_VERTEX: str = load_glsl(__file__, "fullscreen.vert")
+
+
+COMPOSITE_FRAGMENT: str = load_glsl(__file__, "composite.frag")

@@ -12,6 +12,7 @@ uniform vec3  u_top_color;
 uniform vec3  u_side_color;
 uniform vec3  u_bottom_color;
 uniform float u_fade_dist;
+uniform float u_hdr_output;   // 1.0 → linearize for the HDR buffer; 0.0 → legacy LDR
 
 in vec3 v_world;
 out vec4 frag_color;
@@ -146,5 +147,11 @@ void main() {
     }
 
     if (acc < 0.004) discard;
-    frag_color = vec4(col / max(acc, 1e-4), acc);    // un-premultiply for M_alpha
+    vec3 cloud_col = col / max(acc, 1e-4);           // un-premultiply for M_alpha
+    // These boxy clouds use display-referred flat face colours.  When the scene
+    // renders into the linear-HDR buffer, linearise so the alpha blend over the
+    // (linear) sky reads correctly.  (Interim: the volumetric cloud rewrite
+    // replaces this shader entirely.)
+    if (u_hdr_output > 0.5) cloud_col = pow(cloud_col, vec3(2.2));
+    frag_color = vec4(cloud_col, acc);
 }

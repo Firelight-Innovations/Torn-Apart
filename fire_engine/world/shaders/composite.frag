@@ -1,0 +1,27 @@
+#version 330 core
+// Final composite pass for the HDR post-processing chain.
+//
+// Reads the linear-HDR scene buffer (the object shaders already multiplied in
+// the auto-exposure value, so bloom — added in a later phase — operates on the
+// exposed signal, which is physically where glare happens), optionally adds the
+// bloom contribution, then applies the ACES filmic tonemap + sRGB gamma that
+// every surface shader used to do internally.  This is now the ONE place the
+// scene is tonemapped, so high dynamic range survives all the way here.
+uniform sampler2D u_scene;     // linear HDR, auto-exposure already applied
+uniform sampler2D u_bloom;     // bloom blur (black until the bloom phase wires it)
+uniform float u_bloom_strength;
+
+in vec2 v_uv;
+out vec4 frag_color;
+
+vec3 acesTonemap(vec3 x) {
+    return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14),
+                 0.0, 1.0);
+}
+
+void main() {
+    vec3 hdr = texture(u_scene, v_uv).rgb;
+    hdr += texture(u_bloom, v_uv).rgb * u_bloom_strength;
+    vec3 ldr = acesTonemap(hdr);
+    frag_color = vec4(pow(ldr, vec3(1.0 / 2.2)), 1.0);
+}

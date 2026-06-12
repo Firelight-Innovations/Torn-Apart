@@ -159,6 +159,16 @@ class App(ShowBase):
         clock:     "Clock",
         event_bus: "EventBus",
     ) -> None:
+        # The HDR post-processing buffers are full-window render targets.
+        # Panda3D's default ``textures-power-2 down`` would round them to a
+        # power-of-two (e.g. 1280×720 → 2048×1024) and the composite would then
+        # sample the scene in a sub-rectangle of a padded texture (the rest
+        # black).  This GPU supports NPOT textures (the lighting cascades are
+        # already non-power-of-two 3-D volumes), so disable padding when
+        # post-processing is on.  Must run before the GSG is created.
+        if getattr(config, "gfx_post_process", True):
+            from panda3d.core import loadPrcFileData  # type: ignore[import]
+            loadPrcFileData("torn-apart-hdr", "textures-power-2 none")
         super().__init__()
 
         self._config    = config
@@ -187,6 +197,10 @@ class App(ShowBase):
         # task; None keeps the legacy baked-vertex-light path.
         self.lighting_pipeline = None      # GpuLightingPipeline | None
         self.sky_system = None             # SkySystem | None (set by main.py)
+        # HDR post-processing pipeline (set by main.py after sky/grass exist;
+        # None keeps the legacy in-shader-tonemap path).  Driven in step 6b of
+        # the frame task.
+        self.post_process = None           # PostProcessPipeline | None
         # Per-chunk NodePath bookkeeping: coord -> NodePath under terrain_root.
         self._chunk_nodes: dict[tuple[int, int, int], NodePath] = {}
 
@@ -207,6 +221,11 @@ class App(ShowBase):
 
         # Anti-aliasing off (retro look)
         self.render.set_antialias(AntialiasAttrib.M_none)
+
+        # Default the HDR-output flag OFF so every surface shader tonemaps
+        # internally (legacy look) unless the post-process pipeline turns it on.
+        # Set on ``render`` so all surface shaders inherit one source of truth.
+        self.render.set_shader_input("u_hdr_output", 0.0)
 
         # ------------------------------------------------------------------
         # Disable Panda3D's default camera controller
@@ -416,6 +435,13 @@ class App(ShowBase):
                 self.camera_go.transform.position, sky_state, real_dt)
             self.lighting_pipeline.update_surface_inputs(
                 self.terrain_root, sky_state)
+
+        # 6b. integration hook: HDR post-processing (Phase 2+)
+        #     Refresh per-frame post inputs (bloom strength, lens-flare sun
+        #     position, …).  The scene already rendered into the HDR buffer; the
+        #     composite + effect passes run as render2d cards after this task.
+        if self.post_process is not None:
+            self.post_process.update(self.lighting_pipeline)
 
         # 7. EventBus drain
         self._event_bus.drain()

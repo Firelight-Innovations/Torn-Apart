@@ -47,6 +47,10 @@ uniform float u_px_rad;           // view angle per screen pixel (radians)
 uniform float u_ao_strength;
 uniform float u_exposure;
 uniform float u_emission_scale;
+// 1.0 → output linear HDR (the post-process pass tonemaps); 0.0 → tonemap
+// here (legacy path when post-processing is disabled).  Inherited from
+// ``render`` so it applies to every surface shader at once.
+uniform float u_hdr_output;
 
 // --- froxel fog ----------------------------------------------------------
 uniform sampler3D u_fog_integrated;  // rgb accumulated light, a transmittance
@@ -326,6 +330,12 @@ void main() {
         hdr = hdr * fog.a + fog.rgb;
     }
 
-    vec3 ldr = acesTonemap(hdr * u_exposure);
-    frag_color = vec4(pow(ldr, vec3(1.0 / 2.2)), 1.0);
+    // Auto-exposure is applied HERE (so bloom downstream works on the exposed
+    // signal); the post-process composite does the single ACES tonemap + gamma.
+    vec3 graded = hdr * u_exposure;
+    if (u_hdr_output > 0.5) {
+        frag_color = vec4(graded, 1.0);                         // linear HDR
+    } else {
+        frag_color = vec4(pow(acesTonemap(graded), vec3(1.0 / 2.2)), 1.0);
+    }
 }

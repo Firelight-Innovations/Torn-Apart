@@ -27,6 +27,7 @@ uniform vec3  u_moon_radiance;
 uniform vec3  u_sky_ambient;
 uniform float u_quant_m;          // light-pixel size (matches terrain)
 uniform float u_exposure;
+uniform float u_hdr_output;   // 1.0 → linear HDR out (post tonemaps); 0.0 → tonemap here
 
 // --- froxel fog (same one-tap composite as the terrain shader) -----------
 uniform sampler3D u_fog_integrated;
@@ -95,6 +96,10 @@ void main() {
         hdr = hdr * fog.a + fog.rgb;
     }
 
-    vec3 ldr = acesTonemap(hdr * u_exposure);
-    frag_color = vec4(pow(ldr, vec3(1.0 / 2.2)), 1.0);
+    vec3 graded = hdr * u_exposure;
+    if (u_hdr_output > 0.5) {
+        frag_color = vec4(graded, 1.0);                         // linear HDR
+    } else {
+        frag_color = vec4(pow(acesTonemap(graded), vec3(1.0 / 2.2)), 1.0);
+    }
 }

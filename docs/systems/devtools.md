@@ -1,10 +1,16 @@
 # devtools — System Doc
-keywords: dev tools, developer overlay, debug menu, debug overlay, in-game editor, imgui, dear imgui, directgui, inspector, hierarchy, selection, picking, outline, gizmo, spawn, performance stats, fps overlay, noclip, dev camera, panel, field, tool, DevToolsManager, DevOverlay, describe_object, ray_aabb
+keywords: dev tools, developer overlay, debug menu, debug overlay, in-game editor, imgui, dear imgui, directgui, inspector, hierarchy, selection, picking, outline, gizmo, spawn, performance stats, fps overlay, noclip, dev camera, panel, field, tool, DevToolsManager, DevOverlay, describe_object, ray_aabb, editor scene objects, authored objects, gizmo write-back
 
 > One doc per code package, but this system spans **two**: the headless brain
 > `fire_engine/devtools/` and its Panda3D renderer `fire_engine/world/devtools_overlay.py`
 > (the only panda3d-touching half, per CLAUDE.md hard rule 1). They are documented
 > together here because they are one feature; `world.md` cross-links back.
+>
+> Editor-authored scene objects (loaded via `fire_engine.scene.SceneRuntime`,
+> tag `editor_scene`) register as overlay selectables too — F1 → click
+> inspects/moves them like dev-spawned cubes. Gizmo edits on them WRITE BACK
+> into the authored store (`world/scene_visuals.py` sync task), so F5 persists
+> the moved transform rather than the stale authored one.
 
 ## Role
 The **in-game developer overlay**: a debug menu the owner flies the dev noclip

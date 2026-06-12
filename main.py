@@ -246,13 +246,21 @@ def _load_proof_model(app) -> None:
         _log.warning("Proof model load skipped: %s", exc)
 
 
-def build_demo():
+def build_demo(load_path: str | None = None):
     """
     Boot the engine and wire the demo, returning the constructed ``App``.
 
     Does everything EXCEPT call ``app.run()`` — so callers can either run the
     blocking main loop (``main()``) or step the task manager headlessly for an
     offscreen screenshot (``tools/screenshot.py``).
+
+    Parameters
+    ----------
+    load_path : str | None
+        Optional ``.ta`` save/scene to load at boot (``python main.py --load
+        scenes/foo.ta``).  The file's world seed must match ``config.toml``'s
+        ``world_seed`` or the load is refused (logged, not fatal).  When given,
+        F5/F9 also target this path for the session instead of the quick slot.
 
     Follows ARCHITECTURE §4a.1 startup order exactly.  Constructs the App
     (window) before registering panda3d resource loaders (they need the global
@@ -672,11 +680,14 @@ def build_demo():
             return
         fire_explosion()
 
+    # --load retargets the quick-save slot so F5/F9 round-trip the opened scene.
+    save_path = load_path or _SAVE_PATH
+
     def on_save() -> None:
-        """F5 → save the world (edited chunks only) to saves/quick.ta."""
+        """F5 → save the world (edited chunks only) to the active save path."""
         try:
-            save_manager.save(_SAVE_PATH)
-            _log.info("Saved to %s", _SAVE_PATH)
+            save_manager.save(save_path)
+            _log.info("Saved to %s", save_path)
         except OSError as exc:
             _log.error("Save failed: %s", exc)
 
@@ -692,12 +703,17 @@ def build_demo():
         """
         chunk_manager.reset_to_baseline()
         try:
-            save_manager.load(_SAVE_PATH)
-            _log.info("Loaded %s", _SAVE_PATH)
+            save_manager.load(save_path)
+            _log.info("Loaded %s", save_path)
         except FileNotFoundError:
-            _log.warning("No save at %s yet (press F5 first)", _SAVE_PATH)
+            _log.warning("No save at %s yet (press F5 first)", save_path)
         except SaveIncompatibleError as exc:
             _log.error("Save incompatible: %s", exc)
+            return
+        # An editor-authored spawn point moves the player there on every load.
+        scene_runtime = getattr(app, "scene_runtime", None)
+        if scene_runtime is not None and scene_runtime.spawn_position is not None:
+            app.camera_go.transform.position = scene_runtime.spawn_position
 
     # --- Sky/weather dev bindings (F6/F7/F8) — dev tooling per §5.5 ---------
     # F6 cycles a forced weather type (None = back to the natural schedule),
@@ -836,9 +852,43 @@ def build_demo():
         app.accept("mouse1-up", overlay.end_gizmo_drag)
         app.dev_overlay = overlay   # exposed for tooling (tools/screenshot.py)
 
+    # --- Editor-authored scenes — load placed objects from .ta saves --------
+    # SceneRuntime is the game-side Saveable for the Fire Editor's
+    # "editor_scene" delta: cubes/spheres become visible GameObjects, "light"
+    # objects become real PointLights, the first "spawn" sets the player start.
+    # Registered AFTER terrain/weather/zones so deltas apply in a stable order,
+    # and after the overlay/lighting exist (the visual factory needs both).
+    from fire_engine.scene import SceneRuntime
+    from fire_engine.world.scene_visuals import SceneVisualFactory
+    scene_visuals = SceneVisualFactory(app, lighting_pipeline, overlay)
+    scene_runtime = SceneRuntime(visual_factory=scene_visuals)
+    scene_visuals.runtime = scene_runtime   # gizmo edits write back for F5
+    save_manager.register(scene_runtime)
+    app.scene_runtime = scene_runtime       # exposed for tooling/tests
+
     app.accept("mouse1", on_click)
     app.accept("f5", on_save)
     app.accept("f9", on_load)
+
+    # --- Boot-time scene/save load (--load PATH) ----------------------------
+    # Runs LAST so every system is registered and the visual factory has the
+    # overlay + lighting pipeline. Terrain deltas mark chunks dirty; one extra
+    # stream/upload pass shows the edits on the first rendered frame.
+    if load_path is not None:
+        try:
+            save_manager.load(load_path)
+            _log.info("Loaded %s", load_path)
+        except FileNotFoundError:
+            _log.error("--load: no such save: %s", load_path)
+        except SaveIncompatibleError as exc:
+            _log.error("--load: incompatible save (its world seed must match "
+                       "config.toml's world_seed): %s", exc)
+        else:
+            app._stream_and_upload_terrain()
+            if scene_runtime.spawn_position is not None:
+                app.camera_go.transform.position = scene_runtime.spawn_position
+                _log.info("Player start set by authored spawn point: %s",
+                          scene_runtime.spawn_position)
 
     _log.info("Demo ready — WASD+mouse to fly, ESC to capture mouse, "
               "left-click to explode, F1 dev overlay, F5 save, F9 load, "
@@ -943,7 +993,14 @@ def build_gi_test_room(app) -> tuple[float, float, float]:
 
 def main() -> None:
     """Boot the demo and run the blocking main loop (opens a window)."""
-    app = build_demo()
+    import argparse
+    parser = argparse.ArgumentParser(description="Torn Apart demo")
+    parser.add_argument(
+        "--load", metavar="PATH", default=None,
+        help="open a .ta save/scene at boot (e.g. scenes/foo.ta saved from the "
+             "Fire Editor); its world seed must match config.toml's world_seed")
+    args = parser.parse_args()
+    app = build_demo(load_path=args.load)
     # 12. Run (blocks until the window closes).  The try/finally stops the
     #     GPU-lighting assembly worker thread cleanly on exit (it is a daemon,
     #     so this is belt-and-suspenders, not strictly required).

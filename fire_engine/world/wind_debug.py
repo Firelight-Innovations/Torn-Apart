@@ -39,25 +39,20 @@ Example (wired by main.py, behind the flag)
 
 from __future__ import annotations
 
-import math
 from typing import Any
 
 import numpy as np
 
 # Panda3D imports allowed in world/ per ARCHITECTURE §3.
 from panda3d.core import (  # type: ignore[import]
-    Geom,
     GeomNode,
-    GeomTriangles,
-    GeomVertexData,
-    GeomVertexFormat,
-    GeomVertexWriter,
     NodePath,
 )
 
 from fire_engine.core import get_logger
 from fire_engine.wind import BallParams, debug_ball_step
 from fire_engine.world.component import Component
+from fire_engine.world.primitives import build_sphere_geom as _build_sphere_geom
 
 __all__ = ["WindBallDebugComponent"]
 
@@ -198,58 +193,5 @@ class WindBallDebugComponent(Component):
             self._node = None
 
 
-# ---------------------------------------------------------------------------
-# Procedural sphere geometry (built once; no asset)
-# ---------------------------------------------------------------------------
-
-def _build_sphere_geom(radius_m: float, segments: int = 16,
-                       rings: int = 8) -> Geom:
-    """
-    Build a small UV-sphere Geom centred at the origin — no asset, in-code.
-
-    A standard latitude/longitude sphere: ``rings`` horizontal bands ×
-    ``segments`` meridians.  The vertex/triangle counts are tiny and fixed
-    (``(rings+1)*(segments+1)`` verts), so the nested build loops are bounded
-    setup, not a per-element hot path.
-
-    Parameters
-    ----------
-    radius_m : float
-        Sphere radius in meters.
-    segments : int, default 16
-        Meridian count (longitude divisions).
-    rings : int, default 8
-        Latitude band count.
-
-    Returns
-    -------
-    panda3d.core.Geom
-    """
-    fmt = GeomVertexFormat.get_v3n3()       # position + normal
-    vdata = GeomVertexData("wind_ball", fmt, Geom.UH_static)
-    vdata.set_num_rows((rings + 1) * (segments + 1))
-    vw = GeomVertexWriter(vdata, "vertex")
-    nw = GeomVertexWriter(vdata, "normal")
-    tris = GeomTriangles(Geom.UH_static)
-
-    for r in range(rings + 1):
-        theta = math.pi * r / rings          # 0..pi (north → south pole)
-        st, ct = math.sin(theta), math.cos(theta)
-        for s in range(segments + 1):
-            phi = 2.0 * math.pi * s / segments
-            sp, cp = math.sin(phi), math.cos(phi)
-            nx, ny, nz = st * cp, st * sp, ct
-            vw.add_data3(nx * radius_m, ny * radius_m, nz * radius_m)
-            nw.add_data3(nx, ny, nz)
-
-    row = segments + 1
-    for r in range(rings):
-        for s in range(segments):
-            a = r * row + s
-            b = a + row
-            tris.add_vertices(a, b, a + 1)
-            tris.add_vertices(a + 1, b, b + 1)
-
-    geom = Geom(vdata)
-    geom.add_primitive(tris)
-    return geom
+# Sphere geometry moved to world/primitives.py (shared with scene visuals);
+# imported above as _build_sphere_geom to keep call sites unchanged.

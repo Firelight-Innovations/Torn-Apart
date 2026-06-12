@@ -1,5 +1,14 @@
 # save — System Doc
-keywords: save, load, delta, msgpack, zlib, Saveable, header, F5, F9, atomic, SaveIncompatibleError, save_key, get_delta, apply_delta, format_version, world_seed, config_digest, game_clock, clock, pickle, no-pickle, tuple-key, numpy, compression, dump_save, on-disk layout, registration order, kv_pairs, ndarray, blake2b, incompatible, round-trip, baseline, deviation, persistence, serialisation
+keywords: save, load, delta, msgpack, zlib, Saveable, header, F5, F9, atomic, SaveIncompatibleError, save_key, get_delta, apply_delta, format_version, world_seed, config_digest, game_clock, clock, pickle, no-pickle, tuple-key, numpy, compression, dump_save, on-disk layout, registration order, kv_pairs, ndarray, blake2b, incompatible, round-trip, baseline, deviation, persistence, serialisation, editor_scene, scene save, authored scene, --load, scenes folder
+
+> Registered save keys today (registration order in main.py): `terrain`
+> (ChunkManager), `weather`, `zones`, `editor_scene`
+> (`fire_engine.scene.SceneRuntime` — placed objects authored in the Fire
+> Editor; the editor daemon registers terrain + the bare store under the same
+> key). A key absent from a save file keeps its baseline (skipped, logged
+> debug); unknown keys in the file are ignored — so editor saves load in the
+> game and vice versa. Only ONE registered system may claim a given save_key.
+> `python main.py --load PATH` loads a save/scene at boot and retargets F5/F9.
 
 > One doc per code package; filename matches the package exactly (`docs/systems/save.md` ↔ `fire_engine/save/`).
 

@@ -62,6 +62,9 @@ from fire_engine.procedural.registry import register, get, clear_cache, reset_re
 from fire_engine.procedural.textures.base import ProceduralTextureDef, value_noise
 # Importing the textures sub-package triggers registration of all built-in defs.
 import fire_engine.procedural.textures  # noqa: F401
+# Importing the flora sub-package registers the built-in tree/bush species
+# (TreeSpeciesDef subclasses returning TreeVariantSet — see flora/__init__.py).
+import fire_engine.procedural.flora  # noqa: F401
 
 __all__ = [
     # Base classes

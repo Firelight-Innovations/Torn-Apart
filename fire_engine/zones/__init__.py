@@ -28,6 +28,14 @@ from fire_engine.zones.flora_placement import (
     flora_instance_attribs,
     flora_instance_count,
 )
+from fire_engine.zones.tree_placement import (
+    SCALE_JITTER,
+    TREE_KINDS,
+    TreeInstances,
+    bake_tree_instances,
+    instances_data_block,
+    species_mix_from_params,
+)
 
 __all__ = [
     "ZoneVolume",
@@ -44,4 +52,10 @@ __all__ = [
     "flora_hash_seed",
     "flora_instance_attribs",
     "flora_instance_count",
+    "SCALE_JITTER",
+    "TREE_KINDS",
+    "TreeInstances",
+    "bake_tree_instances",
+    "instances_data_block",
+    "species_mix_from_params",
 ]

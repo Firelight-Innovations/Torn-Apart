@@ -282,29 +282,43 @@ class Config:
 
     Flora fields (from [flora] table, prefix ``flora_``)
     ----------------------------------------------------
-    GPU-instanced flowers / bushes / trees (``world/flora_renderer.py``)
-    inside ``"flowers"`` / ``"bushes"`` / ``"trees"`` zone volumes.  Per kind:
-    ``density_per_m2`` (plants per m², overridable per volume via
-    ``params["density"]``), ``height_m`` (unscaled sprite height; per-plant
-    jitter scales it), ``fade_start_m``/``fade_end_m`` (camera-distance
-    shrink-away window) and ``max_instances`` (hard per-volume cap).
+    GPU-instanced wildflower sprites (``world/flora_renderer.py``) inside
+    ``"flowers"`` zone volumes.  Density is overridable per volume via
+    ``params["density"]``.  (Bushes and trees are 3-D meshes now — see the
+    [trees] table below.)
 
     flora_flower_density_per_m2 : float — wildflowers per m² (1.5).
     flora_flower_height_m       : float — flower sprite height (0.45 m).
     flora_flower_fade_start_m   : float — flowers fade like grass (60 m).
     flora_flower_fade_end_m     : float — fully gone (90 m).
     flora_flower_max_instances  : int   — per-volume cap (50 000).
-    flora_bush_density_per_m2   : float — bushes per m² (0.08).
-    flora_bush_height_m         : float — bush sprite height (1.3 m).
-    flora_bush_fade_start_m     : float — bushes persist past grass (110 m).
-    flora_bush_fade_end_m       : float — fully gone (150 m).
-    flora_bush_max_instances    : int   — per-volume cap (5 000).
-    flora_tree_density_per_m2   : float — trees per m² (0.02 = 1 per 50 m²).
-    flora_tree_height_m         : float — tree sprite height (7.0 m).
-    flora_tree_fade_start_m     : float — trees are landmarks; they fade
-                                   only near the fog far range (300 m).
-    flora_tree_fade_end_m       : float — fully gone (380 m).
-    flora_tree_max_instances    : int   — per-volume cap (2 000).
+
+    3-D tree/bush fields (from [trees] table, prefixes ``tree_``/``bush_``)
+    -----------------------------------------------------------------------
+    Instanced 3-D flora meshes (``world/tree_renderer.py``) inside
+    ``"trees"`` / ``"bushes"`` zone volumes, placed CPU-side on a jittered
+    grid (``zones/tree_placement.py``).  Near distance draws the variant
+    mesh; past the mesh fade window the renderer crossfades to an
+    instanced billboard impostor, which itself fades out at the impostor
+    window — billboards are LOD only.
+
+    tree_density_per_m2        : float — trees per m² (0.02 = 1 per 50 m²;
+                                  ``params["density"]`` overrides per volume).
+    tree_min_spacing_m         : float — placement grid floor: no two trunks
+                                  closer than ≈0.3× this (3.0 m).
+    tree_max_instances         : int   — per-volume cap (2 000).
+    tree_mesh_fade_start/end_m : float — 3-D mesh shrink-away window
+                                  (110–140 m); the impostor fades IN here.
+    tree_impostor_fade_start/end_m : float — impostor shrink-away window
+                                  (300–380 m, the old sprite landmark range).
+    tree_default_species       : str — species def when a volume names none
+                                  ("tree_gnarled_oak").
+    bush_density_per_m2        : float — bushes per m² (0.08).
+    bush_min_spacing_m         : float — bush spacing floor (1.2 m).
+    bush_max_instances         : int   — per-volume cap (5 000).
+    bush_mesh_fade_start/end_m : float — bush mesh window (60–80 m).
+    bush_impostor_fade_start/end_m : float — bush impostor window (120–150 m).
+    bush_default_species       : str — default bush species ("bush_scrub").
 
     Wind-field fields (from [wind] table, prefix ``wind_``)
     -------------------------------------------------------
@@ -486,16 +500,23 @@ class Config:
     flora_flower_fade_start_m:   float = 60.0
     flora_flower_fade_end_m:     float = 90.0
     flora_flower_max_instances:  int   = 50_000
-    flora_bush_density_per_m2:   float = 0.08
-    flora_bush_height_m:         float = 1.3
-    flora_bush_fade_start_m:     float = 110.0
-    flora_bush_fade_end_m:       float = 150.0
-    flora_bush_max_instances:    int   = 5_000
-    flora_tree_density_per_m2:   float = 0.02
-    flora_tree_height_m:         float = 7.0
-    flora_tree_fade_start_m:     float = 300.0
-    flora_tree_fade_end_m:       float = 380.0
-    flora_tree_max_instances:    int   = 2_000
+    # --- 3-D trees/bushes ([trees] table; world/tree_renderer.py) ---
+    tree_density_per_m2:         float = 0.02
+    tree_min_spacing_m:          float = 3.0
+    tree_max_instances:          int   = 2_000
+    tree_mesh_fade_start_m:      float = 110.0
+    tree_mesh_fade_end_m:        float = 140.0
+    tree_impostor_fade_start_m:  float = 300.0
+    tree_impostor_fade_end_m:    float = 380.0
+    tree_default_species:        str   = "tree_gnarled_oak"
+    bush_density_per_m2:         float = 0.08
+    bush_min_spacing_m:          float = 1.2
+    bush_max_instances:          int   = 5_000
+    bush_mesh_fade_start_m:      float = 60.0
+    bush_mesh_fade_end_m:        float = 80.0
+    bush_impostor_fade_start_m:  float = 120.0
+    bush_impostor_fade_end_m:    float = 150.0
+    bush_default_species:        str   = "bush_scrub"
     # --- Wind field ([wind] table; consumed by fire_engine/wind/) ---
     wind_time_scale:          float = 1.0
     wind_cells:               int   = 64
@@ -587,9 +608,10 @@ def load_config(path: str = "config.toml") -> Config:
     Load engine configuration from a TOML file, returning a frozen ``Config``.
 
     The TOML file may have ``[debug]``, ``[sky]``, ``[terrain]``,
-    ``[lighting]``, ``[fog]``, ``[grass]``, ``[flora]``, ``[wind]`` and
-    ``[graphics]`` tables; their keys are flattened into the same ``Config`` struct.  Any key
-    absent from the file falls back to the ``Config`` dataclass default.
+    ``[lighting]``, ``[fog]``, ``[grass]``, ``[flora]``, ``[trees]``,
+    ``[wind]`` and ``[graphics]`` tables; their keys are flattened into the
+    same ``Config`` struct.  Any key absent from the file falls back to the
+    ``Config`` dataclass default.
 
     ``[graphics]`` is special: its ``preset`` key (off/low/medium/high) is
     expanded into the ``gfx_*`` quality fields via
@@ -627,7 +649,7 @@ def load_config(path: str = "config.toml") -> Config:
     # just carry fully-named Config fields; [graphics] is special — its keys go
     # through preset expansion first (see resolve_graphics_preset).
     _TABLES = ("debug", "sky", "terrain", "lighting", "fog", "grass", "flora",
-               "wind", "graphics")
+               "trees", "wind", "graphics")
     flat: dict = {k: v for k, v in raw.items() if k not in _TABLES}
     for table in _TABLES:
         if table == "graphics":

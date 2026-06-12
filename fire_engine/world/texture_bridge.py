@@ -35,7 +35,7 @@ import numpy as np
 from panda3d.core import Texture, SamplerState  # type: ignore[import]
 
 __all__ = ["to_panda_texture", "to_field_texture", "to_panda_cubemap",
-           "to_panda_texture_3d"]
+           "to_panda_texture_3d", "to_data_texture_f32"]
 
 
 def to_panda_texture(rgba: np.ndarray) -> Texture:
@@ -210,6 +210,54 @@ def to_panda_texture_3d(volume: np.ndarray, *, linear: bool = True,
     tex.set_wrap_u(wrap)
     tex.set_wrap_v(wrap)
     tex.set_wrap_w(wrap)
+    return tex
+
+
+def to_data_texture_f32(block: np.ndarray) -> Texture:
+    """
+    Upload a float32 data block as a 2-D **RGBA32F** texture (texelFetch).
+
+    Used for per-instance transform data (``zones/tree_placement.py::
+    instances_data_block``): the array's first axis becomes texture ROWS
+    (one row per instance, fetched with ``ivec2(col, gl_InstanceID)``), the
+    second axis becomes columns/texels, the last axis the RGBA channels.
+    NO vertical flip (row 0 = texel row 0 — instance ids map directly) and
+    no filtering/wrap concerns: shaders must read it with ``texelFetch``,
+    never ``texture()``.
+
+    Like every Panda3D 4-component RAM image the byte order is **BGRA**
+    even at float type, so channels are reordered on the way in — a shader
+    ``texelFetch(...).r`` returns ``block[i, col, 0]`` exactly.
+
+    Parameters
+    ----------
+    block : numpy.ndarray
+        Shape ``(rows, cols, 4)``, dtype ``float32``.  For tree instances:
+        ``(N, 2, 4)`` — texel 0 ``(x, y, z, yaw)``, texel 1
+        ``(scale, phase, tint, variant)``.
+
+    Returns
+    -------
+    panda3d.core.Texture
+        ``F_rgba32`` texture, ``cols × rows`` texels, nearest/clamped.
+    """
+    if block.ndim != 3 or block.shape[2] != 4:
+        raise ValueError(
+            f"to_data_texture_f32 expects shape (rows, cols, 4), "
+            f"got {block.shape}")
+    if block.dtype != np.float32:
+        raise ValueError(
+            f"to_data_texture_f32 expects dtype float32, got {block.dtype}")
+
+    rows, cols = block.shape[:2]
+    tex = Texture("instance_data")
+    tex.setup_2d_texture(cols, rows, Texture.T_float, Texture.F_rgba32)
+    bgra = np.ascontiguousarray(block[..., [2, 1, 0, 3]])   # RGBA -> BGRA
+    tex.set_ram_image(bgra.tobytes())
+    tex.set_minfilter(SamplerState.FT_nearest)
+    tex.set_magfilter(SamplerState.FT_nearest)
+    tex.set_wrap_u(SamplerState.WM_clamp)
+    tex.set_wrap_v(SamplerState.WM_clamp)
     return tex
 
 

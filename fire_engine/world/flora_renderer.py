@@ -1,28 +1,26 @@
 """
 world/flora_renderer.py — GPU-instanced flora volumes (render component).
 
-``FloraRendererComponent`` draws every ``tag="flowers"``, ``tag="bushes"``
-and ``tag="trees"`` :class:`ZoneVolume` as hardware-instanced crossed-quad
-sprites — the grass idiom (``world/grass_renderer.py``) generalised over a
-table of **flora kinds**.  The CPU holds **no per-plant state**: one shared
+``FloraRendererComponent`` draws every ``tag="flowers"`` :class:`ZoneVolume`
+as hardware-instanced crossed-quad sprites — the grass idiom
+(``world/grass_renderer.py``) generalised over a table of **flora kinds**
+(one row today; the table stays so future sprite-scale flora is one row,
+not one component).  The CPU holds **no per-plant state**: one shared
 crossed-quad Geom per kind is drawn N times per volume via
 ``set_instance_count``, and each instance derives its position / rotation /
 scale / sway phase / sprite-atlas variant in the vertex shader from
 ``gl_InstanceID`` (``world/shaders/flora.vert``; placement math mirrored
 headlessly in ``zones/flora_placement.py``).
 
-Per kind it binds a procedural sprite **atlas** (``flower_sprite`` /
-``bush_sprite`` / ``tree_sprite`` — all seeded per world) and a sway shape:
-flowers bend from the ground like grass, bushes wave their tops, trees pin
-the trunk and sway only the canopy (``u_sway_pivot``).  All three sample the
-SAME wind texture grass uses (inherited from ``terrain_root``), so one gust
-band rolls visibly through meadow, scrub and treeline together; with the
+Per kind it binds a procedural sprite **atlas** (``flower_sprite``, seeded
+per world) and a sway shape: flowers bend from the ground like grass.  They
+sample the SAME wind texture grass uses (inherited from ``terrain_root``),
+so one gust band rolls visibly through grass and meadow together; with the
 wind field off they fall back to the scalar SkyState sway, scaled per kind.
 
-A ``"trees"`` volume is shared infrastructure: this component draws the tree
-sprites, and the wind system's ``LeafLitterComponent`` independently scatters
-gust-driven leaves over the same volume — plant a forest, get its leaf fall
-for free.
+Trees and bushes are NOT sprites any more: ``world/tree_renderer.py`` draws
+them as real instanced 3-D meshes (billboards survive only as its far-LOD
+impostors).
 
 Lighting and fog come by scene-graph inheritance under ``App.terrain_root``
 (radiance cascades + froxel fog, identical to grass).  GPU lighting backend
@@ -112,28 +110,19 @@ class _FloraKind:
     light_offset_m: float  # cascade sample height above the plant base
 
 
-# Flowers bend like grass; bushes wave their tops gently; trees pin the
-# trunk (pivot 0.45) and sway only the canopy, faintly — a 7 m tree tip
-# moving like a grass blade would read as jelly.
+# Flowers bend like grass.  (Bushes and trees left this table for
+# world/tree_renderer.py's 3-D mesh pipeline.)
 _FLORA_KINDS: tuple[_FloraKind, ...] = (
     _FloraKind("flowers", "flower_sprite", 4, 2, 1.0,
                "flora_flower_height_m",
                "flora_flower_fade_start_m", "flora_flower_fade_end_m",
                0.7, 0.6, 0.8, 0.0, 0.5),
-    _FloraKind("bushes", "bush_sprite", 3, 3, 1.0,
-               "flora_bush_height_m",
-               "flora_bush_fade_start_m", "flora_bush_fade_end_m",
-               0.7, 0.6, 0.3, 0.3, 0.75),
-    _FloraKind("trees", "tree_sprite", 3, 3, 2.0 / 3.0,
-               "flora_tree_height_m",
-               "flora_tree_fade_start_m", "flora_tree_fade_end_m",
-               0.8, 0.8, 0.15, 0.45, 3.0),
 )
 
 
 class FloraRendererComponent(Component):
     """
-    Render component for GPU-instanced flora (flowers, bushes, trees).
+    Render component for GPU-instanced sprite flora (flowers).
 
     Parameters (pass as ``add_component`` kwargs)
     ---------------------------------------------
@@ -142,8 +131,8 @@ class FloraRendererComponent(Component):
     sky_system : fire_engine.sky.SkySystem
         Read-only weather source for the scalar sway fallback uniforms.
     zone_store : fire_engine.zones.ZoneStore
-        Volumes tagged ``"flowers"`` / ``"bushes"`` / ``"trees"`` are
-        rendered; the store's ``version`` counter triggers a rebuild.
+        Volumes tagged ``"flowers"`` are rendered; the store's ``version``
+        counter triggers a rebuild.
     chunk_provider : object
         Anything with a ``.chunks`` dict (``ChunkManager``) — height-field
         bakes read voxel materials from it.

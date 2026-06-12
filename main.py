@@ -319,20 +319,21 @@ def build_demo():
         (-12.0, -5.0, 6.0), (12.0, 25.0, 10.0),
         params={"density": cfg.grass_density_per_m2},
     )
-    # Demo "trees" volume — the seam the wind system's leaf litter renders on
-    # (no tree system yet; a future forest registers canopy volumes tagged
-    # "trees" and leaves appear with zero wind-system changes).  Placed just to
-    # the +X side of the grass box, ~20×20 m footprint, z 6→14 to straddle the
-    # terrain surface (ground top z=8) and give leaves vertical room to stream.
+    # Demo "trees" volume — 3-D instanced trees (world/tree_renderer.py) AND
+    # the seam the wind system's leaf litter renders on (one volume: plant a
+    # forest, get its leaf fall for free).  Placed just to the +X side of the
+    # grass box, ~20×20 m footprint, z 6→14 to straddle the terrain surface
+    # (ground top z=8) and give leaves vertical room to stream.  species_mix
+    # picks from the registered TreeSpeciesDefs (procedural/flora/species/).
     zone_store.add(
         "trees",
         (14.0, -5.0, 6.0), (34.0, 15.0, 14.0),
+        params={"species_mix": "tree_gnarled_oak:3,tree_dead:1"},
     )
-    # Flora volumes (world/flora_renderer.py) — wildflowers scattered through
-    # the demo grass box, and a wider band of scrub bushes running from the
-    # meadow into the treeline.  The "trees" volume above is shared
-    # infrastructure: the flora renderer draws tree sprites on it while the
-    # wind system's leaf litter keeps scattering leaves over the same box.
+    # Flora volumes — wildflower sprites (world/flora_renderer.py) scattered
+    # through the demo grass box, and a wider band of 3-D bushes
+    # (world/tree_renderer.py again — a bush is a tree with a stub trunk)
+    # running from the meadow into the treeline.
     zone_store.add(
         "flowers",
         (-12.0, -5.0, 6.0), (12.0, 25.0, 10.0),
@@ -340,6 +341,7 @@ def build_demo():
     zone_store.add(
         "bushes",
         (-12.0, -5.0, 6.0), (34.0, 25.0, 11.0),
+        params={"species_mix": "bush_scrub:2,bush_berry:1"},
     )
     zone_store.mark_baseline()
 
@@ -468,11 +470,11 @@ def build_demo():
     )
     app.grass_go = grass_go
 
-    # 10c2. GPU flora — instanced flowers / bushes / trees inside "flowers" /
-    #      "bushes" / "trees" zone volumes; the grass idiom generalised
-    #      (gl_InstanceID hash placement, baked height fields, cascade
-    #      lighting, wind-texture sway with per-kind gain/pivot, sprite-atlas
-    #      variants).  GPU lighting backend only (disables itself on cpu).
+    # 10c2. GPU flora — instanced flower sprites inside "flowers" zone
+    #      volumes; the grass idiom generalised (gl_InstanceID hash placement,
+    #      baked height fields, cascade lighting, wind-texture sway,
+    #      sprite-atlas variants).  GPU lighting backend only (disables
+    #      itself on cpu).
     from fire_engine.world.flora_renderer import FloraRendererComponent
     flora_go = instantiate()
     flora_go.name = "Flora"
@@ -486,6 +488,26 @@ def build_demo():
         bus=bus,
     )
     app.flora_go = flora_go
+
+    # 10c3. 3-D trees + bushes — per-species variant-mesh pools instanced
+    #      over CPU-baked placements inside "trees" / "bushes" zone volumes,
+    #      with billboard impostors past the mesh fade window (the ONLY
+    #      billboarding trees get).  Species are authored as Python scripts —
+    #      see docs/content/tree_species_authoring.md.  GPU lighting backend
+    #      only (disables itself on cpu).
+    from fire_engine.world.tree_renderer import TreeRendererComponent
+    tree_go = instantiate()
+    tree_go.name = "Trees"
+    tree_go.add_component(
+        TreeRendererComponent,
+        base=app,
+        sky_system=sky_system,
+        zone_store=zone_store,
+        chunk_provider=chunk_manager,
+        lighting_pipeline=lighting_pipeline,
+        bus=bus,
+    )
+    app.tree_go = tree_go
 
     # 10d. Wind system render component — uploads the WindField snapshot as
     #      u_wind_tex on terrain_root each frame and flips u_wind_enabled to 1

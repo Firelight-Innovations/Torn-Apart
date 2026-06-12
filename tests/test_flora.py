@@ -1,17 +1,16 @@
 """
-tests/test_flora.py — flora system: sprite atlases + placement math.
+tests/test_flora.py — sprite flora system: flower atlas + placement math.
 
-Headless (no panda3d): the flower_sprite / bush_sprite / tree_sprite
-ProceduralTextureDefs are pure numpy, and the flora instance-count /
-hash-seed / attrib math lives in ``fire_engine/zones/flora_placement.py``
-(the panda3d-free mirror of what ``FloraRendererComponent`` instances per
-volume).  This suite covers:
+Headless (no panda3d): the flower_sprite ProceduralTextureDef is pure
+numpy, and the flora instance-count / hash-seed / attrib math lives in
+``fire_engine/zones/flora_placement.py`` (the panda3d-free mirror of what
+``FloraRendererComponent`` instances per volume).  Trees and bushes left
+this system for 3-D meshes — see tests/test_tree_*.py.  This suite covers:
 
 1. Texture determinism (same seed → identical bytes; different seed differs).
 2. Texture shape / dtype / binary-alpha / atlas-variant invariants.
-3. Flora instance-count math (area × density, per-kind caps, param override).
-4. Flora hash-seed determinism, bound, and kind-distinctness (a "trees"
-   volume's tree seed must differ from its leaf-litter seed).
+3. Flora instance-count math (area × density, caps, param override).
+4. Flora hash-seed determinism, bound, and volume-distinctness.
 5. flora_instance_attribs: bounds, scale range, variant range, determinism,
    and agreement with the grass chain on the shared links.
 6. The GLSL mirror pin: flora.vert carries the same hash-chain constants.
@@ -32,16 +31,13 @@ from fire_engine.zones import (
     flora_instance_attribs,
     flora_instance_count,
     instance_attribs,
-    leaf_hash_seed,
 )
 
 _REPO = pathlib.Path(__file__).resolve().parents[1]
 
-# (def name, class module path, atlas shape, variant cell width)
+# (def name, atlas shape, variant cell width, variant count)
 _SPRITES = [
     ("flower_sprite", (32, 128, 4), 32, 4),
-    ("bush_sprite", (48, 144, 4), 48, 3),
-    ("tree_sprite", (96, 192, 4), 64, 3),
 ]
 
 
@@ -50,16 +46,12 @@ def _gen(name: str, seed: int, **params) -> np.ndarray:
     registry cache so seed changes actually re-generate)."""
     set_world_seed(seed)
     from fire_engine.procedural.textures.flower_sprite import FlowerSpriteDef
-    from fire_engine.procedural.textures.bush_sprite import BushSpriteDef
-    from fire_engine.procedural.textures.tree_sprite import TreeSpriteDef
-    cls = {"flower_sprite": FlowerSpriteDef,
-           "bush_sprite": BushSpriteDef,
-           "tree_sprite": TreeSpriteDef}[name]
+    cls = {"flower_sprite": FlowerSpriteDef}[name]
     return cls().generate(for_domain("procedural", name), **params)
 
 
 # ---------------------------------------------------------------------------
-# 1 & 2 — texture determinism + invariants (all three atlases)
+# 1 & 2 — texture determinism + invariants
 # ---------------------------------------------------------------------------
 
 class TestFloraSpriteTextures:
@@ -97,8 +89,8 @@ class TestFloraSpriteTextures:
                 assert not np.array_equal(cells[k], cells[k + 1]), name
 
     def test_bases_on_bottom_row(self):
-        # Stems/trunks/foliage touch the bottom image row (V=0 after the
-        # upload flip) so plants stand on the ground, not above it.
+        # Stems touch the bottom image row (V=0 after the upload flip) so
+        # plants stand on the ground, not above it.
         for name, _, _, _ in _SPRITES:
             arr = _gen(name, 1337)
             assert (arr[-1, :, 3] == 255).any(), name
@@ -118,9 +110,9 @@ class TestFloraSpriteTextures:
 class TestFloraInstanceCount:
     def test_area_times_density(self):
         cfg = Config()
-        v = ZoneVolume(1, "trees", (0.0, 0.0, 0.0), (20.0, 20.0, 8.0))
-        assert flora_instance_count(v, cfg, "trees") == \
-            int(400 * cfg.flora_tree_density_per_m2)
+        v = ZoneVolume(1, "flowers", (0.0, 0.0, 0.0), (20.0, 20.0, 8.0))
+        assert flora_instance_count(v, cfg, "flowers") == \
+            int(400 * cfg.flora_flower_density_per_m2)
 
     def test_density_param_override(self):
         cfg = Config()
@@ -130,10 +122,10 @@ class TestFloraInstanceCount:
 
     def test_cap(self):
         cfg = Config()
-        v = ZoneVolume(1, "bushes", (0.0, 0.0, 0.0), (1000.0, 1000.0, 8.0),
+        v = ZoneVolume(1, "flowers", (0.0, 0.0, 0.0), (1000.0, 1000.0, 8.0),
                        params={"density": 100.0})
-        assert flora_instance_count(v, cfg, "bushes") == \
-            cfg.flora_bush_max_instances
+        assert flora_instance_count(v, cfg, "flowers") == \
+            cfg.flora_flower_max_instances
 
     def test_negative_density_clamps_to_zero(self):
         cfg = Config()
@@ -148,27 +140,18 @@ class TestFloraInstanceCount:
 
 class TestFloraHashSeed:
     def test_deterministic_same_seed_same_volume(self):
-        v = ZoneVolume(7, "trees", (0.0, 0.0, 0.0), (10.0, 10.0, 4.0))
+        v = ZoneVolume(7, "flowers", (0.0, 0.0, 0.0), (10.0, 10.0, 4.0))
         set_world_seed(1337)
-        a = flora_hash_seed(v, "trees")
+        a = flora_hash_seed(v, "flowers")
         set_world_seed(1337)
-        b = flora_hash_seed(v, "trees")
+        b = flora_hash_seed(v, "flowers")
         assert a == b
 
-    def test_kinds_and_volumes_distinct(self):
+    def test_volumes_distinct(self):
         set_world_seed(1337)
-        v1 = ZoneVolume(1, "trees", (0.0, 0.0, 0.0), (10.0, 10.0, 4.0))
-        v2 = ZoneVolume(2, "trees", (0.0, 0.0, 0.0), (10.0, 10.0, 4.0))
-        seeds = {flora_hash_seed(v1, k) for k in FLORA_KINDS}
-        seeds.add(flora_hash_seed(v2, "trees"))
-        assert len(seeds) == len(FLORA_KINDS) + 1
-
-    def test_tree_seed_differs_from_leaf_seed(self):
-        # The same "trees" volume feeds tree sprites AND leaf litter — the
-        # two instance chains must not correlate.
-        set_world_seed(1337)
-        v = ZoneVolume(3, "trees", (0.0, 0.0, 0.0), (10.0, 10.0, 4.0))
-        assert flora_hash_seed(v, "trees") != leaf_hash_seed(v)
+        v1 = ZoneVolume(1, "flowers", (0.0, 0.0, 0.0), (10.0, 10.0, 4.0))
+        v2 = ZoneVolume(2, "flowers", (0.0, 0.0, 0.0), (10.0, 10.0, 4.0))
+        assert flora_hash_seed(v1, "flowers") != flora_hash_seed(v2, "flowers")
 
     def test_bounded_for_signed_int(self):
         set_world_seed(1337)

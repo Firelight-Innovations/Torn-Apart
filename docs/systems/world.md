@@ -209,7 +209,11 @@ The HDR offscreen render target + post-processing chain (`None`/disabled when pa
 
 **Lens flare** (`lens_flare.frag`): image-based, screen-space — reads the HDR scene at quarter-res, isolates the sun (a high HDR threshold), and rebuilds **ghosts** (the source mirrored through the screen centre at several scales, with chromatic fringing) + a **halo** ring.  Because it reads the *rendered* scene, occlusion is automatic: when terrain covers the sun it isn't bright in the buffer, so the flare vanishes — no separate depth test needed.  Built in `_build_flare` (`renderQuadInto` div 4), fed to the composite's `u_flare`.  Tuning constants live on `PostProcessPipeline` (`_FLARE_*`); gated by `gfx_lens_flare`.
 
-**Composite** (`composite.frag`): `out = pow(acesTonemap(scene + bloom*strength + flare*strength), 1/2.2)` — the single tonemap point.
+**God rays** (`god_rays.frag`): screen-space crepuscular shafts — half-res radial light-scatter from the sun's screen position (projected per frame in `update`/`_update_godray_sun`, deactivated when the sun is below the horizon or off-screen).  Occlusion is automatic: clouds/terrain that are dark in the scene block the shafts.  Fed to the composite's `u_godray`; gated by `gfx_god_rays` / `gfx_god_ray_samples`.
+
+**FXAA** (`fxaa.frag`): cheap post anti-aliasing, the **last** pass.  When `gfx_fxaa` is on the composite renders into an LDR buffer and the screen quad runs FXAA on it (the HDR offscreen buffer can lose hardware MSAA, so this restores smooth edges); otherwise the composite is itself the screen quad.
+
+**Composite** (`composite.frag`): `out = pow(acesTonemap(scene + bloom + flare + godray), 1/2.2)` — the single tonemap point.  Built LAST (after the effect passes) so it samples their finished buffers; effect strengths drop to 0 when their pass is disabled.
 
 ## Imports Allowed
 

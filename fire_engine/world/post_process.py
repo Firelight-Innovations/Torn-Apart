@@ -42,6 +42,9 @@ from typing import TYPE_CHECKING, Any
 
 from panda3d.core import (  # type: ignore[import]
     FrameBufferProperties,
+    LVecBase2f,
+    LPoint2f,
+    LPoint3f,
     Shader,
     Texture,
 )
@@ -93,10 +96,13 @@ class PostProcessPipeline:
         # (bloom/flare/god-rays insert here).  Each entry is a NodePath card.
         self._mid_passes: list = []
         self._bloom_dummy: Texture | None = None
-        # Bloom: keep refs so the render-target textures aren't GC'd.
+        # Keep refs so the render-target textures aren't GC'd.
         self._bloom_textures: list = []
         self.bloom_tex: Texture | None = None
         self.flare_tex: Texture | None = None
+        self.godray_tex: Texture | None = None
+        self._composite_quad = None
+        self._godray_quad = None
 
         if not self.enabled:
             _log.info("Post-processing disabled (gfx_post_process=false) — "
@@ -142,33 +148,24 @@ class PostProcessPipeline:
         if quad is None:
             raise RuntimeError("FilterManager.renderSceneInto returned no quad")
 
-        # A 1x1 black texture stands in for the (not-yet-built) bloom buffer so
-        # the composite shader always has a valid sampler bound.
-        dummy = Texture("bloom_dummy")
+        # A 1x1 black texture stands in for any disabled effect buffer so the
+        # composite's samplers are always validly bound.
+        dummy = Texture("fx_dummy")
         dummy.setup_2d_texture(1, 1, Texture.T_unsigned_byte, Texture.F_rgba)
         dummy.set_clear_color((0.0, 0.0, 0.0, 1.0))
         self._bloom_dummy = dummy
-
-        shader = Shader.make(Shader.SL_GLSL,
-                             vertex=post_shaders.POST_FULLSCREEN_VERTEX,
-                             fragment=post_shaders.COMPOSITE_FRAGMENT)
-        quad.set_shader(shader)
-        quad.set_shader_input("u_scene", color_tex)
-        quad.set_shader_input("u_bloom", dummy)
-        quad.set_shader_input("u_bloom_strength", 0.0)
-        quad.set_shader_input("u_flare", dummy)
-        quad.set_shader_input("u_flare_strength", 0.0)
 
         self._manager = manager
         self.hdr_color_tex = color_tex
         self.depth_tex = depth_tex
         self._final_quad = quad
 
-        # Bloom pyramid (reads the HDR scene buffer, feeds the composite).
+        # Effect passes read the HDR scene and store result textures; the
+        # composite is built LAST so it runs after them (correct sort order).
         self._build_bloom(color_tex)
-
-        # Lens flare (image-based ghosts + halo from the bright scene).
         self._build_flare(color_tex)
+        self._build_godrays(color_tex)
+        self._build_composite(color_tex, quad)
 
         # Flip every surface shader to linear-HDR output.
         self._set_hdr_output(True)
@@ -241,10 +238,7 @@ class PostProcessPipeline:
             self._bloom_textures.append(tex)
             up_src = tex
 
-        self.bloom_tex = up_src
-        self._final_quad.set_shader_input("u_bloom", up_src)
-        self._final_quad.set_shader_input(
-            "u_bloom_strength", float(getattr(cfg, "gfx_bloom_strength", 0.06)))
+        self.bloom_tex = up_src      # composite binds this in _build_composite
 
     # Lens-flare tuning (held here, not in config — aesthetic constants).
     _FLARE_THRESHOLD = 4.0     # HDR luminance: isolate the sun, not bright sky
@@ -282,9 +276,91 @@ class PostProcessPipeline:
         quad.set_shader_input("u_halo_width", self._FLARE_HALO_WIDTH)
         quad.set_shader_input("u_chroma", self._FLARE_CHROMA)
         self._bloom_textures.append(tex)   # keep ref alive
-        self.flare_tex = tex
-        self._final_quad.set_shader_input("u_flare", tex)
-        self._final_quad.set_shader_input("u_flare_strength", self._FLARE_STRENGTH)
+        self.flare_tex = tex               # composite binds this
+
+    # God-ray tuning (aesthetic constants; quality knobs come from config).
+    _GODRAY_DENSITY = 0.9      # ray length toward the sun (fraction of screen)
+    _GODRAY_DECAY = 0.95       # per-step attenuation
+    _GODRAY_THRESHOLD = 3.0    # isolate the sun from bright sky
+    _GODRAY_STRENGTH = 0.5     # contribution added at composite
+
+    def _build_godrays(self, hdr_tex: Texture) -> None:
+        """
+        Build the screen-space god-ray (crepuscular shaft) pass.
+
+        Half-res radial light-scatter from the sun's screen position (set per
+        frame in :meth:`update`); occlusion is automatic (clouds/terrain that
+        are dark in the scene block the shafts).  No-op when ``gfx_god_rays``
+        is off.
+        """
+        cfg = self.config
+        if not bool(getattr(cfg, "gfx_god_rays", True)):
+            return
+        tex = Texture("god_rays")
+        quad = self._manager.renderQuadInto("god_rays", div=2, colortex=tex)
+        if quad is None:
+            return
+        shader = Shader.make(Shader.SL_GLSL,
+                             vertex=post_shaders.POST_FULLSCREEN_VERTEX,
+                             fragment=post_shaders.GOD_RAYS_FRAGMENT)
+        quad.set_shader(shader)
+        quad.set_shader_input("u_tex", hdr_tex)
+        quad.set_shader_input("u_samples",
+                              int(getattr(cfg, "gfx_god_ray_samples", 32)))
+        quad.set_shader_input("u_density", self._GODRAY_DENSITY)
+        quad.set_shader_input("u_decay", self._GODRAY_DECAY)
+        quad.set_shader_input("u_threshold", self._GODRAY_THRESHOLD)
+        # Per-frame sun screen position + activation (see update()).
+        quad.set_shader_input("u_sun_screen", LVecBase2f(0.5, 0.5))
+        quad.set_shader_input("u_active", 0.0)
+        self._bloom_textures.append(tex)
+        self.godray_tex = tex
+        self._godray_quad = quad
+
+    def _build_composite(self, color_tex: Texture, screen_quad: Any) -> None:
+        """
+        Build the final composite (scene + bloom + flare + god rays → tonemap),
+        with optional FXAA as the very last pass.
+
+        The composite is created AFTER the effect passes so it renders after
+        them.  With FXAA on, the composite renders into an LDR buffer and the
+        screen quad runs FXAA reading it; otherwise the composite IS the screen
+        quad.
+        """
+        cfg = self.config
+        comp_sh = Shader.make(Shader.SL_GLSL,
+                              vertex=post_shaders.POST_FULLSCREEN_VERTEX,
+                              fragment=post_shaders.COMPOSITE_FRAGMENT)
+        comp_quad = screen_quad
+        if bool(getattr(cfg, "gfx_fxaa", True)):
+            ldr = Texture("composite_ldr")
+            cq = self._manager.renderQuadInto("composite", colortex=ldr)
+            if cq is not None:
+                comp_quad = cq
+                fxaa_sh = Shader.make(Shader.SL_GLSL,
+                                      vertex=post_shaders.POST_FULLSCREEN_VERTEX,
+                                      fragment=post_shaders.FXAA_FRAGMENT)
+                screen_quad.set_shader(fxaa_sh)
+                screen_quad.set_shader_input("u_tex", ldr)
+                self._bloom_textures.append(ldr)
+
+        comp_quad.set_shader(comp_sh)
+        comp_quad.set_shader_input("u_scene", color_tex)
+        comp_quad.set_shader_input("u_bloom", self.bloom_tex or self._bloom_dummy)
+        comp_quad.set_shader_input(
+            "u_bloom_strength",
+            float(getattr(cfg, "gfx_bloom_strength", 0.06))
+            if self.bloom_tex is not None else 0.0)
+        comp_quad.set_shader_input("u_flare", self.flare_tex or self._bloom_dummy)
+        comp_quad.set_shader_input(
+            "u_flare_strength",
+            self._FLARE_STRENGTH if self.flare_tex is not None else 0.0)
+        comp_quad.set_shader_input("u_godray",
+                                   self.godray_tex or self._bloom_dummy)
+        comp_quad.set_shader_input(
+            "u_godray_strength",
+            self._GODRAY_STRENGTH if self.godray_tex is not None else 0.0)
+        self._composite_quad = comp_quad
 
     def _log_buffer_props(self, manager: Any) -> None:
         """Log what the GPU actually granted (esp. whether float survived)."""
@@ -341,10 +417,36 @@ class PostProcessPipeline:
         """
         Per-frame refresh of post-process inputs.
 
-        No-op for the scaffold: auto-exposure is applied inside the surface
-        shaders (so it also scales bloom), and the composite needs nothing
-        per-frame yet.  Bloom strength and the lens-flare sun position are
-        pushed here once those phases land.
+        Auto-exposure is applied inside the surface shaders (so it scales bloom
+        too) and bloom/flare are screen-space self-contained, so the only
+        per-frame work is feeding the god-ray pass the sun's screen position.
         """
-        if not self.enabled:
+        if not self.enabled or self._godray_quad is None:
             return
+        self._update_godray_sun()
+
+    def _update_godray_sun(self) -> None:
+        """Project the sun to screen space for the god-ray radial scatter."""
+        base = self.base
+        sky = getattr(base, "sky_system", None)
+        st = getattr(sky, "state", None) if sky is not None else None
+        quad = self._godray_quad
+        if st is None or float(st.sun_dir.z) <= 0.02:    # below horizon → off
+            quad.set_shader_input("u_active", 0.0)
+            return
+        sun = st.sun_dir
+        cam_pos = base.camera.get_pos(base.render)
+        far_pt = LPoint3f(cam_pos.x + float(sun.x) * 1.0e6,
+                          cam_pos.y + float(sun.y) * 1.0e6,
+                          cam_pos.z + float(sun.z) * 1.0e6)
+        rel = base.cam.get_relative_point(base.render, far_pt)
+        ndc = LPoint2f()
+        if not base.camLens.project(rel, ndc):
+            quad.set_shader_input("u_active", 0.0)
+            return
+        u = ndc.x * 0.5 + 0.5
+        v = ndc.y * 0.5 + 0.5
+        # Allow a margin so shafts from a just-off-screen sun still stream in.
+        on = (-0.35 <= u <= 1.35) and (-0.35 <= v <= 1.35)
+        quad.set_shader_input("u_sun_screen", LVecBase2f(float(u), float(v)))
+        quad.set_shader_input("u_active", 1.0 if on else 0.0)

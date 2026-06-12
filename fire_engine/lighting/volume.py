@@ -47,6 +47,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from fire_engine.lighting.occluders import TreeOccluderSet, splat_tree_occluders
 from fire_engine.lighting.palette import MaterialPalette
 
 __all__ = [
@@ -258,6 +259,9 @@ def assemble_geometry(
     chunk_size: int,
     voxel_size: float,
     cache: "ChunkBlockCache | None" = None,
+    occluders: "TreeOccluderSet | None" = None,
+    trunk_occ: float = 0.0,
+    canopy_occ: float = 0.0,
 ) -> GeometryVolume:
     """
     Slice loaded chunks into one contiguous geometry block for ``window``.
@@ -300,6 +304,14 @@ def assemble_geometry(
         large saving for the coarse far cascade, whose ~33k-chunk window is
         otherwise re-downsampled from scratch on every recenter.  Output is
         byte-identical with and without the cache.
+    occluders : TreeOccluderSet, optional
+        Static tree/bush occluders splatted onto the assembled block as
+        fractional occupancy + bounce albedo (see ``lighting/occluders.py``)
+        so the lighting marches see trees.  ``None`` (default) leaves the
+        output byte-identical to the chunks-only assembly.
+    trunk_occ, canopy_occ : float
+        Splat opacities for the occluders (``config.light_tree_trunk_occ`` /
+        ``light_tree_canopy_occ``).  Ignored when ``occluders`` is ``None``.
 
     Returns
     -------
@@ -378,6 +390,12 @@ def assemble_geometry(
     # A = solid sub-voxel fraction ×255, rounded.  k³ at k==1 → 0/255 binary.
     occ = np.rint(solid_count.astype(np.float32) * (255.0 / (k ** 3)))
     albedo_occ[..., 3] = np.clip(occ, 0.0, 255.0).astype(np.uint8)
+
+    # Static tree/bush occluders — splatted after the chunk gather so terrain
+    # solids win the max-combine (a tree inside a hill stays hill-solid).
+    if occluders is not None and occluders.count:
+        splat_tree_occluders(albedo_occ, window.origin_cell, window.cell_m,
+                             occluders, trunk_occ, canopy_occ)
 
     emission = np.empty((n, n, n, 4), dtype=np.uint8)
     emission[..., :3] = np.clip(

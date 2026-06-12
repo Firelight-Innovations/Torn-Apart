@@ -59,6 +59,7 @@ from fire_engine.core import (
 from fire_engine.lighting import glsl
 from fire_engine.lighting.exposure import ExposureMeter
 from fire_engine.lighting.lights import LightSet, OccluderSet, MAX_OCCLUDERS
+from fire_engine.lighting.occluders import TreeOccluderSet
 from fire_engine.lighting.palette import MaterialPalette, build_default_palette
 from fire_engine.lighting.assembly_worker import (
     AssemblyJob,
@@ -318,6 +319,12 @@ class GpuLightingPipeline:
         self._lights_version_seen = -1
         self.occluders = OccluderSet()
         self._occluders_version_seen = -1
+        # Static tree/bush occluders (lighting/occluders.py): splatted into
+        # every assembled geometry volume so the light marches see trees.
+        # Set by the tree renderer via :meth:`set_static_occluders`.
+        self._tree_occluders: "TreeOccluderSet | None" = None
+        # Cascade indices whose GPU volume predates the current occluder set.
+        self._tree_occ_stale: set[int] = set()
         self._box_uniforms: tuple | None = None   # cached LVecBase4f lists
         # Auto-exposure (eye adaptation): headless meter; `exposure` is the
         # final tonemap exposure consumed by the terrain + sky shaders.
@@ -652,10 +659,43 @@ class GpuLightingPipeline:
         vol = assemble_geometry(
             casc.window, self._provider.chunks, self._palette,
             chunk_size=self._config.chunk_size,
-            voxel_size=self._config.voxel_size, cache=cache)
+            voxel_size=self._config.voxel_size, cache=cache,
+            occluders=self._tree_occluders,
+            trunk_occ=float(self._config.light_tree_trunk_occ),
+            canopy_occ=float(self._config.light_tree_canopy_occ))
         _upload_volume(casc.geom, vol.albedo_occ)
         _upload_volume(casc.emis, vol.emission)
         casc.needs_inject = True
+        self._tree_occ_stale.discard(casc.index)
+
+    def set_static_occluders(
+            self, occluders: "TreeOccluderSet | None") -> None:
+        """
+        Replace the static tree/bush occluder set the cascades are lit with.
+
+        Called by ``world/tree_renderer.py`` after every placement (re)bake.
+        The set is splatted as fractional occupancy + bounce albedo into every
+        geometry volume assembled from now on (``lighting/occluders.py``), and
+        every cascade with a committed volume is queued for an async re-splat
+        at its current origin — sun shadows, GI bounce, the surface shaders'
+        refinement march and voxel AO all pick the trees up with zero shader
+        changes.
+
+        Parameters
+        ----------
+        occluders : TreeOccluderSet | None
+            Merged instance set for ALL tree/bush volumes (the renderer
+            re-merges on partial re-bakes).  ``None`` or an empty set clears
+            tree occlusion entirely.
+        """
+        if occluders is not None and occluders.count == 0:
+            occluders = None
+        self._tree_occluders = occluders
+        # Re-splat every already-assembled cascade (async, at the committed
+        # origin).  Cascades not yet placed (boot) pick the set up on their
+        # first assembly automatically.
+        self._tree_occ_stale = {c.index for c in self.cascades
+                                if c.window.origin_cell is not None}
 
     def _apply_edits_sync(self) -> None:
         """
@@ -721,19 +761,25 @@ class GpuLightingPipeline:
             # are frequent and the relight lags invisibly far away).
             casc_ready = batch_ready if casc.index > 0 else have_pending
             hit = casc_ready and self._coords_hit_window(casc.window)
+            # The static tree-occluder set changed since this cascade's volume
+            # was assembled (set_static_occluders) → re-splat at the committed
+            # origin.
+            stale = casc.index in self._tree_occ_stale
             if casc._assembly_inflight:
                 if hit:
                     deferred = True
                 continue
-            if not (moved or hit):
+            if not (moved or hit or stale):
                 continue
             # 'moved' → assemble for the new snapped origin; 'hit' (terrain
             # changed inside the window, origin unchanged) → re-assemble the
-            # committed origin.  Either way the snapshot reads live materials,
-            # so a submit also satisfies any pending 'hit'.
+            # committed origin.  Either way the snapshot reads live materials
+            # and the current occluder set, so a submit also satisfies any
+            # pending 'hit' and clears occluder staleness.
             origin = (casc.window._desired_origin(camera_pos)
                       if moved else casc.window.origin_cell)
             self._submit_assembly(casc, origin)
+            self._tree_occ_stale.discard(casc.index)
         # Clear pending edits only once every cascade they touch has an
         # up-to-date (just-submitted or current) volume — otherwise a busy
         # cascade would silently miss the edit.  Gated on the batch interval so
@@ -761,7 +807,10 @@ class GpuLightingPipeline:
             chunk_size=int(self._config.chunk_size),
             voxel_size=float(self._config.voxel_size),
             materials=materials, palette=self._palette,
-            seq=self._assembly_seq)
+            seq=self._assembly_seq,
+            occluders=self._tree_occluders,
+            trunk_occ=float(self._config.light_tree_trunk_occ),
+            canopy_occ=float(self._config.light_tree_canopy_occ))
         if self._threaded:
             casc._assembly_inflight = True
             casc._pending_seq = self._assembly_seq

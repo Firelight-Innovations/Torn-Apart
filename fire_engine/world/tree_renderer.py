@@ -75,6 +75,7 @@ from fire_engine.core import (
     TerrainEditedEvent,
     get_logger,
 )
+from fire_engine.lighting import TreeOccluderSet
 from fire_engine.world.component import Component
 from fire_engine.world import flora_shaders, tree_shaders
 from fire_engine.world.flora_renderer import _build_cross_geom
@@ -183,6 +184,11 @@ class TreeRendererComponent(Component):
         self._impostor_geoms: dict[str, Geom] = {}
         self._atlas_tex: dict[str, Texture] = {}
         self._impostor_tex: dict[str, Texture] = {}
+        # Per-(kind, volume.id) static-occluder sets (lighting/occluders.py)
+        # — merged + pushed to the pipeline so the light cascades see trees.
+        self._volume_occluders: dict[tuple[str, int], TreeOccluderSet] = {}
+        # Per-species mean (bark_rgb, leaf_rgb) splat colours from the atlas.
+        self._species_occ_rgb: dict[str, tuple] = {}
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -294,6 +300,9 @@ class TreeRendererComponent(Component):
         if self._root is not None:
             self._root.remove_node()
             self._root = None
+        if self.lighting_pipeline is not None:
+            self.lighting_pipeline.set_static_occluders(None)
+        self._volume_occluders.clear()
         self._kind_roots.clear()
         self._volume_nodes.clear()
         self._mesh_geoms.clear()
@@ -338,6 +347,7 @@ class TreeRendererComponent(Component):
             for node in nodes:
                 node.remove_node()
         self._volume_nodes.clear()
+        self._volume_occluders.clear()
         self._dirty_volumes.clear()
 
         total_inst = 0
@@ -352,6 +362,7 @@ class TreeRendererComponent(Component):
             for node in nodes:
                 total_inst += node.get_instance_count()
         self._store_version_built = self.zone_store.version
+        self._push_occluders()
         _log.info("Trees built: %d draw node(s), %d instance draw(s) total",
                   total_nodes, total_inst)
 
@@ -360,11 +371,12 @@ class TreeRendererComponent(Component):
         tag, vol_id = key
         for node in self._volume_nodes.pop(key, ()):
             node.remove_node()
+        self._volume_occluders.pop(key, None)
         vol = self.zone_store.get(vol_id)
-        if vol is None:
-            return
-        kind = next(k for k in _TREE_KINDS if k.tag == tag)
-        self._build_volume(kind, vol)
+        if vol is not None:
+            kind = next(k for k in _TREE_KINDS if k.tag == tag)
+            self._build_volume(kind, vol)
+        self._push_occluders()
         _log.debug("Tree volume %d (%s) re-baked", vol_id, tag)
 
     def _build_volume(self, kind: _TreeKind, vol) -> None:
@@ -383,7 +395,30 @@ class TreeRendererComponent(Component):
             kind=kind.tag)
         if inst.count == 0:
             self._volume_nodes[(kind.tag, vol.id)] = []
+            self._volume_occluders.pop((kind.tag, vol.id), None)
             return
+
+        # Static-occluder set for the lighting cascades: per-instance height
+        # and canopy reach scaled from the species pool extents, splat
+        # colours averaged from the species atlas (bounce albedo).  Pushed to
+        # the pipeline by the caller (_build_volumes / _rebuild_volume).
+        occ_h = np.empty(inst.count, np.float32)
+        occ_r = np.empty(inst.count, np.float32)
+        occ_bark = np.empty((inst.count, 3), np.float32)
+        occ_leaf = np.empty((inst.count, 3), np.float32)
+        for s_idx, name in enumerate(inst.species_names):
+            mask = inst.species_idx == s_idx
+            if not bool(mask.any()):
+                continue
+            vs = variant_sets[name]
+            occ_h[mask] = np.float32(vs.max_height_m) * inst.scale[mask]
+            occ_r[mask] = np.float32(vs.max_radius_m) * inst.scale[mask]
+            bark_rgb, leaf_rgb = self._species_splat_rgb(name, vs)
+            occ_bark[mask] = bark_rgb
+            occ_leaf[mask] = leaf_rgb
+        self._volume_occluders[(kind.tag, vol.id)] = TreeOccluderSet(
+            x=inst.x, y=inst.y, z=inst.z, height_m=occ_h, canopy_r_m=occ_r,
+            bark_rgb=occ_bark, leaf_rgb=occ_leaf)
 
         scale_min, scale_span = SCALE_JITTER[kind.tag]
         scale_max = scale_min + scale_span
@@ -464,6 +499,41 @@ class TreeRendererComponent(Component):
             nodes.append(inode)
 
         self._volume_nodes[(kind.tag, vol.id)] = nodes
+
+    # ------------------------------------------------------------------
+    # Static occluders (the light cascades see the trees)
+    # ------------------------------------------------------------------
+
+    def _push_occluders(self) -> None:
+        """Merge every volume's occluder set and hand it to the pipeline."""
+        if self.lighting_pipeline is None:
+            return
+        sets = [s for s in self._volume_occluders.values() if s.count]
+        self.lighting_pipeline.set_static_occluders(
+            TreeOccluderSet.merge(sets) if sets else None)
+
+    def _species_splat_rgb(self, name: str, vs) -> tuple:
+        """
+        Mean linear bark/leaf splat colours for a species, from its atlas.
+
+        The atlas is bark on the left half (opaque) and the leaf card on the
+        right half (binary alpha) — averaging each half gives the GI bounce
+        colour for trunk/canopy cells without any new species API.  Cached
+        per species; deterministic (the atlas is seeded procedural content).
+        """
+        cached = self._species_occ_rgb.get(name)
+        if cached is None:
+            atlas = vs.atlas.astype(np.float32) / 255.0
+            half = atlas.shape[1] // 2
+            bark = atlas[:, :half, :3].reshape(-1, 3).mean(axis=0)
+            leaf_px = atlas[:, half:, :].reshape(-1, 4)
+            sel = leaf_px[:, 3] > 0.5
+            leaf = leaf_px[sel, :3].mean(axis=0) if bool(sel.any()) else bark
+            # sRGB → linear (the cascade albedo channel is linear).
+            cached = ((bark ** 2.2).astype(np.float32),
+                      (leaf ** 2.2).astype(np.float32))
+            self._species_occ_rgb[name] = cached
+        return cached
 
     # ------------------------------------------------------------------
     # Cached species resources (geoms + textures upload once per species)

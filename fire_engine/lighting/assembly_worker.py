@@ -43,6 +43,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from fire_engine.core import get_logger
+from fire_engine.lighting.occluders import TreeOccluderSet
 from fire_engine.lighting.palette import MaterialPalette
 from fire_engine.lighting.volume import (
     ChunkBlockCache,
@@ -84,6 +85,12 @@ class AssemblyJob:
         Immutable material → albedo/emission lookup (safe to share read-only).
     seq : int
         Monotonic id; lets the consumer drop a superseded result.
+    occluders : TreeOccluderSet | None
+        Static tree/bush occluder snapshot splatted into the volume (see
+        ``lighting/occluders.py``).  Immutable struct-of-arrays — safe to
+        share read-only across the thread boundary.  ``None`` → chunks only.
+    trunk_occ, canopy_occ : float
+        Occluder splat opacities (``config.light_tree_*_occ``).
     """
 
     cascade_index: int
@@ -95,6 +102,9 @@ class AssemblyJob:
     materials: dict
     palette: MaterialPalette
     seq: int
+    occluders: "TreeOccluderSet | None" = None
+    trunk_occ: float = 0.0
+    canopy_occ: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -140,7 +150,9 @@ def assemble_packed(
     window.origin_cell = job.origin_cell  # placed directly; no recenter needed
     vol = assemble_geometry(
         window, job.materials, job.palette,
-        chunk_size=job.chunk_size, voxel_size=job.voxel_size, cache=cache)
+        chunk_size=job.chunk_size, voxel_size=job.voxel_size, cache=cache,
+        occluders=job.occluders,
+        trunk_occ=job.trunk_occ, canopy_occ=job.canopy_occ)
     return AssemblyResult(
         cascade_index=job.cascade_index,
         origin_cell=job.origin_cell,

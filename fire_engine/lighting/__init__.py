@@ -56,6 +56,10 @@ from fire_engine.lighting.palette import (
     MaterialPalette,
     build_default_palette,
 )
+from fire_engine.lighting.occluders import (
+    TreeOccluderSet,
+    splat_tree_occluders,
+)
 from fire_engine.lighting.volume import (
     EMISSION_SCALE,
     ChunkBlockCache,
@@ -88,4 +92,6 @@ __all__ = [
     "assemble_geometry",
     "ChunkBlockCache",
     "EMISSION_SCALE",
+    "TreeOccluderSet",
+    "splat_tree_occluders",
 ]

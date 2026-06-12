@@ -269,6 +269,13 @@ class Config:
                                    shadow edges widen with occluder distance.
     light_bounce_strength: float — [0,1] albedo-tinted bounce gain (first
                                    bounce at inject + gather feedback).
+    light_tree_trunk_occ : float — [0,1] occupancy a tree trunk splats into the
+                                  cascade volumes (lighting/occluders.py) —
+                                  near-opaque wood.
+    light_tree_canopy_occ: float — [0,1] occupancy a tree canopy splats —
+                                  keep well under 1: leaves ATTENUATE sun/GI
+                                  (dappled shade); 1.0 turns the under-canopy
+                                  pitch black and crowns self-shadow to mud.
     light_ao_strength    : float — [0,1] strength of occupancy-based ambient
                                    occlusion at surfaces.
     light_max_point_lights: int  — max simultaneous point/area lights uploaded
@@ -506,6 +513,11 @@ class Config:
     light_penumbra_deg:    float = 2.5
     light_bounce_strength: float = 0.7
     light_ao_strength:     float = 0.6
+    # Static tree/bush occluder splat opacities (lighting/occluders.py):
+    # trunks block almost fully; canopies ATTENUATE (full 1.0 makes the
+    # under-canopy pitch black and crowns self-shadow to mud).
+    light_tree_trunk_occ:  float = 0.85
+    light_tree_canopy_occ: float = 0.30
     light_max_point_lights: int  = 64
     light_exposure:        float = 0.9
     exposure_adapt_enabled: bool = True

@@ -243,11 +243,28 @@ class Config:
                                    cascade-0 cell (``light_c0_cell_m``), so
                                    shrinking this past the cell size yields a
                                    finer-but-smoother grid, not more detail.
-    light_prop_iters     : int   — GI flood-fill propagation iterations per
-                                   frame per cascade (light "flows" over a few
-                                   frames after a change).
-    light_bounce_strength: float — [0,1] albedo-tinted bounce gain per
-                                   propagation step.
+    light_gi_rays        : int   — ray-marched GI: sphere directions gathered
+                                   per cell (fibonacci spiral; more = smoother
+                                   ambient, linearly more inject-time cost).
+    light_gi_steps       : int   — max one-cell march steps per GI ray (reach
+                                   in meters = steps × the cascade cell size).
+    light_gi_iters       : int   — gather iterations per inject; ≥2 lets the
+                                   feedback term carry sky→wall→floor bounce
+                                   and second-bounce colour bleed.
+    light_gi_smooth_passes: int  — air-masked 3³ box-filter passes applied to
+                                   the ray-gathered GI component after the
+                                   gather (0 disables).  Completes the
+                                   gather's 8-phase ray-fan tile (8× the
+                                   effective ray count) — removes the blotchy
+                                   patch / colour-confetti gather noise.
+                                   Contact GI stays voxel-crisp; the filter
+                                   never crosses solid cells (no leaks).
+    light_penumbra_deg   : float — celestial penumbra cone half-angle in
+                                   degrees: the shadow-edge refinement march
+                                   jitters its rays inside this cone, so soft
+                                   shadow edges widen with occluder distance.
+    light_bounce_strength: float — [0,1] albedo-tinted bounce gain (first
+                                   bounce at inject + gather feedback).
     light_ao_strength    : float — [0,1] strength of occupancy-based ambient
                                    occlusion at surfaces.
     light_max_point_lights: int  — max simultaneous point/area lights uploaded
@@ -472,7 +489,11 @@ class Config:
     light_c2_cells:        int   = 64
     light_c2_cell_m:       float = 8.0
     light_quant_m:         float = 0.0625
-    light_prop_iters:      int   = 2
+    light_gi_rays:         int   = 16
+    light_gi_steps:        int   = 24
+    light_gi_iters:        int   = 2
+    light_gi_smooth_passes: int  = 1
+    light_penumbra_deg:    float = 2.5
     light_bounce_strength: float = 0.7
     light_ao_strength:     float = 0.6
     light_max_point_lights: int  = 64

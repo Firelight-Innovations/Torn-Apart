@@ -7,7 +7,7 @@ Replaces the fixed-function texture × baked-vertex-colour pipeline when
 1. samples **direct sun/moon** light through the cascade visibility volume
    (voxel-marched shadows, computed in `lighting/glsl.py` INJECT) with
    Lambert shading on the (optionally normal-mapped) surface normal,
-2. samples **indirect GI** from the flood-fill radiance cascades, with the
+2. samples **indirect GI** from the ray-gathered radiance cascades, with the
    sample position quantised to ``light_quant_m`` (0.25 m) — the pixelated
    "light pixels" look (2×2×2 per terrain voxel),
 3. applies **voxel AO** from the occupancy volume,

@@ -1,0 +1,77 @@
+#version 430
+layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
+
+// SMOOTH — air-masked de-noise of the ray-gathered GI component
+// (runs after the GATHER iterations, ``light_gi_smooth_passes`` times).
+//
+// gather.comp samples only ``light_gi_rays`` (16) directions per cell, with
+// the fan phase varying cell-to-cell (the 8-phase 2x2x2 world tile).  Where
+// the visible sources have high contrast — the white GI room against the
+// night sky, a warm panel light through a doorway — neighbouring cells'
+// fans disagree visibly: blotchy patches on walls, confetti on the ground.
+//
+// This pass box-filters ONLY the ray-gathered component over the 3^3
+// neighbourhood, restricted to air cells, then re-adds the cell's own crisp
+// contact term:
+//
+//   ray(n)  = gathered(n) - own(n)        own(n) = u_source(n) + u_lit(n)
+//   out(c)  = own(c) + mean over air n in 3^3(c) of ray(n)
+//
+// Because the 3^3 kernel contains every phase of the 2x2x2 tile, the mean
+// reconstructs the FULL 8 x u_rays stratified direction set — this is closer
+// to "the blur completes the low-discrepancy sequence" than to a lossy blur.
+//
+// Invariants honoured:
+// - The own-cell contact term (first bounce off adjacent walls + emissive
+//   leak + dynamic-light direct) is subtracted before the blur and re-added
+//   after — voxel-crisp contact GI survives untouched.
+// - Solid cells (occupancy > 0.5) pass through unchanged and are EXCLUDED
+//   from every kernel: no averaging across walls.  Kernel radius is 1 cell
+//   and a wall is >= 2 solid cells (1 m at cascade 0), so the filter can
+//   never reach air on the far side of a wall — no light leaks.  Partial
+//   coarse cells (a in (0, 0.5]) gather like air and smooth like air.
+// - 0.5 m radius at cascade 0: far smaller than the red/green wall bleed
+//   gradient — colour bleed survives.
+// - Pure function of the gather output: deterministic, no temporal state.
+
+layout (rgba8)   uniform readonly  image3D u_geom;    // rgb albedo, a occupancy
+layout (rgba16f) uniform readonly  image3D u_source;  // inject: surface radiosity
+layout (rgba16f) uniform readonly  image3D u_lit;     // inject: dynamic-light direct
+layout (rgba16f) uniform readonly  image3D u_src;     // gather output (own + ray)
+layout (rgba16f) uniform writeonly image3D u_dst;
+
+uniform int u_cells;
+
+// The exact own-cell term gather.comp composed in (gather stores own + sum,
+// so the ray component is recoverable by subtraction — no extra texture).
+vec3 ownTerm(ivec3 c) {
+    return imageLoad(u_source, c).rgb + imageLoad(u_lit, c).rgb;
+}
+
+void main() {
+    ivec3 c = ivec3(gl_GlobalInvocationID.xyz);
+    if (any(greaterThanEqual(c, ivec3(u_cells)))) return;
+
+    vec4 v = imageLoad(u_src, c);
+    if (imageLoad(u_geom, c).a > 0.5) {
+        imageStore(u_dst, c, v);          // solid: own emission, untouched
+        return;
+    }
+
+    vec3  acc  = vec3(0.0);
+    float wsum = 0.0;
+    for (int dz = -1; dz <= 1; dz++)
+    for (int dy = -1; dy <= 1; dy++)
+    for (int dx = -1; dx <= 1; dx++) {
+        ivec3 nc = c + ivec3(dx, dy, dz);
+        if (any(lessThan(nc, ivec3(0))) ||
+            any(greaterThanEqual(nc, ivec3(u_cells))))
+            continue;                     // window edge: shrink the kernel
+        if (imageLoad(u_geom, nc).a > 0.5)
+            continue;                     // air-only: never blur across solids
+        // max() guards fp16 rounding when gathered ~ own (deep shadow).
+        acc  += max(imageLoad(u_src, nc).rgb - ownTerm(nc), vec3(0.0));
+        wsum += 1.0;
+    }
+    imageStore(u_dst, c, vec4(ownTerm(c) + acc / max(wsum, 1.0), v.a));
+}

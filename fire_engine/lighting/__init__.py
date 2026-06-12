@@ -3,7 +3,7 @@ fire_engine.lighting — Scene lighting: GPU volumetric cascades + CPU fallback.
 
 Two backends (``config.lighting_backend``; see docs/systems/lighting.md):
 
-GPU ("gpu", default) — camera-centered radiance cascades with flood-fill GI,
+GPU ("gpu", default) — camera-centered radiance cascades with ray-marched GI,
 voxel-marched sun/moon shadows, dynamic point/area lights, emissive
 materials, and froxel volumetric fog/god rays.  Headless halves exported
 here (``VolumeWindow``, ``assemble_geometry``, ``MaterialPalette``,

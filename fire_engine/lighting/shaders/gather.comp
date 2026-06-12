@@ -1,0 +1,136 @@
+#version 430
+layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
+
+// GATHER — ray-marched voxel GI (replaces the deprecated flood-fill
+// propagate pass, owner decision 2026-06-12).
+//
+// Per air cell, march a fibonacci-sphere fan of rays through the occupancy
+// field and integrate what each ray actually sees:
+//   - a ray that ESCAPES the volume picks up sky radiance, weighted toward
+//     the upward directions — so skylight reaches a cell only through real
+//     openings (a roof hole, a doorway), never by diffusion through walls.
+//     This is what kills the old "flat sky-blue fill on interior floors".
+//   - a ray that HITS a surface picks up that surface's lit source (the
+//     inject pass's first-bounce / emissive / dynamic-light field, sampled
+//     at the last air cell on our side of the wall) plus a feedback bounce
+//     of the previous gather result tinted by the surface albedo — real
+//     multi-bounce colour bleed (red/green walls onto white floors) at any
+//     range the rays reach, not just the 6-neighbour ring.
+//
+// Runs only when INJECT runs (geometry / sun / lights changed): the result
+// is a pure function of its inputs, so there is no per-frame iteration and
+// no convergence delay.  Two iterations per inject (light_gi_iters) let the
+// feedback term carry sky → wall → floor and second-bounce colour.
+//
+// Stability: every hit contribution is transmittance-weighted (Σ ≤ 1 per
+// ray) and the feedback term is scaled by albedo × u_bounce < 1, so the
+// fixed point is bounded by the injected sources + sky — no gain stacking.
+
+layout (rgba8)   uniform readonly  image3D u_geom;    // rgb albedo, a occupancy
+layout (rgba16f) uniform readonly  image3D u_source;  // inject: surface radiosity
+layout (rgba16f) uniform readonly  image3D u_lit;     // inject: dynamic-light direct
+layout (rgba16f) uniform readonly  image3D u_prev;    // previous gather (feedback bounce)
+layout (rgba16f) uniform writeonly image3D u_next;
+
+uniform int   u_cells;
+uniform int   u_rays;         // sphere directions per cell (config light_gi_rays)
+uniform int   u_steps;        // max one-cell march steps per ray (light_gi_steps)
+uniform float u_bounce;       // feedback bounce gain [0,1] (light_bounce_strength)
+uniform vec3  u_sky_ambient;  // hemispheric skylight irradiance (linear HDR)
+uniform vec3  u_origin_m;     // world meters of texel (0,0,0) min corner
+uniform float u_cell_m;
+
+const float GOLDEN_ANGLE = 2.39996323;   // radians
+const float TWO_PI       = 6.28318531;
+
+// Directional sky weight: how much sky lives in direction z (the vertical
+// component).  1 straight up, ~0.4 at the horizon (distant terrain eats most
+// of it), 0 below ~-35°.  Mean over the unit sphere is exactly 3/7, so
+// SKY_NORM = 7/3 makes a fully open-sky cell gather exactly u_sky_ambient —
+// magnitude parity with the old skylight injection.
+float skyW(float z) { return clamp(0.7 * z + 0.4, 0.0, 1.0); }
+const float SKY_NORM = 7.0 / 3.0;
+
+// Per-cell ray-fan phase: 8 phases tiled on a 2x2x2 WORLD-cell lattice
+// (world-anchored, like the old hash, so a window recenter cannot re-roll it
+// — no GI shimmer on recenter).  Unlike a free-running hash — whose
+// neighbour-to-neighbour fan disagreement is *random*, leaving blotchy
+// residue wherever visible sources have high contrast — the tile makes the
+// disagreement a fixed repeating pattern: any 3^3 neighbourhood contains all
+// 8 phases, so the air-masked SMOOTH pass (smooth.comp) averages the
+// complete phase family exactly and the de-noised fan is effectively
+// 8 x u_rays stratified directions per cell.
+float phase8(ivec3 wcell) {
+    ivec3 t = wcell & 1;
+    return (float(t.x | (t.y << 1) | (t.z << 2)) + 0.5) / 8.0;  // (0,1)
+}
+
+void main() {
+    ivec3 c = ivec3(gl_GlobalInvocationID.xyz);
+    if (any(greaterThanEqual(c, ivec3(u_cells)))) return;
+
+    // Own-cell terms at FULL strength: contact GI (the first bounce off the
+    // adjacent walls + emissive leak) and the dynamic-light direct radiance
+    // stay voxel-crisp.  u_lit is added ONLY here — the ray fan must never
+    // re-gather it off surfaces (it is in-air irradiance, not something a
+    // wall emits; gathering it once per visible surface over-counted the GI
+    // test room's panel light ~2.3x).  Its surface bounce arrives correctly
+    // albedo-tinted through the feedback term below instead.  The ray fan
+    // also skips its first marched cell so immediately adjacent surfaces are
+    // not double-counted against the own-cell source.
+    vec3 own = imageLoad(u_source, c).rgb + imageLoad(u_lit, c).rgb;
+    vec4 g = imageLoad(u_geom, c);
+    if (g.a > 0.5) {
+        // Fully-solid cells hold their own emission only.  (Partial coarse
+        // cells, a in (0,0.5], gather like air so hollow rooms stay lit.)
+        imageStore(u_next, c, vec4(own, 1.0));
+        return;
+    }
+
+    // Per-cell rotation + stratum shift of the fibonacci spiral, from the
+    // 8-phase world-cell tile above: the phase offsets BOTH the azimuth
+    // (frac8 of a turn) and the polar stratum (frac8 of a z slab), so the
+    // 8 phases' fans interleave into one stratified 8 x u_rays direction
+    // set rather than 8 rotated copies of the same z rings.
+    ivec3 wcell = ivec3(floor(u_origin_m / u_cell_m + 0.5)) + c;
+    float frac8 = phase8(wcell);
+
+    vec3 sum = vec3(0.0);
+    for (int r = 0; r < u_rays; r++) {
+        float z   = 1.0 - (2.0 * (float(r) + frac8)) / float(u_rays);
+        float rad = sqrt(max(1.0 - z * z, 0.0));
+        float phi = float(r) * GOLDEN_ANGLE + frac8 * TWO_PI;
+        vec3 d = vec3(rad * cos(phi), rad * sin(phi), z);
+
+        vec3 p = vec3(c) + 0.5 + d * 1.2;     // hop out of the own cell
+        ivec3 cprev = c;                      // last air cell along the ray
+        float T = 1.0;                        // transmittance so far
+        for (int i = 0; i < u_steps; i++) {
+            ivec3 cur = ivec3(floor(p));
+            if (any(lessThan(cur, ivec3(0))) ||
+                any(greaterThanEqual(cur, ivec3(u_cells))))
+                break;                        // left the window: open sky
+            vec4 ng = imageLoad(u_geom, cur);
+            if (ng.a > 0.001) {
+                // Surface hit (fractional occupancy = partial hit).  Radiosity
+                // is sampled at the LAST AIR CELL on our side: the inject
+                // source field lives in air next to lit surfaces, so light
+                // can never be picked up through the back of a wall.
+                if (i > 0) {
+                    vec3 srcA = imageLoad(u_source, cprev).rgb;
+                    vec3 fb   = imageLoad(u_prev, cprev).rgb
+                                * ng.rgb * u_bounce;
+                    sum += T * ng.a * (srcA + fb);
+                }
+                T *= 1.0 - ng.a;
+                if (T < 0.01) break;          // opaque: ray finished
+            }
+            if (ng.a < 0.5) cprev = cur;
+            p += d;
+        }
+        // Whatever transmittance survives sees sky in this direction.
+        sum += T * u_sky_ambient * (skyW(d.z) * SKY_NORM);
+    }
+
+    imageStore(u_next, c, vec4(own + sum / float(u_rays), 1.0));
+}

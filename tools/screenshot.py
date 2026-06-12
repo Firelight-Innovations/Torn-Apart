@@ -308,7 +308,7 @@ def capture(frames: int, out_name: str, explode: bool,
 
     if torch and getattr(app, "lighting_pipeline", None) is not None:
         # Drop a warm torch point-light ahead of the camera (GPU backend
-        # only) so GI flood-fill / volumetric glow can be captured headless.
+        # only) so GI gather / volumetric glow can be captured headless.
         # Raycast for the surface — a fixed camera-relative offset buries the
         # torch below ground at some spawn heights (same failure the
         # --explode path had), which reads as "point lights are broken".

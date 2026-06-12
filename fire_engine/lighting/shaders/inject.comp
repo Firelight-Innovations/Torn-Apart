@@ -4,17 +4,18 @@ layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
 layout (rgba8)   uniform readonly  image3D u_geom;    // rgb albedo, a occupancy
 layout (rgba8)   uniform readonly  image3D u_emis;    // rgb emission / EMISSION_SCALE
 layout (rgba8)   uniform writeonly image3D u_vis;     // r sun vis, g moon vis, b sky vis
-layout (rgba16f) uniform writeonly image3D u_direct;  // injected source radiance
-// LOCALIZED sources only (first bounce + emissive leak + dynamic lights —
-// everything in u_direct EXCEPT skylight).  The propagate diffusion is
-// contractive, so it squashes spatially small sources ~3-8x by the time the
-// field converges (broad fields like skylight pass through at full strength —
-// uniform equilibrium of next = d(1-k) + k*avg is exactly d).  The surface
-// shader samples THIS volume directly and adds it at full strength, so the
-// first bounce / torch glow / emissive leak land on nearby surfaces
-// undiluted and voxel-crisp; the diffused copy inside u_direct's flood fill
-// remains as the soft multi-bounce tail.
-layout (rgba16f) uniform writeonly image3D u_bounce_direct;
+// Surface-radiosity field consumed by the GATHER pass (gather.comp): first
+// bounce of celestial light off the 6 solid neighbours (Lambertian, 1/pi)
+// + emissive-neighbour leak.  These are OUTGOING-RADIANCE proxies, so a
+// gather ray may treat a hit as "the surface there emits u_source".
+// NO skylight (the ray fan integrates sky through real openings itself) and
+// NO dynamic lights (u_lit below) — both would be massively over-counted if
+// every visible surface re-emitted them.
+layout (rgba16f) uniform writeonly image3D u_source;
+// Dynamic-light direct radiance in air (point/area/spot, shadow-marched).
+// Added ONCE per cell by the gather (own-cell term only); its bounce off
+// surfaces arrives via the gather's albedo-tinted feedback term instead.
+layout (rgba16f) uniform writeonly image3D u_lit;
 
 uniform int   u_cells;
 uniform vec3  u_sun_dir;        // unit, toward sun (world)
@@ -24,13 +25,6 @@ uniform vec3  u_moon_radiance;
 uniform vec3  u_sky_ambient;    // hemispheric skylight irradiance
 uniform float u_bounce;         // first-bounce gain [0,1]
 uniform float u_emission_scale; // EMISSION_SCALE from volume.py
-// Flood-fill forcing compensation for GI terms (gpu.py: ~0.6/(1-decay)).
-// The propagate diffusion weights its forcing by (1-decay), so localized
-// sources reach equilibrium squashed by that factor while broad fields
-// (skylight) pass through at full strength; pre-multiplying the GI terms
-// keeps spread bounce/emissive light at near-physical strength.  Dynamic
-// lights are NOT gained (their look is tuned around direct injection).
-uniform float u_gi_gain;
 uniform int   u_num_lights;
 uniform vec4  u_light_pos_r[64];  // xyz world pos / box centre, w falloff radius
 uniform vec4  u_light_col_t[64];  // rgb color*intensity, w type (0 point, 1 area, 2 spot)
@@ -125,27 +119,32 @@ void main() {
                     * boxVis(wp, vec3(0.0, 0.0, 1.0), 1e3);
     imageStore(u_vis, c, vec4(sunVis, moonVis, skyVis, 1.0));
 
-    // --- direct radiance injection --------------------------------------
-    vec3 direct = vec3(0.0);
+    // --- lit-source injection --------------------------------------------
     if (solid) {
         // Emissive solids carry their own radiance (visible surface glow);
-        // their light enters the flood fill through adjacent air below.
-        direct = imageLoad(u_emis, c).rgb * u_emission_scale;
-        imageStore(u_direct, c, vec4(direct, 1.0));
-        imageStore(u_bounce_direct, c, vec4(0.0));
+        // their light reaches the air through the emissive leak below.
+        vec3 direct = imageLoad(u_emis, c).rgb * u_emission_scale;
+        imageStore(u_source, c, vec4(direct, 1.0));
+        imageStore(u_lit, c, vec4(0.0));
         return;
     }
 
-    // Skylight: open-air cells receive the hemispheric sky ambient.
-    // (Broad source — flood fill only; NOT part of u_bounce_direct.)
-    direct += u_sky_ambient * skyVis;
-    vec3 gi  = vec3(0.0);         // first bounce + emissive leak (gained)
-    vec3 lit = vec3(0.0);         // dynamic lights (not gained)
+    // NOTE: skylight is deliberately NOT injected — the gather pass
+    // integrates sky through real openings per cell (gather.comp).
+    vec3 gi  = vec3(0.0);         // first bounce + emissive leak
+    vec3 lit = vec3(0.0);         // dynamic lights
 
     // First bounce + emissive leak from the 6 neighbours.  A neighbour's
     // reflected/emitted contribution scales by its solid fraction ``no`` (the
     // occupancy), so a fully-solid wall (no == 1) reflects exactly as before
     // and air (no == 0) is skipped; a half-solid coarse cell reflects half.
+    //
+    // INV_PI converts reflected celestial IRRADIANCE to outgoing RADIANCE
+    // (Lambertian).  It matters now: the gather pass integrates this source
+    // over the full visible solid angle, so an un-normalised source makes
+    // every surface ~3x too hot and an enclosed white room blows out (the
+    // gather feedback term needs no 1/pi — for isotropic ambient the
+    // hemisphere integral's pi cancels it exactly).
     for (int i = 0; i < 6; i++) {
         ivec3 nc = c + NEIGHBORS[i];
         float no = occAt(nc);
@@ -156,7 +155,7 @@ void main() {
         float lamM = max(dot(nrm, u_moon_dir), 0.0);
         gi += ng.rgb * (u_sun_radiance  * (sunVis  * lamS) +
                         u_moon_radiance * (moonVis * lamM)) *
-              (u_bounce * 0.45 * no);
+              (u_bounce * 0.318310 * no);   // 1/pi
         gi += imageLoad(u_emis,
               clamp(nc, ivec3(0), ivec3(u_cells - 1))).rgb *
               (u_emission_scale * 0.6 * no);
@@ -198,6 +197,6 @@ void main() {
         lit += u_light_col_t[i].rgb * (atten * vis);
     }
 
-    imageStore(u_direct, c, vec4(direct + gi * u_gi_gain + lit, 1.0));
-    imageStore(u_bounce_direct, c, vec4(gi + lit, 1.0));
+    imageStore(u_source, c, vec4(gi, 1.0));
+    imageStore(u_lit, c, vec4(lit, 1.0));
 }

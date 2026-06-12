@@ -28,7 +28,7 @@ Fragment shader
 ---------------
 Binary alpha cutout of the pixel-art ``grass_tuft`` texture (discard < 0.5 —
 no sorting, depth-write stays on), lit by the SAME radiance-cascade volumes
-as the terrain: direct sun/moon × voxel-marched visibility + flood-fill GI,
+as the terrain: direct sun/moon × voxel-marched visibility + ray-gathered GI,
 sampled at the blade base quantised to the ``u_quant_m`` light-pixel grid, so
 grass shows the identical pixelated light patches, torch glow and crater
 shadows as the ground it stands on.  Froxel fog composites with one tap, then

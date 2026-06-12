@@ -646,7 +646,7 @@ class DevOverlay:
 
         Emissive props register an :class:`~fire_engine.lighting.lights.AreaLight`
         matching their world bounds on the GPU lighting pipeline — the cube
-        becomes a glowing box light feeding the GI flood fill and the froxel
+        becomes a glowing box light feeding the GI gather and the froxel
         fog (the emission-map path for dynamic objects).  The visual gets a
         bright warm colour-scale so the prop itself reads as glowing.
         No-op without the GPU lighting backend or with nothing selected.

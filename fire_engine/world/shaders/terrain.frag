@@ -21,8 +21,6 @@ uniform sampler3D u_c0_radiance;
 uniform sampler3D u_c0_vis;       // r sun, g moon, b sky visibility
 uniform sampler3D u_c0_geom;      // rgb albedo, a occupancy
 uniform sampler3D u_c0_emis;
-uniform sampler3D u_c0_bounce;    // localized direct sources (GI first bounce,
-uniform sampler3D u_c1_bounce;    // emissive leak, dynamic lights — no sky)
 uniform vec3  u_c0_origin_m;
 uniform float u_c0_cell_m;
 uniform float u_c0_cells;
@@ -52,6 +50,7 @@ uniform vec3  u_moon_dir;
 uniform vec3  u_moon_radiance;
 uniform vec3  u_sky_ambient;
 uniform float u_quant_m;          // light-pixel size (0.0625 m → 8x8 per voxel)
+uniform float u_penumbra_tan;     // tan(celestial penumbra cone half-angle)
 uniform float u_px_rad;           // view angle per screen pixel (radians)
 uniform float u_ao_strength;
 uniform float u_exposure;
@@ -220,6 +219,27 @@ float refineVis(vec3 wp, vec3 dir) {
     return vis;
 }
 
+// Soft-penumbra refinement: average four refineVis marches whose directions
+// are jittered inside a cone of half-angle atan(u_penumbra_tan) around the
+// light.  The fractional result turns the hard voxel-quantised shadow
+// boundary (a re-resolved march is binary per ray) into a smooth gradient
+// whose width grows with occluder distance — a real penumbra.  Runs from the
+// UNQUANTISED probe so the gradient is continuous across light pixels, and
+// only inside the penumbra band (the gate in main), so full-sun/full-shadow
+// fragments still cost one texture tap.
+float refineVisSoft(vec3 wp, vec3 dir) {
+    vec3 up = abs(dir.z) < 0.9 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+    vec3 t1 = normalize(cross(dir, up));
+    vec3 t2 = cross(dir, t1);
+    float r = u_penumbra_tan * 0.7071;         // diagonal cone offsets
+    float v = 0.0;
+    v += refineVis(wp, normalize(dir + ( t1 + t2) * r));
+    v += refineVis(wp, normalize(dir + ( t1 - t2) * r));
+    v += refineVis(wp, normalize(dir + (-t1 + t2) * r));
+    v += refineVis(wp, normalize(dir + (-t1 - t2) * r));
+    return v * 0.25;
+}
+
 vec3 acesTonemap(vec3 x) {
     return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14),
                  0.0, 1.0);
@@ -320,33 +340,17 @@ void main() {
     float occ;
     sampleCascades(probe, radiance, vis, occ);
 
-    // Re-resolve the celestial shadow edge at the light-pixel grid wherever
-    // the trilinear cascade sample is in the penumbra band (see refineVis).
-    // The march starts at the quantized probe, so every fragment of one
-    // light pixel computes the same march — crisp retro-blocky edges, no
-    // sub-pixel shimmer, and full-sun/full-shadow stay one tap.
+    // Re-resolve the celestial shadow edge wherever the trilinear cascade
+    // sample is in the penumbra band (see refineVisSoft).  The cone-jittered
+    // marches start at the UNQUANTISED surface probe so the penumbra is a
+    // smooth continuous gradient, not light-pixel stairs; full-sun and
+    // full-shadow fragments never get here (1 texture tap as before).
+    vec3 probeS = v_world + n * (u_c0_cell_m * 0.75);
     if (u_sun_dir.z > -0.05 && vis.r > 0.02 && vis.r < 0.98)
-        vis.r = refineVis(probe, u_sun_dir);
+        vis.r = refineVisSoft(probeS, u_sun_dir);
     if (u_moon_dir.z > -0.05 && vis.g > 0.02 && vis.g < 0.98 &&
         dot(u_moon_radiance, vec3(1.0)) > 1e-4)
-        vis.g = refineVis(probe, u_moon_dir);
-
-    // Localized direct GI (first bounce / emissive leak / dynamic lights) at
-    // FULL strength from the bounce volumes — the flood-filled ``radiance``
-    // only carries a 3-8x diluted copy of small sources (the diffusion is
-    // contractive), which is why open-world GI was invisible.  Finest-first
-    // cross-fade, same containment weighting as sampleCascades.
-    vec3 bounceD = vec3(0.0);
-    {
-        vec3 buv1 = c_uv(probe, u_c1_origin_m, u_c1_cell_m, u_c1_cells);
-        float bw1 = boxWeight(buv1, 0.12);
-        if (bw1 > 0.0)
-            bounceD = texture(u_c1_bounce, buv1).rgb * bw1;
-        vec3 buv0 = c_uv(probe, u_c0_origin_m, u_c0_cell_m, u_c0_cells);
-        float bw0 = boxWeight(buv0, 0.14);
-        if (bw0 > 0.0)
-            bounceD = mix(bounceD, texture(u_c0_bounce, buv0).rgb, bw0);
-    }
+        vis.g = refineVisSoft(probeS, u_moon_dir);
 
     // Voxel AO: occupancy a little farther out along the normal + above.
     vec3 aoR, aoV; float occFar;
@@ -354,7 +358,7 @@ void main() {
     float ao = 1.0 - u_ao_strength * clamp(0.5 * occ + 0.7 * occFar, 0.0, 1.0);
 
     // ------------------------------------------------------------------
-    // Compose: direct celestial + flood-fill GI + emission.
+    // Compose: direct celestial + gathered voxel GI + emission.
     // ------------------------------------------------------------------
     // ------------------------------------------------------------------
     // World-space procedural ground albedo (never repeats across the map).
@@ -431,7 +435,7 @@ void main() {
         ownEmis = texture(u_c0_emis, uv0).rgb * u_emission_scale;
     vec3 mapEmis = pow(texture(p3d_Texture2, v_uv).rgb, vec3(2.2)) * 4.0;
 
-    vec3 hdr = base * (direct + (radiance + bounceD) * ao) + ownEmis + mapEmis;
+    vec3 hdr = base * (direct + radiance * ao) + ownEmis + mapEmis;
 
     // ------------------------------------------------------------------
     // Volumetric fog composite (one tap into the integrated froxels).

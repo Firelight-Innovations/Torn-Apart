@@ -637,7 +637,7 @@ def build_demo():
         # a black hole through the world until the stream budget catches up.
         chunk_manager.remesh_edited(touched, light_sampler)
         # Volumetric flash: a brief, bright point light in the radiance
-        # volume — the GI flood fill carries it into the crater and the
+        # volume — the GI gather carries it into the crater and the
         # froxel fog catches it as a glow.
         if lighting_pipeline is not None:
             from fire_engine.lighting.lights import PointLight
@@ -735,7 +735,7 @@ def build_demo():
                   int(new_tod // 3600), int(new_tod % 3600 // 60))
 
     # --- Dynamic-light dev bindings (L / K) — GPU lighting backend only -----
-    # L drops a warm torch point-light at the camera (watch the GI flood-fill
+    # L drops a warm torch point-light at the camera (watch the gathered GI
     # carry it around corners); K clears all dropped lights.
     def on_drop_torch() -> None:
         """L → drop a permanent torch light at the camera position."""
@@ -920,7 +920,7 @@ def build_gi_test_room(app) -> tuple[float, float, float]:
     # emission alone glows but only fills its diffusion reach (~4 m); a real
     # box light gives the whole 9 m room inverse-square direct fill, the
     # coloured side walls then bleed red/green onto the white surfaces via the
-    # GI flood-fill (the bounce we want to demonstrate), and — unlike voxel
+    # GI gather (the bounce we want to demonstrate), and — unlike voxel
     # emission — the exposure meter can see it, so the aperture settles sanely.
     pipeline = getattr(app, "lighting_pipeline", None)
     if pipeline is not None:

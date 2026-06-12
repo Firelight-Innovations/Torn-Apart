@@ -32,7 +32,11 @@ light_c1_cell_m = 2.0          # cascade-1 cell edge (meters)
 light_c2_cells = 64            # cascade-2 texels per axis (64 x 8.0 m = 512 m box) — coarse FAR cascade
 light_c2_cell_m = 8.0          # cascade-2 cell edge (meters); keeps distant terrain lit (low-res shadows + GI)
 light_quant_m = 0.0625         # shading sample quantisation (meters) → 8x8x8 light pixels per voxel
-light_prop_iters = 2           # GI flood-fill iterations per frame per cascade
+light_gi_rays = 16             # ray-marched GI: sphere directions gathered per cell
+light_gi_steps = 24            # max one-cell steps per GI ray (reach = steps x cell size)
+light_gi_iters = 2             # gather iterations per inject (>=2 for sky->wall->floor bounce)
+light_gi_smooth_passes = 1     # air-masked 3^3 de-noise passes on the ray-gathered GI (0 = off; contact GI stays crisp)
+light_penumbra_deg = 2.5       # celestial penumbra cone half-angle (soft shadow edges)
 light_bounce_strength = 0.7    # [0,1] albedo-tinted bounce gain
 light_ao_strength = 0.6        # [0,1] voxel ambient-occlusion strength
 light_max_point_lights = 64    # max point/area lights uploaded per frame

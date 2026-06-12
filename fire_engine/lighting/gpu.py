@@ -5,13 +5,13 @@ The one lighting file allowed to touch the GPU (ARCHITECTURE §4 rule 4:
 "Lighting API excepted for light-grid GPU work").  Owns:
 
 - the per-cascade 3-D textures (geometry/emission uploads from
-  `lighting/volume.py` numpy blocks; GPU-written visibility, direct and
+  `lighting/volume.py` numpy blocks; GPU-written visibility, lit-source and
   ping-pong radiance volumes),
 - compute-shader dispatch (`GraphicsEngine.dispatch_compute`) for injection,
-  flood-fill propagation and froxel fog (sources in `lighting/glsl.py`),
+  the ray-marched GI gather and froxel fog (sources in `lighting/glsl.py`),
 - the per-frame schedule: re-assemble/upload only when a cascade window
-  recenters or terrain changes; re-inject only when the volume, sun/moon,
-  sky or dynamic lights changed; propagate + fog every frame,
+  recenters or terrain changes; re-inject + re-gather only when the volume,
+  sun/moon, sky or dynamic lights changed; fog every frame,
 - the shader-input contract consumed by `world/terrain_shader.py`
   (`bind_surface_inputs` once + `update_surface_inputs` per frame).
 
@@ -137,19 +137,15 @@ class _Cascade:
     """One radiance cascade: window + textures + compute node paths."""
 
     def __init__(self, index: int, cells: int, cell_m: float,
-                 inject_shader: Shader, propagate_shader: Shader,
-                 shift_shader: Shader, decay: float, bounce: float,
+                 inject_shader: Shader, gather_shader: Shader,
+                 smooth_shader: Shader, shift_shader: Shader, bounce: float,
+                 gi_rays: int, gi_steps: int,
                  *, margin_cells: int = 8) -> None:
         self.index = index
         self.window = VolumeWindow(cells=cells, cell_m=cell_m,
                                    margin_cells=margin_cells)
         self.cells = cells
         self.cell_m = cell_m
-        self.decay = decay
-        # Extra propagate iterations for a few frames after a recenter, so the
-        # newly-exposed border band (filled with vec4(0) by the shift pass)
-        # converges quickly instead of brightening over many frames.
-        self.boost_frames = 0
 
         self.geom = _make_volume_texture(f"lit_geom_{index}", cells,
                                          hdr=False, linear=True)
@@ -157,14 +153,15 @@ class _Cascade:
                                          hdr=False, linear=True)
         self.vis = _make_volume_texture(f"lit_vis_{index}", cells,
                                         hdr=True, linear=True)
-        self.direct = _make_volume_texture(f"lit_direct_{index}", cells,
-                                           hdr=True, linear=True)
-        # Localized injected sources only (first bounce, emissive leak,
-        # dynamic lights — no skylight).  Sampled directly by the surface
-        # shader at full strength so small GI sources survive the contractive
-        # flood fill (which squashes them ~3-8x); see inject.comp.
-        self.bounce_direct = _make_volume_texture(
-            f"lit_bounce_{index}", cells, hdr=True, linear=True)
+        # Surface-radiosity proxies (celestial first bounce + emissive leak —
+        # no skylight, no dynamic lights), written by INJECT, gathered off
+        # surfaces by GATHER.
+        self.source = _make_volume_texture(
+            f"lit_source_{index}", cells, hdr=True, linear=True)
+        # Dynamic-light direct radiance in air; added once per cell by GATHER
+        # (own-cell term), never re-gathered off surfaces.
+        self.lit = _make_volume_texture(
+            f"lit_dyn_{index}", cells, hdr=True, linear=True)
         self.radiance = [
             _make_volume_texture(f"lit_rad_{index}_a", cells,
                                  hdr=True, linear=True),
@@ -186,35 +183,52 @@ class _Cascade:
         self.inject_np.set_shader_input("u_geom", self.geom)
         self.inject_np.set_shader_input("u_emis", self.emis)
         self.inject_np.set_shader_input("u_vis", self.vis)
-        self.inject_np.set_shader_input("u_direct", self.direct)
-        self.inject_np.set_shader_input("u_bounce_direct", self.bounce_direct)
+        self.inject_np.set_shader_input("u_source", self.source)
+        self.inject_np.set_shader_input("u_lit", self.lit)
         self.inject_np.set_shader_input("u_cells", cells)
         self.inject_np.set_shader_input("u_emission_scale",
                                         float(EMISSION_SCALE))
-        # GI flood-forcing compensation (see inject.comp u_gi_gain): the
-        # propagate equilibrium carries localized forcing at (1-decay) of its
-        # injected value, so pre-gain the GI terms; 0.6 trims the broad-sheet
-        # case (open sunlit ground) back to ~physical bounce strength.
-        self.inject_np.set_shader_input("u_gi_gain", 0.6 / (1.0 - decay))
 
-        # Two pre-bound propagate nodes: a→b and b→a.
-        self.prop_np: list[NodePath] = []
+        # Two pre-bound gather nodes: a→b and b→a (the previous gather feeds
+        # the multi-bounce feedback term).  Per-dispatch inputs (sky ambient,
+        # window origin) are refreshed by the pipeline before each run.
+        self.gather_np: list[NodePath] = []
         for src, dst in ((0, 1), (1, 0)):
-            pn = NodePath(f"lit_prop_{index}_{src}{dst}")
-            pn.set_shader(propagate_shader)
-            pn.set_shader_input("u_prev", self.radiance[src])
-            pn.set_shader_input("u_next", self.radiance[dst])
-            pn.set_shader_input("u_direct", self.direct)
-            pn.set_shader_input("u_geom", self.geom)
-            pn.set_shader_input("u_cells", cells)
-            pn.set_shader_input("u_decay", float(decay))
-            pn.set_shader_input("u_bounce", float(bounce))
-            self.prop_np.append(pn)
+            gn = NodePath(f"lit_gather_{index}_{src}{dst}")
+            gn.set_shader(gather_shader)
+            gn.set_shader_input("u_prev", self.radiance[src])
+            gn.set_shader_input("u_next", self.radiance[dst])
+            gn.set_shader_input("u_source", self.source)
+            gn.set_shader_input("u_lit", self.lit)
+            gn.set_shader_input("u_geom", self.geom)
+            gn.set_shader_input("u_cells", cells)
+            gn.set_shader_input("u_rays", int(gi_rays))
+            gn.set_shader_input("u_steps", int(gi_steps))
+            gn.set_shader_input("u_bounce", float(bounce))
+            gn.set_shader_input("u_cell_m", float(cell_m))
+            self.gather_np.append(gn)
+
+        # Two pre-bound smooth nodes (a→b and b→a): air-masked 3³ box filter
+        # of the ray-gathered GI component, run after the gather iterations
+        # (light_gi_smooth_passes times).  The own-cell contact term
+        # (u_source + u_lit) is recomposed crisp; solids are never crossed.
+        self.smooth_np: list[NodePath] = []
+        for src, dst in ((0, 1), (1, 0)):
+            sn = NodePath(f"lit_smooth_{index}_{src}{dst}")
+            sn.set_shader(smooth_shader)
+            sn.set_shader_input("u_src", self.radiance[src])
+            sn.set_shader_input("u_dst", self.radiance[dst])
+            sn.set_shader_input("u_geom", self.geom)
+            sn.set_shader_input("u_source", self.source)
+            sn.set_shader_input("u_lit", self.lit)
+            sn.set_shader_input("u_cells", cells)
+            self.smooth_np.append(sn)
 
         # Two pre-bound shift nodes (a→b and b→a): copy the CURRENT radiance
         # (read side = ``ping``) into the other texture offset by the recenter
-        # cell delta, then the caller swaps ``ping`` so the next propagate reads
-        # the spatially-aligned field.  Only ``u_shift`` is refreshed per use.
+        # cell delta, then the caller swaps ``ping`` so the same-frame re-gather
+        # feedback reads the spatially-aligned field.  Only ``u_shift`` is
+        # refreshed per use.
         self.shift_np: list[NodePath] = []
         for src, dst in ((0, 1), (1, 0)):
             sn = NodePath(f"lit_shift_{index}_{src}{dst}")
@@ -226,7 +240,7 @@ class _Cascade:
 
     @property
     def radiance_current(self) -> Texture:
-        """The radiance texture holding the latest propagated light."""
+        """The radiance texture holding the latest gathered light."""
         return self.radiance[self.ping]
 
     def origin_m(self) -> tuple[float, float, float]:
@@ -310,17 +324,18 @@ class GpuLightingPipeline:
 
         inject_shader = Shader.make_compute(
             Shader.SL_GLSL, glsl.INJECT_COMPUTE)
-        propagate_shader = Shader.make_compute(
-            Shader.SL_GLSL, glsl.PROPAGATE_COMPUTE)
+        gather_shader = Shader.make_compute(
+            Shader.SL_GLSL, glsl.GATHER_COMPUTE)
+        smooth_shader = Shader.make_compute(
+            Shader.SL_GLSL, glsl.SMOOTH_COMPUTE)
         shift_shader = Shader.make_compute(
             Shader.SL_GLSL, glsl.SHIFT_COMPUTE)
 
-        # Diffusion reach ≈ 1/(1−decay) cells; aim a few metres on each cascade.
         # Cascade 2 is the coarse FAR cascade (8 m cells, 512 m box): it keeps
         # distant terrain lit with low-resolution shadows + GI once a surface
         # leaves cascade 1, instead of the old hard fall-back to flat sky
         # ambient.  It rides the exact same off-thread assembly + inject +
-        # propagate machinery as the others (the per-frame loops iterate
+        # gather machinery as the others (the per-frame loops iterate
         # ``self.cascades``), so "bake far chunks on a separate thread at a
         # lower resolution" needs no new subsystem.
         # Cascade-2 recenter hysteresis is widened (margin 16 cells = 128 m vs
@@ -329,19 +344,21 @@ class GpuLightingPipeline:
         # ChunkBlockCache cutting per-chunk re-downsample cost — can otherwise
         # lag at flight speed, leaving c2 permanently mid-assembly.  The cache
         # restores throughput; the wider margin cuts the recenter rate.
+        bounce = float(config.light_bounce_strength)
+        gi_rays = int(config.light_gi_rays)
+        gi_steps = int(config.light_gi_steps)
+        self._gi_iters = max(1, int(config.light_gi_iters))
+        self._gi_smooth = max(0, int(config.light_gi_smooth_passes))
         self.cascades = [
             _Cascade(0, config.light_c0_cells, config.light_c0_cell_m,
-                     inject_shader, propagate_shader, shift_shader,
-                     decay=math.exp(-config.light_c0_cell_m / 4.0),
-                     bounce=float(config.light_bounce_strength)),
+                     inject_shader, gather_shader, smooth_shader,
+                     shift_shader, bounce, gi_rays, gi_steps),
             _Cascade(1, config.light_c1_cells, config.light_c1_cell_m,
-                     inject_shader, propagate_shader, shift_shader,
-                     decay=math.exp(-config.light_c1_cell_m / 10.0),
-                     bounce=float(config.light_bounce_strength)),
+                     inject_shader, gather_shader, smooth_shader,
+                     shift_shader, bounce, gi_rays, gi_steps),
             _Cascade(2, config.light_c2_cells, config.light_c2_cell_m,
-                     inject_shader, propagate_shader, shift_shader,
-                     decay=math.exp(-config.light_c2_cell_m / 24.0),
-                     bounce=float(config.light_bounce_strength),
+                     inject_shader, gather_shader, smooth_shader,
+                     shift_shader, bounce, gi_rays, gi_steps,
                      margin_cells=16),
         ]
 
@@ -405,10 +422,6 @@ class GpuLightingPipeline:
         # of flashing black for the 1-2 frames an async reassembly lags.
         self._edited_coords: set[tuple[int, int, int]] = set()
         self._force_all_dirty = True         # first frame: build everything
-        # After the boot-frame synchronous assemble + first inject, run a big
-        # one-shot propagate burst so the world starts at converged GI instead
-        # of brightening over ~1 s (light_prop_iters per frame is slow to fill).
-        self._boot_warmup_pending = True
         self._load_dirty_timer = 0.0
         self._last_sun: tuple | None = None  # (sun_dir, sun_rad, moon, sky)
         bus.subscribe(TerrainEditedEvent, self._on_terrain_edited)
@@ -555,7 +568,10 @@ class GpuLightingPipeline:
             )
         box_min, box_max, n_boxes = self._box_uniforms
 
-        # 4. Injection — only for cascades whose light or geometry changed.
+        # 4. Injection + gather — only for cascades whose light or geometry
+        #    changed.  The gather result is a pure function of the injected
+        #    fields, so there is nothing to run on quiet frames: steady-state
+        #    per-frame GPU lighting cost is the froxel fog alone.
         if any(c.needs_inject for c in self.cascades):
             pos_r = [LVecBase4f(*packed[i, 0:4]) for i in range(glsl.MAX_LIGHTS)]
             col_t = [LVecBase4f(*packed[i, 4:8]) for i in range(glsl.MAX_LIGHTS)]
@@ -585,36 +601,27 @@ class GpuLightingPipeline:
                 groups = (_groups(casc.cells, 4),) * 3
                 engine.dispatch_compute(
                     groups, n.get_attrib(ShaderAttrib), gsg)
-
-        # 5. Propagation — every frame; light visibly flows toward steady state.
-        #    A just-recentered cascade runs extra iterations for a few frames
-        #    (``boost_frames``) so the border band the shift pass zeroed out
-        #    converges fast instead of crawling in over ~1/light_prop_iters s.
-        base_iters = max(1, self._config.light_prop_iters)
-        for casc in self.cascades:
-            groups = (_groups(casc.cells, 4),) * 3
-            iters = base_iters
-            if casc.boost_frames > 0:
-                iters += 6
-                casc.boost_frames -= 1
-            for _ in range(iters):
-                node = casc.prop_np[casc.ping]      # ping → pong
-                engine.dispatch_compute(
-                    groups, node.get_attrib(ShaderAttrib), gsg)
-                casc.ping ^= 1
-
-        # 5b. Boot warmup: on the very first frame, after the first inject +
-        #     normal propagate above, flood the field to convergence in one shot
-        #     (~48 iters, all cascades) so the world is fully lit on frame 1
-        #     instead of fading up over a second of normal 2-iters/frame.
-        if self._boot_warmup_pending:
-            self._boot_warmup_pending = False
-            for casc in self.cascades:
-                groups = (_groups(casc.cells, 4),) * 3
-                for _ in range(48):
-                    node = casc.prop_np[casc.ping]
+                # 5. Gather (ray-marched GI) over the fresh source field.
+                #    Iteration 1 carries sky + first bounce; iteration 2 lets
+                #    the feedback term add sky→wall→floor and second-bounce
+                #    colour (it reads iteration 1's output).
+                for _ in range(self._gi_iters):
+                    gn = casc.gather_np[casc.ping]      # ping → pong
+                    gn.set_shader_input("u_sky_ambient",
+                                        LVecBase3f(*sky_amb))
+                    gn.set_shader_input("u_origin_m",
+                                        LVecBase3f(*casc.origin_m()))
                     engine.dispatch_compute(
-                        groups, node.get_attrib(ShaderAttrib), gsg)
+                        groups, gn.get_attrib(ShaderAttrib), gsg)
+                    casc.ping ^= 1
+                # 5b. Smooth (air-masked de-noise of the ray component) —
+                #     completes the gather's 8-phase ray-fan tile so the
+                #     blotch/confetti noise of disagreeing neighbour fans
+                #     averages out; contact GI stays voxel-crisp.
+                for _ in range(self._gi_smooth):
+                    sm = casc.smooth_np[casc.ping]      # ping → pong
+                    engine.dispatch_compute(
+                        groups, sm.get_attrib(ShaderAttrib), gsg)
                     casc.ping ^= 1
 
         # 6. Froxel fog.
@@ -780,15 +787,13 @@ class GpuLightingPipeline:
         casc.emis.set_ram_image(res.emis_bytes)
         # Radiance continuity: the two ping-pong textures still hold the OLD
         # window's field at the OLD origin.  If this commit moves the origin,
-        # shift the current radiance by the integer cell delta so the already-
-        # converged GI follows the window instead of reading stale, misaligned
-        # light for the many frames propagate would need to re-converge.
+        # shift the current radiance by the integer cell delta so the same-
+        # frame re-gather's feedback term (and anything sampling radiance
+        # before it lands) reads a spatially-aligned field.
         old_origin = casc.window.origin_cell
         new_origin = tuple(res.origin_cell)
         if old_origin is not None and old_origin != new_origin:
             self._shift_radiance(casc, old_origin, new_origin)
-            # Re-converge the newly-exposed border band fast for a few frames.
-            casc.boost_frames = 4
         # Commit: the GPU geom texture now matches this origin, so the shader
         # origin uniforms (read from window.origin_cell) line up exactly.
         casc.window.origin_cell = new_origin
@@ -799,7 +804,7 @@ class GpuLightingPipeline:
                         new_origin: tuple[int, int, int]) -> None:
         """
         Copy ``casc``'s current radiance into its other ping-pong texture,
-        offset by the recenter cell delta, then swap so the next propagate reads
+        offset by the recenter cell delta, then swap so the next gather reads
         the spatially-aligned field (kills the recenter GI pop).
 
         ``u_shift = new_origin - old_origin``: a cell at new-window index ``c``
@@ -890,8 +895,6 @@ class GpuLightingPipeline:
         c0, c1, c2 = self.cascades
         node.set_shader_input("u_c0_geom", c0.geom)
         node.set_shader_input("u_c0_vis", c0.vis)
-        node.set_shader_input("u_c0_bounce", c0.bounce_direct)
-        node.set_shader_input("u_c1_bounce", c1.bounce_direct)
         node.set_shader_input("u_c0_cells", float(c0.cells))
         node.set_shader_input("u_c0_cell_m", float(c0.cell_m))
         node.set_shader_input("u_c1_geom", c1.geom)
@@ -904,6 +907,11 @@ class GpuLightingPipeline:
         node.set_shader_input("u_c2_cell_m", float(c2.cell_m))
         node.set_shader_input("u_quant_m",
                               float(self._config.light_quant_m))
+        # Celestial penumbra cone half-angle, as a tangent (the refinement
+        # march jitters its rays inside this cone for smooth soft edges).
+        node.set_shader_input(
+            "u_penumbra_tan",
+            float(math.tan(math.radians(self._config.light_penumbra_deg))))
         node.set_shader_input("u_ao_strength",
                               float(self._config.light_ao_strength))
         node.set_shader_input("u_emission_scale", float(EMISSION_SCALE))

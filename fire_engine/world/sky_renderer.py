@@ -100,6 +100,18 @@ _CAMERA_FAR_M:         float = 4000.0  # minimum camera far plane (meters)
 _CLOUD_QUAD_SIDE_M:    float = 2400.0  # cloud slab quad side length (meters)
 _CLOUD_FADE_FRACTION:  float = 0.92    # fade distance as a fraction of half-side
 
+# Volumetric cloud layer (raymarched; replaces the boxy slab quads).
+_VCLOUD_ALT_M:         float = 500.0   # cloud slab bottom altitude (world Z, m)
+_VCLOUD_THICK_M:       float = 400.0   # slab thickness (m)
+_VCLOUD_SHAPE_TILE_M:  float = 3000.0  # world span of one shape-noise tile (m)
+_VCLOUD_DETAIL_TILE_M: float = 320.0   # world span of one detail-noise tile (m)
+_VCLOUD_DETAIL_STR:    float = 0.22    # edge-erosion strength from the detail vol
+_VCLOUD_SIGMA:         float = 0.09    # extinction per meter at full density
+_VCLOUD_LIGHT_STEP_M:  float = 28.0    # sun light-march step length (m)
+_VCLOUD_HG:            float = 0.62    # Henyey-Greenstein anisotropy (fwd scatter)
+_VCLOUD_SHAPE_SIZE:    int   = 64      # baked shape volume edge (voxels)
+_VCLOUD_DETAIL_SIZE:   int   = 32      # baked detail volume edge (voxels)
+
 # Rain layers: (cylinder radius m, scroll-rate multiplier).  Different scroll
 # rates per layer give cheap parallax depth.
 _RAIN_LAYERS: tuple[tuple[float, float], ...] = ((4.0, 1.6), (7.0, 1.15), (11.0, 0.85))
@@ -178,6 +190,43 @@ def _make_geom_node(vertex_block: np.ndarray,
     node = GeomNode(name)
     node.add_geom(geom)
     return node
+
+
+def _load_or_bake_cloud_noise(seed: int, shape_size: int, detail_size: int):
+    """
+    Load the baked volumetric-cloud noise volumes, baking + caching on a miss.
+
+    The bake (``sky.cloud_noise``) is deterministic in the world seed, so a
+    disk cache keyed by ``(seed, size, version)`` is always valid — the ~1.7 s
+    64³ bake then happens only on the very first run for a seed.  Cache lives
+    under ``saves/cloud_cache/`` (gitignored); any I/O failure silently falls
+    back to baking in-process (never fatal).
+
+    Returns ``(shape_arr, detail_arr)`` — both ``(N,N,N,4) uint8``.
+    """
+    from pathlib import Path
+    from fire_engine.sky.cloud_noise import bake_shape_noise, bake_detail_noise
+
+    cache_dir = Path("saves") / "cloud_cache"
+    version = 1
+
+    def _load_or(kind: str, size: int, baker) -> np.ndarray:
+        path = cache_dir / f"{kind}_{seed}_{size}_v{version}.npy"
+        try:
+            if path.exists():
+                return np.load(path)
+        except Exception as exc:  # noqa: BLE001 — corrupt cache → rebake
+            _log.warning("cloud noise cache read failed (%s); rebaking", exc)
+        arr = baker(size)
+        try:
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            np.save(path, arr)
+        except Exception as exc:  # noqa: BLE001 — cache is an optimisation
+            _log.debug("cloud noise cache write failed: %s", exc)
+        return arr
+
+    return (_load_or("cloud_shape", shape_size, bake_shape_noise),
+            _load_or("cloud_detail", detail_size, bake_detail_noise))
 
 
 def _build_dome_node(radius_m: float, stacks: int, slices: int) -> GeomNode:
@@ -591,9 +640,8 @@ class SkyRendererComponent(Component):
             if self.terrain_root is not None:
                 self.terrain_root.set_fog(self._fog)
 
-        _log.info("Sky renderer ready (cloud slab z=[%.0f, %.0f] m, cell=%.0f m)",
-                  self._cloud_alt_m, self._cloud_alt_m + self._cloud_thick_m,
-                  self._cloud_cell_m)
+        _log.info("Sky renderer ready (volumetric cloud slab z=[%.0f, %.0f] m)",
+                  _VCLOUD_ALT_M, _VCLOUD_ALT_M + _VCLOUD_THICK_M)
 
     def update(self, dt: float) -> None:
         """
@@ -721,39 +769,79 @@ class SkyRendererComponent(Component):
         self._dome_np = dome
 
     def _build_clouds(self) -> None:
-        """Build the cloud slab quads + raymarch shader (static uniforms once)."""
-        node = _build_cloud_node(_CLOUD_QUAD_SIDE_M, self._cloud_thick_m)
+        """
+        Build the volumetric cloud "dome" + raymarch shader (static uniforms).
+
+        Reuses the inverted-sphere dome geometry purely to get a per-pixel world
+        view direction; the fragment shader analytically intersects + marches
+        the cloud slab in world space, so clouds fill the sky to the horizon.
+        Drawn after the sky dome (bin 15) and before terrain, composited with a
+        premultiplied-over blend (``src + dst·srcAlpha``, srcAlpha =
+        transmittance).  Gated by ``gfx_clouds``.
+        """
+        cfg = getattr(self.base, "_config", None)
+        if not bool(getattr(cfg, "gfx_clouds", True)):
+            self._cloud_np = None
+            _log.info("Volumetric clouds disabled (gfx_clouds=false)")
+            return
+
+        from fire_engine.world.texture_bridge import to_panda_texture_3d
+
+        node = _build_dome_node(_DOME_RADIUS_M, _DOME_STACKS, _DOME_SLICES)
         clouds = self.base.render.attach_new_node(node)
-        clouds.set_bin("background", 20)          # after the dome, before terrain
+        clouds.set_bin("background", 15)          # after dome (10), before terrain
         clouds.set_depth_write(False)
         clouds.set_depth_test(False)
-        clouds.set_two_sided(True)                # visible from below AND above
         clouds.set_light_off()
-        clouds.set_transparency(TransparencyAttrib.M_alpha)
+        clouds.set_color_off()
+        # Premultiplied OVER: out = src.rgb + dst.rgb · src.a, with src.a =
+        # transmittance — a bright sun bleeds through thin cloud, thick occludes.
+        clouds.set_transparency(TransparencyAttrib.M_none)
+        clouds.set_attrib(ColorBlendAttrib.make(
+            ColorBlendAttrib.M_add,
+            ColorBlendAttrib.O_one,
+            ColorBlendAttrib.O_incoming_alpha))
 
         shader = Shader.make(Shader.SL_GLSL,
-                             vertex=sky_shaders.CLOUD_VERTEX,
-                             fragment=sky_shaders.CLOUD_FRAGMENT)
+                             vertex=sky_shaders.CLOUD_VOLUMETRIC_VERTEX,
+                             fragment=sky_shaders.CLOUD_VOLUMETRIC_FRAGMENT)
         clouds.set_shader(shader)
 
-        # World-seed-derived hash offset (deterministic cloud field).
-        seed = float(for_domain("sky", "clouds").random())
-        clouds.set_shader_input("u_seed", seed)
-        # coverage → noise-threshold quantile table (see _cloud_value_quantiles).
-        self._cloud_quantiles = _cloud_value_quantiles(seed)
-        clouds.set_shader_input("u_altitude", self._cloud_alt_m)
-        clouds.set_shader_input("u_thickness", self._cloud_thick_m)
-        clouds.set_shader_input("u_cell", self._cloud_cell_m)
-        clouds.set_shader_input("u_fade_dist",
-                                _CLOUD_QUAD_SIDE_M * 0.5 * _CLOUD_FADE_FRACTION)
+        # Baked, tileable density volumes (disk-cached — deterministic per seed).
+        seed = int(getattr(cfg, "world_seed", 0))
+        shape_arr, detail_arr = _load_or_bake_cloud_noise(
+            seed, _VCLOUD_SHAPE_SIZE, _VCLOUD_DETAIL_SIZE)
+        clouds.set_shader_input("u_shape", to_panda_texture_3d(shape_arr))
+        clouds.set_shader_input("u_detail", to_panda_texture_3d(detail_arr))
+
+        # Static uniforms.
+        clouds.set_shader_input("u_altitude", _VCLOUD_ALT_M)
+        clouds.set_shader_input("u_thickness", _VCLOUD_THICK_M)
+        clouds.set_shader_input("u_max_dist",
+                                float(getattr(cfg, "gfx_cloud_max_dist_m", 2400.0)))
+        clouds.set_shader_input("u_shape_scale", 1.0 / _VCLOUD_SHAPE_TILE_M)
+        clouds.set_shader_input("u_detail_scale", 1.0 / _VCLOUD_DETAIL_TILE_M)
+        clouds.set_shader_input("u_detail_strength", _VCLOUD_DETAIL_STR)
+        clouds.set_shader_input("u_sigma", _VCLOUD_SIGMA)
+        clouds.set_shader_input("u_hg", _VCLOUD_HG)
+        clouds.set_shader_input("u_light_step_m", _VCLOUD_LIGHT_STEP_M)
+        clouds.set_shader_input("u_steps", int(getattr(cfg, "gfx_cloud_steps", 48)))
+        clouds.set_shader_input("u_light_steps",
+                                int(getattr(cfg, "gfx_cloud_light_steps", 6)))
+        clouds.set_shader_input("u_exposure",
+                                float(getattr(cfg, "light_exposure", 0.9)))
+
+        # Per-frame defaults (overwritten in _update_clouds).
         clouds.set_shader_input("u_cam_pos", LVecBase3f(0.0, 0.0, 0.0))
-        clouds.set_shader_input("u_coverage", 0.0)
-        clouds.set_shader_input("u_opacity", 0.0)
-        clouds.set_shader_input("u_wind_offset", LVecBase2f(0.0, 0.0))
-        clouds.set_shader_input("u_top_color", LVecBase3f(1.0, 1.0, 1.0))
-        clouds.set_shader_input("u_side_color", LVecBase3f(0.7, 0.7, 0.72))
-        clouds.set_shader_input("u_bottom_color", LVecBase3f(0.45, 0.45, 0.5))
-        clouds.set_pos(0.0, 0.0, self._cloud_alt_m)
+        clouds.set_shader_input("u_sun_dir", LVecBase3f(0.0, 0.0, 1.0))
+        clouds.set_shader_input("u_moon_dir", LVecBase3f(0.0, 0.0, -1.0))
+        clouds.set_shader_input("u_sun_radiance", LVecBase3f(3.0, 2.9, 2.6))
+        clouds.set_shader_input("u_moon_radiance", LVecBase3f(0.06, 0.07, 0.10))
+        clouds.set_shader_input("u_sky_ambient", LVecBase3f(0.4, 0.5, 0.7))
+        clouds.set_shader_input("u_coverage", 0.5)
+        clouds.set_shader_input("u_cloud_density", 1.0)
+        clouds.set_shader_input("u_wind", LVecBase2f(0.0, 0.0))
+        clouds.set_shader_input("u_time", 0.0)
         self._cloud_np = clouds
 
     def _build_rain(self) -> None:
@@ -920,44 +1008,39 @@ class SkyRendererComponent(Component):
         self._ss_progress = 0.0
 
     def _update_clouds(self, st: Any, cx: float, cy: float, cz: float) -> None:
-        """Follow the camera (cell-snapped XY) and push the cloud uniforms."""
+        """Follow the camera and push the volumetric-cloud per-frame uniforms."""
         clouds = self._cloud_np
-        cell = self._cloud_cell_m
-        # Snap to cell multiples so the grid never swims under the quad.
-        clouds.set_pos(math.floor(cx / cell) * cell,
-                       math.floor(cy / cell) * cell,
-                       self._cloud_alt_m)
+        if clouds is None:
+            return
+        # Camera-follow (translation only — the dome must stay world-oriented so
+        # the slab intersection uses true world directions).
+        clouds.set_pos(cx, cy, cz)
         clouds.set_shader_input("u_cam_pos", LVecBase3f(cx, cy, cz))
-        # Map coverage (fill fraction) to the matching noise threshold so the
-        # requested fraction of cells is actually occupied.
-        q = self._cloud_quantiles
-        cov = _clamp01(float(st.cloud_coverage))
-        clouds.set_shader_input("u_coverage",
-                                float(q[int(cov * (len(q) - 1))]))
-        clouds.set_shader_input("u_opacity",
-                                _clamp01(0.55 + 0.45 * float(st.cloud_density)))
-        clouds.set_shader_input("u_wind_offset",
-                                LVecBase2f(self._wind_x_m, self._wind_y_m))
 
-        # Flat-face lighting, computed CPU-side from the sky state:
-        # tops catch sun + sky ambient, sides are medium, bottoms darkest and
-        # pulled toward storm-gray as density rises; at night a faint moon/sky
-        # term keeps them barely readable.
-        sun_r, sun_g, sun_b = st.sun_color
-        si = float(st.sun_intensity)
-        hr, hg, hb = st.horizon_color          # bright weather-graded sky ambient
-        night = 0.05 * float(st.star_visibility)
-        top = (
-            _clamp01(sun_r * si * 0.55 + hr * 0.58 + night),
-            _clamp01(sun_g * si * 0.55 + hg * 0.58 + night),
-            _clamp01(sun_b * si * 0.55 + hb * 0.58 + night * 1.5),
-        )
-        side = tuple(c * 0.80 for c in top)
-        bottom_scale = 0.66 - 0.34 * float(st.cloud_density)   # storm-dark bottoms
-        bottom = tuple(c * bottom_scale for c in top)
-        clouds.set_shader_input("u_top_color", LVecBase3f(*top))
-        clouds.set_shader_input("u_side_color", LVecBase3f(*side))
-        clouds.set_shader_input("u_bottom_color", LVecBase3f(*bottom))
+        sun = st.sun_dir
+        moon = st.moon_dir
+        clouds.set_shader_input("u_sun_dir",
+                                LVecBase3f(float(sun.x), float(sun.y), float(sun.z)))
+        clouds.set_shader_input("u_moon_dir",
+                                LVecBase3f(float(moon.x), float(moon.y), float(moon.z)))
+        clouds.set_shader_input("u_sun_radiance", LVecBase3f(*st.sun_radiance))
+        clouds.set_shader_input("u_moon_radiance", LVecBase3f(*st.moon_radiance))
+        clouds.set_shader_input("u_sky_ambient", LVecBase3f(*st.sky_ambient))
+        clouds.set_shader_input("u_coverage", _clamp01(float(st.cloud_coverage)))
+        clouds.set_shader_input("u_cloud_density",
+                                _clamp01(0.75 + 0.25 * float(st.cloud_density)))
+        clouds.set_shader_input("u_wind",
+                                LVecBase2f(self._wind_x_m, self._wind_y_m))
+        clouds.set_shader_input("u_time", float(self._time_s))
+
+        # Legacy (post-off) path tonemaps inside the cloud shader — keep its
+        # exposure synced to the dome's compressed auto-exposure.
+        pipeline = getattr(self.base, "lighting_pipeline", None)
+        if pipeline is not None:
+            clouds.set_shader_input(
+                "u_exposure",
+                float(getattr(pipeline, "exposure_sky",
+                              getattr(pipeline, "exposure", 0.9))))
 
     def _update_rain(self, st: Any, cx: float, cy: float, cz: float,
                      dt: float) -> None:

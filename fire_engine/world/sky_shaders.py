@@ -110,6 +110,8 @@ __all__ = [
     "SKY_DOME_FRAGMENT",
     "CLOUD_VERTEX",
     "CLOUD_FRAGMENT",
+    "CLOUD_VOLUMETRIC_VERTEX",
+    "CLOUD_VOLUMETRIC_FRAGMENT",
 ]
 
 
@@ -131,3 +133,13 @@ CLOUD_VERTEX: str = load_glsl(__file__, "cloud.vert")
 
 
 CLOUD_FRAGMENT: str = load_glsl(__file__, "cloud.frag")
+
+
+# ---------------------------------------------------------------------------
+# Volumetric raymarched clouds (replaces the boxy clouds)
+# ---------------------------------------------------------------------------
+
+CLOUD_VOLUMETRIC_VERTEX: str = load_glsl(__file__, "cloud_volumetric.vert")
+
+
+CLOUD_VOLUMETRIC_FRAGMENT: str = load_glsl(__file__, "cloud_volumetric.frag")

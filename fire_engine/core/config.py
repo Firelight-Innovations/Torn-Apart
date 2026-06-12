@@ -377,7 +377,7 @@ class Config:
     gfx_cloud_steps:            int   = 96
     gfx_cloud_light_steps:      int   = 8
     gfx_cloud_resolution_scale: float = 1.0
-    gfx_cloud_max_dist_m:       float = 2400.0
+    gfx_cloud_max_dist_m:       float = 6000.0
     gfx_god_rays:               bool  = True
     gfx_god_ray_samples:        int   = 32
 

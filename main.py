@@ -328,6 +328,19 @@ def build_demo():
         "trees",
         (14.0, -5.0, 6.0), (34.0, 15.0, 14.0),
     )
+    # Flora volumes (world/flora_renderer.py) — wildflowers scattered through
+    # the demo grass box, and a wider band of scrub bushes running from the
+    # meadow into the treeline.  The "trees" volume above is shared
+    # infrastructure: the flora renderer draws tree sprites on it while the
+    # wind system's leaf litter keeps scattering leaves over the same box.
+    zone_store.add(
+        "flowers",
+        (-12.0, -5.0, 6.0), (12.0, 25.0, 10.0),
+    )
+    zone_store.add(
+        "bushes",
+        (-12.0, -5.0, 6.0), (34.0, 25.0, 11.0),
+    )
     zone_store.mark_baseline()
 
     # 6. Lighting.  Two backends (config.lighting_backend):
@@ -454,6 +467,25 @@ def build_demo():
         bus=bus,
     )
     app.grass_go = grass_go
+
+    # 10c2. GPU flora — instanced flowers / bushes / trees inside "flowers" /
+    #      "bushes" / "trees" zone volumes; the grass idiom generalised
+    #      (gl_InstanceID hash placement, baked height fields, cascade
+    #      lighting, wind-texture sway with per-kind gain/pivot, sprite-atlas
+    #      variants).  GPU lighting backend only (disables itself on cpu).
+    from fire_engine.world.flora_renderer import FloraRendererComponent
+    flora_go = instantiate()
+    flora_go.name = "Flora"
+    flora_go.add_component(
+        FloraRendererComponent,
+        base=app,
+        sky_system=sky_system,
+        zone_store=zone_store,
+        chunk_provider=chunk_manager,
+        lighting_pipeline=lighting_pipeline,
+        bus=bus,
+    )
+    app.flora_go = flora_go
 
     # 10d. Wind system render component — uploads the WindField snapshot as
     #      u_wind_tex on terrain_root each frame and flips u_wind_enabled to 1

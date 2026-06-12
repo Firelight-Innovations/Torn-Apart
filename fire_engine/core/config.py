@@ -280,6 +280,32 @@ class Config:
                                    gone (meters).
     grass_max_instances  : int   — hard cap on instances per grass volume.
 
+    Flora fields (from [flora] table, prefix ``flora_``)
+    ----------------------------------------------------
+    GPU-instanced flowers / bushes / trees (``world/flora_renderer.py``)
+    inside ``"flowers"`` / ``"bushes"`` / ``"trees"`` zone volumes.  Per kind:
+    ``density_per_m2`` (plants per m², overridable per volume via
+    ``params["density"]``), ``height_m`` (unscaled sprite height; per-plant
+    jitter scales it), ``fade_start_m``/``fade_end_m`` (camera-distance
+    shrink-away window) and ``max_instances`` (hard per-volume cap).
+
+    flora_flower_density_per_m2 : float — wildflowers per m² (1.5).
+    flora_flower_height_m       : float — flower sprite height (0.45 m).
+    flora_flower_fade_start_m   : float — flowers fade like grass (60 m).
+    flora_flower_fade_end_m     : float — fully gone (90 m).
+    flora_flower_max_instances  : int   — per-volume cap (50 000).
+    flora_bush_density_per_m2   : float — bushes per m² (0.08).
+    flora_bush_height_m         : float — bush sprite height (1.3 m).
+    flora_bush_fade_start_m     : float — bushes persist past grass (110 m).
+    flora_bush_fade_end_m       : float — fully gone (150 m).
+    flora_bush_max_instances    : int   — per-volume cap (5 000).
+    flora_tree_density_per_m2   : float — trees per m² (0.02 = 1 per 50 m²).
+    flora_tree_height_m         : float — tree sprite height (7.0 m).
+    flora_tree_fade_start_m     : float — trees are landmarks; they fade
+                                   only near the fog far range (300 m).
+    flora_tree_fade_end_m       : float — fully gone (380 m).
+    flora_tree_max_instances    : int   — per-volume cap (2 000).
+
     Wind-field fields (from [wind] table, prefix ``wind_``)
     -------------------------------------------------------
     These drive the spatially-varying wind field (``fire_engine/wind/``): a
@@ -434,6 +460,22 @@ class Config:
     grass_fade_start_m:    float = 60.0
     grass_fade_end_m:      float = 90.0
     grass_max_instances:   int   = 200_000
+    # --- Flora ([flora] table; consumed by world/flora_renderer.py) ---
+    flora_flower_density_per_m2: float = 1.5
+    flora_flower_height_m:       float = 0.45
+    flora_flower_fade_start_m:   float = 60.0
+    flora_flower_fade_end_m:     float = 90.0
+    flora_flower_max_instances:  int   = 50_000
+    flora_bush_density_per_m2:   float = 0.08
+    flora_bush_height_m:         float = 1.3
+    flora_bush_fade_start_m:     float = 110.0
+    flora_bush_fade_end_m:       float = 150.0
+    flora_bush_max_instances:    int   = 5_000
+    flora_tree_density_per_m2:   float = 0.02
+    flora_tree_height_m:         float = 7.0
+    flora_tree_fade_start_m:     float = 300.0
+    flora_tree_fade_end_m:       float = 380.0
+    flora_tree_max_instances:    int   = 2_000
     # --- Wind field ([wind] table; consumed by fire_engine/wind/) ---
     wind_time_scale:          float = 1.0
     wind_cells:               int   = 64
@@ -515,8 +557,8 @@ def load_config(path: str = "config.toml") -> Config:
     Load engine configuration from a TOML file, returning a frozen ``Config``.
 
     The TOML file may have ``[debug]``, ``[sky]``, ``[terrain]``,
-    ``[lighting]``, ``[fog]``, ``[grass]``, ``[wind]`` and ``[graphics]``
-    tables; their keys are flattened into the same ``Config`` struct.  Any key
+    ``[lighting]``, ``[fog]``, ``[grass]``, ``[flora]``, ``[wind]`` and
+    ``[graphics]`` tables; their keys are flattened into the same ``Config`` struct.  Any key
     absent from the file falls back to the ``Config`` dataclass default.
 
     ``[graphics]`` is special: its ``preset`` key (off/low/medium/high) is
@@ -554,8 +596,8 @@ def load_config(path: str = "config.toml") -> Config:
     # Flatten the organisational tables into one top-level dict.  Most tables
     # just carry fully-named Config fields; [graphics] is special — its keys go
     # through preset expansion first (see resolve_graphics_preset).
-    _TABLES = ("debug", "sky", "terrain", "lighting", "fog", "grass", "wind",
-               "graphics")
+    _TABLES = ("debug", "sky", "terrain", "lighting", "fog", "grass", "flora",
+               "wind", "graphics")
     flat: dict = {k: v for k, v in raw.items() if k not in _TABLES}
     for table in _TABLES:
         if table == "graphics":

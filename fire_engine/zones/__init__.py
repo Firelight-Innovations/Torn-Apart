@@ -22,6 +22,12 @@ from fire_engine.zones.grass_placement import (
     leaf_hash_seed,
     leaf_instance_count,
 )
+from fire_engine.zones.flora_placement import (
+    FLORA_KINDS,
+    flora_hash_seed,
+    flora_instance_attribs,
+    flora_instance_count,
+)
 
 __all__ = [
     "ZoneVolume",
@@ -34,4 +40,8 @@ __all__ = [
     "instance_attribs",
     "leaf_hash_seed",
     "leaf_instance_count",
+    "FLORA_KINDS",
+    "flora_hash_seed",
+    "flora_instance_attribs",
+    "flora_instance_count",
 ]

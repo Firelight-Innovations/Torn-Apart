@@ -13,3 +13,6 @@ editor/extension/node_modules/
 editor/extension/dist/
 editor/extension/media/
 editor/extension/*.vsix
+
+# Screenshot / render-dump artifacts
+tools/out/

@@ -408,6 +408,26 @@ class Config:
     gfx_cloud_max_dist_m  : float — far raymarch distance for clouds (meters).
     gfx_god_rays          : bool  — screen-space crepuscular rays through clouds.
     gfx_god_ray_samples   : int   — radial sample count for god rays.
+    gfx_god_ray_strength  : float — god-ray contribution added at composite.
+    gfx_lens_flare_strength : float — lens-flare contribution at composite
+                                    (lower = subtler flare).
+    gfx_lens_flare_threshold: float — HDR luminance the flare isolates as "the
+                                    sun" (higher = only the very brightest core
+                                    flares, ignoring bright sky).
+    gfx_tonemap_hue_preserve: float — [0,1] blend toward the hue-preserving
+                                    tonemap.  0 = plain per-channel ACES (bright
+                                    sky washes to white); 1 = fully preserve hue
+                                    (saturated sky stays coloured as it brightens).
+    gfx_sun_disc_intensity: float — HDR gain on the sun disc (how hard it blooms
+                                    into a bright blob).
+    gfx_sun_halo_intensity: float — HDR gain on the forward-Mie glow haloing the
+                                    sun.
+    gfx_sun_min_brightness: float — floor on the sun disc/halo transmittance so a
+                                    low (sunrise/sunset) sun still reads bright
+                                    instead of fading out; hue is preserved.
+    gfx_sky_inscatter_scale: float — multiplier on the scattered-sky radiance
+                                    (lower = dimmer sky, less low-sun wash-out;
+                                    does not touch the sun disc).
     """
 
     world_seed:           int   = 1337
@@ -528,6 +548,16 @@ class Config:
     gfx_cloud_max_dist_m:       float = 6000.0
     gfx_god_rays:               bool  = True
     gfx_god_ray_samples:        int   = 32
+    # Aesthetic tuning — NOT carried by the presets (so they stay consistent
+    # across off/low/medium/high); override freely in [graphics] in config.toml.
+    gfx_god_ray_strength:       float = 0.4
+    gfx_lens_flare_strength:    float = 0.055
+    gfx_lens_flare_threshold:   float = 4.0
+    gfx_tonemap_hue_preserve:   float = 0.8
+    gfx_sun_disc_intensity:     float = 45.0
+    gfx_sun_halo_intensity:     float = 1.8
+    gfx_sun_min_brightness:     float = 0.25
+    gfx_sky_inscatter_scale:    float = 0.9
 
     # ------------------------------------------------------------------
     # Derived read-only properties

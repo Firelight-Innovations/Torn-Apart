@@ -19,6 +19,11 @@ uniform float u_daylight;           // SkyState.daylight (night-floor blend)
 uniform float u_weather_gray;       // 0-1 overcast desaturation weight
 uniform float u_exposure;           // tonemap exposure (match terrain shader)
 uniform float u_hdr_output;         // 1.0 → linear HDR out (post tonemaps); 0.0 → tonemap here
+// Config-exposed sky/sun tuning (gfx_* in [graphics]; see core/config.py).
+uniform float u_sun_disc_intensity; // HDR gain on the sun disc (bloom blob)
+uniform float u_sun_halo_intensity; // HDR gain on the forward-Mie sun halo
+uniform float u_sun_min_brightness; // floor on disc/halo transmittance (low sun)
+uniform float u_sky_inscatter_scale;// scattered-sky radiance multiplier
 uniform vec3  u_fog_color;
 uniform float u_fog_blend;          // legacy horizon fog (CPU backend; 0 on GPU)
 uniform sampler3D u_fog_integrated; // froxel fog (GPU backend)
@@ -153,7 +158,9 @@ void main() {
     // edge) the scatter ray is clamped to graze the horizon so the band
     // continues the horizon hue instead of going black at the ground hit.
     vec3 ds = (d.z < 0.015) ? normalize(vec3(d.xy, 0.015)) : d;
-    vec3 col = scatterLight(ds, u_sun_dir, SUN_I);
+    // Scattered-sky radiance, scaled by the config knob (lower = less low-sun
+    // wash-out).  The sun disc/halo are added AFTER and are NOT scaled here.
+    vec3 col = scatterLight(ds, u_sun_dir, SUN_I) * u_sky_inscatter_scale;
     // Moonlit sky: same physics, tiny intensity, scaled by the phase.
     if (u_moon_dir.z > -0.05 && u_moon_glow > 0.01) {
         col += scatterLight(ds, u_moon_dir, SUN_I * 0.0045 * u_moon_glow);
@@ -169,6 +176,11 @@ void main() {
     if (d.z < 0.0) col *= clamp(1.0 + d.z * 1.2, 0.45, 1.0);
 
     vec3 sunT = viewTransmittance(u_sun_dir);
+    // Keep a low (sunrise/sunset) sun reading bright: lift its transmittance to
+    // a floor on the PEAK channel, preserving the warm red/orange hue so the
+    // sun no longer "fades out" near the horizon.
+    float sunTpk = max(sunT.r, max(sunT.g, sunT.b));
+    sunT *= max(1.0, u_sun_min_brightness / max(sunTpk, 1e-4));
 
     // Disc coverage of the sun/moon at this pixel — opaque bodies that must
     // occlude the star skybox (added post-tonemap below) so they never look
@@ -199,8 +211,8 @@ void main() {
     // a soft, edgeless blob (how a real bright sun reads) — clamping the disc
     // to ~white (legacy path) instead gives the hard-edged disc.  The halo is
     // the forward-Mie glow that haloes the disc and also feeds the bloom.
-    float discGain = (u_hdr_output > 0.5) ? 45.0 : 14.0;
-    float haloGain = (u_hdr_output > 0.5) ? 1.8 : 0.55;
+    float discGain = (u_hdr_output > 0.5) ? u_sun_disc_intensity : 14.0;
+    float haloGain = (u_hdr_output > 0.5) ? u_sun_halo_intensity : 0.55;
     float sc = dot(d, u_sun_dir);
     if (sc > 0.999) {
         vec2 sl;

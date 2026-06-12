@@ -128,3 +128,19 @@ preset = "high"
 # gfx_cloud_max_dist_m = 6000.0  # far raymarch distance for clouds (meters)
 # gfx_god_rays = true            # crepuscular rays through clouds
 # gfx_god_ray_samples = 32       # radial god-ray samples
+#
+# --- Aesthetic tuning (NOT changed by the preset — tune these freely) --------
+# These control the LOOK of the sun/sky/flare, independent of quality preset.
+# Uncomment and edit to taste; the values shown are the defaults.
+# gfx_god_ray_strength = 0.4       # how strongly god rays add in (0 = none)
+# gfx_lens_flare_strength = 0.055  # lens-flare intensity (raise for stronger)
+# gfx_lens_flare_threshold = 4.0   # HDR level the flare treats as "the sun"
+#                                  # (higher = only the brightest core flares)
+# gfx_tonemap_hue_preserve = 0.8   # 0 = bright sky washes to white (filmic);
+#                                  # 1 = sky keeps its colour as it brightens
+# gfx_sun_disc_intensity = 45.0    # how hard the sun disc blooms into a blob
+# gfx_sun_halo_intensity = 1.8     # brightness of the glow haloing the sun
+# gfx_sun_min_brightness = 0.25    # floor so a low sunrise/sunset sun stays
+#                                  # bright instead of fading (hue preserved)
+# gfx_sky_inscatter_scale = 0.9    # sky brightness multiplier; LOWER this if
+#                                  # the world looks washed out at low sun

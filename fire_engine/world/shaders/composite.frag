@@ -14,6 +14,7 @@ uniform sampler2D u_flare;     // lens-flare features (black until that phase)
 uniform float u_flare_strength;
 uniform sampler2D u_godray;    // crepuscular rays (black until that phase)
 uniform float u_godray_strength;
+uniform float u_hue_preserve;  // [0,1] blend toward hue-preserving tonemap
 
 in vec2 v_uv;
 out vec4 frag_color;
@@ -34,7 +35,7 @@ vec3 tonemapHuePreserve(vec3 c) {
     float peak = max(c.r, max(c.g, c.b));
     vec3 ratio = c / max(peak, 1e-4);
     vec3 hue = ratio * acesTonemap(vec3(peak)).x;  // tonemap peak, keep colour
-    return mix(perCh, hue, 0.6);
+    return mix(perCh, hue, clamp(u_hue_preserve, 0.0, 1.0));
 }
 
 void main() {

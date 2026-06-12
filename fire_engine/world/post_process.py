@@ -240,13 +240,12 @@ class PostProcessPipeline:
 
         self.bloom_tex = up_src      # composite binds this in _build_composite
 
-    # Lens-flare tuning (held here, not in config — aesthetic constants).
-    _FLARE_THRESHOLD = 4.0     # HDR luminance: isolate the sun, not bright sky
+    # Lens-flare geometry tuning (aesthetic constants; strength + threshold are
+    # config-exposed via gfx_lens_flare_strength / gfx_lens_flare_threshold).
     _FLARE_GHOSTS = 5          # ghost reflections along the centre axis
     _FLARE_DISPERSAL = 0.32    # ghost spacing
     _FLARE_HALO_WIDTH = 0.45   # halo ring radius (UV)
     _FLARE_CHROMA = 0.012      # chromatic-aberration spread (UV)
-    _FLARE_STRENGTH = 0.22     # contribution added at composite
 
     def _build_flare(self, hdr_tex: Texture) -> None:
         """
@@ -270,7 +269,9 @@ class PostProcessPipeline:
                              fragment=post_shaders.LENS_FLARE_FRAGMENT)
         quad.set_shader(shader)
         quad.set_shader_input("u_tex", hdr_tex)
-        quad.set_shader_input("u_threshold", self._FLARE_THRESHOLD)
+        quad.set_shader_input("u_threshold",
+                              float(getattr(cfg, "gfx_lens_flare_threshold",
+                                            4.0)))
         quad.set_shader_input("u_ghosts", self._FLARE_GHOSTS)
         quad.set_shader_input("u_dispersal", self._FLARE_DISPERSAL)
         quad.set_shader_input("u_halo_width", self._FLARE_HALO_WIDTH)
@@ -278,11 +279,11 @@ class PostProcessPipeline:
         self._bloom_textures.append(tex)   # keep ref alive
         self.flare_tex = tex               # composite binds this
 
-    # God-ray tuning (aesthetic constants; quality knobs come from config).
+    # God-ray geometry tuning (aesthetic constants; strength is config-exposed
+    # via gfx_god_ray_strength, sample count via gfx_god_ray_samples).
     _GODRAY_DENSITY = 0.9      # ray length toward the sun (fraction of screen)
     _GODRAY_DECAY = 0.95       # per-step attenuation
     _GODRAY_THRESHOLD = 3.0    # isolate the sun from bright sky
-    _GODRAY_STRENGTH = 0.5     # contribution added at composite
 
     def _build_godrays(self, hdr_tex: Texture) -> None:
         """
@@ -354,12 +355,17 @@ class PostProcessPipeline:
         comp_quad.set_shader_input("u_flare", self.flare_tex or self._bloom_dummy)
         comp_quad.set_shader_input(
             "u_flare_strength",
-            self._FLARE_STRENGTH if self.flare_tex is not None else 0.0)
+            float(getattr(cfg, "gfx_lens_flare_strength", 0.055))
+            if self.flare_tex is not None else 0.0)
         comp_quad.set_shader_input("u_godray",
                                    self.godray_tex or self._bloom_dummy)
         comp_quad.set_shader_input(
             "u_godray_strength",
-            self._GODRAY_STRENGTH if self.godray_tex is not None else 0.0)
+            float(getattr(cfg, "gfx_god_ray_strength", 0.4))
+            if self.godray_tex is not None else 0.0)
+        comp_quad.set_shader_input(
+            "u_hue_preserve",
+            float(getattr(cfg, "gfx_tonemap_hue_preserve", 0.8)))
         self._composite_quad = comp_quad
 
     def _log_buffer_props(self, manager: Any) -> None:

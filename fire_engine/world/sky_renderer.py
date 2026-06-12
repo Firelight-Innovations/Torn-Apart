@@ -651,6 +651,19 @@ class SkyRendererComponent(Component):
         cfg = getattr(self.base, "_config", None)
         dome.set_shader_input("u_exposure",
                               float(getattr(cfg, "light_exposure", 0.9)))
+        # Config-exposed sky/sun tuning (static — set once; see core/config.py).
+        dome.set_shader_input("u_sun_disc_intensity",
+                              float(getattr(cfg, "gfx_sun_disc_intensity",
+                                            45.0)))
+        dome.set_shader_input("u_sun_halo_intensity",
+                              float(getattr(cfg, "gfx_sun_halo_intensity",
+                                            1.8)))
+        dome.set_shader_input("u_sun_min_brightness",
+                              float(getattr(cfg, "gfx_sun_min_brightness",
+                                            0.25)))
+        dome.set_shader_input("u_sky_inscatter_scale",
+                              float(getattr(cfg, "gfx_sky_inscatter_scale",
+                                            0.9)))
         dummy_fog = Texture("dome_fog_dummy")
         dummy_fog.setup_3d_texture(1, 1, 1, Texture.T_float, Texture.F_rgba16)
         dummy_fog.set_clear_color((0.0, 0.0, 0.0, 1.0))

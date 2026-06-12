@@ -49,6 +49,8 @@ __all__ = [
     "instance_attribs",
     "grass_hash_seed",
     "grass_instance_count",
+    "leaf_hash_seed",
+    "leaf_instance_count",
     "bake_grass_height_field",
     "HEIGHT_SENTINEL",
 ]
@@ -177,6 +179,46 @@ def grass_instance_count(volume: ZoneVolume, config: Config) -> int:
     density = float(volume.params.get("density", config.grass_density_per_m2))
     count = int(volume.area_xy_m2 * max(density, 0.0))
     return max(0, min(count, int(config.grass_max_instances)))
+
+
+def leaf_hash_seed(volume: ZoneVolume) -> int:
+    """
+    Deterministic per-volume hash seed for the leaf-litter instance chain.
+
+    The wind system's leaf-litter renderer (``world/mote_renderer.py``) draws
+    one hardware-instanced node per ``tag="trees"`` :class:`ZoneVolume`,
+    deriving each leaf's spawn position / tumble / life from ``gl_InstanceID``
+    hashed against this seed — exactly the GPU-only idiom :func:`grass_hash_seed`
+    feeds for grass.  Derived through ``for_domain("wind", "leaves", volume.id)``
+    (Hard Rule 2) so the same world seed + volume id always scatters identical
+    litter.  Bounded to ``[0, 2**31)`` (Panda3D passes it as a signed int).
+    """
+    return int(for_domain("wind", "leaves", volume.id).integers(0, 2 ** 31))
+
+
+def leaf_instance_count(volume: ZoneVolume, config: Config) -> int:
+    """
+    Number of leaf-litter instances a ``tag="trees"`` volume spawns.
+
+    ``density × footprint area``, where density (leaves/m²) comes from the
+    volume's ``params["leaf_density"]`` or ``config.wind_leaf_density_per_m2``,
+    clamped to ``config.wind_leaf_max_instances``.  Pure function — the headless
+    mirror of what ``LeafLitterComponent`` instances per volume, tested in
+    ``tests/test_motes.py`` (the renderer holds no per-leaf CPU state, exactly
+    like grass).
+
+    Example
+    -------
+    >>> from fire_engine.core import Config
+    >>> from fire_engine.zones import ZoneVolume
+    >>> v = ZoneVolume(1, "trees", (0.0, 0.0, 0.0), (20.0, 20.0, 8.0))
+    >>> leaf_instance_count(v, Config())          # 400 m² × 0.15
+    60
+    """
+    density = float(volume.params.get("leaf_density",
+                                      config.wind_leaf_density_per_m2))
+    count = int(volume.area_xy_m2 * max(density, 0.0))
+    return max(0, min(count, int(config.wind_leaf_max_instances)))
 
 
 def bake_grass_height_field(

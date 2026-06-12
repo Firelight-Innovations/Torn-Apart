@@ -319,6 +319,15 @@ def build_demo():
         (-12.0, -5.0, 6.0), (12.0, 25.0, 10.0),
         params={"density": cfg.grass_density_per_m2},
     )
+    # Demo "trees" volume — the seam the wind system's leaf litter renders on
+    # (no tree system yet; a future forest registers canopy volumes tagged
+    # "trees" and leaves appear with zero wind-system changes).  Placed just to
+    # the +X side of the grass box, ~20×20 m footprint, z 6→14 to straddle the
+    # terrain surface (ground top z=8) and give leaves vertical room to stream.
+    zone_store.add(
+        "trees",
+        (14.0, -5.0, 6.0), (34.0, 15.0, 14.0),
+    )
     zone_store.mark_baseline()
 
     # 6. Lighting.  Two backends (config.lighting_backend):
@@ -466,6 +475,35 @@ def build_demo():
         bus=bus,
     )
     app.wind_go = wind_go
+
+    # 10e. Wind particles — dust motes + leaf litter, both GPU-instanced with
+    #      zero CPU per-particle state, sampling the inherited u_wind_tex.  Dust
+    #      drifts everywhere (camera-anchored wrapping lattice); leaf litter
+    #      renders on every "trees" zone volume (settles in calm air, streams in
+    #      gusts/storms).  GPU lighting backend only (they disable themselves on
+    #      cpu / when no wind field — same gate as grass + the wind component).
+    from fire_engine.world.mote_renderer import (
+        DustMoteComponent,
+        LeafLitterComponent,
+    )
+    dust_go = instantiate()
+    dust_go.name = "DustMotes"
+    dust_go.add_component(
+        DustMoteComponent,
+        base=app,
+        lighting_pipeline=lighting_pipeline,
+    )
+    app.dust_go = dust_go
+
+    leaf_go = instantiate()
+    leaf_go.name = "LeafLitter"
+    leaf_go.add_component(
+        LeafLitterComponent,
+        base=app,
+        zone_store=zone_store,
+        lighting_pipeline=lighting_pipeline,
+    )
+    app.leaf_go = leaf_go
 
     # 11. Resource-manager proof model (non-fatal).
     _load_proof_model(app)

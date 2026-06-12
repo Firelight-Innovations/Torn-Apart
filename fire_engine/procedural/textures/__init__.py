@@ -13,6 +13,8 @@ procedural registry:
     * ``"dirt_ground"``      — 64×64 RGBA pixel-art dry dirt/clod ground.
     * ``"moon_surface"``     — 256×256 RGBA lunar disc (maria + craters).
     * ``"grass_tuft"``       — 32×32 RGBA pixel-art grass-blade alpha cutout.
+    * ``"dust_mote"``        — 32×32 RGBA soft radial dust/pollen speck (wind).
+    * ``"leaf_sprite"``      — 32×96 RGBA leaf-litter atlas, 3 hue variants (wind).
 
 Additional textures can be added by creating a new module in this package and
 importing it here.  See ``docs/systems/procedural.md`` for the authoring guide.
@@ -26,6 +28,8 @@ from fire_engine.procedural.textures import grass_ground      # registers "grass
 from fire_engine.procedural.textures import dirt_ground       # registers "dirt_ground"
 from fire_engine.procedural.textures import moon_surface      # registers "moon_surface"
 from fire_engine.procedural.textures import grass_tuft        # registers "grass_tuft"
+from fire_engine.procedural.textures import dust_mote         # registers "dust_mote"
+from fire_engine.procedural.textures import leaf_sprite       # registers "leaf_sprite"
 
 __all__ = [
     "ProceduralTextureDef",
@@ -38,4 +42,6 @@ __all__ = [
     "dirt_ground",
     "moon_surface",
     "grass_tuft",
+    "dust_mote",
+    "leaf_sprite",
 ]

@@ -58,6 +58,43 @@ grass_fade_start_m = 60.0      # camera distance where blades start shrinking aw
 grass_fade_end_m = 90.0        # camera distance where blades are fully gone
 grass_max_instances = 200000   # hard cap on instances per grass volume
 
+[wind]
+# Spatially-varying wind field (fire_engine/wind/): a 64x64-cell x 4 m (256 m)
+# player-centred grid of horizontal wind velocity built from seeded spectral
+# gust modes that advect downwind, plus an analytic vertical profile.
+# Units: meters, m/s, rad/s, seconds.
+wind_cells = 64                # grid cells per axis (64 x 4 m = 256 m region)
+wind_cell_m = 4.0              # cell edge (meters)
+wind_snap_cells = 8            # recenter origin snap granularity (cells -> 32 m)
+wind_margin_cells = 8          # recenter hysteresis band (cells from centre -> 32 m)
+wind_gust_modes = 12           # spectral Brownian-band gust modes summed per cell
+wind_gust_wavelen_min = 20.0   # gust spatial wavelength band min (meters)
+wind_gust_wavelen_max = 120.0  # gust spatial wavelength band max (meters)
+wind_gust_omega_min = 0.15     # intrinsic temporal frequency band min (rad/s)
+wind_gust_omega_max = 0.8      # intrinsic temporal frequency band max (rad/s)
+wind_gust_base = 0.6           # base gust amplitude gain (calm air)
+wind_gust_storm_gain = 1.4     # extra gust amplitude per unit storminess
+wind_storm_freq_gain = 0.8     # temporal-frequency boost per unit storminess (choppier)
+wind_speed_ref = 8.0           # reference mean wind speed for full gust gain (m/s)
+wind_turb_base = 0.2           # base turbulence channel value (calm)
+wind_turb_storm_gain = 1.0     # turbulence increase per unit storminess
+wind_shear = 0.18              # vertical-profile power-law shear exponent
+wind_profile_z_ref = 10.0      # reference height where profile reaches 1.0 (meters)
+wind_profile_floor = 0.35      # minimum profile multiplier at ground level
+wind_profile_cap = 1.6         # maximum profile multiplier high up
+wind_layer_m = 8.0             # venturi terrain-occupancy fold band above ground (m; WP2)
+wind_venturi_iters = 8         # venturi flux-relaxation iterations (WP2)
+wind_venturi_max = 2.2         # clamp on venturi speed-up multiplier (WP2)
+wind_deflect_gain = 0.15       # venturi sideways-deflection gain (WP2)
+wind_updraft_gain = 0.4        # analytic obstacle-updraft gain (WP2)
+wind_mote_count = 1500         # dust/pollen mote instance count (WP4)
+wind_mote_box_m = 24.0         # camera-anchored mote lattice cell size (meters; WP4)
+wind_mote_size_m = 0.04        # mote billboard size (meters; WP4)
+wind_mote_life_s = 6.0         # mote looping lifetime (seconds; WP4)
+wind_leaf_density_per_m2 = 0.15  # leaf-litter instances per m2 of a "trees" volume (WP4)
+wind_leaf_size_m = 0.12        # leaf billboard size (meters; WP4)
+wind_leaf_max_instances = 20000  # hard cap on leaf instances per volume (WP4)
+
 [sky]
 sky_cloud_altitude_m = 96.0    # cloud layer base altitude (world Z, meters)
 sky_cloud_thickness_m = 8.0    # cloud layer vertical thickness (meters)

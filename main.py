@@ -408,6 +408,26 @@ def build_demo():
     )
     app.sky_go = sky_go
 
+    # 10b-wind. Wind field — the spatially-varying, time-evolving wind that
+    #      grass (and later flags/cloth/motes) samples instead of one flat
+    #      scalar.  Construct the headless WindField (+ the venturi worker if
+    #      WP2 has landed; it is optional — WindField(cfg, worker=None) runs an
+    #      identity venturi) and seed the boot default u_wind_enabled = 0.0 on
+    #      terrain_root BEFORE any component starts, so grass is valid (scalar
+    #      fallback) until the WindSystemComponent's first upload flips it to 1.
+    from fire_engine.wind import WindField
+    try:
+        from fire_engine.wind import VenturiWorker        # WP2 (may not exist yet)
+        venturi_worker = VenturiWorker()
+        venturi_worker.start()
+    except ImportError:
+        venturi_worker = None
+        _log.info("Venturi worker unavailable (WP2 not landed) — wind runs "
+                  "with identity venturi")
+    wind_field = WindField(cfg, worker=venturi_worker)
+    app.wind_worker = venturi_worker        # exposed so main() can stop it on exit
+    app.terrain_root.set_shader_input("u_wind_enabled", 0.0)
+
     # 10c. GPU grass — instanced tufts inside every "grass" zone volume,
     #      placed entirely on the GPU (gl_InstanceID hash), lit by the same
     #      radiance cascades as the terrain, swaying with the weather.
@@ -425,6 +445,27 @@ def build_demo():
         bus=bus,
     )
     app.grass_go = grass_go
+
+    # 10d. Wind system render component — uploads the WindField snapshot as
+    #      u_wind_tex on terrain_root each frame and flips u_wind_enabled to 1
+    #      after the first upload, so grass samples the travelling gust field.
+    #      GPU lighting backend only (disables itself + leaves the scalar
+    #      fallback on cpu); it OWNS the venturi worker and stops it on destroy.
+    from fire_engine.world.wind_renderer import WindSystemComponent
+    wind_go = instantiate()
+    wind_go.name = "Wind"
+    wind_go.add_component(
+        WindSystemComponent,
+        base=app,
+        clock=clock,
+        wind_field=wind_field,
+        worker=venturi_worker,
+        sky_system=sky_system,
+        chunk_provider=chunk_manager,
+        lighting_pipeline=lighting_pipeline,
+        bus=bus,
+    )
+    app.wind_go = wind_go
 
     # 11. Resource-manager proof model (non-fatal).
     _load_proof_model(app)
@@ -784,6 +825,13 @@ def main() -> None:
         pipeline = getattr(app, "lighting_pipeline", None)
         if pipeline is not None:
             pipeline.shutdown()
+        # Stop the wind venturi worker thread cleanly on exit (mirrors the
+        # lighting assembly worker shutdown above).  The WindSystemComponent
+        # also stops it in on_destroy, so this is belt-and-suspenders for the
+        # exit path that tears the window down without destroying components.
+        wind_worker = getattr(app, "wind_worker", None)
+        if wind_worker is not None:
+            wind_worker.stop(join=True)
 
 
 def _to_ground_texture():

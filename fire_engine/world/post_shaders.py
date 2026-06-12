@@ -8,6 +8,9 @@ UV) and read from RGBA16F float textures produced by ``FilterManager``.
 
 Passes (added across phases; the loader lists only what exists today):
     POST_FULLSCREEN_VERTEX  — shared fullscreen-quad vertex shader.
+    BLOOM_DOWN_FRAGMENT     — 13-tap downsample (+ soft-knee bright-pass/Karis
+                              on the first level).
+    BLOOM_UP_FRAGMENT       — 3x3 tent upsample + add (progressive combine).
     COMPOSITE_FRAGMENT      — scene HDR (+ bloom) → ACES tonemap → sRGB gamma.
 
 The GLSL lives in ``world/shaders/*.vert`` / ``*.frag`` (loaded via
@@ -19,11 +22,19 @@ from fire_engine.core.shader_source import load_glsl
 
 __all__ = [
     "POST_FULLSCREEN_VERTEX",
+    "BLOOM_DOWN_FRAGMENT",
+    "BLOOM_UP_FRAGMENT",
     "COMPOSITE_FRAGMENT",
 ]
 
 
 POST_FULLSCREEN_VERTEX: str = load_glsl(__file__, "fullscreen.vert")
+
+
+BLOOM_DOWN_FRAGMENT: str = load_glsl(__file__, "bloom_down.frag")
+
+
+BLOOM_UP_FRAGMENT: str = load_glsl(__file__, "bloom_up.frag")
 
 
 COMPOSITE_FRAGMENT: str = load_glsl(__file__, "composite.frag")

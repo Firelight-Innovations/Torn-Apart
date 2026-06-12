@@ -93,6 +93,9 @@ class PostProcessPipeline:
         # (bloom/flare/god-rays insert here).  Each entry is a NodePath card.
         self._mid_passes: list = []
         self._bloom_dummy: Texture | None = None
+        # Bloom: keep refs so the render-target textures aren't GC'd.
+        self._bloom_textures: list = []
+        self.bloom_tex: Texture | None = None
 
         if not self.enabled:
             _log.info("Post-processing disabled (gfx_post_process=false) — "
@@ -158,10 +161,84 @@ class PostProcessPipeline:
         self.depth_tex = depth_tex
         self._final_quad = quad
 
+        # Bloom pyramid (reads the HDR scene buffer, feeds the composite).
+        self._build_bloom(color_tex)
+
         # Flip every surface shader to linear-HDR output.
         self._set_hdr_output(True)
 
         self._log_buffer_props(manager)
+
+    def _build_bloom(self, hdr_tex: Texture) -> None:
+        """
+        Build the downsample/upsample bloom pyramid feeding the composite.
+
+        Call-of-Duty-style: a soft-knee bright-pass + Karis-averaged 13-tap
+        downsample chain (``gfx_bloom_mips`` halvings), then a 3x3-tent upsample
+        chain that progressively adds each level back — a smooth, wide,
+        firefly-free glow.  All buffers are half-res-and-down RGBA16F, so the
+        cost is a small fraction of a full-res pass (iGPU-friendly).  No-op when
+        ``gfx_bloom`` is off (composite keeps the black dummy, strength 0).
+        """
+        cfg = self.config
+        if not bool(getattr(cfg, "gfx_bloom", True)):
+            return
+
+        mips = max(1, int(getattr(cfg, "gfx_bloom_mips", 5)))
+        fbp = FrameBufferProperties()
+        fbp.set_float_color(True)
+        fbp.set_rgba_bits(16, 16, 16, 16)
+        down_sh = Shader.make(Shader.SL_GLSL,
+                              vertex=post_shaders.POST_FULLSCREEN_VERTEX,
+                              fragment=post_shaders.BLOOM_DOWN_FRAGMENT)
+        up_sh = Shader.make(Shader.SL_GLSL,
+                            vertex=post_shaders.POST_FULLSCREEN_VERTEX,
+                            fragment=post_shaders.BLOOM_UP_FRAGMENT)
+        threshold = float(getattr(cfg, "gfx_bloom_threshold", 1.0))
+        knee = float(getattr(cfg, "gfx_bloom_knee", 0.5))
+
+        # Downsample chain: div 2, 4, 8, … (each level halves resolution).
+        down_tex: list[Texture] = []
+        src = hdr_tex
+        for i in range(mips):
+            tex = Texture(f"bloom_down_{i}")
+            quad = self._manager.renderQuadInto(f"bloom_down_{i}",
+                                                div=2 ** (i + 1),
+                                                colortex=tex, fbprops=fbp)
+            if quad is None:
+                break
+            quad.set_shader(down_sh)
+            quad.set_shader_input("u_tex", src)
+            quad.set_shader_input("u_prefilter", 1.0 if i == 0 else 0.0)
+            quad.set_shader_input("u_threshold", threshold)
+            quad.set_shader_input("u_knee", knee)
+            down_tex.append(tex)
+            src = tex
+
+        if not down_tex:
+            return
+        self._bloom_textures.extend(down_tex)
+
+        # Upsample chain: from the smallest mip back up to div 2, adding each
+        # same-resolution downsample level on the way.
+        up_src = down_tex[-1]
+        for i in range(len(down_tex) - 2, -1, -1):
+            tex = Texture(f"bloom_up_{i}")
+            quad = self._manager.renderQuadInto(f"bloom_up_{i}",
+                                                div=2 ** (i + 1),
+                                                colortex=tex, fbprops=fbp)
+            if quad is None:
+                break
+            quad.set_shader(up_sh)
+            quad.set_shader_input("u_src", up_src)
+            quad.set_shader_input("u_add", down_tex[i])
+            self._bloom_textures.append(tex)
+            up_src = tex
+
+        self.bloom_tex = up_src
+        self._final_quad.set_shader_input("u_bloom", up_src)
+        self._final_quad.set_shader_input(
+            "u_bloom_strength", float(getattr(cfg, "gfx_bloom_strength", 0.06)))
 
     def _log_buffer_props(self, manager: Any) -> None:
         """Log what the GPU actually granted (esp. whether float survived)."""

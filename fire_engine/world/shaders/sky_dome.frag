@@ -176,6 +176,12 @@ void main() {
     float bodyMask = 0.0;
 
     // --- Sun: large limb-darkened disc tinted by its own transmittance -----
+    // In HDR the disc is pushed FAR above 1.0 so the bloom pass bleeds it into
+    // a soft, edgeless blob (how a real bright sun reads) — clamping the disc
+    // to ~white (legacy path) instead gives the hard-edged disc.  The halo is
+    // the forward-Mie glow that haloes the disc and also feeds the bloom.
+    float discGain = (u_hdr_output > 0.5) ? 45.0 : 14.0;
+    float haloGain = (u_hdr_output > 0.5) ? 1.8 : 0.55;
     float sc = dot(d, u_sun_dir);
     if (sc > 0.999) {
         vec2 sl;
@@ -184,12 +190,12 @@ void main() {
         if (sdisc > 0.0) {
             float limb = sqrt(max(1.0 - sr * sr, 0.0));
             float ld = 0.42 + 0.58 * limb;               // limb darkening
-            col += sunT * (u_sun_intensity * sdisc * ld * 14.0);
+            col += sunT * (u_sun_intensity * sdisc * ld * discGain);
             bodyMask = max(bodyMask, sdisc);             // sun occludes stars
         }
     }
     // Forward-Mie halo around the sun.
-    col += sunT * (u_sun_intensity * pow(max(sc, 0.0), 350.0) * 0.55);
+    col += sunT * (u_sun_intensity * pow(max(sc, 0.0), 350.0) * haloGain);
 
     // --- Moon: large textured disc with dynamic phase terminator -----------
     float mc = dot(d, u_moon_dir);

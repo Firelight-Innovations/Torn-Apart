@@ -205,7 +205,9 @@ The HDR offscreen render target + post-processing chain (`None`/disabled when pa
 
 **HDR output contract (`u_hdr_output`).** A single float shader-input set on `render` (inherited by every surface shader: terrain, sky dome, clouds, grass).  `0.0` = the shader does its own ACES tonemap + sRGB gamma (legacy path, exact previous look).  `1.0` = the shader outputs **linear HDR with auto-exposure already multiplied in** (`hdr * u_exposure`), and the composite pass does the single ACES tonemap + gamma.  Applying exposure in the surface shaders (not the composite) is deliberate: bloom must operate on the exposed signal.  The sky dome's stars + shooting-star ride along as additive emissive detail; the boxy clouds linearise (`pow(col, 2.2)`) under HDR until the volumetric rewrite replaces them.
 
-**Composite** (`composite.frag`): `out = pow(acesTonemap(scene + bloom*strength), 1/2.2)`.  Bloom is bound to a 1×1 black dummy with `strength = 0` until the bloom phase.
+**Bloom** (`bloom_down.frag` / `bloom_up.frag`): a Call-of-Duty/Jimenez pyramid — a soft-knee bright-pass + Karis-averaged 13-tap **downsample** chain (`gfx_bloom_mips` halvings, all RGBA16F at ≤ half-res so it's iGPU-cheap), then a 3×3-tent **upsample** chain that progressively adds each level back for a smooth, wide, firefly-free glow.  Built in `PostProcessPipeline._build_bloom` via `FilterManager.renderQuadInto`; the result feeds the composite's `u_bloom`.  The sun disc in `sky_dome.frag` is pushed far above 1.0 under HDR (`discGain`/`haloGain`) so bloom bleeds it into a soft, edgeless blob.  Disabled (composite keeps a black dummy, `strength = 0`) when `gfx_bloom` is off.
+
+**Composite** (`composite.frag`): `out = pow(acesTonemap(scene + bloom*strength), 1/2.2)` — the single tonemap point.
 
 ## Imports Allowed
 

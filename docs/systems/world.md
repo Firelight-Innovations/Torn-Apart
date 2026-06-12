@@ -207,7 +207,9 @@ The HDR offscreen render target + post-processing chain (`None`/disabled when pa
 
 **Bloom** (`bloom_down.frag` / `bloom_up.frag`): a Call-of-Duty/Jimenez pyramid — a soft-knee bright-pass + Karis-averaged 13-tap **downsample** chain (`gfx_bloom_mips` halvings, all RGBA16F at ≤ half-res so it's iGPU-cheap), then a 3×3-tent **upsample** chain that progressively adds each level back for a smooth, wide, firefly-free glow.  Built in `PostProcessPipeline._build_bloom` via `FilterManager.renderQuadInto`; the result feeds the composite's `u_bloom`.  The sun disc in `sky_dome.frag` is pushed far above 1.0 under HDR (`discGain`/`haloGain`) so bloom bleeds it into a soft, edgeless blob.  Disabled (composite keeps a black dummy, `strength = 0`) when `gfx_bloom` is off.
 
-**Composite** (`composite.frag`): `out = pow(acesTonemap(scene + bloom*strength), 1/2.2)` — the single tonemap point.
+**Lens flare** (`lens_flare.frag`): image-based, screen-space — reads the HDR scene at quarter-res, isolates the sun (a high HDR threshold), and rebuilds **ghosts** (the source mirrored through the screen centre at several scales, with chromatic fringing) + a **halo** ring.  Because it reads the *rendered* scene, occlusion is automatic: when terrain covers the sun it isn't bright in the buffer, so the flare vanishes — no separate depth test needed.  Built in `_build_flare` (`renderQuadInto` div 4), fed to the composite's `u_flare`.  Tuning constants live on `PostProcessPipeline` (`_FLARE_*`); gated by `gfx_lens_flare`.
+
+**Composite** (`composite.frag`): `out = pow(acesTonemap(scene + bloom*strength + flare*strength), 1/2.2)` — the single tonemap point.
 
 ## Imports Allowed
 

@@ -96,6 +96,7 @@ class PostProcessPipeline:
         # Bloom: keep refs so the render-target textures aren't GC'd.
         self._bloom_textures: list = []
         self.bloom_tex: Texture | None = None
+        self.flare_tex: Texture | None = None
 
         if not self.enabled:
             _log.info("Post-processing disabled (gfx_post_process=false) — "
@@ -155,6 +156,8 @@ class PostProcessPipeline:
         quad.set_shader_input("u_scene", color_tex)
         quad.set_shader_input("u_bloom", dummy)
         quad.set_shader_input("u_bloom_strength", 0.0)
+        quad.set_shader_input("u_flare", dummy)
+        quad.set_shader_input("u_flare_strength", 0.0)
 
         self._manager = manager
         self.hdr_color_tex = color_tex
@@ -163,6 +166,9 @@ class PostProcessPipeline:
 
         # Bloom pyramid (reads the HDR scene buffer, feeds the composite).
         self._build_bloom(color_tex)
+
+        # Lens flare (image-based ghosts + halo from the bright scene).
+        self._build_flare(color_tex)
 
         # Flip every surface shader to linear-HDR output.
         self._set_hdr_output(True)
@@ -239,6 +245,46 @@ class PostProcessPipeline:
         self._final_quad.set_shader_input("u_bloom", up_src)
         self._final_quad.set_shader_input(
             "u_bloom_strength", float(getattr(cfg, "gfx_bloom_strength", 0.06)))
+
+    # Lens-flare tuning (held here, not in config — aesthetic constants).
+    _FLARE_THRESHOLD = 4.0     # HDR luminance: isolate the sun, not bright sky
+    _FLARE_GHOSTS = 5          # ghost reflections along the centre axis
+    _FLARE_DISPERSAL = 0.32    # ghost spacing
+    _FLARE_HALO_WIDTH = 0.45   # halo ring radius (UV)
+    _FLARE_CHROMA = 0.012      # chromatic-aberration spread (UV)
+    _FLARE_STRENGTH = 0.22     # contribution added at composite
+
+    def _build_flare(self, hdr_tex: Texture) -> None:
+        """
+        Build the image-based lens-flare pass (ghosts + halo) feeding composite.
+
+        Reads the HDR scene at quarter-res, isolates the sun (a high HDR
+        threshold), and rebuilds ghost reflections (mirrored through the screen
+        centre, with chromatic fringing) + a halo ring.  Occlusion is automatic
+        — an occluded sun isn't bright in the buffer, so the flare disappears.
+        No-op when ``gfx_lens_flare`` is off.
+        """
+        cfg = self.config
+        if not bool(getattr(cfg, "gfx_lens_flare", True)):
+            return
+        tex = Texture("lens_flare")
+        quad = self._manager.renderQuadInto("lens_flare", div=4, colortex=tex)
+        if quad is None:
+            return
+        shader = Shader.make(Shader.SL_GLSL,
+                             vertex=post_shaders.POST_FULLSCREEN_VERTEX,
+                             fragment=post_shaders.LENS_FLARE_FRAGMENT)
+        quad.set_shader(shader)
+        quad.set_shader_input("u_tex", hdr_tex)
+        quad.set_shader_input("u_threshold", self._FLARE_THRESHOLD)
+        quad.set_shader_input("u_ghosts", self._FLARE_GHOSTS)
+        quad.set_shader_input("u_dispersal", self._FLARE_DISPERSAL)
+        quad.set_shader_input("u_halo_width", self._FLARE_HALO_WIDTH)
+        quad.set_shader_input("u_chroma", self._FLARE_CHROMA)
+        self._bloom_textures.append(tex)   # keep ref alive
+        self.flare_tex = tex
+        self._final_quad.set_shader_input("u_flare", tex)
+        self._final_quad.set_shader_input("u_flare_strength", self._FLARE_STRENGTH)
 
     def _log_buffer_props(self, manager: Any) -> None:
         """Log what the GPU actually granted (esp. whether float survived)."""

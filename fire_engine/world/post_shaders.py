@@ -11,7 +11,8 @@ Passes (added across phases; the loader lists only what exists today):
     BLOOM_DOWN_FRAGMENT     — 13-tap downsample (+ soft-knee bright-pass/Karis
                               on the first level).
     BLOOM_UP_FRAGMENT       — 3x3 tent upsample + add (progressive combine).
-    COMPOSITE_FRAGMENT      — scene HDR (+ bloom) → ACES tonemap → sRGB gamma.
+    LENS_FLARE_FRAGMENT     — image-based ghosts + halo from the bright scene.
+    COMPOSITE_FRAGMENT      — scene HDR (+ bloom + flare) → ACES tonemap → gamma.
 
 The GLSL lives in ``world/shaders/*.vert`` / ``*.frag`` (loaded via
 ``load_glsl``) so editors get syntax highlighting + LSP.
@@ -24,6 +25,7 @@ __all__ = [
     "POST_FULLSCREEN_VERTEX",
     "BLOOM_DOWN_FRAGMENT",
     "BLOOM_UP_FRAGMENT",
+    "LENS_FLARE_FRAGMENT",
     "COMPOSITE_FRAGMENT",
 ]
 
@@ -35,6 +37,9 @@ BLOOM_DOWN_FRAGMENT: str = load_glsl(__file__, "bloom_down.frag")
 
 
 BLOOM_UP_FRAGMENT: str = load_glsl(__file__, "bloom_up.frag")
+
+
+LENS_FLARE_FRAGMENT: str = load_glsl(__file__, "lens_flare.frag")
 
 
 COMPOSITE_FRAGMENT: str = load_glsl(__file__, "composite.frag")

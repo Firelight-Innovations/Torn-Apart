@@ -10,6 +10,8 @@
 uniform sampler2D u_scene;     // linear HDR, auto-exposure already applied
 uniform sampler2D u_bloom;     // bloom blur (black until the bloom phase wires it)
 uniform float u_bloom_strength;
+uniform sampler2D u_flare;     // lens-flare features (black until that phase)
+uniform float u_flare_strength;
 
 in vec2 v_uv;
 out vec4 frag_color;
@@ -22,6 +24,7 @@ vec3 acesTonemap(vec3 x) {
 void main() {
     vec3 hdr = texture(u_scene, v_uv).rgb;
     hdr += texture(u_bloom, v_uv).rgb * u_bloom_strength;
+    hdr += texture(u_flare, v_uv).rgb * u_flare_strength;
     vec3 ldr = acesTonemap(hdr);
     frag_color = vec4(pow(ldr, vec3(1.0 / 2.2)), 1.0);
 }

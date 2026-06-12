@@ -23,11 +23,25 @@ vec3 acesTonemap(vec3 x) {
                  0.0, 1.0);
 }
 
+// Hue-preserving tonemap.  Plain per-channel ACES bleaches saturated highlights
+// toward white (the bright sky around a mid-elevation sun turning flat white):
+// each channel saturates independently, so blue's R/G catch up to B.  Blending
+// in a version that tonemaps the PEAK channel and keeps the original RGB ratio
+// preserves the hue as luminance rises, so a bright blue sky stays blue instead
+// of washing out — while the sun disc (R≈G≈B) still reads white.
+vec3 tonemapHuePreserve(vec3 c) {
+    vec3 perCh = acesTonemap(c);                 // filmic, desaturates highlights
+    float peak = max(c.r, max(c.g, c.b));
+    vec3 ratio = c / max(peak, 1e-4);
+    vec3 hue = ratio * acesTonemap(vec3(peak)).x;  // tonemap peak, keep colour
+    return mix(perCh, hue, 0.6);
+}
+
 void main() {
     vec3 hdr = texture(u_scene, v_uv).rgb;
     hdr += texture(u_bloom, v_uv).rgb * u_bloom_strength;
     hdr += texture(u_flare, v_uv).rgb * u_flare_strength;
     hdr += texture(u_godray, v_uv).rgb * u_godray_strength;
-    vec3 ldr = acesTonemap(hdr);
+    vec3 ldr = tonemapHuePreserve(hdr);
     frag_color = vec4(pow(ldr, vec3(1.0 / 2.2)), 1.0);
 }

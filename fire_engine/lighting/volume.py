@@ -261,7 +261,7 @@ def assemble_geometry(
     cache: "ChunkBlockCache | None" = None,
     occluders: "TreeOccluderSet | None" = None,
     trunk_occ: float = 0.0,
-    canopy_occ: float = 0.0,
+    canopy_gain: float = 0.0,
 ) -> GeometryVolume:
     """
     Slice loaded chunks into one contiguous geometry block for ``window``.
@@ -309,9 +309,13 @@ def assemble_geometry(
         fractional occupancy + bounce albedo (see ``lighting/occluders.py``)
         so the lighting marches see trees.  ``None`` (default) leaves the
         output byte-identical to the chunks-only assembly.
-    trunk_occ, canopy_occ : float
-        Splat opacities for the occluders (``config.light_tree_trunk_occ`` /
-        ``light_tree_canopy_occ``).  Ignored when ``occluders`` is ``None``.
+    trunk_occ : float
+        Trunk splat opacity (``config.light_tree_trunk_occ``).  Ignored when
+        ``occluders`` is ``None``.
+    canopy_gain : float
+        Multiplier on each instance's leaf-derived per-meter canopy
+        extinction (``config.light_tree_canopy_extinction_gain``).  Ignored
+        when ``occluders`` is ``None``.
 
     Returns
     -------
@@ -395,7 +399,7 @@ def assemble_geometry(
     # solids win the max-combine (a tree inside a hill stays hill-solid).
     if occluders is not None and occluders.count:
         splat_tree_occluders(albedo_occ, window.origin_cell, window.cell_m,
-                             occluders, trunk_occ, canopy_occ)
+                             occluders, trunk_occ, canopy_gain)
 
     emission = np.empty((n, n, n, 4), dtype=np.uint8)
     emission[..., :3] = np.clip(

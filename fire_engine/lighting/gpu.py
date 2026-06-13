@@ -662,7 +662,7 @@ class GpuLightingPipeline:
             voxel_size=self._config.voxel_size, cache=cache,
             occluders=self._tree_occluders,
             trunk_occ=float(self._config.light_tree_trunk_occ),
-            canopy_occ=float(self._config.light_tree_canopy_occ))
+            canopy_gain=float(self._config.light_tree_canopy_extinction_gain))
         _upload_volume(casc.geom, vol.albedo_occ)
         _upload_volume(casc.emis, vol.emission)
         casc.needs_inject = True
@@ -679,7 +679,10 @@ class GpuLightingPipeline:
         every cascade with a committed volume is queued for an async re-splat
         at its current origin — sun shadows, GI bounce, the surface shaders'
         refinement march and voxel AO all pick the trees up with zero shader
-        changes.
+        changes.  Canopies are a translucent leaf medium (per-meter
+        extinction from each instance's ``canopy_sigma`` ×
+        ``light_tree_canopy_extinction_gain``); trunks splat at
+        ``light_tree_trunk_occ``.
 
         Parameters
         ----------
@@ -810,7 +813,7 @@ class GpuLightingPipeline:
             seq=self._assembly_seq,
             occluders=self._tree_occluders,
             trunk_occ=float(self._config.light_tree_trunk_occ),
-            canopy_occ=float(self._config.light_tree_canopy_occ))
+            canopy_gain=float(self._config.light_tree_canopy_extinction_gain))
         if self._threaded:
             casc._assembly_inflight = True
             casc._pending_seq = self._assembly_seq

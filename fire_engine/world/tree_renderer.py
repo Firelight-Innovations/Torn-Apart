@@ -189,6 +189,8 @@ class TreeRendererComponent(Component):
         self._volume_occluders: dict[tuple[str, int], TreeOccluderSet] = {}
         # Per-species mean (bark_rgb, leaf_rgb) splat colours from the atlas.
         self._species_occ_rgb: dict[str, tuple] = {}
+        # Per-species leaf-derived canopy extinction (per meter, scale 1.0).
+        self._species_sigma: dict[str, float] = {}
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -399,11 +401,15 @@ class TreeRendererComponent(Component):
             return
 
         # Static-occluder set for the lighting cascades: per-instance height
-        # and canopy reach scaled from the species pool extents, splat
-        # colours averaged from the species atlas (bounce albedo).  Pushed to
-        # the pipeline by the caller (_build_volumes / _rebuild_volume).
+        # and canopy reach scaled from the species pool extents, per-meter
+        # canopy extinction from the species' REAL leaf area (a dense oak
+        # shades harder than a near-bare snag; sigma scales 1/instance-scale
+        # since leaf area grows s² against canopy volume s³), splat colours
+        # averaged from the species atlas (bounce albedo).  Pushed to the
+        # pipeline by the caller (_build_volumes / _rebuild_volume).
         occ_h = np.empty(inst.count, np.float32)
         occ_r = np.empty(inst.count, np.float32)
+        occ_sigma = np.empty(inst.count, np.float32)
         occ_bark = np.empty((inst.count, 3), np.float32)
         occ_leaf = np.empty((inst.count, 3), np.float32)
         for s_idx, name in enumerate(inst.species_names):
@@ -413,12 +419,14 @@ class TreeRendererComponent(Component):
             vs = variant_sets[name]
             occ_h[mask] = np.float32(vs.max_height_m) * inst.scale[mask]
             occ_r[mask] = np.float32(vs.max_radius_m) * inst.scale[mask]
+            occ_sigma[mask] = (np.float32(self._species_canopy_sigma(name, vs))
+                               / np.maximum(inst.scale[mask], 1e-3))
             bark_rgb, leaf_rgb = self._species_splat_rgb(name, vs)
             occ_bark[mask] = bark_rgb
             occ_leaf[mask] = leaf_rgb
         self._volume_occluders[(kind.tag, vol.id)] = TreeOccluderSet(
             x=inst.x, y=inst.y, z=inst.z, height_m=occ_h, canopy_r_m=occ_r,
-            bark_rgb=occ_bark, leaf_rgb=occ_leaf)
+            canopy_sigma=occ_sigma, bark_rgb=occ_bark, leaf_rgb=occ_leaf)
 
         scale_min, scale_span = SCALE_JITTER[kind.tag]
         scale_max = scale_min + scale_span
@@ -511,6 +519,33 @@ class TreeRendererComponent(Component):
         sets = [s for s in self._volume_occluders.values() if s.count]
         self.lighting_pipeline.set_static_occluders(
             TreeOccluderSet.merge(sets) if sets else None)
+
+    def _species_canopy_sigma(self, name: str, vs) -> float:
+        """
+        Per-meter canopy extinction for a species at scale 1.0.
+
+        How thick the leaves are, measured from the actual meshes: mean
+        one-sided leaf area over the variant pool
+        (``procedural.flora.mesh_leaf_area_m2``) ÷ the canopy ellipsoid
+        volume from the pool extents, × 0.5 (randomly-oriented flat cards
+        present half their area to any direction).  Transmittance through
+        ``X`` meters of crown centre is then ``exp(-sigma·X)`` — a leafy
+        oak shades hard, a two-tuft snag barely dims the ground.  Cached
+        per species; deterministic (meshes are seeded procedural content).
+        """
+        sigma = self._species_sigma.get(name)
+        if sigma is None:
+            from fire_engine.procedural.flora import mesh_leaf_area_m2
+            from fire_engine.lighting.occluders import (
+                CANOPY_HALF_HEIGHT_FRAC)
+            leaf_area = float(np.mean(
+                [mesh_leaf_area_m2(m) for m in vs.meshes]))
+            cv = CANOPY_HALF_HEIGHT_FRAC * float(vs.max_height_m)
+            r = float(vs.max_radius_m)
+            volume = (4.0 / 3.0) * np.pi * r * r * max(cv, 1e-3)
+            sigma = 0.5 * leaf_area / max(volume, 1e-3)
+            self._species_sigma[name] = sigma
+        return sigma
 
     def _species_splat_rgb(self, name: str, vs) -> tuple:
         """

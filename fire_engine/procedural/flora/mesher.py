@@ -43,7 +43,8 @@ from fire_engine.procedural.flora.skeleton import (
     _normalize,
 )
 
-__all__ = ["TreeMesh", "mesh_branches", "mesh_leaves", "merge_parts"]
+__all__ = ["TreeMesh", "mesh_branches", "mesh_leaves", "merge_parts",
+           "mesh_leaf_area_m2"]
 
 
 @dataclass
@@ -97,6 +98,51 @@ class TreeMesh:
                         colors=np.empty((0, 4), dtype=np.float32),
                         indices=np.empty(0, dtype=np.uint32),
                         height_m=0.0, radius_m=0.0)
+
+
+def mesh_leaf_area_m2(mesh: TreeMesh) -> float:
+    """
+    Total one-sided LEAF area of a variant mesh, in square meters.
+
+    Leaf triangles are identified by the atlas layout contract
+    (``procedural/flora/atlas.py``): leaves map into the atlas's RIGHT half
+    (``uv.x >= 0.5``), bark into the left.  A triangle counts as leaf when
+    all three of its vertices sit in the leaf half.
+
+    This is the "how thick are the leaves" measure the lighting occluders
+    use: leaf area ÷ canopy volume gives a per-meter extinction density, so
+    a dense oak crown blocks more sun than a scraggly snag with two tufts
+    (see ``lighting/occluders.py`` and ``world/tree_renderer.py``).
+
+    Parameters
+    ----------
+    mesh : TreeMesh
+        One variant mesh (tree-local meters).
+
+    Returns
+    -------
+    float
+        Sum of leaf-triangle areas (m²); 0.0 for a leafless mesh.
+
+    Example
+    -------
+    >>> from fire_engine.procedural.flora.mesher import TreeMesh, mesh_leaf_area_m2
+    >>> mesh_leaf_area_m2(TreeMesh.empty())
+    0.0
+    """
+    if mesh.indices.shape[0] == 0:
+        return 0.0
+    tris = mesh.indices.reshape(-1, 3)
+    leaf_vert = mesh.uvs[:, 0] >= 0.5
+    leaf_tri = leaf_vert[tris].all(axis=1)
+    if not bool(leaf_tri.any()):
+        return 0.0
+    p = mesh.positions
+    t = tris[leaf_tri]
+    e1 = p[t[:, 1]] - p[t[:, 0]]
+    e2 = p[t[:, 2]] - p[t[:, 0]]
+    areas = 0.5 * np.linalg.norm(np.cross(e1, e2), axis=1)
+    return float(areas.sum())
 
 
 def _quad_indices(n_quads: int) -> np.ndarray:

@@ -272,10 +272,14 @@ class Config:
     light_tree_trunk_occ : float — [0,1] occupancy a tree trunk splats into the
                                   cascade volumes (lighting/occluders.py) —
                                   near-opaque wood.
-    light_tree_canopy_occ: float — [0,1] occupancy a tree canopy splats —
-                                  keep well under 1: leaves ATTENUATE sun/GI
-                                  (dappled shade); 1.0 turns the under-canopy
-                                  pitch black and crowns self-shadow to mud.
+    light_tree_canopy_extinction_gain : float — multiplier on each tree's
+                                  leaf-derived per-METER canopy extinction:
+                                  transmittance through X m of crown centre =
+                                  exp(-sigma·gain·X), the same at every
+                                  cascade cell size.  1.0 = the species' real
+                                  leaf density; raise for darker shade, lower
+                                  for airier canopies; 0 disables canopy
+                                  occlusion.
     light_ao_strength    : float — [0,1] strength of occupancy-based ambient
                                    occlusion at surfaces.
     light_max_point_lights: int  — max simultaneous point/area lights uploaded
@@ -513,11 +517,13 @@ class Config:
     light_penumbra_deg:    float = 2.5
     light_bounce_strength: float = 0.7
     light_ao_strength:     float = 0.6
-    # Static tree/bush occluder splat opacities (lighting/occluders.py):
-    # trunks block almost fully; canopies ATTENUATE (full 1.0 makes the
-    # under-canopy pitch black and crowns self-shadow to mud).
+    # Static tree/bush occluders (lighting/occluders.py): trunks splat a
+    # near-opaque column; canopies are a TRANSLUCENT leaf medium — per-meter
+    # extinction derived from the species' real leaf area, scaled by this
+    # gain (light through X m of crown = exp(-sigma*gain*X), identical at
+    # every cascade cell size).
     light_tree_trunk_occ:  float = 0.85
-    light_tree_canopy_occ: float = 0.30
+    light_tree_canopy_extinction_gain: float = 1.0
     light_max_point_lights: int  = 64
     light_exposure:        float = 0.9
     exposure_adapt_enabled: bool = True

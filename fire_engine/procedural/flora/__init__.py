@@ -35,6 +35,7 @@ from fire_engine.procedural.flora.mesher import (
     TreeMesh,
     merge_parts,
     mesh_branches,
+    mesh_leaf_area_m2,
     mesh_leaves,
 )
 from fire_engine.procedural.flora.atlas import (
@@ -63,6 +64,7 @@ __all__ = [
     "TreeMesh",
     "mesh_branches",
     "mesh_leaves",
+    "mesh_leaf_area_m2",
     "merge_parts",
     "AtlasLayout",
     "bark_texture",

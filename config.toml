@@ -40,7 +40,7 @@ light_penumbra_deg = 2.5       # celestial penumbra cone half-angle (soft shadow
 light_bounce_strength = 0.7    # [0,1] albedo-tinted bounce gain
 light_ao_strength = 0.6        # [0,1] voxel ambient-occlusion strength
 light_tree_trunk_occ = 0.85    # [0,1] occupancy a tree trunk splats into the cascades (near-opaque wood)
-light_tree_canopy_occ = 0.30   # [0,1] canopy splat — leaves ATTENUATE light; 1.0 = pitch-black under-canopy
+light_tree_canopy_extinction_gain = 1.0  # x the species' leaf-derived per-meter canopy extinction (light through X m of crown = exp(-sigma*gain*X)); raise = darker shade, 0 = off
 light_max_point_lights = 64    # max point/area lights uploaded per frame
 light_exposure = 0.9           # HDR tonemap exposure (base; auto-exposure multiplies it)
 exposure_adapt_enabled = true  # auto-exposure / eye adaptation

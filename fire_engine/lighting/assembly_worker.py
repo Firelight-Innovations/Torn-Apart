@@ -89,8 +89,11 @@ class AssemblyJob:
         Static tree/bush occluder snapshot splatted into the volume (see
         ``lighting/occluders.py``).  Immutable struct-of-arrays — safe to
         share read-only across the thread boundary.  ``None`` → chunks only.
-    trunk_occ, canopy_occ : float
-        Occluder splat opacities (``config.light_tree_*_occ``).
+    trunk_occ : float
+        Trunk splat opacity (``config.light_tree_trunk_occ``).
+    canopy_gain : float
+        Multiplier on the per-instance leaf-derived canopy extinction
+        (``config.light_tree_canopy_extinction_gain``).
     """
 
     cascade_index: int
@@ -104,7 +107,7 @@ class AssemblyJob:
     seq: int
     occluders: "TreeOccluderSet | None" = None
     trunk_occ: float = 0.0
-    canopy_occ: float = 0.0
+    canopy_gain: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -152,7 +155,7 @@ def assemble_packed(
         window, job.materials, job.palette,
         chunk_size=job.chunk_size, voxel_size=job.voxel_size, cache=cache,
         occluders=job.occluders,
-        trunk_occ=job.trunk_occ, canopy_occ=job.canopy_occ)
+        trunk_occ=job.trunk_occ, canopy_gain=job.canopy_gain)
     return AssemblyResult(
         cascade_index=job.cascade_index,
         origin_cell=job.origin_cell,

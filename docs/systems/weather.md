@@ -30,7 +30,9 @@ simulate local gusts (that's `wind/`), or own `SkyState` (that's `sky/`).
 | `classify(local) → WeatherType` | Discrete label from a `LocalWeather` sample (fog→storm→rain→overcast→cloudy→clear, first match wins). |
 | `WeatherType` | `clear`/`cloudy`/`overcast`/`fog`/`rain`/`storm` — exact legacy string values. |
 | `LocalWeather` | Frozen local sample: cloud_coverage/density, fog_density, rain_intensity, wind_dir/speed, humidity, wetness, temperature_c. First six map 1:1 onto `SkyState`. |
-| `WeatherSystem(config, bus=None)` | The system (`save_key="weather"`). `update(day, tod, player_pos=None) → LocalWeather`; `sample_local(pos_xy, t_abs) → LocalWeather`; `.cells` (active, nearest first); `.current` (label); `force_weather(type\|None)` dev override; `get_delta`/`apply_delta`. |
+| `WeatherSystem(config, bus=None)` | The system (`save_key="weather"`). `update(day, tod, player_pos=None) → LocalWeather`; `sample_local(pos_xy, t_abs) → LocalWeather`; `sample_fields(points_xy, t_abs) → (cov, den, rain, fog, gust)` vectorised core; `.cells` (active, nearest first); `.current` (label); `force_weather(type\|None)` dev override; `get_delta`/`apply_delta`. |
+| `WeatherMap(config)` (M3) | Square `(cells, cells, 4)` float32 raster cache of the four spatial channels around a moving center (`weather_map_cells` × `weather_map_cell_m`). `rasterize(system, center_xy, t_abs) → (N,N,4)`; `texel_centers(center_xy) → (N*N, 2)`; `.cells`/`.cell_m`/`.span_m`. Layout `out[row=Y, col=X, channel]`. Pure derivation of the sim (never saved). |
+| `MAP_CHANNELS` | `("coverage", "density", "precip", "fog")` — the raster's last-axis channel order. |
 
 ## Imports Allowed
 `core` (config, rng), numpy, stdlib.  From M8: `wind` (modifier seam only —
@@ -100,3 +102,14 @@ print(ws.current, lw.rain_intensity, [c.kind.value for c in ws.cells])
   meant for scalar/per-cell evaluation; the per-frame budget is scalar-only.
 - `force_weather` is a dev shim over the legacy global states; the real spatial
   summon API lands in M8.  Legacy (old-Markov) save deltas still load.
+- **M4 GPU contract**: `WeatherMap.rasterize` output is packed by
+  `fire_engine.sky.pack_weather_map` (fp16 BGRA, row-major — no transpose) and
+  uploaded by `world/weather_renderer.py::WeatherMapComponent`.  The cloud
+  shader samples the resulting texture at the **RAW world XY** — never add the
+  wind drift, because the raster already bakes in cell motion each re-raster
+  (adding `u_wind` would double-advect the storm off its own rain).  Render
+  bridges live in `world/` (Hard Rule 1); the packer is headless in `sky/`.
+- The `WeatherMapComponent` only **reads** the weather system (`rasterize` is a
+  pure fn of seed/center/`t_abs`); the `SkyRendererComponent` is the single
+  driver of `sky_system.update(player_pos)`.  Don't add a second `update` caller
+  or weather double-advances per frame.

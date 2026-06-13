@@ -437,6 +437,27 @@ def build_demo():
     )
     app.sky_go = sky_go
 
+    # 10b-weather. Weather map (M4) — the spatial weather field (coverage /
+    #      density / precip / fog) the volumetric clouds sample per march step
+    #      so a passing storm has a dark, lowered, raining base while the sky a
+    #      kilometre away stays clear.  Headless WeatherMap lives on the
+    #      sky_system; this render component rasters it around the camera, packs
+    #      it to a small fp16 texture, and binds the weather-map uniform
+    #      contract on app.render (inherited by the cloud dome).  The
+    #      SkyRendererComponent is the sole driver of sky_system.update(), so
+    #      this component only READS the advanced weather (no double-update).
+    #      Gated by gfx_weather_map (kill switch); virga by gfx_cloud_virga.
+    from fire_engine.world.weather_renderer import WeatherMapComponent
+    weather_go = instantiate()
+    weather_go.name = "WeatherMap"
+    weather_go.add_component(
+        WeatherMapComponent,
+        base=app,
+        sky_system=sky_system,
+        clock=clock,
+    )
+    app.weather_go = weather_go
+
     # 10b-wind. Wind field — the spatially-varying, time-evolving wind that
     #      grass (and later flags/cloth/motes) samples instead of one flat
     #      scalar.  Construct the headless WindField (+ the venturi worker if

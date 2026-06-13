@@ -161,6 +161,8 @@ preset = "high"
 # gfx_cloud_light_steps = 8      # sun light-march steps (self-shadow; main cost)
 # gfx_cloud_resolution_scale = 1.0  # 0.5 = half-res clouds (big iGPU win)
 # gfx_cloud_max_dist_m = 6000.0  # far raymarch distance for clouds (meters)
+# gfx_weather_map = true         # spatial weather-map texture → per-step cloud coverage/density/precip (M4; off ⇒ flat ambient, pre-M4 look)
+# gfx_cloud_virga = true         # gray rain shafts below storm bases (needs gfx_weather_map)
 # gfx_god_rays = true            # crepuscular rays through clouds
 # gfx_god_ray_samples = 32       # radial god-ray samples
 # gfx_foliage_shadow_refine = true  # per-fragment shadow refinement on foliage

@@ -68,6 +68,8 @@ GRAPHICS_PRESETS: dict[str, dict] = {
         "gfx_fxaa": False,
         "gfx_lens_flare": False,
         "gfx_clouds": False,
+        "gfx_weather_map": False,
+        "gfx_cloud_virga": False,
         "gfx_god_rays": False,
         "gfx_foliage_shadow_refine": False,
     },
@@ -83,6 +85,8 @@ GRAPHICS_PRESETS: dict[str, dict] = {
         "gfx_cloud_steps": 32,
         "gfx_cloud_light_steps": 4,
         "gfx_cloud_resolution_scale": 0.5,
+        "gfx_weather_map": True,
+        "gfx_cloud_virga": False,
         "gfx_god_rays": False,
         "gfx_god_ray_samples": 16,
         "gfx_foliage_shadow_refine": False,
@@ -99,6 +103,8 @@ GRAPHICS_PRESETS: dict[str, dict] = {
         "gfx_cloud_steps": 48,
         "gfx_cloud_light_steps": 6,
         "gfx_cloud_resolution_scale": 1.0,
+        "gfx_weather_map": True,
+        "gfx_cloud_virga": True,
         "gfx_god_rays": True,
         "gfx_god_ray_samples": 24,
         "gfx_foliage_shadow_refine": True,
@@ -115,6 +121,8 @@ GRAPHICS_PRESETS: dict[str, dict] = {
         "gfx_cloud_steps": 96,
         "gfx_cloud_light_steps": 8,
         "gfx_cloud_resolution_scale": 1.0,
+        "gfx_weather_map": True,
+        "gfx_cloud_virga": True,
         "gfx_god_rays": True,
         "gfx_god_ray_samples": 32,
         "gfx_foliage_shadow_refine": True,
@@ -448,6 +456,18 @@ class Config:
     gfx_cloud_resolution_scale: float — cloud pass resolution (0.5 = half-res,
                                     the biggest perf win on an iGPU).
     gfx_cloud_max_dist_m  : float — far raymarch distance for clouds (meters).
+    gfx_weather_map       : bool  — upload the spatial weather-map texture and
+                                    sample it in the cloud raymarch (spatial
+                                    coverage/density/precip).  Off ⇒ the cloud
+                                    shader uses the flat ambient scalars (the
+                                    pre-M4 look); the renderer skips the
+                                    re-raster + upload entirely.  Master kill
+                                    switch for the M4 GPU weather contract.
+    gfx_cloud_virga       : bool  — gray rain shafts hanging below storm-cloud
+                                    bases (driven by the weather map's precip
+                                    channel).  Requires ``gfx_weather_map``;
+                                    off ⇒ storm bases still lower/darken but no
+                                    virga streaks.
     gfx_god_rays          : bool  — screen-space crepuscular rays through clouds.
     gfx_god_ray_samples   : int   — radial sample count for god rays.
     gfx_foliage_shadow_refine : bool — per-fragment celestial-shadow refinement
@@ -640,6 +660,8 @@ class Config:
     gfx_cloud_light_steps:      int   = 8
     gfx_cloud_resolution_scale: float = 1.0
     gfx_cloud_max_dist_m:       float = 6000.0
+    gfx_weather_map:            bool  = True
+    gfx_cloud_virga:            bool  = True
     gfx_god_rays:               bool  = True
     gfx_god_ray_samples:        int   = 32
     gfx_foliage_shadow_refine:  bool  = True

@@ -41,6 +41,7 @@ Quick-start example
 
 from fire_engine.sky.celestial import moon_direction, sun_direction
 from fire_engine.sky.sky_state import SkyState, SkySystem
+from fire_engine.sky.weather_map_pack import pack_weather_map
 from fire_engine.weather import LocalWeather, WeatherSystem, WeatherType
 
 __all__ = [
@@ -49,6 +50,7 @@ __all__ = [
     "WeatherType",
     "LocalWeather",
     "WeatherSystem",
+    "pack_weather_map",
     "sun_direction",
     "moon_direction",
 ]

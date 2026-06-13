@@ -542,10 +542,17 @@ class SkyRendererComponent(Component):
         The component registry runs ALL update() calls before any
         late_update(), so calling ``sky_system.update()`` here guarantees a
         fresh ``SkyState`` for ``late_update`` without modifying App.
+
+        This is the single driver of ``sky_system.update(player_pos)`` — it
+        threads the camera world XY through so distant storms sample at the
+        camera (M4).  Other readers (wind, the WeatherMapComponent's raster)
+        consume the already-advanced weather system, so nothing else calls
+        ``update`` (no double-advance).
         """
         self._time_s += dt
         if self.sky_system is not None:
-            self._state = self.sky_system.update()
+            cx, cy, _ = self._camera_pos()
+            self._state = self.sky_system.update((cx, cy))
 
     def late_update(self, dt: float) -> None:
         """Write this frame's SkyState to the GPU (bulk uniform/state writes)."""
@@ -747,6 +754,23 @@ class SkyRendererComponent(Component):
         clouds.set_shader_input("u_cloud_density", 1.0)
         clouds.set_shader_input("u_wind", LVecBase2f(0.0, 0.0))
         clouds.set_shader_input("u_time", 0.0)
+
+        # M4 weather-map contract defaults: the WeatherMapComponent binds the
+        # real texture + origin + enable on ``render`` (inherited here), but a
+        # dummy 1x1 sampler and disabled state keep the shader valid even when
+        # that component is absent / the feature is off (pre-M4 flat-ambient
+        # look).  A bound sampler2D is required (an unbound one is UB).
+        dummy_wmap = Texture("weather_map_dummy")
+        dummy_wmap.setup_2d_texture(1, 1, Texture.T_half_float,
+                                    Texture.F_rgba16)
+        dummy_wmap.set_clear_color((0.0, 0.0, 0.0, 0.0))
+        clouds.set_shader_input("u_weather_map", dummy_wmap)
+        clouds.set_shader_input("u_wmap_origin", LVecBase2f(0.0, 0.0))
+        clouds.set_shader_input("u_wmap_cell_m", 1.0)
+        clouds.set_shader_input("u_wmap_cells", 1.0)
+        clouds.set_shader_input("u_weather_map_enabled", 0)
+        clouds.set_shader_input("u_weather_ambient", LVecBase2f(0.0, 0.0))
+        clouds.set_shader_input("u_virga_enabled", 0)
         self._cloud_np = clouds
 
     def _build_rain(self) -> None:

@@ -46,6 +46,12 @@ All symbols below are re-exported from `fire_engine.sky` (`__init__.py`).
 | `sky.update(player_pos=None) -> SkyState` | Reads `clock.game_day` / `clock.game_time_of_day`, samples weather at `player_pos` (origin if `None`), computes + caches.  Call once per frame. |
 | `sky.state` | Property: last computed `SkyState` (`update()` invoked lazily if never run). |
 
+### Weather-map GPU pack (`sky/weather_map_pack.py`) — headless, M4
+
+| Symbol | Description |
+|---|---|
+| `pack_weather_map(raster) -> bytes` | Pack a `(cells, cells, 4)` float32 `WeatherMap.rasterize` output into Panda3D 2-D-texture RAM bytes: **little-endian float16, row-major `(row=Y, col=X)`, BGRA** (no transpose — the raster is already row-major, unlike `pack_wind_field`'s `[x,y]` field).  Logical RGBA = `(coverage, density, precip, fog)`; BGRA is the `F_rgba16` data-texture quirk (same swap `pack_wind_field` / `lighting/volume.pack_volume` apply).  Panda3D un-swizzles BGRA→RGBA on sample, so the shader reads `texture(...).rgba == (coverage, density, precip, fog)`.  Pure, thread-safe, no panda3d.  Layout pinned by `tests/test_weather_map_pack.py`.  Uploaded by `world/weather_renderer.py::WeatherMapComponent`. |
+
 ### Weather (now `fire_engine/weather/`; `sky/weather.py` is a re-export shim)
 
 The weather model moved into its own headless package when it became spatial
@@ -63,7 +69,7 @@ imports keep working; new code imports from `fire_engine.weather`.
 | `ws.force_weather(weather)` | Dev override (compat shim); `None` clears it and blends back to the natural spatial sample. |
 | `ws.get_delta() -> dict` | `{}` unless an override/release blend is active. |
 | `ws.apply_delta(delta)` | Restore override state; subsequent behaviour identical. |
-| `SEGMENT_SECONDS`, `SEGMENTS_PER_DAY`, `BLEND_SECONDS` | 7200 s, 12, 1200 s (20 game minutes). |
+| `BLEND_SECONDS`, `HYSTERESIS_SECONDS` | Override crossfade 1200 s (20 game min); classify hysteresis 60 game s. |
 
 ### Celestial (`sky/celestial.py`) — pure functions
 
@@ -97,7 +103,8 @@ Headless numpy (no panda3d); `world/texture_bridge.to_panda_texture_3d` uploads 
 ### Related (owned elsewhere)
 
 - `"night_sky"` / `"rain_streak"` / `"moon_surface"` procedural textures — see `docs/systems/procedural.md`.  The moon disc texture is seeded per world (`for_domain`): every world grows different craters/maria.
-- The render half: dome single-scatter shader, 2.5×-sized limb-darkened sun disc + textured moon disc with phase terminator, cloud/rain renderers, and the `SkyRendererComponent(external_lighting=...)` flag — `world/sky_renderer.py` / `world/sky_shaders.py`.  Under HDR output (`u_hdr_output=1`) the sun disc/halo gains and the scattered-sky brightness are config-exposed `gfx_*` uniforms pushed once at build (`_build_dome`): `gfx_sun_disc_intensity`, `gfx_sun_halo_intensity`, `gfx_sun_min_brightness` (transmittance floor that keeps a grazing sunrise/sunset sun bright instead of fading, hue preserved), `gfx_sky_inscatter_scale` (sky-radiance multiplier — lower to cut the washed-out look when the sun is low, without dimming the disc).  See `docs/systems/world.md` "Aesthetic vs quality config".
+- The render half: dome single-scatter shader, 2.5×-sized limb-darkened sun disc + textured moon disc with phase terminator, cloud/rain renderers, and the `SkyRendererComponent(external_lighting=...)` flag — `world/sky_renderer.py` / `world/sky_shaders.py`.  `SkyRendererComponent` is the **sole driver** of `sky_system.update(player_pos)` (threads the camera world XY through, M4); other readers consume the already-advanced weather.
+- The M4 **weather-map** render bridge `world/weather_renderer.py::WeatherMapComponent` rasters the spatial weather field (`WeatherMap`) around the camera, packs it with `pack_weather_map`, and binds the weather-map uniform contract on `render` (`u_weather_map`, `u_wmap_origin`, `u_wmap_cell_m`, `u_wmap_cells`, `u_weather_map_enabled`, `u_weather_ambient`, `u_virga_enabled`).  `cloud_volumetric.frag` samples it per march step at the **raw world XY** (never `+u_wind` — the map already encodes cell drift) for spatial coverage/density/precip, edge-fading to `u_weather_ambient` past the map; precip lowers/darkens storm bases and (medium+ preset) adds gray **virga** shafts.  Gated by `gfx_weather_map` / `gfx_cloud_virga`.  Under HDR output (`u_hdr_output=1`) the sun disc/halo gains and the scattered-sky brightness are config-exposed `gfx_*` uniforms pushed once at build (`_build_dome`): `gfx_sun_disc_intensity`, `gfx_sun_halo_intensity`, `gfx_sun_min_brightness` (transmittance floor that keeps a grazing sunrise/sunset sun bright instead of fading, hue preserved), `gfx_sky_inscatter_scale` (sky-radiance multiplier — lower to cut the washed-out look when the sun is low, without dimming the disc).  See `docs/systems/world.md` "Aesthetic vs quality config".
 - `[sky]` config table (`sky_cloud_altitude_m`, `sky_cloud_thickness_m`, `sky_cloud_cell_m`, `sky_star_count`) — see `docs/systems/core.md`.
 - `clock.game_time_scale` (read/write, dev time scrubbing) — see `docs/systems/core.md`.
 

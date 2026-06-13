@@ -601,6 +601,19 @@ class Config:
     weather_synoptic_speed_max_ms: float = 11.0
     weather_synoptic_period_min_h: float = 2.5    # sinusoid period band (game h)
     weather_synoptic_period_max_h: float = 14.0
+    # Storm cells (M2): spatial showers/storms/cloud-banks/fog-banks that drift
+    # on the synoptic flow. Natural spawn schedule is a pure function of
+    # (seed, day) — see weather/cells.py. Units: meters, game seconds, m/s.
+    weather_domain_m:              float = 6000.0  # half-extent of the spawn square (±m around origin)
+    weather_spawn_slots_per_day:   int   = 8       # candidate cell spawn slots per day
+    weather_cell_radius_min_m:     float = 350.0   # cell footprint radius band at peak (m)
+    weather_cell_radius_max_m:     float = 1200.0
+    weather_cell_duration_min_s:   float = 2400.0  # cell lifetime band (game s; 40 min .. 3 h)
+    weather_cell_duration_max_s:   float = 10800.0
+    weather_storm_wind_max_ms:     float = 9.0     # extra gust a THUNDERSTORM adds at its core (m/s)
+    weather_fog_max_density:       float = 0.028   # cap on FOG_BANK fog coefficient (1/m)
+    weather_temp_mean_c:           float = 12.0    # daily mean air temperature (°C)
+    weather_temp_amp_c:            float = 8.0     # daily temperature swing amplitude (°C)
     # --- Graphics quality ([graphics] table; defaults == "high" preset) ---
     gfx_preset:                 str   = "high"
     gfx_post_process:           bool  = True

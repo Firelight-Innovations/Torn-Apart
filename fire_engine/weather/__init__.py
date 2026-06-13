@@ -9,6 +9,28 @@ render bridges live in ``fire_engine/world/``.
 See ``docs/systems/weather.md`` for the system contract.
 """
 
+from fire_engine.weather.cells import (
+    CellKind,
+    Regime,
+    StormCell,
+    day_regime,
+    natural_cells,
+    regime_ambient,
+)
+from fire_engine.weather.classify import WeatherType, classify
 from fire_engine.weather.synoptic import Synoptic
+from fire_engine.weather.system import LocalWeather, WeatherSystem
 
-__all__ = ["Synoptic"]
+__all__ = [
+    "Synoptic",
+    "CellKind",
+    "Regime",
+    "StormCell",
+    "day_regime",
+    "natural_cells",
+    "regime_ambient",
+    "WeatherType",
+    "classify",
+    "LocalWeather",
+    "WeatherSystem",
+]

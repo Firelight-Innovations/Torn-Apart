@@ -154,10 +154,16 @@ class TestSkyStateDeterminism:
 
 class TestDifferentSeed:
     def test_different_seed_different_weather_sequence(self):
+        # Spatial weather model: at a *fixed* world point the timeline is
+        # dominated by the per-day regime (storm cells rarely cross any single
+        # point), so two seeds can share a short regime run by chance.  Sample
+        # a longer window (8 days) so the seed-dependent regime draw has room
+        # to diverge — the honest "different world ⇒ different weather"
+        # property for a point sample.
         def sequence(seed: int) -> list[str]:
             sky, clock = _make_sky(seed=seed)
             out = []
-            for day in range(3):
+            for day in range(8):
                 for seg in range(12):
                     clock.game_day = day
                     clock.game_time_of_day = seg * 2 * HOUR + HOUR  # mid-segment
@@ -166,7 +172,7 @@ class TestDifferentSeed:
             return out
 
         assert sequence(1) != sequence(2), (
-            "Different world seeds must produce different weather schedules"
+            "Different world seeds must produce different weather timelines"
         )
 
 

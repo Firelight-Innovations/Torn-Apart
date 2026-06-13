@@ -1,0 +1,9 @@
+Known pipe types:
+  wglGraphicsPipe
+(all display modules loaded.)
+:display:windisplay(warning): SetForegroundWindow() failed!
+WROTE C:\Users\bjsea\Documents\Projects\Torn Apart\tools\out\diag\flyback_nofog.png
+c0 box_y=[524..572]
+c1 box_y=[464..656]
+c2 box_y=[256..768]
+AL lib: (EE) alc_cleanup: 1 device not closed

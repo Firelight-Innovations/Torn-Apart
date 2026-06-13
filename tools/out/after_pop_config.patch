@@ -1,0 +1,56 @@
+diff --git a/config.toml b/config.toml
+index 1b48954..cfda603 100644
+--- a/config.toml
++++ b/config.toml
+@@ -28,10 +28,10 @@ ground_texels_per_m = 16.0    # virtual texels/m for the GPU shader's non-repeat
+ lighting_backend = "gpu"       # "gpu" = volumetric radiance cascades (GLSL compute); "cpu" = legacy baked vertex sunlight
+ light_c0_cells = 96            # cascade-0 texels per axis (96 x 0.5 m = 48 m box around the camera)
+ light_c0_cell_m = 0.5          # cascade-0 cell edge (meters) — one terrain voxel
+-light_c1_cells = 96            # cascade-1 texels per axis (96 x 2.0 m = 192 m box, covers view distance)
+-light_c1_cell_m = 2.0          # cascade-1 cell edge (meters)
+-light_c2_cells = 64            # cascade-2 texels per axis (64 x 8.0 m = 512 m box) — coarse FAR cascade
+-light_c2_cell_m = 8.0          # cascade-2 cell edge (meters); keeps distant terrain lit (low-res shadows + GI)
++light_c1_cells = 96            # cascade-1 texels per axis (96 x 1.0 m = 96 m box, mid-field detail)
++light_c1_cell_m = 1.0          # cascade-1 cell edge (meters) — halved from 2.0 for finer mid-range shadows (zero extra VRAM)
++light_c2_cells = 64            # cascade-2 texels per axis (64 x 4.0 m = 256 m box) — coarse FAR cascade, covers view distance
++light_c2_cell_m = 4.0          # cascade-2 cell edge (meters) — halved from 8.0; keeps distant terrain lit (finer shadows + GI)
+ light_quant_m = 0.0625         # shading sample quantisation (meters) → 8x8x8 light pixels per voxel
+ light_gi_rays = 16             # ray-marched GI: sphere directions gathered per cell
+ light_gi_steps = 24            # max one-cell steps per GI ray (reach = steps x cell size)
+diff --git a/fire_engine/core/config.py b/fire_engine/core/config.py
+index 7c5e76c..18db716 100644
+--- a/fire_engine/core/config.py
++++ b/fire_engine/core/config.py
+@@ -257,16 +257,16 @@ class Config:
+                                    0.5 m cells).
+     light_c0_cell_m      : float — cascade-0 cell edge in meters (0.5 = one
+                                    terrain voxel).
+-    light_c1_cells       : int   — cascade-1 texels per axis (96 → 192 m box).
+-    light_c1_cell_m      : float — cascade-1 cell edge in meters (2.0).
+-    light_c2_cells       : int   — cascade-2 texels per axis (64 → 512 m box):
++    light_c1_cells       : int   — cascade-1 texels per axis (96 → 96 m box).
++    light_c1_cell_m      : float — cascade-1 cell edge in meters (1.0).
++    light_c2_cells       : int   — cascade-2 texels per axis (64 → 256 m box):
+                                    the coarse FAR cascade that keeps distant
+                                    terrain (and the GI test room) lit with
+                                    low-resolution shadows + GI once it leaves
+                                    cascade 1, instead of falling back to flat
+                                    sky ambient.  Assembled off-thread like the
+                                    others.
+-    light_c2_cell_m      : float — cascade-2 cell edge in meters (8.0).
++    light_c2_cell_m      : float — cascade-2 cell edge in meters (4.0).
+     light_quant_m        : float — shading sample-grid quantisation in meters
+                                    (0.0625 → 8×8×8 visible light pixels per
+                                    0.5 m voxel — the pixelated-light look).
+@@ -612,9 +612,9 @@ class Config:
+     light_c0_cells:        int   = 96
+     light_c0_cell_m:       float = 0.5
+     light_c1_cells:        int   = 96
+-    light_c1_cell_m:       float = 2.0
++    light_c1_cell_m:       float = 1.0
+     light_c2_cells:        int   = 64
+-    light_c2_cell_m:       float = 8.0
++    light_c2_cell_m:       float = 4.0
+     light_quant_m:         float = 0.0625
+     light_gi_rays:         int   = 16
+     light_gi_steps:        int   = 24

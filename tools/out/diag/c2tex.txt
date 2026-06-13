@@ -1,0 +1,28 @@
+Known pipe types:
+  wglGraphicsPipe
+(all display modules loaded.)
+:display:windisplay(warning): SetForegroundWindow() failed!
+
+=== cascade 0 cell_m=0.5 cells=96 ===
+  geom occ solid_fraction=0.5000
+  vis sun: min=0.000 max=1.000 mean=0.510
+  vis sky: min=0.000 max=1.000 mean=0.510
+  radiance mag: min=0.0000 max=0.8697 mean=0.4292
+  z=8m slice (k=48): sun vis mean=1.000 rad mean=0.5542
+
+=== cascade 1 cell_m=2.0 cells=96 ===
+  geom occ solid_fraction=0.1204
+  vis sun: min=0.000 max=1.000 mean=0.674
+  vis sky: min=0.000 max=1.000 mean=0.730
+  radiance mag: min=0.0000 max=0.8714 mean=0.6327
+  z=8m slice (k=52): sun vis mean=1.000 rad mean=0.7265
+
+=== cascade 2 cell_m=8.0 cells=64 ===
+  geom occ solid_fraction=0.0059
+  vis sun: min=0.000 max=1.000 mean=0.956
+  vis sky: min=0.000 max=1.000 mean=0.964
+  radiance mag: min=0.0000 max=0.8726 mean=0.8391
+  z=8m slice (k=33): sun vis mean=1.000 rad mean=0.8599
+
+sun_dir/radiance/ambient: ((-0.0009815053781494498, -0.3420199751853943, 0.9396921396255493), (3.130143143623703, 2.9197440721305377, 2.445818615608164), (0.25802895426750183, 0.20087121427059174, -0.9450247883796692), (0.0, 0.0, 0.0), (0.23084588713707443, 0.41960125468191145, 0.7319058543063061))
+AL lib: (EE) alc_cleanup: 1 device not closed

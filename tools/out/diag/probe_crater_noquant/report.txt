@@ -1,0 +1,10 @@
+window 1280x720  fov_x 50.94 deg  (2.39 arcmin/px)  step 0.25 px  settle 8 frames/pose  threshold 0.04
+static control  flip fraction 0.00000  mean |diff| 0.000006 (must be ~0; nonzero = real-time animation polluting the metric)
+positive control (8 px)  flip fraction 0.44048  mean |diff| 0.052704 (mean must be >> static; ~static = STALE CAPTURE, harness broken)
+
+sub-pixel sweep (13 poses x 0.25 px):
+  flip fraction  full   0.03161
+  flip fraction  bottom 0.01491   (near ground)
+  flip fraction  middle 0.06640   (far ground)
+  flip fraction  top    0.01350   (horizon/sky)
+  static floor          0.00000

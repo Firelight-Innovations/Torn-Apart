@@ -1,0 +1,11 @@
+Known pipe types:
+  wglGraphicsPipe
+(all display modules loaded.)
+:display:windisplay(warning): SetForegroundWindow() failed!
+c0 box_y=[812..860] inflight=True
+c1 box_y=[752..944] inflight=True
+c2 box_y=[576..1088] inflight=True
+cam y 880.0 loaded chunks 294
+chunk y range 48 57
+WROTE C:\Users\bjsea\Documents\Projects\Torn Apart\tools\out\diag\flyback_lookback.png
+AL lib: (EE) alc_cleanup: 1 device not closed

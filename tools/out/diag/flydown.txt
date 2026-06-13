@@ -1,0 +1,24 @@
+Known pipe types:
+  wglGraphicsPipe
+(all display modules loaded.)
+:display:windisplay(warning): SetForegroundWindow() failed!
+fly0_down45_nofog.png lower-third mean bright=0.795 cam_y=-20
+Known pipe types:
+  wglGraphicsPipe
+(all display modules loaded.)
+:display:windisplay(warning): SetForegroundWindow() failed!
+Traceback (most recent call last):
+  File "C:\Users\bjsea\Documents\Projects\Torn Apart\tools\out\diag\fly_down.py", line 39, in <module>
+    shot("fly600_down45_nofog.png", 600, False, -45.0)  # moved 600m, look down, no fog
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bjsea\Documents\Projects\Torn Apart\tools\out\diag\fly_down.py", line 11, in shot
+    app=demo.build_demo()
+        ^^^^^^^^^^^^^^^^^
+  File "C:\Users\bjsea\Documents\Projects\Torn Apart\main.py", line 277, in build_demo
+    app = App(cfg, clock, bus)
+          ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bjsea\Documents\Projects\Torn Apart\fire_engine\world\app.py", line 162, in __init__
+    super().__init__()
+  File "C:\Users\bjsea\Documents\Projects\Torn Apart\.venv\Lib\site-packages\direct\showbase\ShowBase.py", line 429, in __init__
+    raise Exception("Attempt to spawn multiple ShowBase instances!")
+Exception: Attempt to spawn multiple ShowBase instances!

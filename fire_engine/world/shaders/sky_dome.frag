@@ -33,6 +33,9 @@ uniform float u_ss_active;
 uniform vec3  u_ss_start;
 uniform vec3  u_ss_travel;
 uniform float u_ss_progress;
+uniform float u_lightning_flash;    // M7: 0 normally; pulses on a nearby strike
+                                    // (additive sky whitening — NEVER touches
+                                    // exposure, which would fight auto-adapt).
 
 in vec3 v_dir;
 out vec4 frag_color;
@@ -300,10 +303,14 @@ void main() {
     // shooting star are display-referred emissive detail added on top; they
     // ride along into the tonemap (they bloom nicely once that phase lands).
     // Legacy path: tonemap here, then add the LDR night art exactly as before.
+    // M7 lightning flash: a brief additive whitening of the whole sky during a
+    // nearby strike — NOT an exposure change (that would fight auto-adaptation).
+    vec3 flash = vec3(0.55, 0.62, 0.85) * u_lightning_flash;
+
     if (u_hdr_output > 0.5) {
-        frag_color = vec4(col * u_exposure + stars + ss, 1.0);
+        frag_color = vec4(col * u_exposure + stars + ss + flash, 1.0);
     } else {
         vec3 ldr = pow(acesTonemap(col * u_exposure), vec3(1.0 / 2.2));
-        frag_color = vec4(ldr + stars + ss, 1.0);
+        frag_color = vec4(ldr + stars + ss + flash, 1.0);
     }
 }

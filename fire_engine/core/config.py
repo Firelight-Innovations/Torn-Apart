@@ -75,6 +75,7 @@ GRAPHICS_PRESETS: dict[str, dict] = {
         "gfx_rain_mode": "off",
         "gfx_rain_particles": 0,
         "gfx_rain_occlusion": True,
+        "gfx_lightning_bolts": False,
     },
     "low": {
         "gfx_post_process": True,
@@ -96,6 +97,7 @@ GRAPHICS_PRESETS: dict[str, dict] = {
         "gfx_rain_mode": "cylinders",
         "gfx_rain_particles": 0,
         "gfx_rain_occlusion": True,
+        "gfx_lightning_bolts": True,
     },
     "medium": {
         "gfx_post_process": True,
@@ -117,6 +119,7 @@ GRAPHICS_PRESETS: dict[str, dict] = {
         "gfx_rain_mode": "particles",
         "gfx_rain_particles": 7_000,
         "gfx_rain_occlusion": True,
+        "gfx_lightning_bolts": True,
     },
     "high": {
         "gfx_post_process": True,
@@ -138,6 +141,7 @@ GRAPHICS_PRESETS: dict[str, dict] = {
         "gfx_rain_mode": "particles",
         "gfx_rain_particles": 12_000,
         "gfx_rain_occlusion": True,
+        "gfx_lightning_bolts": True,
     },
 }
 
@@ -507,6 +511,14 @@ class Config:
     gfx_rain_occlusion    : bool  — sample the rain-cover heightmap to discard
                                     streaks under cover (all presets, all modes;
                                     false ⇒ rain everywhere, the old look).
+    gfx_lightning_bolts   : bool  — render procedural lightning bolts (M7):
+                                    camera-facing stepped-leader ribbons, a
+                                    two-phase flash, a transient scene light and
+                                    a sky/cloud flash pulse, on a strike.  On for
+                                    low+ presets, off for "off".  The headless
+                                    strike SCHEDULE + ThunderEvents still run
+                                    when this is off (audio/gameplay only see no
+                                    drawn bolt).
     gfx_foliage_shadow_refine : bool — per-fragment celestial-shadow refinement
                                     march on foliage (grass/flora/trees/
                                     impostors; the lit_surface.glsl ``u_refine``
@@ -703,6 +715,24 @@ class Config:
     weather_fog_condense_band:     float = 0.10    # humidity overshoot over saturation for full condensation
     weather_fog_wind_full_ms:      float = 1.0     # full fog at/below this wind speed (m/s)
     weather_fog_wind_none_ms:      float = 3.0     # no emergent fog at/above this wind speed (m/s)
+    # Procedural lightning (M7): a deterministic Poisson strike schedule per
+    # active THUNDERSTORM cell (pure fn of seed+cell+time window — recomputes
+    # identically after a save/load mid-storm) and a stepped-leader bolt grown
+    # through a cheap seeded potential field.  See weather/lightning.py +
+    # weather/bolt.py. Units: strikes/min, meters, degrees, counts.
+    weather_lightning_strikes_per_min: float = 2.5   # peak strike rate per cell at full intensity (thinned by cell intensity)
+    weather_lightning_cloud_base_m:    float = 220.0 # cloud-base height above ground the bolt starts at (m)
+    weather_lightning_ground_z_m:      float = 8.0   # fallback ground-plane world Z when no cover heightmap (m; == ground_height_m)
+    bolt_step_len_min_m:   float = 5.0     # stepped-leader step length band (m)
+    bolt_step_len_max_m:   float = 15.0
+    bolt_cone_deg:         float = 38.0    # half-angle of the downward candidate-direction fan (deg)
+    bolt_candidates:       int   = 7       # K candidate directions fanned each step
+    bolt_softmax_temp:     float = 0.35    # softmax temperature for the seeded direction pick
+    bolt_branch_prob:      float = 0.12    # per-step probability a side branch spawns
+    bolt_max_steps:        int   = 400     # hard cap on leader steps (the one bounded loop)
+    bolt_noise_gain:       float = 0.6     # weight of the seeded value-noise "air resistance" in the score
+    bolt_repulsion_gain:   float = 0.45    # weight of repulsion from the existing channel in the score
+    bolt_branch_max_depth: int   = 3       # branches stop spawning sub-branches past this depth
     # --- Graphics quality ([graphics] table; defaults == "high" preset) ---
     gfx_preset:                 str   = "high"
     gfx_post_process:           bool  = True
@@ -732,6 +762,10 @@ class Config:
     gfx_rain_mode:              str   = "particles"
     gfx_rain_particles:         int   = 12_000
     gfx_rain_occlusion:         bool  = True
+    # Procedural lightning bolts (M7): the render half of the lightning system
+    # (camera-facing stepped-leader ribbons + flash + transient scene light).
+    # On for low+ presets, off for "off".  Gates world/lightning_renderer.py.
+    gfx_lightning_bolts:        bool  = True
     # Aesthetic tuning — NOT carried by the presets (so they stay consistent
     # across off/low/medium/high); override freely in [graphics] in config.toml.
     gfx_god_ray_strength:       float = 0.4

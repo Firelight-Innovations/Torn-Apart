@@ -197,6 +197,16 @@ Both rendered modes apply two gates at the element world XY:
 
 **Shooting stars are deterministic:** game time is split into 30-game-minute slots; `for_domain("sky", "shooting_stars", game_day, slot)` decides spawn (pâ‰ˆ0.5) + start/travel directions; the streak animates over ~1.2 real seconds and only spawns while `star_visibility > 0.5`.
 
+### LightningRendererComponent (`world/lightning_renderer.py`, shaders in `world/lightning_shaders.py` → `shaders/lightning.{vert,frag}`, M7)
+
+The render half of procedural lightning. Subscribes to `LightningStrikeEvent` (published by the headless `WeatherSystem` schedule — see `docs/systems/weather.md`) and, per strike: regrows the bolt with `weather.generate_bolt(event.seed, …)` (deterministic — the event carries only the seed), resolves a **roof-aware ground Z** from a `terrain.RainCoverField` (so a bolt hits a roof, not the floor under it; falls back to `event.ground_pos` Z when no cover is known), uploads the segments to a **pool of two** dynamic-geometry nodes (a quick double-strike doesn't clobber the first bolt), and plays a two-phase envelope: a flickering **leader** revealing the channel top-down (~0.16 s) → a bright HDR **return stroke** (~0.10 s) + afterglow + 1–2 seeded **restrikes**. Each segment is a **camera-facing ribbon** expanded in `lightning.vert` (offset along `segment_dir × view_dir`, hidden below the `u_reveal` front). Parented under `terrain_root` so `u_cam_pos` is inherited.
+
+On a strike it also (1) adds a transient `lighting.PointLight` (`ttl_s ≈ 0.3 s`) at the strike point so the scene lights up, (2) pulses a `u_lightning_flash` uniform **on `base.render`** (inherited by `sky_dome.frag` + `cloud_volumetric.frag`, which add it as an **additive** sky/cloud whitening — NEVER an exposure change, which would fight auto-adaptation), and (3) re-publishes a `ThunderEvent` (camera distance, `delay_s = distance / 343`). Custom vertex format (`vertex` + `a_other` segment-other-endpoint + `a_ribbon = (side, alongT, width, brightness)`). Gated by `config.gfx_lightning_bolts` (off ⇒ disables itself; the headless strike schedule + ThunderEvents still run). **GPU lighting backend only** (needs the live pipeline `.lights` + inherited `u_cam_pos`).
+
+| Symbol | Description |
+|---|---|
+| `LightningRendererComponent(base, sky_system, chunk_provider, lighting_pipeline, bus)` | Add via `add_component`. `chunk_provider` = anything with a `.chunks` dict (`ChunkManager`) for the roof-aware cover heightmap; `lighting_pipeline` = the active `GpuLightingPipeline` (its `.lights` gets the flash light). |
+
 ### GrassRendererComponent (`world/grass_renderer.py`, shaders in `world/grass_shaders.py`)
 
 GPU-only instanced grass for every `tag="grass"` `ZoneVolume` (headless math in `fire_engine/zones/` — see `docs/systems/zones.md`). **GPU lighting backend only**: requires the active `GpuLightingPipeline`; on the legacy CPU backend the component logs and disables itself.
@@ -304,10 +314,14 @@ Per ARCHITECTURE.md Â§4a.2, `world/` may also import: `resources/`, `terrain/`
 ## Events
 
 ### Published
-None directly from world/.  App calls `event_bus.drain()` each frame; the bus carries events from terrain/lighting/etc.
+- `ThunderEvent` (deferred) — `LightningRendererComponent` re-publishes one per `LightningStrikeEvent` it renders, carrying the camera distance and `delay_s = distance / 343` for the delayed audio crack (M7).
+
+Otherwise nothing directly from world/.  App calls `event_bus.drain()` each frame; the bus carries events from terrain/lighting/etc.
 
 ### Subscribed
-None directly.  Terrain/lighting integrate via the App integration hooks, not event subscriptions.
+- `LightningStrikeEvent` — `LightningRendererComponent` (drives bolts); `ChunkLoadedEvent` / `TerrainEditedEvent` — same component (marks its roof-aware cover heightmap dirty).  Also `ChunkLoadedEvent` / `TerrainEditedEvent` by `RainRendererComponent` / grass / flora / trees for their own dirty-tracking.
+
+Otherwise none directly.  Terrain/lighting integrate via the App integration hooks, not event subscriptions.
 
 ## Units & Invariants
 

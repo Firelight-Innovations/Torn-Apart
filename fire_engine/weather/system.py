@@ -39,7 +39,11 @@ from dataclasses import dataclass
 import numpy as np
 
 from fire_engine.core.config import Config
-from fire_engine.core.event_bus import EventBus, WeatherChangedEvent
+from fire_engine.core.event_bus import (
+    EventBus,
+    LightningStrikeEvent,
+    WeatherChangedEvent,
+)
 from fire_engine.weather.cells import (
     CellKind,
     StormCell,
@@ -301,6 +305,14 @@ class WeatherSystem:
         self._last_state: WeatherType | None = None
         self._last_abs_t: float | None = None
         self._last_player: tuple[float, float] = (0.0, 0.0)
+
+        # --- M7 lightning emission ---
+        # Absolute game time through which lightning strikes have already been
+        # emitted.  None until the first update; the schedule is recomputed each
+        # frame for the gap [last, now) and is load-resume safe (recomputes
+        # identically — see weather/lightning.py), so a save/load mid-storm just
+        # advances this across the gap and never re-emits past strikes.
+        self._last_strike_time: float | None = None
 
         # Classification hysteresis.
         self._committed_state: WeatherType | None = None
@@ -604,6 +616,60 @@ class WeatherSystem:
         )
 
     # ------------------------------------------------------------------
+    # Lightning (M7)
+    # ------------------------------------------------------------------
+
+    def _emit_lightning(self, abs_t: float, cells: list[StormCell]) -> None:
+        """
+        Publish a :class:`LightningStrikeEvent` per scheduled strike since the
+        last update, for every active THUNDERSTORM cell.
+
+        Pure-schedule emission: ``scheduled_strikes(cell, last, now)`` is
+        load-resume safe (recomputes byte-identically — see
+        :mod:`fire_engine.weather.lightning`), so this never double-emits across
+        a save/load.  The strike's world XY is the (synoptic-advected) cell
+        center plus the schedule's footprint-relative offset; ``pos`` lifts it to
+        the configured cloud base and ``ground_pos`` drops it to the config
+        ground plane (the renderer refines that to the real roof Z via the
+        rain-cover heightmap).  Events go out **deferred** like
+        :class:`WeatherChangedEvent` (drained once per tick, never per-frame
+        plumbing).
+        """
+        # Local import keeps the module-load graph lean and the hook self-
+        # contained (easy to merge / lift).
+        from fire_engine.weather.cells import CellKind
+        from fire_engine.weather.lightning import cell_id_int, scheduled_strikes
+
+        last = self._last_strike_time
+        if last is None:                 # first update: no back-window to emit
+            return
+        if abs_t <= last:                # clock didn't advance (paused / rewind)
+            return
+
+        cloud_base = float(self._config.weather_lightning_cloud_base_m)
+        ground_z = float(self._config.weather_lightning_ground_z_m)
+
+        for cell in cells:
+            if cell.kind is not CellKind.THUNDERSTORM:
+                continue
+            strikes = scheduled_strikes(cell, last, abs_t, self._config)
+            if not strikes:
+                continue
+            cid = cell_id_int(cell.id)
+            for s in strikes:
+                center = cell.center(s.time_abs, self.synoptic)    # (2,) world XY
+                wx = float(center[0] + s.pos_xy[0])
+                wy = float(center[1] + s.pos_xy[1])
+                self._bus.publish_deferred(LightningStrikeEvent(
+                    pos=(wx, wy, ground_z + cloud_base),
+                    ground_pos=(wx, wy, ground_z),
+                    seed=int(s.seed),
+                    time_abs=float(s.time_abs),
+                    cell_id=int(cid),
+                    intensity=float(s.intensity),
+                ))
+
+    # ------------------------------------------------------------------
     # Classification (hysteresis)
     # ------------------------------------------------------------------
 
@@ -689,6 +755,16 @@ class WeatherSystem:
             np.hypot(*(c.center(abs_t, self.synoptic) - origin))
         ))
         self._cells = cells
+
+        # --- M7 lightning emission ---------------------------------------
+        # Emit one LightningStrikeEvent per scheduled strike in (last, now] for
+        # every active THUNDERSTORM cell.  Kept deliberately small + clearly
+        # delimited so it merges cleanly against M8/M9's parallel edits to this
+        # method.  No-op when there is no bus.  See weather/lightning.py.
+        if self._bus is not None:
+            self._emit_lightning(abs_t, cells)
+        self._last_strike_time = abs_t
+        # --- end M7 lightning emission -----------------------------------
 
         if self._override is not None:
             if self._override_start_abs_t is None:

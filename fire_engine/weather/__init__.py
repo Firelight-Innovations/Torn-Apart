@@ -17,7 +17,13 @@ from fire_engine.weather.cells import (
     natural_cells,
     regime_ambient,
 )
+from fire_engine.weather.bolt import BoltGeometry, generate_bolt
 from fire_engine.weather.classify import WeatherType, classify
+from fire_engine.weather.lightning import (
+    StrikeParams,
+    cell_id_int,
+    scheduled_strikes,
+)
 from fire_engine.weather.humidity import (
     condense_fraction,
     emergent_fog,
@@ -50,4 +56,9 @@ __all__ = [
     "WeatherSystem",
     "WeatherMap",
     "MAP_CHANNELS",
+    "BoltGeometry",
+    "generate_bolt",
+    "StrikeParams",
+    "scheduled_strikes",
+    "cell_id_int",
 ]

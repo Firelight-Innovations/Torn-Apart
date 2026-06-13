@@ -609,6 +609,26 @@ def build_demo():
     )
     app.rain_go = rain_go
 
+    # 10e2. Procedural lightning (M7) — subscribes to LightningStrikeEvents
+    #      published by the headless WeatherSystem schedule and renders pooled
+    #      stepped-leader bolts (camera-facing ribbons) with a two-phase flash,
+    #      a transient scene light, and a u_lightning_flash sky/cloud pulse;
+    #      re-publishes ThunderEvents (distance/343 delay).  Gated by
+    #      gfx_lightning_bolts; GPU lighting backend only (disables itself on
+    #      cpu — the headless strike schedule + thunder still run).
+    from fire_engine.world.lightning_renderer import LightningRendererComponent
+    lightning_go = instantiate()
+    lightning_go.name = "Lightning"
+    lightning_go.add_component(
+        LightningRendererComponent,
+        base=app,
+        sky_system=sky_system,
+        chunk_provider=chunk_manager,
+        lighting_pipeline=lighting_pipeline,
+        bus=bus,
+    )
+    app.lightning_go = lightning_go
+
     # 10f. Wind debug ball (dev-only, [debug] debug_wind_ball) — a bright
     #      procedural sphere on the ground near spawn pushed by WindField.sample
     #      each fixed step: the physics seam proof (it scoots on gusts, rolls in

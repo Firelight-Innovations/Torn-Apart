@@ -106,8 +106,10 @@ class DemoHouseDef(BuildingDef):
 
     Params
     ------
-    position : (x, y, z) — world origin (default ``(-6, 2, ground_z)`` — in
-        front of the default spawn so it is visible on game start).
+    position : (x, y, z) — world origin (default ``(-26, 6, ground_z)`` — on
+        the open ground one chunk west of the demo grass patch, clear of the
+        grass/flower/bush/tree zones so the building is judged on bare terrain
+        rather than poking through groundcover).
     ground_z : float — local z=0 world height when ``position`` is omitted
         (default 8.0; main.py passes ``Config.ground_height_m``).
     yaw_deg  : float — yaw about world +Z in degrees (default 18).
@@ -126,7 +128,7 @@ class DemoHouseDef(BuildingDef):
 
     def generate(self, rng: np.random.Generator, **params) -> Building:
         ground_z = float(params.get("ground_z", 8.0))
-        pos = params.get("position", (-6.0, 2.0, ground_z))
+        pos = params.get("position", (-26.0, 6.0, ground_z))
         yaw = math.radians(float(params.get("yaw_deg", 18.0)))
         cfg = Config()
         defaults = BuildingDefaults.from_config(cfg)

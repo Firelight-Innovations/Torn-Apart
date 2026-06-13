@@ -60,7 +60,7 @@ b.set_roof()                                 # flat roof slab
 spec = b.to_dict()                           # save payload; from_dict restores
 ```
 
-The registered `DemoHouseDef` (`procedural.get("building_demo_house")`, in `buildings/defs.py`) is the in-game **feature-showcase** build: a two-storey ~12×8 m house exercising every v1 capability at once — non-orthogonal chamfer wall, curved east bay (incl. a curved-wall window), variable wall thickness (0.4 m exterior / 0.15 m interior) and a 1.1 m open-plan half-wall, exterior + interior doors, three auto-detected & tagged rooms on storey 0 plus one explicit `add_room("loft")` on storey 1, variable storey heights, auto foundation + flat roof, a stair stub, and an 18° yaw. It spawns in front of the default spawn point on every launch via `[debug] debug_demo_building` (now **on by default** — set `false` to hide). main.py adds it before `mark_baseline()` so it is part of the save baseline (regenerates on load, ~0-byte delta when untouched).
+The registered `DemoHouseDef` (`procedural.get("building_demo_house")`, in `buildings/defs.py`) is the in-game **feature-showcase** build: a two-storey ~12×8 m house exercising every v1 capability at once — non-orthogonal chamfer wall, curved east bay (incl. a curved-wall window), variable wall thickness (0.4 m exterior / 0.15 m interior) and a 1.1 m open-plan half-wall, exterior + interior doors, three auto-detected & tagged rooms on storey 0 plus one explicit `add_room("loft")` on storey 1, variable storey heights, auto foundation + flat roof, a stair stub, and an 18° yaw. It spawns on open ground one chunk **west** of the demo grass patch (clear of the grass/flower/bush/tree zones) on every launch via `[debug] debug_demo_building` (now **on by default** — set `false` to hide). main.py adds it before `mark_baseline()` so it is part of the save baseline (regenerates on load, ~0-byte delta when untouched).
 
 ## Gotchas
 - Room auto-detection requires walls to MEET AT ENDPOINTS (within `building_snap_eps_m`, 1 cm): v1 does not split mid-span T-junctions — author the long wall as two spans sharing the junction vertex.
@@ -72,3 +72,35 @@ The registered `DemoHouseDef` (`procedural.get("building_demo_house")`, in `buil
 - Meshing joins walls **butt-to-butt** (v1): each wall is offset/mitered along its *own* centerline only — there is no cross-wall miter at shared corners, so thick walls overlap slightly at corners (invisible from outside; cross-wall miter is future polish). Per-storey floor slabs use the **convex hull** of that storey's wall centerlines, so a concave plan's floor bridges the notch (same caveat as `set_foundation`).
 - A wall mesh assumes its openings' `head_m` stays below the wall top — the top cap spans the full length; an opening reaching the very top would leave the cap floating. Keep `head_m < height_m`.
 - `mesh_building` emits **building-local** positions (unlike terrain chunk meshes, which are world-space at the chunk origin). The renderer MUST apply `building.position`/`rotation` as a node transform, and `building.vert` MUST compute `v_world` via `p3d_ModelMatrix` or lighting samples the wrong world cell.
+
+## Known Limitations (v1)
+This is the **first iteration**. The list below is the canonical handoff for the agent that takes the next pass — every item is a deliberate v1 cut, not an accidental bug. (Owner/other agents: append your own findings under "Owner-observed", below.)
+
+1. **No light occlusion — buildings don't shadow or bounce GI.** `occlusion.BuildingOccupancyRasterizer.rasterize_occupancy` is a documented no-op, so buildings are *lit* but cast no shadows and contribute no GI; interiors only darken through openings. Enabling it needs a thread-safe immutable geometry snapshot handed to the async cascade-assembly worker (the intended wall/slab voxelization is spelled out in `occlusion.py`'s docstring). **This is the single biggest visual gap.**
+2. **Butt-to-butt wall joins — no cross-wall corner miter.** Each wall is offset/mitered along *its own* centerline only; at shared corners thick walls overlap and can poke through. Looks fine from outside for thin walls; visible on thick walls and at acute corners.
+3. **Convex-hull slabs & footprints.** `set_foundation`/`set_roof` (auto) and the per-storey floor slabs use the **convex hull** of the wall centerlines. Concave / L-shaped / U-shaped / courtyard plans get a slab that bridges the notch (the demo's chamfer notch is bridged this way). Workaround today: pass explicit polygons; proper fix is to triangulate the true room/footprint outlines.
+4. **Flat roofs only.** `set_roof` is a single flat slab — no pitched / gabled / hipped / shed roofs, no overhang/eave control beyond the footprint polygon, no fascia/gutter.
+5. **Stairs are data-only stubs.** `StairsStub` reserves which storeys connect and where, but meshes nothing and feeds no traversal/navmesh — there is no way to actually move between storeys.
+6. **Room auto-detection is endpoint-only, single-storey, planar.** Walls must meet at shared endpoints (no mid-span T-junction splitting — author long walls as two spans). Detection runs per storey on its 2-D wall graph; there is no multi-storey volume/room-stack concept, and overlapping/self-touching plans can confuse the half-edge trace.
+7. **One material, no per-surface control.** Everything samples the single `plaster_wall` albedo. No per-wall / per-room / per-face material or colour, no distinct roof / floor / foundation / trim materials, no UV scale/offset control, no normal/roughness maps on buildings yet.
+8. **Openings are bare rectangles.** Windows/doors are rectangular holes with flat reveals — no frames, glazing, mullions, sills-as-geometry, or arched/round tops; doors are just holes (not functional/openable). An opening's `head_m` must stay below the wall top (the top cap spans the full wall length, so a full-height opening would leave the cap floating).
+9. **No interior detail.** The next storey's floor slab *is* the ceiling (no distinct ceiling surface), and rooms are polygons + tags only — no baseboards, fixtures, or furniture (furnishing is the whole point of tracking rooms, but it's future work).
+10. **No collision / physics.** `world_aabb()` is a conservative broad-phase box for lighting invalidation only; there is no per-wall collision geometry, so the player passes straight through buildings.
+11. **No procedural generation yet.** The `BuildingDef.generate(rng, **params)` seam exists, but only `DemoHouseDef` (a fixed hand-authored layout) is implemented — there is no tag/description→building generator and no settlement/town placement.
+12. **Variable wall height leaves open tops by design.** A wall shorter than the storey band (e.g. the demo's 1.1 m half-wall) is open above — there's no auto-cap to the ceiling/roof; that's intended for open-plan partitions but means you can't yet make a "wall with a gap" cleanly.
+
+### Owner-observed (fill in)
+_Reserved for the owner's and other agents' additional findings — add bullets here._
+
+## Roadmap — Iteration 2 (suggested)
+Ordered roughly by impact; the next agent should treat this as a starting backlog, not a fixed spec.
+- **Wire up light occlusion** (limitation 1): snapshot-safe geometry → cascade worker → buildings shadow + bounce GI. Highest visual payoff.
+- **True-outline (concave) slabs** (limitation 3): triangulate actual room/footprint polygons; support L-shapes, courtyards, atria.
+- **Cross-wall corner miter** (limitation 2): proper mitered joins at shared nodes.
+- **Pitched roofs** (limitation 4): gable/hip/shed roof generators over the footprint.
+- **Per-surface materials** (limitation 7): material ids per wall/room/face + roof/floor/trim textures, UV control.
+- **Real stairs** (limitation 5): stair-run geometry + storey traversal.
+- **Richer openings** (limitation 8): frames, glazing, arched tops, functional doors, room-connectivity/portal graph.
+- **Collision meshes** (limitation 10): per-wall collision for the player/physics.
+- **The procedural generator** (limitation 11): tag/description→building + settlement placement — the reason the whole authoring API exists.
+- **T-junction room detection** (limitation 6): auto-split mid-span wall intersections.

@@ -477,3 +477,39 @@ file captures the choices made *underneath* it during implementation.
 - **Q:** Trees received light but did not block it — noon-bright ground under every canopy, no crown self-shadow. Options: voxelise tree meshes into the terrain field (heavy, couples meshes to terrain, breaks on sway), per-tree dynamic-occluder AABBs (16-box cap, boxes read wrong for crowns), or splat analytic shapes into the cascade volumes at assembly time.
 - **Choice:** `lighting/occluders.py` — `TreeOccluderSet` (struct-of-arrays from the zone placements) + `splat_tree_occluders`: trunk = near-opaque column (`light_tree_trunk_occ` 0.85), canopy = FRACTIONAL ellipsoid (`light_tree_canopy_occ` 0.30 — leaves attenuate; 1.0 reads pitch-black). Hooked after the chunk gather in `assemble_geometry` (max-combine: terrain solids win; albedo written only where occupancy rises, so bounce colour comes from the species atlas means), threaded through `AssemblyJob`, pushed by `tree_renderer` via `GpuLightingPipeline.set_static_occluders` after every placement (re)bake; stale cascades re-splat asynchronously at their committed origins. Coarse cells scale contributions by shape-volume / cell-volume (a bush is a wisp in an 8 m cell).
 - **Why:** The splat rides the existing assembly path end-to-end — INJECT sun march, GATHER bounce, the lit_surface refinement march and voxel AO all see trees with ZERO shader changes (the payoff of the unified lit-surface contract), and it stays deterministic and headless-testable (`tests/test_tree_occluders.py`). Fractional canopy occupancy is what makes dappled shade instead of a black disc: the vis march multiplies (1 - occ) per cell, so light decays through leaves the way the fractional-occupancy contract already intended.
+
+---
+
+## 2026-06-12 — Buildings: free-form floorplan model (fire_engine/buildings/)
+
+ARCHITECTURE.md §5.7 reserved `fire_engine/buildings/` as a "blocks + primitives" Building Manager stub. The owner's brief reframed it: buildings are deliberately **not** voxels — free-form walls in any direction, arbitrary building rotation, curved walls, windows/doors, variable thickness, foundations, with rooms as first-class objects (future systems procedurally generate buildings from tags and furnish each room). This rewrites §5.7 to a free-form floorplan model and records the sub-decisions made underneath it. (Commit 1 of a multi-commit build; the model layer only.)
+
+### Floorplan walls, not free 3-D surfaces or block kits
+- **Q:** What geometric primitive backs a building — voxel sub-grid, CSG of solid blocks, or 2-D floorplan extruded per storey?
+- **Choice:** Per-storey 2-D floorplans (`Storey` holds plan-space walls/rooms; `Building` stacks storeys under one world transform). Sims/Paralives-style. Walls extrude between slab top and storey height; arbitrary building rotation lives entirely in the `Building.position`/`rotation` node transform, never baked into plan coords.
+- **Why:** Floorplans are what a tag→building generator actually reasons about (rooms, adjacencies, openings) and what furnishing needs; extrusion + a single node transform keeps every wall headless and numpy-friendly without a voxel coupling.
+
+### D1 — One `Wall` class, DXF bulge arcs (no separate curve type)
+- **Q:** How are curved walls represented without a second wall class?
+- **Choice:** `Wall(a, b, bulge=0.0, ...)`; `|bulge| = tan(included_angle/4)` (DXF convention). `bulge=0` ⇒ straight; **positive bows LEFT of a→b**, negative right; `|bulge|=1` ⇒ semicircle. `kind` is derived; `arc_params()` returns signed sweep `-4·atan(bulge)`; `tessellate()` emits a centerline polyline with exact endpoints.
+- **Why:** One scalar captures the full straight↔arc range, room topology needs only endpoints, and arc geometry is derived once in tessellation/meshing — no parallel class to keep in sync.
+
+### D3 — Building-local elevation contract
+- **Q:** Where is z=0 and how do storeys stack?
+- **Choice:** Local z=0 = top of the foundation slab (foundation occupies `[-depth, 0]`). Storey i: `base_z = Σ` lower storey heights; floor slab `[base_z, base_z+slab_m]`; walls `[base_z+slab_m, base_z+height_m]` (a wall's own `height_m` measures from slab top). Flat roof slab caps `total_height_m`. World = `position + rotation.rotate(local)`.
+- **Why:** A single unambiguous datum lets meshing, room detection and the future lighting voxelization all agree without per-call origin negotiation.
+
+### Numbers from Config, dimensions never hardcoded
+- **Q:** Where do default storey height / wall thickness / slab / foundation / tessellation / snap tolerance live?
+- **Choice:** A `[buildings]` config table → `BuildingDefaults.from_config(cfg)` (single number source). `building_arc_segments_per_quarter=8`, `building_snap_eps_m=0.01`.
+- **Why:** Hard Rule "config values from core.config"; one place to retune, and `BuildingDefaults` travels with each building's save payload so old saves keep their authored dimensions.
+
+### Save/serialize: plain-primitive dicts, per-building element ids
+- **Q:** How are buildings serialized given no-pickle, and how do element ids stay stable?
+- **Choice:** Every model type has `to_dict()`/`from_dict()` over primitives only (Vec3/Quat→list, enums→str, no numpy in the dict). Element ids are a per-building monotonic int (`next_eid`) serialized in the payload; building ids are assigned later by the manager.
+- **Why:** Round-trippable, inspectable saves with no live refs (Hard Rule 3); serializing `next_eid` keeps ids stable across save/load so deltas and references survive reload.
+
+### Deferred to later commits (recorded so the seam is intentional, not forgotten)
+- **D4** room auto-detection (planar half-edge minimal cycles, endpoint-snap; v1 requires walls to meet at endpoints — no mid-span T-split) → commit 2 (`rooms.py`).
+- **D5** meshing by partition not CSG (arc→chords, centerline ±t/2 miter, opening-rect face partition, ear-clipped slabs → `terrain.meshing.MeshArrays`) → commit 3.
+- **D6** mesh emitted in building-local space; renderer applies the node transform (move/rotate = transform write, no remesh; `building.vert` must compute `v_world` via `p3d_ModelMatrix`) → commit 7.

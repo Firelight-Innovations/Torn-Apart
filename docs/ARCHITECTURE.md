@@ -415,7 +415,7 @@ The exception to "only World renders": owns its GPU uploads.
 - All lights (sun, torch, explosion, spell) register here.
 
 ### 5.7 Building Manager API
-Procedural buildings at runtime from `BuildingDef` scripts (subclass of `ProceduralDef`): footprint, floor count, room layout, façade, furniture rules. All geometry from blocks + primitives (boxes, cylinders, arches, ramps) with procedural textures; only hand-crafted landmarks come from the Resource Manager. Furniture/clutter placed via `ZoneVolume` tags inside buildings.
+Free-form **floorplan** buildings (owner decision 2026-06-12, superseding the v1 "blocks + primitives" wording): a `Building` carries one world transform (position + quaternion, arbitrary rotation on any axis) and stacked per-storey 2-D plans — walls are straight segments or circular arcs (`bulge` scalar) with real thickness and parametric window/door openings; foundations, floor/ceiling slabs and flat roofs complete the envelope; **rooms are first-class objects** (auto-detected from wall topology or explicitly authored) so furnishing can be generated per room later. Buildings are meshed directly to triangles (`MeshArrays`, the terrain contract) and are NOT voxel-aligned; only hand-crafted landmarks come from the Resource Manager. Procedural buildings at runtime come from `BuildingDef` scripts (subclass of `ProceduralDef`) that drive the same imperative authoring API: footprint, floor count, room layout, façade, furniture rules. Furniture/clutter placed via `ZoneVolume` tags inside buildings. See `docs/systems/buildings.md`.
 
 ### 5.8 AI API *(stubs in Session 1; deep implementation future scope)*
 Tiered simulation for 10k+ agents:

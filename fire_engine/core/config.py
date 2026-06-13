@@ -348,6 +348,29 @@ class Config:
     bush_impostor_fade_start/end_m : float — bush impostor window (120–150 m).
     bush_default_species       : str — default bush species ("bush_scrub").
 
+    Building fields (from [buildings] table, prefix ``building_``)
+    -------------------------------------------------------------
+    Free-form floorplan buildings (``fire_engine/buildings/``): per-storey
+    2-D plans of segment/arc walls with thickness and parametric openings.
+    All distances in meters.
+
+    building_default_storey_height_m  : float — floor-to-floor height when a
+                                        storey gets no explicit value (3.0).
+    building_default_wall_thickness_m : float — wall thickness when a wall
+                                        gets no explicit value (0.3).
+    building_slab_thickness_m         : float — floor/ceiling/roof slab
+                                        thickness (0.2).
+    building_foundation_depth_m       : float — foundation slab depth below
+                                        building-local z=0 (0.5).
+    building_arc_segments_per_quarter : int   — chords per quarter circle
+                                        when tessellating arc walls (8); used
+                                        identically by meshing and room
+                                        detection so polygons agree.
+    building_snap_eps_m               : float — endpoint-snap tolerance for
+                                        room auto-detection (0.01 = 1 cm).
+    debug_demo_building (in [debug])  : bool  — spawn the dev demo house near
+                                        spawn at boot (off by default).
+
     Wind-field fields (from [wind] table, prefix ``wind_``)
     -------------------------------------------------------
     These drive the spatially-varying wind field (``fire_engine/wind/``): a
@@ -491,6 +514,7 @@ class Config:
     show_chunk_borders:   bool  = False
     show_light_grid:      bool  = False
     debug_wind_ball:      bool  = False
+    debug_demo_building:  bool  = False
     sky_cloud_altitude_m:  float = 96.0
     sky_cloud_thickness_m: float = 8.0
     sky_cloud_cell_m:      float = 12.0
@@ -560,6 +584,13 @@ class Config:
     bush_impostor_fade_start_m:  float = 120.0
     bush_impostor_fade_end_m:    float = 150.0
     bush_default_species:        str   = "bush_scrub"
+    # --- Buildings ([buildings] table; consumed by fire_engine/buildings/) ---
+    building_default_storey_height_m:  float = 3.0
+    building_default_wall_thickness_m: float = 0.3
+    building_slab_thickness_m:         float = 0.2
+    building_foundation_depth_m:       float = 0.5
+    building_arc_segments_per_quarter: int   = 8
+    building_snap_eps_m:               float = 0.01
     # --- Wind field ([wind] table; consumed by fire_engine/wind/) ---
     wind_time_scale:          float = 1.0
     wind_cells:               int   = 64
@@ -653,8 +684,8 @@ def load_config(path: str = "config.toml") -> Config:
 
     The TOML file may have ``[debug]``, ``[sky]``, ``[terrain]``,
     ``[lighting]``, ``[fog]``, ``[grass]``, ``[flora]``, ``[trees]``,
-    ``[wind]`` and ``[graphics]`` tables; their keys are flattened into the
-    same ``Config`` struct.  Any key absent from the file falls back to the
+    ``[buildings]``, ``[wind]`` and ``[graphics]`` tables; their keys are
+    flattened into the same ``Config`` struct.  Any key absent from the file falls back to the
     ``Config`` dataclass default.
 
     ``[graphics]`` is special: its ``preset`` key (off/low/medium/high) is
@@ -693,7 +724,7 @@ def load_config(path: str = "config.toml") -> Config:
     # just carry fully-named Config fields; [graphics] is special — its keys go
     # through preset expansion first (see resolve_graphics_preset).
     _TABLES = ("debug", "sky", "terrain", "lighting", "fog", "grass", "flora",
-               "trees", "wind", "graphics")
+               "trees", "buildings", "wind", "graphics")
     flat: dict = {k: v for k, v in raw.items() if k not in _TABLES}
     for table in _TABLES:
         if table == "graphics":

@@ -17,6 +17,7 @@ show_fps = true
 show_chunk_borders = false
 show_light_grid = false
 debug_wind_ball = true     # dev wind-field physics proof: a bright ball on the ground near spawn that gusts scoot / storms roll (set false to hide)
+debug_demo_building = false # spawn the dev demo house near spawn (fire_engine/buildings/ vertical-slice proof)
 
 [terrain]
 mesh_style = "faceted"         # "faceted" = flat-shaded surface nets (semi-smooth Daggerfall look); "blocky" = classic cubes
@@ -64,6 +65,15 @@ grass_blade_height_m = 0.6     # unscaled tuft height (meters); per-blade jitter
 grass_fade_start_m = 60.0      # camera distance where blades start shrinking away
 grass_fade_end_m = 90.0        # camera distance where blades are fully gone
 grass_max_instances = 200000   # hard cap on instances per grass volume
+
+[buildings]
+# Free-form floorplan buildings (fire_engine/buildings/). All meters.
+building_default_storey_height_m = 3.0   # floor-to-floor height fallback
+building_default_wall_thickness_m = 0.3  # wall thickness fallback
+building_slab_thickness_m = 0.2          # floor/ceiling/roof slab thickness
+building_foundation_depth_m = 0.5        # foundation slab depth below building-local z=0
+building_arc_segments_per_quarter = 8    # arc-wall tessellation: chords per quarter circle
+building_snap_eps_m = 0.01               # room-detection endpoint snap tolerance (1 cm)
 
 [wind]
 # Spatially-varying wind field (fire_engine/wind/): a 64x64-cell x 4 m (256 m)

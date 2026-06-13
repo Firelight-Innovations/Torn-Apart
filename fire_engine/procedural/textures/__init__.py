@@ -35,6 +35,7 @@ from fire_engine.procedural.textures import grass_tuft        # registers "grass
 from fire_engine.procedural.textures import dust_mote         # registers "dust_mote"
 from fire_engine.procedural.textures import leaf_sprite       # registers "leaf_sprite"
 from fire_engine.procedural.textures import flower_sprite     # registers "flower_sprite"
+from fire_engine.procedural.textures import plaster_wall      # registers "plaster_wall"
 
 __all__ = [
     "ProceduralTextureDef",
@@ -50,4 +51,5 @@ __all__ = [
     "dust_mote",
     "leaf_sprite",
     "flower_sprite",
+    "plaster_wall",
 ]

@@ -154,12 +154,9 @@ async def _cmd_brush(c: EditorClient, args) -> object:
         v = getattr(args, k)
         if v is not None:
             params[k] = v
-    if args.wait:
-        frames = await c.drain_until_stream_done(
-            lambda: c.request("terrain.brush", params)
-        )
-        meshes = sum(1 for f in frames if f.schema_id == 1)
-        return {"ok": True, "streamed_frames": len(frames), "meshes": meshes}
+    # terrain.brush awaits its remesh+broadcast before returning, so the result
+    # already implies the meshes were pushed — no stream.done sentinel to wait on
+    # (that's a set_center thing). Just return the result.
     return await c.request("terrain.brush", params)
 
 
@@ -351,7 +348,6 @@ def _build_parser() -> argparse.ArgumentParser:
     s.add_argument("--hy", type=float)
     s.add_argument("--hz", type=float)
     s.add_argument("--height", type=float)
-    s.add_argument("--wait", action="store_true", help="block until stream.done; report counts")
 
     sub.add_parser("undo", help="undo the last edit (terrain or scene)")
     sub.add_parser("redo", help="redo the last undone edit")

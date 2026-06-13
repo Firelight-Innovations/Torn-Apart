@@ -372,8 +372,10 @@ class Config:
                                         detection so polygons agree.
     building_snap_eps_m               : float — endpoint-snap tolerance for
                                         room auto-detection (0.01 = 1 cm).
-    debug_demo_building (in [debug])  : bool  — spawn the dev demo house near
-                                        spawn at boot (off by default).
+    debug_demo_building (in [debug])  : bool  — spawn the feature-showcase
+                                        demo house in front of spawn at boot
+                                        (on by default — the building-system
+                                        evaluation build; set false to hide).
 
     Wind-field fields (from [wind] table, prefix ``wind_``)
     -------------------------------------------------------
@@ -518,7 +520,7 @@ class Config:
     show_chunk_borders:   bool  = False
     show_light_grid:      bool  = False
     debug_wind_ball:      bool  = False
-    debug_demo_building:  bool  = False
+    debug_demo_building:  bool  = True
     sky_cloud_altitude_m:  float = 96.0
     sky_cloud_thickness_m: float = 8.0
     sky_cloud_cell_m:      float = 12.0

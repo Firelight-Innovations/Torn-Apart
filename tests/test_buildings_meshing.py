@@ -170,8 +170,15 @@ class TestDemoHouseDef:
         set_world_seed(1337)
         house = get("building_demo_house", ground_z=8.0)
         assert len(house.storeys) == 2
-        # Storey 0 splits into two rooms (auto-detected from the divider).
-        assert len(house.storeys[0].rooms) == 2
+        # Storey 0 auto-detects three rooms (living / dining / kitchen) from
+        # the spine wall + east half-wall topology.
+        assert len(house.storeys[0].rooms) == 3
+        assert {r.tag for r in house.storeys[0].rooms} == {
+            "living", "dining", "kitchen"}
+        # Storey 1 carries one explicitly-authored (non-auto) room.
+        assert len(house.storeys[1].rooms) == 1
+        assert house.storeys[1].rooms[0].tag == "loft"
+        assert house.storeys[1].rooms[0].auto is False
         assert house.foundation is not None and house.roof is not None
         assert house.total_height_m == 6.0
         assert len(house.storeys[0].stairs) == 1

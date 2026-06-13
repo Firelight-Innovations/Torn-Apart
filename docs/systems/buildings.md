@@ -60,6 +60,8 @@ b.set_roof()                                 # flat roof slab
 spec = b.to_dict()                           # save payload; from_dict restores
 ```
 
+The registered `DemoHouseDef` (`procedural.get("building_demo_house")`, in `buildings/defs.py`) is the in-game **feature-showcase** build: a two-storey ~12×8 m house exercising every v1 capability at once — non-orthogonal chamfer wall, curved east bay (incl. a curved-wall window), variable wall thickness (0.4 m exterior / 0.15 m interior) and a 1.1 m open-plan half-wall, exterior + interior doors, three auto-detected & tagged rooms on storey 0 plus one explicit `add_room("loft")` on storey 1, variable storey heights, auto foundation + flat roof, a stair stub, and an 18° yaw. It spawns in front of the default spawn point on every launch via `[debug] debug_demo_building` (now **on by default** — set `false` to hide). main.py adds it before `mark_baseline()` so it is part of the save baseline (regenerates on load, ~0-byte delta when untouched).
+
 ## Gotchas
 - Room auto-detection requires walls to MEET AT ENDPOINTS (within `building_snap_eps_m`, 1 cm): v1 does not split mid-span T-junctions — author the long wall as two spans sharing the junction vertex.
 - The automatic `set_foundation()`/`set_roof()` footprint is a **convex hull**: L-shaped/concave footprints must pass an explicit polygon or the slab will bridge the notch.

@@ -72,6 +72,9 @@ GRAPHICS_PRESETS: dict[str, dict] = {
         "gfx_cloud_virga": False,
         "gfx_god_rays": False,
         "gfx_foliage_shadow_refine": False,
+        "gfx_rain_mode": "off",
+        "gfx_rain_particles": 0,
+        "gfx_rain_occlusion": True,
     },
     "low": {
         "gfx_post_process": True,
@@ -90,6 +93,9 @@ GRAPHICS_PRESETS: dict[str, dict] = {
         "gfx_god_rays": False,
         "gfx_god_ray_samples": 16,
         "gfx_foliage_shadow_refine": False,
+        "gfx_rain_mode": "cylinders",
+        "gfx_rain_particles": 0,
+        "gfx_rain_occlusion": True,
     },
     "medium": {
         "gfx_post_process": True,
@@ -108,6 +114,9 @@ GRAPHICS_PRESETS: dict[str, dict] = {
         "gfx_god_rays": True,
         "gfx_god_ray_samples": 24,
         "gfx_foliage_shadow_refine": True,
+        "gfx_rain_mode": "particles",
+        "gfx_rain_particles": 7_000,
+        "gfx_rain_occlusion": True,
     },
     "high": {
         "gfx_post_process": True,
@@ -126,6 +135,9 @@ GRAPHICS_PRESETS: dict[str, dict] = {
         "gfx_god_rays": True,
         "gfx_god_ray_samples": 32,
         "gfx_foliage_shadow_refine": True,
+        "gfx_rain_mode": "particles",
+        "gfx_rain_particles": 12_000,
+        "gfx_rain_occlusion": True,
     },
 }
 
@@ -422,6 +434,18 @@ class Config:
     wind_leaf_max_instances : int — hard cap on leaf instances per volume
                                    (20000; WP4).
 
+    Rain-cover heightmap fields (from [rain] table, prefix ``rain_``)
+    -----------------------------------------------------------------
+    Drive the top-down cover heightmap (``terrain/rain_cover.py``) that the M6
+    volumetric rain renderer samples to discard rain under roofs/overhangs.
+
+    rain_cover_cells     : int   — columns per axis of the player-centred cover
+                                   window (256 → a 256 m square at 1 m cells).
+    rain_cover_cell_m    : float — column edge in meters (1.0 = light-cell size).
+    rain_cover_budget_columns : int — chunk-columns the renderer refolds per
+                                   refresh so a full rebuild amortises over
+                                   frames (4).
+
     Graphics-quality fields (from [graphics] table, prefix ``gfx_``)
     ---------------------------------------------------------------
     These drive the HDR post-processing pipeline and volumetric clouds so the
@@ -470,6 +494,19 @@ class Config:
                                     virga streaks.
     gfx_god_rays          : bool  — screen-space crepuscular rays through clouds.
     gfx_god_ray_samples   : int   — radial sample count for god rays.
+    gfx_rain_mode         : str   — volumetric rain mode: "off" (no rain),
+                                    "cylinders" (cheap camera-following scrolled
+                                    shells — the low preset), or "particles"
+                                    (GPU-instanced falling streaks — medium+).
+                                    Both rendered modes honour the rain-cover
+                                    heightmap cull (no rain under a roof) and the
+                                    weather-map precip footprint.
+    gfx_rain_particles    : int   — instanced rain-streak count in "particles"
+                                    mode (per preset: 0 off/cylinders, 7000
+                                    medium, 12000 high).
+    gfx_rain_occlusion    : bool  — sample the rain-cover heightmap to discard
+                                    streaks under cover (all presets, all modes;
+                                    false ⇒ rain everywhere, the old look).
     gfx_foliage_shadow_refine : bool — per-fragment celestial-shadow refinement
                                     march on foliage (grass/flora/trees/
                                     impostors; the lit_surface.glsl ``u_refine``
@@ -613,6 +650,10 @@ class Config:
     wind_leaf_density_per_m2: float = 0.15
     wind_leaf_size_m:         float = 0.12
     wind_leaf_max_instances:  int   = 20_000
+    # --- Rain cover heightmap ([rain] table; terrain/rain_cover.py + M6 rain) ---
+    rain_cover_cells:         int   = 256
+    rain_cover_cell_m:        float = 1.0
+    rain_cover_budget_columns: int  = 4
     # --- Weather simulation ([weather] table; consumed by fire_engine/weather/) ---
     # Synoptic flow: the slow steering current that carries storm cells.
     # Closed-form pure function of (seed, game time) — see weather/synoptic.py.
@@ -684,6 +725,13 @@ class Config:
     gfx_god_rays:               bool  = True
     gfx_god_ray_samples:        int   = 32
     gfx_foliage_shadow_refine:  bool  = True
+    # Volumetric rain (M6): "off" / "cylinders" (cheap scrolled shells) /
+    # "particles" (GPU-instanced falling streaks).  Both gated modes honour the
+    # rain-cover heightmap cull (no rain under a roof) + the weather-map precip
+    # footprint.  Defaults == the "high" preset (particles, 12k).
+    gfx_rain_mode:              str   = "particles"
+    gfx_rain_particles:         int   = 12_000
+    gfx_rain_occlusion:         bool  = True
     # Aesthetic tuning — NOT carried by the presets (so they stay consistent
     # across off/low/medium/high); override freely in [graphics] in config.toml.
     gfx_god_ray_strength:       float = 0.4
@@ -724,8 +772,8 @@ def load_config(path: str = "config.toml") -> Config:
 
     The TOML file may have ``[debug]``, ``[sky]``, ``[terrain]``,
     ``[lighting]``, ``[fog]``, ``[grass]``, ``[flora]``, ``[trees]``,
-    ``[wind]``, ``[weather]`` and ``[graphics]`` tables; their keys are
-    flattened into the same ``Config`` struct.  Any key absent from the file falls back to the
+    ``[wind]``, ``[rain]``, ``[weather]`` and ``[graphics]`` tables; their keys
+    are flattened into the same ``Config`` struct.  Any key absent from the file falls back to the
     ``Config`` dataclass default.
 
     ``[graphics]`` is special: its ``preset`` key (off/low/medium/high) is
@@ -764,7 +812,7 @@ def load_config(path: str = "config.toml") -> Config:
     # just carry fully-named Config fields; [graphics] is special — its keys go
     # through preset expansion first (see resolve_graphics_preset).
     _TABLES = ("debug", "sky", "terrain", "lighting", "fog", "grass", "flora",
-               "trees", "wind", "weather", "graphics")
+               "trees", "wind", "rain", "weather", "graphics")
     flat: dict = {k: v for k, v in raw.items() if k not in _TABLES}
     for table in _TABLES:
         if table == "graphics":

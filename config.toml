@@ -106,6 +106,15 @@ wind_leaf_density_per_m2 = 0.15  # leaf-litter instances per m2 of a "trees" vol
 wind_leaf_size_m = 0.12        # leaf billboard size (meters; WP4)
 wind_leaf_max_instances = 20000  # hard cap on leaf instances per volume (WP4)
 
+[rain]
+# Top-down rain-cover heightmap (terrain/rain_cover.py): the highest-solid-voxel
+# world Z per 1 m column around the player. The M6 volumetric rain renderer
+# samples it and discards any streak below the cover height — so rain never
+# falls under a roof/overhang. Units: meters, cells.
+rain_cover_cells = 256          # columns per axis of the player-centred window (256 m at 1 m cells)
+rain_cover_cell_m = 1.0         # column edge (meters) — matches the light-cell size
+rain_cover_budget_columns = 4   # chunk-columns refolded per refresh (amortises a full rebuild)
+
 [weather]
 # Spatial weather simulation (fire_engine\weather\). Synoptic flow = the slow
 # steering current (hours-scale, closed-form function of seed + game time)
@@ -187,6 +196,9 @@ preset = "high"
 # gfx_god_ray_samples = 32       # radial god-ray samples
 # gfx_foliage_shadow_refine = true  # per-fragment shadow refinement on foliage
 #                                # (grass/flora/trees; off on off/low presets)
+# gfx_rain_mode = "particles"    # "off" | "cylinders" (low) | "particles" (medium+) — GPU rain
+# gfx_rain_particles = 12000     # instanced rain-streak count in "particles" mode (7000 medium / 12000 high)
+# gfx_rain_occlusion = true      # discard rain under roofs via the cover heightmap (THE no-rain-under-roof fix)
 #
 # --- Aesthetic tuning (NOT changed by the preset — tune these freely) --------
 # These control the LOOK of the sun/sky/flare, independent of quality preset.

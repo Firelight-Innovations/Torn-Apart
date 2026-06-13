@@ -585,6 +585,30 @@ def build_demo():
     )
     app.leaf_go = leaf_go
 
+    # 10e2. Volumetric rain (M6) — GPU-instanced falling streaks (or the cheap
+    #      camera-following cylinders on the low preset) that exist only inside
+    #      storm footprints (weather-map precip gate) and NEVER under a roof
+    #      (the rain-cover heightmap cull — the headline M6 fix).  The component
+    #      owns the headless RainCoverField, folds the loaded chunks' highest
+    #      solid voxel per column, uploads it to u_rain_height_tex with
+    #      committed-origin discipline, and subscribes to terrain events to
+    #      refold dirty columns.  Parents under terrain_root so the inherited
+    #      wind / fog / camera + weather-map contracts arrive automatically.
+    #      Gated by gfx_rain_mode ("off"/"cylinders"/"particles") +
+    #      gfx_rain_occlusion; GPU lighting backend only (disables itself on cpu).
+    from fire_engine.world.rain_renderer import RainRendererComponent
+    rain_go = instantiate()
+    rain_go.name = "Rain"
+    rain_go.add_component(
+        RainRendererComponent,
+        base=app,
+        sky_system=sky_system,
+        chunk_provider=chunk_manager,
+        lighting_pipeline=lighting_pipeline,
+        bus=bus,
+    )
+    app.rain_go = rain_go
+
     # 10f. Wind debug ball (dev-only, [debug] debug_wind_ball) — a bright
     #      procedural sphere on the ground near spawn pushed by WindField.sample
     #      each fixed step: the physics seam proof (it scoots on gusts, rolls in

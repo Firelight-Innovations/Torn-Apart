@@ -1,5 +1,5 @@
 # terrain — System Doc
-keywords: voxel, chunk, mesh, mesher, build_mesh, build_mesh_faceted, surface nets, faceted, facet, smooth terrain, semi-smooth, Daggerfall, mesh_style, blocky, facet_shade_strength, grass, dirt, MATERIAL_DIRT, MATERIAL_GRASS, face_materials, verts_per_face, neighbor_materials, NEIGHBOR_OFFSETS_26, brush, apply_brush, SphereBrush, BoxBrush, CylinderBrush, BrushMode, crater, flat, flat terrain, world_size_m, ground_height_m, world footprint, world bounds, world size, seed-independent, authored terrain, heightmap, surface_height, carve, cave, overhang, raycast, raycast_voxel, DDA, Hit, streaming, ChunkManager, desired_set, stream_frame, get_or_create, chunk_provider, Saveable, delta, get_delta, apply_delta, generate_chunk, MeshArrays, light_sampler, neighbor_solids, WORLD_FLOOR_SOLID, padding, world_origin, materials, dirty, edited, determinism, geometry_bridge, to_geom, vertex alpha, material packing, material id alpha, procedural ground, world-space ground, ground_texels_per_m, ground shader palette
+keywords: voxel, chunk, mesh, mesher, build_mesh, build_mesh_faceted, surface nets, faceted, facet, smooth terrain, semi-smooth, Daggerfall, mesh_style, blocky, facet_shade_strength, grass, dirt, MATERIAL_DIRT, MATERIAL_GRASS, face_materials, verts_per_face, neighbor_materials, NEIGHBOR_OFFSETS_26, brush, apply_brush, SphereBrush, BoxBrush, CylinderBrush, BrushMode, crater, flat, flat terrain, world_size_m, ground_height_m, world footprint, world bounds, world size, seed-independent, authored terrain, heightmap, surface_height, carve, cave, overhang, raycast, raycast_voxel, DDA, Hit, streaming, ChunkManager, desired_set, stream_frame, get_or_create, chunk_provider, Saveable, delta, get_delta, apply_delta, generate_chunk, MeshArrays, light_sampler, neighbor_solids, WORLD_FLOOR_SOLID, padding, world_origin, materials, dirty, edited, determinism, geometry_bridge, to_geom, vertex alpha, material packing, material id alpha, procedural ground, world-space ground, ground_texels_per_m, ground shader palette, rain cover, RainCoverField, rain_cover, cover heightmap, top-solid, highest solid voxel, rain occlusion, no rain under roof, OPEN_SKY_Z, rain_cover_cells, rain_cover_cell_m, rain_cover_budget_columns, recenter, rebuild_all, rebuild_columns
 
 > One doc per code package; filename matches the package exactly (`docs/systems/terrain.md` ↔ `fire_engine/terrain/`).
 
@@ -47,6 +47,13 @@ All symbols below are re-exported from `fire_engine.terrain` (`__init__.py`).
 | `Hit` | Dataclass: `point`, `voxel`, `chunk_coord`, `normal`, `distance`. |
 | `ChunkManager(config, event_bus)` | Streaming store, `chunk_provider`, `Saveable("terrain")`. |
 | `ChunkManager.remesh_edited(coords, light_sampler=None) -> int` | Same-frame remesh of brush-edited chunks + their dirty border neighbours, bypassing the `stream_frame` budget. Call right after `apply_brush` with its returned set. |
+| `RainCoverField(config)` | Top-down **cover heightmap**: highest-solid-voxel world Z per 1 m column in a `rain_cover_cells²` window centred on the player. Pure numpy (no panda3d); the M6 rain renderer (`world/rain_renderer.py`) uploads it and discards rain below the cover height (no rain under a roof). |
+| `RainCoverField.height` | `(cells, cells) float32` world Z (m); `[row=+Y, col=+X]`, `OPEN_SKY_Z` where unknown. |
+| `RainCoverField.origin_m -> (float, float)` | Committed min-corner world XY (m) of texel `(0,0)`; world XY → texel = `(xy - origin_m) / cell_m`. |
+| `RainCoverField.recenter(center_xy) -> origin_m` | Snap the window's min-corner under `center_xy` (cell-grid snapped — committed-origin discipline). |
+| `RainCoverField.rebuild_all(chunks)` | Cold rebuild: clear to `OPEN_SKY_Z`, fold every chunk overlapping the window. |
+| `RainCoverField.rebuild_columns(chunks, chunk_columns)` | Incremental refold of the window texels under the given `(cx, cy)` chunk columns (clears then re-folds all loaded Z layers — removing a roof lowers the height). |
+| `OPEN_SKY_Z` | Sentinel world Z (−1e9 m) for a column with no known solid voxel (open sky never clips rain). |
 
 The render-side bridge `world/geometry_bridge.to_geom(mesh) -> panda3d.core.Geom` (and `to_geom_node`) lives in `world/` (the only file allowed to import panda3d for this handoff).
 
@@ -155,6 +162,13 @@ build_mesh(
 
 ### Handoff to `world/`
 Terrain produces `MeshArrays` (pure numpy) and records them; the World layer drains `pending_meshes`, calls `world/geometry_bridge.to_geom` (one bulk memoryview write per array — no per-vertex `GeomVertexWriter` loops), and uploads the Geom.
+
+### Rain-cover heightmap (`RainCoverField`, M6)
+A top-down cache of the **world Z of the highest solid voxel per 1 m column** around the player, consumed by the GPU rain renderer to cull rain under roofs/overhangs.
+
+- **Window**: a `rain_cover_cells × rain_cover_cells` grid of `rain_cover_cell_m`-edge columns (256 × 1 m by default → a 256 m square), centred on the player and snapped to the cell grid (committed-origin discipline, mirroring wind/weather). `height[row, col]` indexes `row → world +Y`, `col → world +X` (the wind/weather convention); `origin_m` is texel `(0,0)`'s min-corner world XY.
+- **Per-chunk reduction (vectorised — Hard Rule 4)**: `argmax` over the **reversed Z axis** of a chunk's `(32,32,32)` solidity mask finds the highest solid voxel per `(x,y)` column in one pass (no Python voxel loop); the top-face world Z = `cz·16 + (z_idx+1)·0.5`. Columns of multiple chunk-Z layers fold with `np.maximum`, so a roof above a floor wins. Open columns stay at `OPEN_SKY_Z` (−1e9 m) so open sky never clips rain.
+- **Dirty rebuilds**: the world component marks `(cx, cy)` chunk **columns** dirty on `ChunkLoadedEvent` / `TerrainEditedEvent` and refolds them via `rebuild_columns` (clear the column's window footprint, re-fold all loaded Z layers) so **removing a roof lowers** the height. It recenters (full `rebuild_all`) when the player crosses a threshold and amortises dirty refolds over `rain_cover_budget_columns` columns per refresh.
 
 ## Examples
 

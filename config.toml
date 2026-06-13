@@ -196,6 +196,21 @@ weather_summon_fog_intensity = 0.9      # summoned fog-bank peak intensity (0–
 weather_gustfront_range_m = 600.0       # register a gust-front modifier when a cell's leading edge is within this range of the player (m)
 weather_gustfront_strength_ms = 7.0     # peak added wind speed along the summoned gust front (m/s)
 weather_gustfront_width_m = 80.0        # gust-front band half-width (Gaussian sigma, m)
+# Procedural lightning (M7): deterministic Poisson strike schedule per active
+# THUNDERSTORM cell + a stepped-leader bolt grown through a seeded potential field.
+weather_lightning_strikes_per_min = 2.5  # peak strikes/min per cell (thinned by cell intensity)
+weather_lightning_cloud_base_m = 220.0   # cloud-base height above ground the bolt starts at (m)
+weather_lightning_ground_z_m = 8.0       # fallback ground-plane world Z when no cover heightmap (m)
+bolt_step_len_min_m = 5.0            # stepped-leader step length band (m)
+bolt_step_len_max_m = 15.0
+bolt_cone_deg = 38.0                 # half-angle of the downward candidate fan (deg)
+bolt_candidates = 7                  # K candidate directions per step
+bolt_softmax_temp = 0.35             # softmax temperature for the seeded direction pick
+bolt_branch_prob = 0.12              # per-step side-branch spawn probability
+bolt_max_steps = 400                 # hard cap on leader steps
+bolt_noise_gain = 0.6                # weight of the seeded "air resistance" value-noise in the score
+bolt_repulsion_gain = 0.45           # weight of repulsion from the existing channel
+bolt_branch_max_depth = 3            # branches stop spawning sub-branches past this depth
 
 [sky]
 sky_cloud_altitude_m = 96.0    # cloud layer base altitude (world Z, meters)
@@ -233,6 +248,7 @@ preset = "high"
 # gfx_rain_mode = "particles"    # "off" | "cylinders" (low) | "particles" (medium+) — GPU rain
 # gfx_rain_particles = 12000     # instanced rain-streak count in "particles" mode (7000 medium / 12000 high)
 # gfx_rain_occlusion = true      # discard rain under roofs via the cover heightmap (THE no-rain-under-roof fix)
+# gfx_lightning_bolts = true     # render procedural lightning bolts (M7; on low+, off on "off")
 #
 # --- Aesthetic tuning (NOT changed by the preset — tune these freely) --------
 # These control the LOOK of the sun/sky/flare, independent of quality preset.

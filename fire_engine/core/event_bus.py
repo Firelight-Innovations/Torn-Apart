@@ -24,6 +24,8 @@ events exported from this module are:
     TerrainEditedEvent(chunk_coords, brush) — brush edit completed
     GameDayTickEvent(day)         — one in-game day has elapsed
     WeatherChangedEvent(previous, current, day) — discrete weather state changed
+    LightningStrikeEvent(...)     — a thunderstorm cell fired a lightning strike (M7)
+    ThunderEvent(...)             — delayed thunder crack for a strike (M7)
 
 Example
 -------
@@ -118,6 +120,78 @@ class WeatherChangedEvent:
     previous: str
     current: str
     day: int
+
+
+@dataclass(frozen=True)
+class LightningStrikeEvent:
+    """
+    Published by the WeatherSystem (M7) when a thunderstorm cell fires a strike.
+
+    One event per scheduled strike (deterministic Poisson schedule per active
+    THUNDERSTORM cell — see ``fire_engine.weather.lightning``).  Carried via
+    ``bus.publish_deferred`` (state-change notification, never per-frame data
+    plumbing).  The render half (``world/lightning_renderer.py``) subscribes,
+    generates the bolt geometry from ``seed`` (deterministic), animates the
+    flash, adds a transient scene light, and re-publishes a
+    :class:`ThunderEvent` for the delayed audio crack.
+
+    All randomness for the bolt geometry is keyed off ``seed`` so the same
+    strike renders byte-identically on every machine / after a save-load.
+
+    Attributes
+    ----------
+    pos : tuple[float, float, float]
+        Strike origin (cloud-base) world XYZ, meters — the top of the bolt.
+    ground_pos : tuple[float, float, float]
+        Where the bolt terminates on the ground / roof, world XYZ, meters.
+    seed : int
+        Bolt RNG seed — deterministic channel geometry
+        (``for_domain("weather", "bolt", seed, ...)``).
+    time_abs : float
+        Absolute game time of the strike, seconds (day·86400 + time-of-day).
+    cell_id : int
+        Source :class:`~fire_engine.weather.StormCell` id, hashed to an int
+        (the cell's stable string id digested deterministically).
+    intensity : float
+        0–1 strike brightness / scale (peak cell intensity at strike time).
+    """
+    pos: tuple[float, float, float]
+    ground_pos: tuple[float, float, float]
+    seed: int
+    time_abs: float
+    cell_id: int
+    intensity: float
+
+
+@dataclass(frozen=True)
+class ThunderEvent:
+    """
+    Published by the render half (M7) after a :class:`LightningStrikeEvent`,
+    carrying the delayed audio crack for the strike.
+
+    The thunder is heard ``delay_s`` after the flash (``distance_m / 343`` — the
+    speed of sound), so a distant storm rumbles seconds after its lightning and
+    a close one cracks almost immediately.  Audio subscribers schedule a rumble
+    that long after the event arrives.  Via ``bus.publish_deferred``.
+
+    Attributes
+    ----------
+    pos : tuple[float, float, float]
+        Strike origin world XYZ, meters (same as the strike's ``pos``).
+    distance_m : float
+        Distance from the listener (camera) to the strike, meters.
+    delay_s : float
+        Audio delay before the crack is heard, seconds (``distance_m / 343``).
+    time_abs : float
+        Absolute game time of the originating flash, seconds.
+    intensity : float
+        0–1 strike intensity (drives the rumble loudness / low-pass roll-off).
+    """
+    pos: tuple[float, float, float]
+    distance_m: float
+    delay_s: float
+    time_abs: float
+    intensity: float
 
 
 @dataclass(frozen=True)

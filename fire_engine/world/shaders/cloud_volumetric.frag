@@ -75,6 +75,8 @@ uniform float u_light_step_m;     // light-march step length (m)
 uniform float u_hg;               // HG anisotropy (forward scatter)
 uniform float u_hdr_output;       // 1 = emit linear HDR; 0 = tonemap (legacy)
 uniform float u_exposure;         // legacy tonemap exposure
+uniform float u_lightning_flash;  // M7: 0 normally; pulses on a nearby strike
+                                  // (lights the cloud from within — additive).
 
 // --- M4 spatial weather map (RGBA16F: R=coverage G=density B=precip A=fog) ---
 uniform sampler2D u_weather_map;       // spatial weather (bound by world/weather_renderer)
@@ -377,6 +379,11 @@ void main() {
     float alpha = (1.0 - T) * edge;
     scattered *= edge;
     T = 1.0 - alpha;
+
+    // M7 lightning flash: light the cloud from within during a nearby strike —
+    // proportional to how much cloud this pixel covers (alpha), so clear sky
+    // doesn't glow.  Additive; never an exposure change.
+    scattered += vec3(0.6, 0.66, 0.85) * u_lightning_flash * alpha;
 
     if (u_hdr_output > 0.5) {
         // Premultiplied linear HDR; composite blend adds dst*T.

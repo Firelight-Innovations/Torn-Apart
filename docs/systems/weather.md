@@ -1,5 +1,5 @@
 # weather — System Doc
-keywords: weather, synoptic, wind direction, prevailing wind, storm, storm cell, front, air mass, displacement, D(t), drift, steering current, volumetric weather, regime, shower, thunderstorm, cloud bank, fog bank, classify, WeatherType, LocalWeather, sample_local, force_weather, humidity, relative_humidity, saturation_humidity, emergent fog, condensation, condense, ground fog, rain_recent_at, wetness_at, dew, mist, cloud genera, WMO genera, CloudGenus, cloud_layers, classify_genus, CloudLayers, CloudBand, cirrus, cirrostratus, altocumulus, altostratus, stratus, stratocumulus, cumulus, cumulonimbus, nimbostratus, cloud band, cloud altitude band, anvil, cirrus residual, summon, summon_cell, summon_rainstorm, summon_thunderstorm, summon_fog_bank, clear_all, clear skies, suppress, suppressed, gust front, GustFront, attach_wind_field, cell_eta_s, ETA, save delta, get_delta, apply_delta, Saveable, load-resume
+keywords: weather, synoptic, wind direction, prevailing wind, storm, storm cell, front, air mass, displacement, D(t), drift, steering current, volumetric weather, regime, shower, thunderstorm, cloud bank, fog bank, classify, WeatherType, LocalWeather, sample_local, force_weather, humidity, relative_humidity, saturation_humidity, emergent fog, condensation, condense, ground fog, rain_recent_at, wetness_at, dew, mist, cloud genera, WMO genera, CloudGenus, cloud_layers, classify_genus, CloudLayers, CloudBand, cirrus, cirrostratus, altocumulus, altostratus, stratus, stratocumulus, cumulus, cumulonimbus, nimbostratus, cloud band, cloud altitude band, anvil, cirrus residual, summon, summon_cell, summon_rainstorm, summon_thunderstorm, summon_fog_bank, clear_all, clear skies, suppress, suppressed, gust front, GustFront, attach_wind_field, cell_eta_s, ETA, save delta, get_delta, apply_delta, Saveable, load-resume, lightning, bolt, strike, stepped leader, return stroke, thunder, LightningStrikeEvent, ThunderEvent, generate_bolt, BoltGeometry, scheduled_strikes, StrikeParams, Poisson, branch
 
 > Status: under construction (volumetric-weather branch). M1 (synoptic flow),
 > M2 (storm cells + local sampling + classify), M3 (weather map + ground
@@ -42,6 +42,11 @@ simulate local gusts (that's `wind/`), or own `SkyState` (that's `sky/`).
 | `CloudBand` (M9) | `HIGH`/`MID`/`LOW` `int` Enum (0/1/2) — the altitude band a genus renders in; also the GPU band order. `BAND_HIGH`/`BAND_MID`/`BAND_LOW` are the bare-int aliases. |
 | `classify_genus(coverage, density, precip, regime) → (high, mid, low)` (M9) | Dominant genus per band — pure, vectorised fn of the sampled fields + the day `Regime`. Scalar in → a 3-tuple of `CloudGenus`; array in → three object ndarrays. CLOUD_BANK→stratus family, SHOWER→STRATUS rain layer, THUNDERSTORM(precip)→CUMULONIMBUS, HIGH_PRESSURE residual→CIRRUS, FRONTAL overcast→cirrostratus/altostratus/stratocumulus stack. |
 | `cloud_layers(coverage, density, precip, regime, config) → CloudLayers` (M9) | Continuous per-band layer params (the renderer's drive): `CloudLayers` bundles `genus_high/mid/low` + length-3 (high,mid,low) ndarrays `base_altitude_m` (strictly decreasing high→low), `thickness_m` (storms deepen the low slab), `coverage`, `density` (cirrus always thin), `detail_scale`. Pure, deterministic, continuous in the inputs (no jumps); zero save bytes. |
+| `scheduled_strikes(cell, t0, t1, config) → list[StrikeParams]` (M7) | Deterministic Poisson lightning schedule for a THUNDERSTORM `cell` in `[t0, t1)`: exponential inter-arrival gaps at peak `weather_lightning_strikes_per_min`, thinned by `cell.intensity(t)`.  **Load-resume safe** — a window equals the concat of any partition of it (`scheduled_strikes(cell,t0,t1) == scheduled_strikes(cell,t0,tm)+scheduled_strikes(cell,tm,t1)`), so a save/load mid-storm recomputes identically.  Empty for non-thunderstorm cells.  `StrikeParams.pos_xy` is **footprint-relative** (add `cell.center(t, syn)` for world XY). |
+| `StrikeParams` (M7) | Frozen: `time_abs` (game s), `pos_xy` (footprint-relative XY offset, m), `intensity` (0–1), `seed` (per-strike bolt seed). |
+| `cell_id_int(cell_id_str) → int` (M7) | Stable cross-process blake2b digest of a cell's string id to a 31-bit int (for the event `cell_id` + RNG keys). |
+| `generate_bolt(seed, start, ground_z, config) → BoltGeometry` (M7) | Grow a deterministic stepped-leader bolt from cloud-base `start` to `ground_z`.  Pure fn of (world_seed, `seed`).  The ONE allowed bounded loop (≤ `bolt_max_steps` ≤ 400 steps across main channel + branches; target < 5 ms). |
+| `BoltGeometry` (M7) | Frozen segment arrays: `a` (N,3), `b` (N,3) endpoints (m), `width` (N,), `brightness` (N,), `is_main` (N, bool — the return-stroke channel that reached ground).  `len(bolt) == N`. |
 
 ## Imports Allowed
 `core` (config, rng), numpy, stdlib.  From M8: `wind` (`GustFront` /
@@ -55,7 +60,13 @@ leak test).
 Published: `WeatherChangedEvent` (deferred) when the **committed** discrete
 label changes — i.e. after the classification hysteresis (`HYSTERESIS_SECONDS`
 = 60 game s) so the label never flickers at a threshold.  M7 adds
-`LightningStrikeEvent` via the consumer.
+`LightningStrikeEvent` (deferred) — one per scheduled strike per active
+THUNDERSTORM cell, emitted from the small `# --- M7 lightning emission ---` hook
+in `WeatherSystem.update` (tracks `last_strike_time`; `scheduled_strikes(cell,
+last, now)` per cell; world XY = `cell.center(t, syn)` + strike offset; `pos` at
+the config cloud base, `ground_pos` at the config ground plane which the renderer
+refines to the real roof Z).  `ThunderEvent` is published by the **render half**
+(`world/lightning_renderer.py`), not here.
 Subscribed: none.
 
 ## Units & Invariants
@@ -105,6 +116,20 @@ Subscribed: none.
   strictly ordered** (`base_altitude_m[HIGH] > [MID] > [LOW]`) and the high band
   density is always capped low (`cloud_genera_high_density`) — ice cloud is
   thin. All `cloud_genera_*` tunables live in `[weather]`/`Config`.
+- **Lightning** (M7): only THUNDERSTORM cells strike.  The schedule is a
+  deterministic Poisson process anchored at the cell's **spawn time** and walked
+  forward (one `for_domain("weather","lightning", cell_id)` stream for the gaps +
+  keep draws; a SEPARATE `…,"xy", idx` stream per strike for the footprint
+  offset, so the gap stream stays window-independent).  Inter-arrival gaps are
+  exponential at peak `weather_lightning_strikes_per_min`; each candidate is kept
+  with probability `cell.intensity(t)` (thinning → fewer strikes while the cell
+  grows/decays).  A bolt is a stepped leader: each step fans `bolt_candidates`
+  directions in a `bolt_cone_deg` downward cone, scores them by downward progress
+  − seeded value-noise air-resistance − channel repulsion, and softmax-picks
+  (`bolt_softmax_temp`); the first channel to reach `ground_z` is the bright
+  return stroke (`is_main`), branches (`bolt_branch_prob`) dim with depth and
+  stop mid-air.  Everything keyed off the strike `seed` → byte-identical on every
+  machine.
 - `rain_recent_at` is the same fixed-offset exponential quadrature as
   `wetness_at` but with a longer decay (`weather_humidity_recent_tau_s`, ~5 h):
   the air stays muggy for hours after a shower while the ground dries in ~1 h,
@@ -204,6 +229,19 @@ print(ws.current, lw.rain_intensity, [c.kind.value for c in ws.cells])
   pure fn of seed/center/`t_abs`); the `SkyRendererComponent` is the single
   driver of `sky_system.update(player_pos)`.  Don't add a second `update` caller
   or weather double-advances per frame.
+- **Lightning is load-resume safe by construction** — the schedule walks from
+  the cell **spawn time**, never from `t0`, so slicing the window can't shift the
+  stream.  The one trap: the per-strike footprint-offset draw MUST come from its
+  own `for_domain(…,"xy", idx)` stream, NOT the gap stream — a kept strike before
+  `t0` skips returning its offset, and if that offset draw came from the gap
+  stream, splitting the window would misalign every later gap.  `StrikeParams.pos_xy`
+  is therefore **footprint-relative**; the `WeatherSystem` hook adds
+  `cell.center(t, syn)` for the world XY (so the strike rides the storm's drift).
+- **`generate_bolt` is the ONE allowed bounded Python loop** (Hard Rule 4): the
+  stepped-leader growth, capped at `bolt_max_steps` (≤ 400) across the main
+  channel + all branches (one shared step budget).  Everything else in the bolt
+  is numpy.  Don't add a second growth loop or vectorise the leader away — the
+  sequential channel/repulsion dependence is inherent.
 - **Emergent fog recursion guard**: `_sample_core` (no emergent fog) is the
   routine the rain-history quadratures (`wetness_at` / `rain_recent_at`) call;
   `sample_fields` adds the emergent term on top.  Emergent fog *depends* on the

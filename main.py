@@ -478,6 +478,13 @@ def build_demo():
     app.wind_worker = venturi_worker        # exposed so main() can stop it on exit
     app.terrain_root.set_shader_input("u_wind_enabled", 0.0)
 
+    # 10b-gust. Couple the weather sim's gust fronts (M8) to the wind field: a
+    #      storm whose leading edge nears the player registers a GustFront wind
+    #      modifier so the grass kicks as the front arrives. The WindSystemComponent
+    #      already drives wind_field.update() each frame, so the registered fronts
+    #      take effect. No-op until attached (the weather sim stays headless).
+    sky_system.weather.attach_wind_field(wind_field)
+
     # 10c. GPU grass — instanced tufts inside every "grass" zone volume,
     #      placed entirely on the GPU (gl_InstanceID hash), lit by the same
     #      radiance cascades as the terrain, swaying with the weather.
@@ -608,6 +615,26 @@ def build_demo():
         bus=bus,
     )
     app.rain_go = rain_go
+
+    # 10e2. Procedural lightning (M7) — subscribes to LightningStrikeEvents
+    #      published by the headless WeatherSystem schedule and renders pooled
+    #      stepped-leader bolts (camera-facing ribbons) with a two-phase flash,
+    #      a transient scene light, and a u_lightning_flash sky/cloud pulse;
+    #      re-publishes ThunderEvents (distance/343 delay).  Gated by
+    #      gfx_lightning_bolts; GPU lighting backend only (disables itself on
+    #      cpu — the headless strike schedule + thunder still run).
+    from fire_engine.world.lightning_renderer import LightningRendererComponent
+    lightning_go = instantiate()
+    lightning_go.name = "Lightning"
+    lightning_go.add_component(
+        LightningRendererComponent,
+        base=app,
+        sky_system=sky_system,
+        chunk_provider=chunk_manager,
+        lighting_pipeline=lighting_pipeline,
+        bus=bus,
+    )
+    app.lightning_go = lightning_go
 
     # 10f. Wind debug ball (dev-only, [debug] debug_wind_ball) — a bright
     #      procedural sphere on the ground near spawn pushed by WindField.sample

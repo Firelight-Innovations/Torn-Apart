@@ -154,6 +154,7 @@ async function connectClient(port: number): Promise<void> {
   client.onClose = () => output.appendLine("[extension] client disconnected");
   client.onBinary = (frame) => {
     if (frame.schemaId === SchemaId.MESH && sceneView) sceneView.postMesh(frame.payload);
+    else if (frame.schemaId === SchemaId.TEXTURE && sceneView) sceneView.postTexture(frame.payload);
   };
   client.onNotification = (method, params) => {
     const p = (params ?? {}) as Record<string, unknown>;
@@ -250,6 +251,7 @@ function openSceneView(): void {
   const onReady = async () => {
     if (!worldOpen) await openWorldBySeed(1337);
     if (currentConfig) sceneView?.postConfig(currentConfig);
+    await requestGroundLut(); // textured ground (TEXTURE frame follows)
     await refreshHierarchy(); // pushes current objects into the fresh viewport
     setCenter(20, -20, 24); // initial camera spot above the flat ground
   };
@@ -318,6 +320,7 @@ async function doOpenWorld(params: Record<string, unknown>): Promise<void> {
     currentConfig = res.config;
     sceneView?.reset();
     sceneView?.postConfig(currentConfig);
+    await requestGroundLut(); // new world -> new seed -> fresh ground LUT
     await refreshHierarchy(); // a save may carry placed objects
     output.appendLine(
       `[extension] world open — seed ${res.seed}, edited chunks ${res.edited_chunks}`
@@ -387,6 +390,20 @@ async function saveScene(forceDialog = false): Promise<void> {
   } catch (e) {
     const msg = e instanceof RpcRemoteError ? e.rpc.message : (e as Error).message;
     vscode.window.showErrorMessage(`Fire Editor: save failed — ${msg}`);
+  }
+}
+
+/**
+ * Ask the daemon for the procedural-ground palette LUT. The result announces a
+ * TEXTURE binary frame that follows on the socket; onBinary relays it to the
+ * viewport, which swaps its terrain material to the world-space ground shader.
+ */
+async function requestGroundLut(): Promise<void> {
+  if (!client || !worldOpen) return;
+  try {
+    await client.request(Method.WORLD_GROUND_LUT, {});
+  } catch (e) {
+    output.appendLine(`[extension] world.ground_lut failed: ${(e as Error).message}`);
   }
 }
 

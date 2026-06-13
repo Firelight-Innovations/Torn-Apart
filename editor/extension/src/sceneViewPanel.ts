@@ -62,6 +62,10 @@ export class SceneViewPanel {
   postMesh(payload: Uint8Array): void {
     this.panel.webview.postMessage({ type: "mesh", payload });
   }
+  /** Relay a TEXTURE binary frame (currently the procedural-ground LUT). */
+  postTexture(payload: Uint8Array): void {
+    this.panel.webview.postMessage({ type: "groundLut", payload });
+  }
   postUnload(coord: [number, number, number]): void {
     this.panel.webview.postMessage({ type: "unload", coord });
   }
@@ -117,11 +121,23 @@ export class SceneViewPanel {
   #palette label { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
   #palette select, #palette input { background: #1a2430; color: #cfe3f2; border: 1px solid #2a3a48; }
   #dirty { color: #e0b341; }
+  #gizmoModes { display: flex; gap: 4px; }
+  #gizmoModes button {
+    flex: 1; background: #1a2430; color: #cfe3f2; border: 1px solid #2a3a48;
+    border-radius: 3px; padding: 2px 0; cursor: pointer;
+    font: 11px var(--vscode-editor-font-family, monospace);
+  }
+  #gizmoModes button.active { background: #2d4a66; border-color: #4f9fe0; }
 </style>
 </head>
 <body>
   <div id="stats">waiting for daemon…</div>
   <div id="palette">
+    <div id="gizmoModes">
+      <button id="gizmoMove" title="Move (W)">Move</button>
+      <button id="gizmoRotate" title="Rotate (E)">Rotate</button>
+      <button id="gizmoScale" title="Scale (R)">Scale</button>
+    </div>
     <strong>Brush <span id="dirty"></span></strong>
     <label>shape
       <select id="brushShape">
@@ -139,7 +155,7 @@ export class SceneViewPanel {
     <label>size <input id="brushSize" type="range" min="0.5" max="8" step="0.5" value="2" /></label>
     <label>material <input id="brushMaterial" type="number" min="0" max="255" value="1" style="width:48px" /></label>
   </div>
-  <div id="hint">Right-drag look + WASD/QE fly · Middle-drag pan · Scroll zoom · Alt+Left orbit · Left-click select/carve · F frame · Esc deselect · Ctrl+Z/Y undo · G wire · B borders</div>
+  <div id="hint">Right-drag look + WASD/QE fly · Middle-drag pan · Scroll zoom · Alt+Left orbit · Left-click select/carve · W/E/R move/rotate/scale gizmo · F frame · Esc deselect · Ctrl+Z/Y undo · G wire · B borders</div>
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;

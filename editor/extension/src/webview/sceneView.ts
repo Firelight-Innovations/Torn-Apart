@@ -10,7 +10,10 @@
 // - Vertex colours already bake greyscale x sunlight, so MeshBasicMaterial shows
 //   the engine's lighting without double-shading.
 import * as THREE from "three";
+import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 import { decodeMeshPayload, chunkKey } from "../protocol/meshPayload";
+import { decodeTexturePayload } from "../protocol/texturePayload";
+import { makeGroundMaterial } from "./groundMaterial";
 
 declare function acquireVsCodeApi(): {
   postMessage(msg: unknown): void;
@@ -43,8 +46,36 @@ let showBorders = false;
 let totalVerts = 0;
 let totalTris = 0;
 
+// Boot fallback: greyscale baked-light vertex colours. Replaced by the
+// procedural ground ShaderMaterial once the daemon ships the palette LUT
+// (world.ground_lut → "groundLut" message).
 const material = new THREE.MeshBasicMaterial({ vertexColors: true });
+let groundMaterial: THREE.ShaderMaterial | null = null;
+let terrainMaterial: THREE.Material = material;
+let groundSeed = 0;
+let groundTexelsPerM = 16;
 const borderMaterial = new THREE.LineBasicMaterial({ color: 0x3a8fd0 });
+
+function applyGroundLut(payload: Uint8Array): void {
+  const tex = decodeTexturePayload(payload);
+  groundMaterial?.dispose();
+  groundMaterial = makeGroundMaterial(tex.data, tex.width, tex.height, {
+    seed: groundSeed,
+    texelsPerM: groundTexelsPerM,
+  });
+  groundMaterial.wireframe = showWireframe;
+  updatePxRad();
+  terrainMaterial = groundMaterial;
+  for (const mesh of chunks.values()) mesh.material = terrainMaterial;
+}
+
+function updatePxRad(): void {
+  if (!groundMaterial) return;
+  // Vertical FOV radians / CSS pixels of viewport height = radians per pixel
+  // (the same definition as the game's u_px_rad).
+  groundMaterial.uniforms.u_px_rad.value =
+    ((camera.fov * Math.PI) / 180) / renderer.domElement.clientHeight;
+}
 
 function upsertChunk(payload: Uint8Array): void {
   const m = decodeMeshPayload(payload);
@@ -58,7 +89,7 @@ function upsertChunk(payload: Uint8Array): void {
   geo.setAttribute("uv", new THREE.BufferAttribute(m.uvs, 2));
   geo.setIndex(new THREE.BufferAttribute(m.indices, 1));
 
-  const mesh = new THREE.Mesh(geo, material);
+  const mesh = new THREE.Mesh(geo, terrainMaterial);
   scene.add(mesh);
   chunks.set(key, mesh);
   totalVerts += m.vertexCount;
@@ -143,6 +174,60 @@ selectionHelper.renderOrder = 1000;
 selectionHelper.visible = false;
 scene.add(selectionHelper);
 
+// --- transform gizmo (move / rotate / scale the selected object) ---
+// three.js TransformControls: axis arrows + plane handles (translate),
+// 3 rings (rotate), per-axis + uniform-center handles (scale). It edits the
+// attached node's LOCAL transform under its hierarchy parent — exactly the
+// semantics of scene.set_transform.
+type GizmoMode = "translate" | "rotate" | "scale";
+let draggingObjectId: number | null = null;
+let lastTransformSent = 0;
+const TRANSFORM_THROTTLE_MS = 80;
+
+const tc = new TransformControls(camera, renderer.domElement);
+tc.setSpace("local");
+scene.add(tc);
+
+function sendTransform(node: THREE.Object3D, force: boolean): void {
+  const id = node.userData.id as number | undefined;
+  if (id === undefined) return;
+  const now = performance.now();
+  if (!force && now - lastTransformSent < TRANSFORM_THROTTLE_MS) return;
+  lastTransformSent = now;
+  const q = node.quaternion; // three is (x,y,z,w); wire is (w,x,y,z)
+  vscode.postMessage({
+    type: "transform",
+    id,
+    position: [node.position.x, node.position.y, node.position.z],
+    rotation: [q.w, q.x, q.y, q.z],
+    scale: [node.scale.x, node.scale.y, node.scale.z],
+  });
+}
+
+tc.addEventListener("objectChange", () => {
+  if (tc.object) {
+    sendTransform(tc.object, false);
+    refreshSelectionHelper();
+  }
+});
+tc.addEventListener("dragging-changed", (e) => {
+  if ((e as { value: unknown }).value) {
+    draggingObjectId = selectedObjectId;
+  } else {
+    // Drag ended: send the exact final transform un-throttled; the resulting
+    // scene.changed echo reconciles everyone.
+    if (tc.object) sendTransform(tc.object, true);
+    draggingObjectId = null;
+  }
+});
+
+function setGizmoMode(mode: GizmoMode): void {
+  tc.setMode(mode);
+  for (const [btn, m] of [["gizmoMove", "translate"], ["gizmoRotate", "rotate"], ["gizmoScale", "scale"]] as const) {
+    document.getElementById(btn)?.classList.toggle("active", m === mode);
+  }
+}
+
 const KIND_COLOR: Record<string, number> = {
   empty: 0x9aa7b2,
   cube: 0x4f9fe0,
@@ -211,13 +296,18 @@ function setObjects(list: SceneObjectDTO[]): void {
     }
     const desiredParent = o.parent != null ? objectGizmos.get(o.parent) ?? objectGroup : objectGroup;
     if (node.parent !== desiredParent) desiredParent.add(node);
-    node.position.set(o.position[0], o.position[1], o.position[2]);
-    // stored quat is (w, x, y, z); three.js wants (x, y, z, w).
-    node.quaternion.set(o.rotation[1], o.rotation[2], o.rotation[3], o.rotation[0]);
-    node.scale.set(o.scale[0], o.scale[1], o.scale[2]);
+    // Echo suppression: while a gizmo drag is live, our local node IS the
+    // source of truth — daemon echoes of throttled mid-drag transforms must
+    // not snap it backwards.
+    if (o.id !== draggingObjectId) {
+      node.position.set(o.position[0], o.position[1], o.position[2]);
+      // stored quat is (w, x, y, z); three.js wants (x, y, z, w).
+      node.quaternion.set(o.rotation[1], o.rotation[2], o.rotation[3], o.rotation[0]);
+      node.scale.set(o.scale[0], o.scale[1], o.scale[2]);
+    }
   }
-  if (selectedObjectId != null && !objectGizmos.has(selectedObjectId)) selectedObjectId = null;
-  refreshSelectionHelper();
+  // Re-resolve the selection: detaches the gizmo if the object was deleted.
+  selectObjectLocal(selectedObjectId);
 }
 
 function refreshSelectionHelper(): void {
@@ -233,6 +323,9 @@ function refreshSelectionHelper(): void {
 
 function selectObjectLocal(id: number | null): void {
   selectedObjectId = id != null && objectGizmos.has(id) ? id : null;
+  const node = selectedObjectId != null ? objectGizmos.get(selectedObjectId) : undefined;
+  if (node) tc.attach(node);
+  else tc.detach();
   refreshSelectionHelper();
 }
 
@@ -365,6 +458,9 @@ renderer.domElement.addEventListener("mousedown", (e) => {
     dragMode = "pan";
     e.preventDefault();
   } else if (e.button === 0) {
+    // Transform-gizmo interaction wins: TransformControls sets `axis` while a
+    // handle is hovered and `dragging` during a drag — never select/carve then.
+    if (tc.dragging || tc.axis !== null) return;
     if (e.altKey) {
       const hit = raycastTerrain();
       orbitPivot.copy(hit ? hit.point : camera.position.clone().addScaledVector(forwardVector(), orbitDistance));
@@ -419,8 +515,13 @@ document.addEventListener("mousemove", (e) => {
     pitch = clamp(pitch - e.movementY * LOOK_SENS, -1.5, 1.5);
     camera.position.copy(orbitPivot).addScaledVector(forwardVector(), -orbitDistance);
   } else {
-    // Free hover: drive the brush preview off the terrain under the cursor.
+    // Free hover: drive the brush preview off the terrain under the cursor —
+    // unless the transform gizmo owns the pointer (hover or drag).
     pointerNDC(e);
+    if (tc.dragging || tc.axis !== null) {
+      gizmo.visible = false;
+      return;
+    }
     const hit = raycastTerrain();
     if (hit) {
       pivotDist = hit.distance;
@@ -459,9 +560,17 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   keys.add(e.code);
+  // W/E/R switch the transform-gizmo mode (Unity bindings) — only when not
+  // flying (the WASD fly keys are only consumed during a right-drag look).
+  if (dragMode !== "look" && selectedObjectId != null) {
+    if (e.code === "KeyW") setGizmoMode("translate");
+    if (e.code === "KeyE") setGizmoMode("rotate");
+    if (e.code === "KeyR") setGizmoMode("scale");
+  }
   if (e.code === "KeyG") {
     showWireframe = !showWireframe;
     material.wireframe = showWireframe;
+    if (groundMaterial) groundMaterial.wireframe = showWireframe;
   }
   if (e.code === "KeyB") {
     showBorders = !showBorders;
@@ -532,6 +641,10 @@ function tick(): void {
     vscode.postMessage({ type: "focus", x: focus.x, y: focus.y, z: focus.z });
   }
 
+  if (groundMaterial) {
+    (groundMaterial.uniforms.u_cam_pos.value as THREE.Vector3).copy(camera.position);
+  }
+
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
 }
@@ -561,7 +674,20 @@ window.addEventListener("message", (event) => {
       if (msg.config && typeof msg.config.chunk_meters === "number") {
         chunkMeters = msg.config.chunk_meters;
       }
+      if (msg.config && typeof msg.config.ground_seed === "number") {
+        groundSeed = msg.config.ground_seed;
+        groundTexelsPerM = Number(msg.config.ground_texels_per_m) || 16;
+        if (groundMaterial) {
+          groundMaterial.uniforms.u_ground_seed.value = groundSeed;
+          groundMaterial.uniforms.u_ground_texels_per_m.value = groundTexelsPerM;
+        }
+      }
       break;
+    case "groundLut": {
+      const buf = msg.payload instanceof ArrayBuffer ? new Uint8Array(msg.payload) : (msg.payload as Uint8Array);
+      applyGroundLut(buf);
+      break;
+    }
     case "reset":
       clearAll();
       setObjects([]);
@@ -591,7 +717,14 @@ window.addEventListener("resize", () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  updatePxRad();
 });
+
+// Gizmo mode buttons in the palette (W/E/R keyboard equivalents).
+document.getElementById("gizmoMove")?.addEventListener("click", () => setGizmoMode("translate"));
+document.getElementById("gizmoRotate")?.addEventListener("click", () => setGizmoMode("rotate"));
+document.getElementById("gizmoScale")?.addEventListener("click", () => setGizmoMode("scale"));
+setGizmoMode("translate");
 
 vscode.postMessage({ type: "ready" });
 requestAnimationFrame(tick);

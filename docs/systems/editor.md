@@ -64,16 +64,33 @@ table in `editor/protocol/SCHEMA.md`.
 **Extension webview (Scene View, F1/F2):** `editor/extension/src/webview/sceneView.ts`
 — three.js viewport, Z-up, **Unity-style editor camera** (right-drag look +
 WASD/QE flythrough, middle-drag pan, scroll dolly, Alt+left orbit; the cursor is
-free otherwise). Builds a `BufferGeometry` per chunk from MESH frames,
-`MeshBasicMaterial` with vertex colours (baked sunlight), overlays (wireframe
+free otherwise). Builds a `BufferGeometry` per chunk from MESH frames. **Ground
+is textured, not lit** — `src/webview/groundMaterial.ts` is a full-bright GLSL3
+`ShaderMaterial` port of the game's `terrain.frag` ground albedo (same hash /
+octaves / 4-corner texel-coverage filtering / palette LUT), fed by the
+`world.ground_lut` TEXTURE frame (`texturePayload.ts` decode) and `ground_seed`/
+`ground_texels_per_m` config; it composes `alb * v_color.rgb` with NO cascades/
+fog/tonemap (the owner wants no lighting in the editor). A boot-time
+`MeshBasicMaterial` (vertex colours) shows until the LUT arrives, then every
+chunk swaps. Gotchas (mirror `terrain.frag` HEAD): `mpp` is **analytic** (never
+`fwidth`); the vec4 `color` attribute is self-declared in the vertex shader with
+`vertexColors:false` so the alpha material-id survives; the LUT row is clamped so
+blocky-mesher `alpha==1.0` degrades to the last palette row. Overlays (wireframe
 `G`, chunk borders `B`, stats). Brush palette (shape/mode/size/material) with a
 wireframe **brush preview gizmo** that tracks the hovered terrain point; left-click
 selects an object gizmo if one is under the cursor, else carves
 (`terrain.raycast` → `terrain.brush`). Placeable objects render as coloured
-gizmos parented to mirror the hierarchy; the selected one wears a yellow box,
-`F` frames it, `Esc` deselects. `Ctrl+Z`/`Ctrl+Y` undo/redo, dirty indicator from
-`edit.state`. Host side: `sceneViewPanel.ts` relays MESH frames + object/select/
-frame messages down and camera/focus/edit/select messages up.
+gizmos parented to mirror the hierarchy; the selected one wears a yellow box and
+a three.js **`TransformControls`** move/rotate/scale gizmo (`W`/`E`/`R` or the
+palette buttons; local space; axis + plane + uniform handles). Gizmo drags send
+throttled `transform` messages → `scene.set_transform`; the dragged id is echo-
+suppressed so daemon round-trips don't snap it back, and `dragging-changed`
+sends one final un-throttled transform (so the drag coalesces to a single undo
+step). Carve/select is suppressed while `tc.dragging || tc.axis !== null`. `F`
+frames the selection, `Esc` deselects. `Ctrl+Z`/`Ctrl+Y` undo/redo, dirty
+indicator from `edit.state`. Host side: `sceneViewPanel.ts` relays MESH + TEXTURE
+(`postTexture`) frames + object/select/frame messages down and camera/focus/edit/
+select/transform messages up.
 
 **Extension hierarchy (F2):** `editor/extension/src/hierarchyView.ts` — a native
 sidebar `TreeView` (`HierarchyProvider`, activity-bar container `fireEditor`)

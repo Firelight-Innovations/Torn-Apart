@@ -44,6 +44,7 @@ from __future__ import annotations
 import threading
 from collections import OrderedDict
 from dataclasses import dataclass
+from typing import Protocol, runtime_checkable
 
 import numpy as np
 
@@ -53,12 +54,68 @@ from fire_engine.lighting.palette import MaterialPalette
 __all__ = [
     "VolumeWindow",
     "GeometryVolume",
+    "GeometryOccupancyProvider",
     "assemble_geometry",
     "window_chunk_span",
     "pack_volume",
     "ChunkBlockCache",
     "EMISSION_SCALE",
 ]
+
+
+@runtime_checkable
+class GeometryOccupancyProvider(Protocol):
+    """
+    Structural hook letting a NON-terrain geometry system (buildings, future
+    props) splat its solids into the lighting cascades so the GPU marches see
+    and shadow them — without lighting importing that system or vice versa
+    (the Protocol is structural; nothing imports across the boundary).
+
+    A provider rasterizes into the already-assembled volume arrays in place,
+    **max-combining** occupancy the same way :func:`splat_tree_occluders` does:
+    write a cell's occupancy alpha (and bounce albedo) only where it would
+    *raise* the existing value, so terrain solids always win over a building
+    cell that happens to overlap a hill.
+
+    Implementations must be deterministic and must touch only cells inside the
+    window (``origin_cell`` … ``origin_cell + cells`` per axis); cells outside
+    their own geometry are left untouched (so ``providers=()`` — and providers
+    whose geometry misses the window — leave the output byte-identical).
+
+    Thread-safety: a provider may be called from the async cascade-assembly
+    worker, so it must read an immutable snapshot of its geometry, never live
+    mutable state.  (v1's building provider is a documented no-op; live
+    snapshot wiring is future scope — see ``buildings/occlusion.py``.)
+    """
+
+    def rasterize_occupancy(
+        self,
+        origin_cell: tuple[int, int, int],
+        cells: int,
+        cell_m: float,
+        albedo_occ: np.ndarray,
+        emission: np.ndarray,
+    ) -> None:
+        """
+        Splat this provider's geometry into ``albedo_occ`` / ``emission``.
+
+        Parameters
+        ----------
+        origin_cell : tuple[int, int, int]
+            Window origin in light cells (integer cell coords).
+        cells : int
+            Window edge length in cells (arrays are ``(cells,)*3 (+,4)``).
+        cell_m : float
+            Cell edge in meters (cascade resolution).
+        albedo_occ : np.ndarray
+            ``uint8 (cells, cells, cells, 4)`` — RGB bounce albedo + A
+            occupancy; mutate in place, max-combining occupancy.
+        emission : np.ndarray
+            ``uint8 (cells, cells, cells, 4)`` — emissive RGB (÷EMISSION_SCALE)
+            for self-lit surfaces (e.g. future glowing windows); usually
+            untouched.
+        """
+        ...  # pragma: no cover
 
 # Emission is HDR (a torch glow is ~2.0) but stored in uint8 textures; values
 # are divided by this scale on pack and multiplied back in the shader.
@@ -262,6 +319,7 @@ def assemble_geometry(
     occluders: "TreeOccluderSet | None" = None,
     trunk_occ: float = 0.0,
     canopy_occ: float = 0.0,
+    providers: "tuple[GeometryOccupancyProvider, ...]" = (),
 ) -> GeometryVolume:
     """
     Slice loaded chunks into one contiguous geometry block for ``window``.
@@ -312,6 +370,11 @@ def assemble_geometry(
     trunk_occ, canopy_occ : float
         Splat opacities for the occluders (``config.light_tree_trunk_occ`` /
         ``light_tree_canopy_occ``).  Ignored when ``occluders`` is ``None``.
+    providers : tuple[GeometryOccupancyProvider, ...], optional
+        Non-terrain geometry providers (buildings, future props) splatted into
+        the volume after the chunk gather + tree occluders, max-combining
+        occupancy (see :class:`GeometryOccupancyProvider`).  Empty (default)
+        leaves the output byte-identical to the chunks-only assembly.
 
     Returns
     -------
@@ -402,6 +465,12 @@ def assemble_geometry(
         palette.emission[materials] * (255.0 / EMISSION_SCALE),
         0.0, 255.0).astype(np.uint8)
     emission[..., 3] = 255
+
+    # Non-terrain geometry providers (buildings, props) splat last so terrain
+    # and tree solids win the max-combine.  Empty → byte-identical output.
+    for provider in providers:
+        provider.rasterize_occupancy(window.origin_cell, n, window.cell_m,
+                                     albedo_occ, emission)
 
     return GeometryVolume(
         albedo_occ=albedo_occ,

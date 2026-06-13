@@ -15,9 +15,6 @@ its per-frame ``SkyState``:
   cloud slab sampling the baked tileable 3-D noise (``sky.cloud_noise``):
   self-shadowed (Beer + powder), HG forward-scatter silver lining, premultiplied
   OVER the sky so a bright sun bleeds through thin cloud.  Gated by ``gfx_clouds``.
-* **Rain** — three nested camera-following open cylinders textured with the
-  ``"rain_streak"`` texture, UV-scrolled at per-layer rates for parallax,
-  additively blended, hidden when ``rain_intensity < 0.05``.
 * **Fog + global light** — exponential ``panda3d.core.Fog`` on the terrain
   root (density ``SkyState.fog_density`` 1/m, colour ``fog_color``), window
   clear colour blended toward fog, and ``terrain_root.set_color_scale`` driven
@@ -76,7 +73,6 @@ from panda3d.core import (  # type: ignore[import]
     SamplerState,
     Shader,
     Texture,
-    TextureStage,
     TransparencyAttrib,
 )
 
@@ -109,17 +105,6 @@ _VCLOUD_LIGHT_STEP_M:  float = 28.0    # sun light-march step length (m)
 _VCLOUD_HG:            float = 0.62    # Henyey-Greenstein anisotropy (fwd scatter)
 _VCLOUD_SHAPE_SIZE:    int   = 64      # baked shape volume edge (voxels)
 _VCLOUD_DETAIL_SIZE:   int   = 32      # baked detail volume edge (voxels)
-
-# Rain layers: (cylinder radius m, scroll-rate multiplier).  Different scroll
-# rates per layer give cheap parallax depth.
-_RAIN_LAYERS: tuple[tuple[float, float], ...] = ((4.0, 1.6), (7.0, 1.15), (11.0, 0.85))
-_RAIN_HEIGHT_M:        float = 14.0    # cylinder height (meters, camera-centred)
-_RAIN_SEGMENTS:        int   = 32      # cylinder circumference divisions
-_RAIN_TEX_METERS_U:    float = 3.0     # streak texture horizontal world span (m)
-_RAIN_TEX_METERS_V:    float = 12.0    # streak texture vertical world span (m)
-_RAIN_HIDE_THRESHOLD:  float = 0.05    # rain_intensity below which rain hides
-_RAIN_BASE_SCROLL:     float = 1.4     # base UV scroll rate (v-units / s)
-_RAIN_MAX_TILT_DEG:    float = 14.0    # max wind tilt of the rain cylinders
 
 # Shooting stars: deterministic schedule (see _update_shooting_star).
 _SS_SLOT_GAME_S:       float = 1800.0  # one slot = 30 game-minutes (game seconds)
@@ -274,58 +259,6 @@ def _build_dome_node(radius_m: float, stacks: int, slices: int) -> GeomNode:
                            tris.reshape(-1), "sky_dome")
 
 
-def _build_rain_cylinder(radius_m: float, height_m: float,
-                         segments: int) -> GeomNode:
-    """
-    Build one open (uncapped) vertical cylinder for a rain layer.
-
-    Centred on the model origin (z spans ±height/2); UVs tile the
-    ``"rain_streak"`` texture so streaks are ~world-scaled: u covers
-    ``_RAIN_TEX_METERS_U`` meters of circumference per tile, v covers
-    ``_RAIN_TEX_METERS_V`` meters of height per tile.  Rendered two-sided.
-
-    V orientation (do NOT "simplify"): ``texture_bridge.to_panda_texture``
-    vertically flips the numpy array on upload (docs/systems/world.md gotcha
-    #8).  The ``"rain_streak"`` def paints each streak's bright head with the
-    motion-blur tail at HIGHER array rows, so post-flip the tail sits at
-    LOWER texture v.  We therefore map **v = v_tiles at the cylinder bottom
-    and v = 0 at the top**: world-up = decreasing v puts the tail ABOVE the
-    bright head (correct falling-rain look), and a DECREASING per-frame V
-    offset (see ``_update_rain``) translates the pattern DOWNWARD.
-
-    Parameters
-    ----------
-    radius_m : float — cylinder radius in meters.
-    height_m : float — cylinder height in meters.
-    segments : int   — circumference divisions.
-    """
-    theta = np.linspace(0.0, 2.0 * np.pi, segments + 1)
-    x = (radius_m * np.cos(theta)).astype(np.float32)
-    y = (radius_m * np.sin(theta)).astype(np.float32)
-    u_tiles = (2.0 * np.pi * radius_m) / _RAIN_TEX_METERS_U
-    v_tiles = height_m / _RAIN_TEX_METERS_V
-    u = np.linspace(0.0, u_tiles, segments + 1).astype(np.float32)
-
-    n = segments + 1
-    block = np.empty((2 * n, 5), dtype=np.float32)   # [x, y, z, u, v]
-    block[:n, 0] = x
-    block[:n, 1] = y
-    block[:n, 2] = -0.5 * height_m
-    block[:n, 3] = u
-    block[:n, 4] = v_tiles          # bottom ring = HIGH v (see docstring)
-    block[n:, 0] = x
-    block[n:, 1] = y
-    block[n:, 2] = 0.5 * height_m
-    block[n:, 3] = u
-    block[n:, 4] = 0.0              # top ring = v 0
-
-    j = np.arange(segments, dtype=np.uint32)
-    b0, b1 = j, j + 1
-    t0, t1 = j + n, j + 1 + n
-    idx = np.stack([b0, b1, t1, b0, t1, t0], axis=-1).reshape(-1)
-    return _make_geom_node(block, GeomVertexFormat.get_v3t2(), idx, "rain_layer")
-
-
 # ---------------------------------------------------------------------------
 # Texture acquisition (registry first, deterministic fallback second)
 # ---------------------------------------------------------------------------
@@ -352,29 +285,6 @@ def _fallback_star_cube(star_count: int) -> np.ndarray:
     out = np.empty((6, size, size, 4), dtype=np.uint8)
     out[..., :3] = (np.clip(rgb, 0.0, 1.0) * 255.0).astype(np.uint8)
     out[..., 3] = out[..., :3].max(axis=-1)
-    return out
-
-
-def _fallback_rain_streak() -> np.ndarray:
-    """
-    Deterministic stand-in for the registry ``"rain_streak"`` def: a 128x512
-    vertically tileable RGBA texture of faint vertical streaks.
-    """
-    rng = for_domain("sky", "rain_streak_fallback")
-    height, width = 512, 128
-    seeds = ((rng.random((height, width)) < 0.0045).astype(np.float32)
-             * (0.35 + 0.65 * rng.random((height, width)).astype(np.float32)))
-    streak = np.zeros_like(seeds)
-    length = 40
-    for k in range(length):                      # 40 bulk array ops, tileable via roll
-        streak += np.roll(seeds, k, axis=0) * (1.0 - k / float(length))
-    streak = np.clip(streak * 0.9, 0.0, 1.0)
-    v = (streak * 255.0).astype(np.uint8)
-    out = np.empty((height, width, 4), dtype=np.uint8)
-    out[..., 0] = (streak * 0.72 * 255.0).astype(np.uint8)
-    out[..., 1] = (streak * 0.80 * 255.0).astype(np.uint8)
-    out[..., 2] = v
-    out[..., 3] = v
     return out
 
 
@@ -433,9 +343,10 @@ class SkyRendererComponent(Component):
 
     Lifecycle
     ---------
-    * ``start()`` — builds all scene-graph nodes ONCE (dome, cloud quads, rain
-      cylinders, Fog object), compiles the GLSL shaders, uploads textures, and
-      extends the camera far plane to cover the sky geometry.
+    * ``start()`` — builds all scene-graph nodes ONCE (dome, cloud quads, Fog
+      object), compiles the GLSL shaders, uploads textures, and extends the
+      camera far plane to cover the sky geometry.  (Rain now lives in
+      ``world/rain_renderer.py`` — M6.)
     * ``update(dt)`` — drives ``sky_system.update()`` (the registry runs all
       updates before any late_update, so the state is fresh for every reader
       this frame without touching App).
@@ -489,10 +400,6 @@ class SkyRendererComponent(Component):
         # Scene-graph nodes (built in start())
         self._dome_np = None
         self._cloud_np = None
-        self._rain_root = None
-        self._rain_layers: list = []       # (NodePath, scroll_mult)
-        self._rain_scroll: list[float] = []
-        self._rain_visible: bool = False
         self._fog: Fog | None = None
 
         # Shooting-star animation state
@@ -521,7 +428,6 @@ class SkyRendererComponent(Component):
 
         self._build_dome(star_count)
         self._build_clouds()
-        self._build_rain()
 
         # Exponential fog on the terrain (density/colour driven per frame).
         # Skipped under external (GPU volumetric) lighting — the froxel fog
@@ -542,10 +448,17 @@ class SkyRendererComponent(Component):
         The component registry runs ALL update() calls before any
         late_update(), so calling ``sky_system.update()`` here guarantees a
         fresh ``SkyState`` for ``late_update`` without modifying App.
+
+        This is the single driver of ``sky_system.update(player_pos)`` — it
+        threads the camera world XY through so distant storms sample at the
+        camera (M4).  Other readers (wind, the WeatherMapComponent's raster)
+        consume the already-advanced weather system, so nothing else calls
+        ``update`` (no double-advance).
         """
         self._time_s += dt
         if self.sky_system is not None:
-            self._state = self.sky_system.update()
+            cx, cy, _ = self._camera_pos()
+            self._state = self.sky_system.update((cx, cy))
 
     def late_update(self, dt: float) -> None:
         """Write this frame's SkyState to the GPU (bulk uniform/state writes)."""
@@ -564,16 +477,14 @@ class SkyRendererComponent(Component):
         self._update_dome(st, cx, cy, cz)
         self._update_shooting_star(st, dt)
         self._update_clouds(st, cx, cy, cz)
-        self._update_rain(st, cx, cy, cz, dt)
         self._update_fog_and_light(st)
 
     def on_destroy(self) -> None:
         """Detach all sky nodes and clear the terrain fog."""
-        for np_node in (self._dome_np, self._cloud_np, self._rain_root):
+        for np_node in (self._dome_np, self._cloud_np):
             if np_node is not None:
                 np_node.remove_node()
-        self._dome_np = self._cloud_np = self._rain_root = None
-        self._rain_layers.clear()
+        self._dome_np = self._cloud_np = None
         if self.terrain_root is not None and self._fog is not None:
             self.terrain_root.clear_fog()
             self.terrain_root.clear_color_scale()
@@ -747,38 +658,54 @@ class SkyRendererComponent(Component):
         clouds.set_shader_input("u_cloud_density", 1.0)
         clouds.set_shader_input("u_wind", LVecBase2f(0.0, 0.0))
         clouds.set_shader_input("u_time", 0.0)
+
+        # M4 weather-map contract defaults: the WeatherMapComponent binds the
+        # real texture + origin + enable on ``render`` (inherited here), but a
+        # dummy 1x1 sampler and disabled state keep the shader valid even when
+        # that component is absent / the feature is off (pre-M4 flat-ambient
+        # look).  A bound sampler2D is required (an unbound one is UB).
+        dummy_wmap = Texture("weather_map_dummy")
+        dummy_wmap.setup_2d_texture(1, 1, Texture.T_half_float,
+                                    Texture.F_rgba16)
+        dummy_wmap.set_clear_color((0.0, 0.0, 0.0, 0.0))
+        clouds.set_shader_input("u_weather_map", dummy_wmap)
+        clouds.set_shader_input("u_wmap_origin", LVecBase2f(0.0, 0.0))
+        clouds.set_shader_input("u_wmap_cell_m", 1.0)
+        clouds.set_shader_input("u_wmap_cells", 1.0)
+        clouds.set_shader_input("u_weather_map_enabled", 0)
+        clouds.set_shader_input("u_weather_ambient", LVecBase2f(0.0, 0.0))
+        clouds.set_shader_input("u_virga_enabled", 0)
+
+        # M9 WMO cloud genera: layered high/mid/low altitude bands derived
+        # in-shader from the weather map (no new texture data).  All static —
+        # config tunables pushed once here; the band selection is per-step in
+        # the shader from the existing coverage/density/precip channels.  Gated
+        # by gfx_cloud_genera (requires gfx_weather_map; off ⇒ single slab, the
+        # pre-M9 look — the shader's u_cloud_genera_enabled==0 path).
+        genera_on = (bool(getattr(cfg, "gfx_cloud_genera", False))
+                     and bool(getattr(cfg, "gfx_weather_map", False)))
+        clouds.set_shader_input("u_cloud_genera_enabled", 1 if genera_on else 0)
+        clouds.set_shader_input("u_genera_high_alt",
+                                float(getattr(cfg, "cloud_genera_high_alt_m", 1400.0)))
+        clouds.set_shader_input("u_genera_high_thick",
+                                float(getattr(cfg, "cloud_genera_high_thick_m", 120.0)))
+        clouds.set_shader_input("u_genera_mid_alt",
+                                float(getattr(cfg, "cloud_genera_mid_alt_m", 850.0)))
+        clouds.set_shader_input("u_genera_mid_thick",
+                                float(getattr(cfg, "cloud_genera_mid_thick_m", 220.0)))
+        clouds.set_shader_input("u_genera_high_floor",
+                                float(getattr(cfg, "cloud_genera_high_cov_floor", 0.06)))
+        clouds.set_shader_input("u_genera_high_cov_w",
+                                float(getattr(cfg, "cloud_genera_high_cov_weight", 0.35)))
+        clouds.set_shader_input("u_genera_high_density",
+                                float(getattr(cfg, "cloud_genera_high_density", 0.30)))
+        clouds.set_shader_input("u_genera_mid_cov_w",
+                                float(getattr(cfg, "cloud_genera_mid_cov_weight", 0.60)))
+        clouds.set_shader_input("u_genera_high_detail",
+                                float(getattr(cfg, "cloud_genera_high_detail_scale", 0.45)))
+        clouds.set_shader_input("u_genera_mid_detail",
+                                float(getattr(cfg, "cloud_genera_mid_detail_scale", 0.85)))
         self._cloud_np = clouds
-
-    def _build_rain(self) -> None:
-        """Build three nested rain cylinders under one camera-following root."""
-        rain_tex = _sky_texture("rain_streak", fallback=_fallback_rain_streak())
-        rain_tex.set_wrap_u(Texture.WM_repeat)
-        rain_tex.set_wrap_v(Texture.WM_repeat)
-        # Override the bridge's retro nearest filter: magnified nearest streaks
-        # become chunky bright bars; linear keeps them thin and soft.
-        rain_tex.set_minfilter(SamplerState.FT_linear)
-        rain_tex.set_magfilter(SamplerState.FT_linear)
-
-        root = self.base.render.attach_new_node("rain_root")
-        for radius_m, scroll_mult in _RAIN_LAYERS:
-            node = _build_rain_cylinder(radius_m, _RAIN_HEIGHT_M, _RAIN_SEGMENTS)
-            layer = root.attach_new_node(node)
-            layer.set_texture(rain_tex)
-            layer.set_two_sided(True)
-            layer.set_light_off()
-            layer.set_depth_write(False)
-            layer.set_transparency(TransparencyAttrib.M_alpha)
-            # Additive-ish: contribution = rgb * alpha, added — streaks brighten
-            # the scene subtly instead of smearing gray over it.
-            layer.set_attrib(ColorBlendAttrib.make(
-                ColorBlendAttrib.M_add,
-                ColorBlendAttrib.O_incoming_alpha,
-                ColorBlendAttrib.O_one))
-            self._rain_layers.append((layer, scroll_mult))
-            self._rain_scroll.append(0.0)
-        root.hide()
-        self._rain_root = root
-        self._rain_visible = False
 
     # ------------------------------------------------------------------
     # Per-frame helpers
@@ -946,38 +873,6 @@ class SkyRendererComponent(Component):
                 "u_exposure",
                 float(getattr(pipeline, "exposure_sky",
                               getattr(pipeline, "exposure", 0.9))))
-
-    def _update_rain(self, st: Any, cx: float, cy: float, cz: float,
-                     dt: float) -> None:
-        """Follow the camera, scroll the streak UVs, tilt with the wind."""
-        ri = float(st.rain_intensity)
-        if ri < _RAIN_HIDE_THRESHOLD:
-            if self._rain_visible:
-                self._rain_root.hide()
-                self._rain_visible = False
-            return
-        if not self._rain_visible:
-            self._rain_root.show()
-            self._rain_visible = True
-
-        root = self._rain_root
-        root.set_pos(cx, cy, cz)
-        # Slight wind tilt: heading faces the wind, pitch leans the streaks.
-        wx, wy = st.wind_dir
-        heading_deg = math.degrees(math.atan2(-float(wx), float(wy)))
-        tilt_deg = min(_RAIN_MAX_TILT_DEG, float(st.wind_speed) * 1.1)
-        root.set_hpr(heading_deg, tilt_deg, 0.0)
-        # Subtle is better than spammy: fade contribution with intensity.
-        root.set_color_scale(1.0, 1.0, 1.0, _clamp01(0.12 + 0.38 * ri))
-
-        # Scroll DOWNWARD: with the cylinder's mirrored V (v grows toward the
-        # ground — see _build_rain_cylinder), a DECREASING offset translates
-        # the streak pattern toward -Z.  Per-layer rates give parallax.
-        stage = TextureStage.get_default()
-        rate = _RAIN_BASE_SCROLL * (0.5 + 1.5 * ri)
-        for i, (layer, mult) in enumerate(self._rain_layers):
-            self._rain_scroll[i] = (self._rain_scroll[i] - rate * mult * dt) % 1.0
-            layer.set_tex_offset(stage, 0.0, self._rain_scroll[i])
 
     def _update_fog_and_light(self, st: Any) -> None:
         """Exponential fog + clear colour + global terrain light scale."""

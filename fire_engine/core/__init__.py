@@ -44,6 +44,8 @@ from fire_engine.core.event_bus import (
     TerrainEditedEvent,
     GameDayTickEvent,
     WeatherChangedEvent,
+    LightningStrikeEvent,
+    ThunderEvent,
 )
 from fire_engine.core.rng import set_world_seed, for_domain
 from fire_engine.core.config import Config, load_config
@@ -62,6 +64,8 @@ __all__ = [
     "TerrainEditedEvent",
     "GameDayTickEvent",
     "WeatherChangedEvent",
+    "LightningStrikeEvent",
+    "ThunderEvent",
     # RNG
     "set_world_seed",
     "for_domain",

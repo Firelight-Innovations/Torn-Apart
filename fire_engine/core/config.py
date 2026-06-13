@@ -68,8 +68,15 @@ GRAPHICS_PRESETS: dict[str, dict] = {
         "gfx_fxaa": False,
         "gfx_lens_flare": False,
         "gfx_clouds": False,
+        "gfx_weather_map": False,
+        "gfx_cloud_virga": False,
+        "gfx_cloud_genera": False,
         "gfx_god_rays": False,
         "gfx_foliage_shadow_refine": False,
+        "gfx_rain_mode": "off",
+        "gfx_rain_particles": 0,
+        "gfx_rain_occlusion": True,
+        "gfx_lightning_bolts": False,
     },
     "low": {
         "gfx_post_process": True,
@@ -83,9 +90,16 @@ GRAPHICS_PRESETS: dict[str, dict] = {
         "gfx_cloud_steps": 32,
         "gfx_cloud_light_steps": 4,
         "gfx_cloud_resolution_scale": 0.5,
+        "gfx_weather_map": True,
+        "gfx_cloud_virga": False,
+        "gfx_cloud_genera": False,
         "gfx_god_rays": False,
         "gfx_god_ray_samples": 16,
         "gfx_foliage_shadow_refine": False,
+        "gfx_rain_mode": "cylinders",
+        "gfx_rain_particles": 0,
+        "gfx_rain_occlusion": True,
+        "gfx_lightning_bolts": True,
     },
     "medium": {
         "gfx_post_process": True,
@@ -99,9 +113,16 @@ GRAPHICS_PRESETS: dict[str, dict] = {
         "gfx_cloud_steps": 48,
         "gfx_cloud_light_steps": 6,
         "gfx_cloud_resolution_scale": 1.0,
+        "gfx_weather_map": True,
+        "gfx_cloud_virga": True,
+        "gfx_cloud_genera": True,
         "gfx_god_rays": True,
         "gfx_god_ray_samples": 24,
         "gfx_foliage_shadow_refine": True,
+        "gfx_rain_mode": "particles",
+        "gfx_rain_particles": 7_000,
+        "gfx_rain_occlusion": True,
+        "gfx_lightning_bolts": True,
     },
     "high": {
         "gfx_post_process": True,
@@ -115,9 +136,16 @@ GRAPHICS_PRESETS: dict[str, dict] = {
         "gfx_cloud_steps": 96,
         "gfx_cloud_light_steps": 8,
         "gfx_cloud_resolution_scale": 1.0,
+        "gfx_weather_map": True,
+        "gfx_cloud_virga": True,
+        "gfx_cloud_genera": True,
         "gfx_god_rays": True,
         "gfx_god_ray_samples": 32,
         "gfx_foliage_shadow_refine": True,
+        "gfx_rain_mode": "particles",
+        "gfx_rain_particles": 12_000,
+        "gfx_rain_occlusion": True,
+        "gfx_lightning_bolts": True,
     },
 }
 
@@ -372,8 +400,10 @@ class Config:
                                         detection so polygons agree.
     building_snap_eps_m               : float — endpoint-snap tolerance for
                                         room auto-detection (0.01 = 1 cm).
-    debug_demo_building (in [debug])  : bool  — spawn the dev demo house near
-                                        spawn at boot (off by default).
+    debug_demo_building (in [debug])  : bool  — spawn the feature-showcase
+                                        demo house in front of spawn at boot
+                                        (on by default — the building-system
+                                        evaluation build; set false to hide).
 
     Wind-field fields (from [wind] table, prefix ``wind_``)
     -------------------------------------------------------
@@ -441,6 +471,18 @@ class Config:
     wind_leaf_max_instances : int — hard cap on leaf instances per volume
                                    (20000; WP4).
 
+    Rain-cover heightmap fields (from [rain] table, prefix ``rain_``)
+    -----------------------------------------------------------------
+    Drive the top-down cover heightmap (``terrain/rain_cover.py``) that the M6
+    volumetric rain renderer samples to discard rain under roofs/overhangs.
+
+    rain_cover_cells     : int   — columns per axis of the player-centred cover
+                                   window (256 → a 256 m square at 1 m cells).
+    rain_cover_cell_m    : float — column edge in meters (1.0 = light-cell size).
+    rain_cover_budget_columns : int — chunk-columns the renderer refolds per
+                                   refresh so a full rebuild amortises over
+                                   frames (4).
+
     Graphics-quality fields (from [graphics] table, prefix ``gfx_``)
     ---------------------------------------------------------------
     These drive the HDR post-processing pipeline and volumetric clouds so the
@@ -475,8 +517,48 @@ class Config:
     gfx_cloud_resolution_scale: float — cloud pass resolution (0.5 = half-res,
                                     the biggest perf win on an iGPU).
     gfx_cloud_max_dist_m  : float — far raymarch distance for clouds (meters).
+    gfx_weather_map       : bool  — upload the spatial weather-map texture and
+                                    sample it in the cloud raymarch (spatial
+                                    coverage/density/precip).  Off ⇒ the cloud
+                                    shader uses the flat ambient scalars (the
+                                    pre-M4 look); the renderer skips the
+                                    re-raster + upload entirely.  Master kill
+                                    switch for the M4 GPU weather contract.
+    gfx_cloud_virga       : bool  — gray rain shafts hanging below storm-cloud
+                                    bases (driven by the weather map's precip
+                                    channel).  Requires ``gfx_weather_map``;
+                                    off ⇒ storm bases still lower/darken but no
+                                    virga streaks.
+    gfx_cloud_genera      : bool  — render layered WMO cloud genera (M9): a high
+                                    cirrus band, a mid alto- band and the low
+                                    cumulus/stratus/cumulonimbus deck, each with
+                                    a genus-appropriate look, derived in-shader
+                                    from the weather map (no extra texture data).
+                                    Requires ``gfx_weather_map``; off ⇒ the
+                                    single cloud slab (the pre-M9 look).
     gfx_god_rays          : bool  — screen-space crepuscular rays through clouds.
     gfx_god_ray_samples   : int   — radial sample count for god rays.
+    gfx_rain_mode         : str   — volumetric rain mode: "off" (no rain),
+                                    "cylinders" (cheap camera-following scrolled
+                                    shells — the low preset), or "particles"
+                                    (GPU-instanced falling streaks — medium+).
+                                    Both rendered modes honour the rain-cover
+                                    heightmap cull (no rain under a roof) and the
+                                    weather-map precip footprint.
+    gfx_rain_particles    : int   — instanced rain-streak count in "particles"
+                                    mode (per preset: 0 off/cylinders, 7000
+                                    medium, 12000 high).
+    gfx_rain_occlusion    : bool  — sample the rain-cover heightmap to discard
+                                    streaks under cover (all presets, all modes;
+                                    false ⇒ rain everywhere, the old look).
+    gfx_lightning_bolts   : bool  — render procedural lightning bolts (M7):
+                                    camera-facing stepped-leader ribbons, a
+                                    two-phase flash, a transient scene light and
+                                    a sky/cloud flash pulse, on a strike.  On for
+                                    low+ presets, off for "off".  The headless
+                                    strike SCHEDULE + ThunderEvents still run
+                                    when this is off (audio/gameplay only see no
+                                    drawn bolt).
     gfx_foliage_shadow_refine : bool — per-fragment celestial-shadow refinement
                                     march on foliage (grass/flora/trees/
                                     impostors; the lit_surface.glsl ``u_refine``
@@ -518,7 +600,7 @@ class Config:
     show_chunk_borders:   bool  = False
     show_light_grid:      bool  = False
     debug_wind_ball:      bool  = False
-    debug_demo_building:  bool  = False
+    debug_demo_building:  bool  = True
     sky_cloud_altitude_m:  float = 96.0
     sky_cloud_thickness_m: float = 8.0
     sky_cloud_cell_m:      float = 12.0
@@ -630,6 +712,115 @@ class Config:
     wind_leaf_density_per_m2: float = 0.15
     wind_leaf_size_m:         float = 0.12
     wind_leaf_max_instances:  int   = 20_000
+    # --- Rain cover heightmap ([rain] table; terrain/rain_cover.py + M6 rain) ---
+    rain_cover_cells:         int   = 256
+    rain_cover_cell_m:        float = 1.0
+    rain_cover_budget_columns: int  = 4
+    # --- Weather simulation ([weather] table; consumed by fire_engine/weather/) ---
+    # Synoptic flow: the slow steering current that carries storm cells.
+    # Closed-form pure function of (seed, game time) — see weather/synoptic.py.
+    weather_synoptic_components:   int   = 4      # vector sinusoids in W(t)
+    weather_synoptic_speed_min_ms: float = 1.5    # guaranteed speed band (m/s)
+    weather_synoptic_speed_max_ms: float = 11.0
+    weather_synoptic_period_min_h: float = 2.5    # sinusoid period band (game h)
+    weather_synoptic_period_max_h: float = 14.0
+    # Storm cells (M2): spatial showers/storms/cloud-banks/fog-banks that drift
+    # on the synoptic flow. Natural spawn schedule is a pure function of
+    # (seed, day) — see weather/cells.py. Units: meters, game seconds, m/s.
+    weather_domain_m:              float = 6000.0  # half-extent of the spawn square (±m around origin)
+    weather_spawn_slots_per_day:   int   = 8       # candidate cell spawn slots per day
+    weather_cell_radius_min_m:     float = 350.0   # cell footprint radius band at peak (m)
+    weather_cell_radius_max_m:     float = 1200.0
+    weather_cell_duration_min_s:   float = 2400.0  # cell lifetime band (game s; 40 min .. 3 h)
+    weather_cell_duration_max_s:   float = 10800.0
+    weather_storm_wind_max_ms:     float = 9.0     # extra gust a THUNDERSTORM adds at its core (m/s)
+    weather_fog_max_density:       float = 0.028   # cap on FOG_BANK fog coefficient (1/m)
+    weather_temp_mean_c:           float = 12.0    # daily mean air temperature (°C)
+    weather_temp_amp_c:            float = 8.0     # daily temperature swing amplitude (°C)
+    # Weather map (M3): a derived raster of the local weather fields around the
+    # player — the render + sampling cache (never saved; recomputed each tick).
+    weather_map_cells:             int   = 128     # raster resolution (square, N×N texels)
+    weather_map_cell_m:            float = 24.0    # raster texel size (m) → 128×24 ≈ 3 km span
+    # Ground wetness (M3): closed-form fixed-offset quadrature over the analytic
+    # rain history at a point (no integrated state — recompute-free on load).
+    weather_wetness_tau_s:         float = 3600.0  # wetness decay time constant (game s)
+    weather_wetness_step_s:        float = 600.0   # quadrature step into the past (game s)
+    weather_wetness_samples:       int   = 12      # number of past rain samples (window = step·samples)
+    # Emergent humidity + fog (M5): fog condenses from conditions, not a state.
+    # humidity = base(day) + rain_gain·rain_recent + wetness_gain·wetness; it
+    # condenses to fog where it exceeds the temperature-dependent saturation
+    # humidity in calm air. All closed-form pure fn of (seed, t, pos). See
+    # weather/humidity.py. Units: relative humidity 0–1, °C, m/s, fog 1/m.
+    weather_humidity_base_min:     float = 0.35    # seeded per-day calm-air humidity baseline band
+    weather_humidity_base_max:     float = 0.65
+    weather_humidity_rain_gain:    float = 1.00    # humidity added per unit recent rain (0–1)
+    weather_humidity_wetness_gain: float = 0.30    # humidity added per unit ground wetness (0–1)
+    weather_humidity_recent_tau_s:    float = 18000.0  # recent-rain decay time constant (game s; 5 h — air holds moisture for hours so evening rain feeds pre-dawn fog)
+    weather_humidity_recent_step_s:   float = 1800.0   # recent-rain quadrature step into past (game s)
+    weather_humidity_recent_samples:  int   = 12       # recent-rain samples (window = step·samples = 6 h)
+    weather_fog_emergent_max:      float = 0.022   # max emergent fog coefficient at full condensation (1/m)
+    weather_fog_sat_ref_c:         float = 5.0     # reference temperature for saturation humidity (°C)
+    weather_fog_sat_base:          float = 0.63    # saturation humidity at the reference temperature (0–1)
+    weather_fog_sat_slope_per_c:   float = 0.011   # saturation humidity rise per °C above the reference
+    weather_fog_condense_band:     float = 0.10    # humidity overshoot over saturation for full condensation
+    weather_fog_wind_full_ms:      float = 1.0     # full fog at/below this wind speed (m/s)
+    weather_fog_wind_none_ms:      float = 3.0     # no emergent fog at/above this wind speed (m/s)
+    # WMO cloud genera (M9): the sampled weather (coverage/density/precip +
+    # regime) is mapped to layered altitude bands — high cirrus, mid alto-,
+    # low strato/cumulus/cumulonimbus — by weather/clouds.py::cloud_layers
+    # (headless) and mirrored in-shader by cloud_volumetric.frag (no new
+    # texture data; the same coverage/density/precip channels drive the bands).
+    # base_altitude / thickness in meters (world Z); cov_weight/density 0–1;
+    # detail_scale is a multiplier on the renderer's base noise frequency
+    # (cirrus stretched+smooth → low; cumulus billowy → high).
+    cloud_genera_high_alt_m:       float = 1400.0  # high (cirrus) band base altitude (m)
+    cloud_genera_high_thick_m:     float = 120.0   # high band thickness (m; thin veil)
+    cloud_genera_mid_alt_m:        float = 850.0   # mid (alto-) band base altitude (m)
+    cloud_genera_mid_thick_m:      float = 220.0   # mid band thickness (m)
+    cloud_genera_low_alt_m:        float = 500.0   # low (cumulus/stratus) band base altitude (m)
+    cloud_genera_low_thick_m:      float = 400.0   # low band thickness (m; storms deepen it)
+    cloud_genera_high_cov_floor:   float = 0.06    # cirrus present even in fair weather (residual floor)
+    cloud_genera_high_cov_weight:  float = 0.35    # extra high-band coverage per unit sampled coverage
+    cloud_genera_high_density:     float = 0.30    # ice cloud is thin: cap on high-band opacity
+    cloud_genera_mid_cov_weight:   float = 0.60    # mid-band coverage per unit sampled coverage
+    cloud_genera_high_detail_scale: float = 0.45   # high band: stretched, smooth streaks
+    cloud_genera_mid_detail_scale:  float = 0.85   # mid band: moderate lumpiness
+    cloud_genera_low_detail_scale:  float = 1.30   # low band: billowy cumulus detail
+    # Summon API + gust-front coupling (M8). Summoned cells are spawned UPWIND of
+    # the player (so they drift in on the synoptic flow) with per-kind footprint
+    # defaults; the gust-front modifier kicks in when a cell's leading edge nears
+    # the player. All meters / game seconds / m/s — no magic numbers in code.
+    weather_summon_upwind_m:       float = 2500.0  # how far upwind a summoned cell spawns (m)
+    weather_summon_rain_radius_m:  float = 700.0   # summoned rainstorm footprint radius (m)
+    weather_summon_rain_duration_s: float = 5400.0 # summoned rainstorm lifetime (game s; 90 min)
+    weather_summon_rain_intensity: float = 0.85    # summoned rainstorm peak intensity (0–1)
+    weather_summon_storm_radius_m: float = 950.0   # summoned thunderstorm footprint radius (m)
+    weather_summon_storm_duration_s: float = 6000.0 # summoned thunderstorm lifetime (game s; 100 min)
+    weather_summon_storm_intensity: float = 1.0    # summoned thunderstorm peak intensity (0–1)
+    weather_summon_fog_radius_m:   float = 600.0   # summoned fog-bank footprint radius (m)
+    weather_summon_fog_duration_s: float = 7200.0  # summoned fog-bank lifetime (game s; 2 h)
+    weather_summon_fog_intensity:  float = 0.9     # summoned fog-bank peak intensity (0–1)
+    weather_gustfront_range_m:     float = 600.0   # register a gust-front modifier when a cell's leading edge is within this range of the player (m)
+    weather_gustfront_strength_ms: float = 7.0     # peak added wind speed along the summoned gust front (m/s)
+    weather_gustfront_width_m:     float = 80.0    # gust-front band half-width (Gaussian sigma, m)
+    # Procedural lightning (M7): a deterministic Poisson strike schedule per
+    # active THUNDERSTORM cell (pure fn of seed+cell+time window — recomputes
+    # identically after a save/load mid-storm) and a stepped-leader bolt grown
+    # through a cheap seeded potential field.  See weather/lightning.py +
+    # weather/bolt.py. Units: strikes/min, meters, degrees, counts.
+    weather_lightning_strikes_per_min: float = 2.5   # peak strike rate per cell at full intensity (thinned by cell intensity)
+    weather_lightning_cloud_base_m:    float = 220.0 # cloud-base height above ground the bolt starts at (m)
+    weather_lightning_ground_z_m:      float = 8.0   # fallback ground-plane world Z when no cover heightmap (m; == ground_height_m)
+    bolt_step_len_min_m:   float = 5.0     # stepped-leader step length band (m)
+    bolt_step_len_max_m:   float = 15.0
+    bolt_cone_deg:         float = 38.0    # half-angle of the downward candidate-direction fan (deg)
+    bolt_candidates:       int   = 7       # K candidate directions fanned each step
+    bolt_softmax_temp:     float = 0.35    # softmax temperature for the seeded direction pick
+    bolt_branch_prob:      float = 0.12    # per-step probability a side branch spawns
+    bolt_max_steps:        int   = 400     # hard cap on leader steps (the one bounded loop)
+    bolt_noise_gain:       float = 0.6     # weight of the seeded value-noise "air resistance" in the score
+    bolt_repulsion_gain:   float = 0.45    # weight of repulsion from the existing channel in the score
+    bolt_branch_max_depth: int   = 3       # branches stop spawning sub-branches past this depth
     # --- Graphics quality ([graphics] table; defaults == "high" preset) ---
     gfx_preset:                 str   = "high"
     gfx_post_process:           bool  = True
@@ -647,9 +838,23 @@ class Config:
     gfx_cloud_light_steps:      int   = 8
     gfx_cloud_resolution_scale: float = 1.0
     gfx_cloud_max_dist_m:       float = 6000.0
+    gfx_weather_map:            bool  = True
+    gfx_cloud_virga:            bool  = True
+    gfx_cloud_genera:           bool  = True   # M9: layered WMO genera bands (high cirrus / mid alto / low cumulus+cb). Off ⇒ single-slab clouds (pre-M9 look). Requires gfx_weather_map.
     gfx_god_rays:               bool  = True
     gfx_god_ray_samples:        int   = 32
     gfx_foliage_shadow_refine:  bool  = True
+    # Volumetric rain (M6): "off" / "cylinders" (cheap scrolled shells) /
+    # "particles" (GPU-instanced falling streaks).  Both gated modes honour the
+    # rain-cover heightmap cull (no rain under a roof) + the weather-map precip
+    # footprint.  Defaults == the "high" preset (particles, 12k).
+    gfx_rain_mode:              str   = "particles"
+    gfx_rain_particles:         int   = 12_000
+    gfx_rain_occlusion:         bool  = True
+    # Procedural lightning bolts (M7): the render half of the lightning system
+    # (camera-facing stepped-leader ribbons + flash + transient scene light).
+    # On for low+ presets, off for "off".  Gates world/lightning_renderer.py.
+    gfx_lightning_bolts:        bool  = True
     # Aesthetic tuning — NOT carried by the presets (so they stay consistent
     # across off/low/medium/high); override freely in [graphics] in config.toml.
     gfx_god_ray_strength:       float = 0.4
@@ -690,8 +895,9 @@ def load_config(path: str = "config.toml") -> Config:
 
     The TOML file may have ``[debug]``, ``[sky]``, ``[terrain]``,
     ``[lighting]``, ``[fog]``, ``[grass]``, ``[flora]``, ``[trees]``,
-    ``[buildings]``, ``[wind]`` and ``[graphics]`` tables; their keys are
-    flattened into the same ``Config`` struct.  Any key absent from the file falls back to the
+    ``[buildings]``, ``[wind]``, ``[rain]``, ``[weather]`` and ``[graphics]``
+    tables; their keys are flattened into the same ``Config`` struct.  Any key
+    absent from the file falls back to the
     ``Config`` dataclass default.
 
     ``[graphics]`` is special: its ``preset`` key (off/low/medium/high) is
@@ -730,7 +936,7 @@ def load_config(path: str = "config.toml") -> Config:
     # just carry fully-named Config fields; [graphics] is special — its keys go
     # through preset expansion first (see resolve_graphics_preset).
     _TABLES = ("debug", "sky", "terrain", "lighting", "fog", "grass", "flora",
-               "trees", "buildings", "wind", "graphics")
+               "trees", "buildings", "wind", "rain", "weather", "graphics")
     flat: dict = {k: v for k, v in raw.items() if k not in _TABLES}
     for table in _TABLES:
         if table == "graphics":

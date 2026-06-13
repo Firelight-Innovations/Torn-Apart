@@ -17,7 +17,7 @@ show_fps = true
 show_chunk_borders = false
 show_light_grid = false
 debug_wind_ball = true     # dev wind-field physics proof: a bright ball on the ground near spawn that gusts scoot / storms roll (set false to hide)
-debug_demo_building = false # spawn the dev demo house near spawn (fire_engine/buildings/ vertical-slice proof)
+debug_demo_building = true # spawn the feature-showcase demo house in front of spawn (fire_engine/buildings/)
 
 [terrain]
 mesh_style = "faceted"         # "faceted" = flat-shaded surface nets (semi-smooth Daggerfall look); "blocky" = classic cubes
@@ -116,6 +116,112 @@ wind_leaf_density_per_m2 = 0.15  # leaf-litter instances per m2 of a "trees" vol
 wind_leaf_size_m = 0.12        # leaf billboard size (meters; WP4)
 wind_leaf_max_instances = 20000  # hard cap on leaf instances per volume (WP4)
 
+[rain]
+# Top-down rain-cover heightmap (terrain/rain_cover.py): the highest-solid-voxel
+# world Z per 1 m column around the player. The M6 volumetric rain renderer
+# samples it and discards any streak below the cover height — so rain never
+# falls under a roof/overhang. Units: meters, cells.
+rain_cover_cells = 256          # columns per axis of the player-centred window (256 m at 1 m cells)
+rain_cover_cell_m = 1.0         # column edge (meters) — matches the light-cell size
+rain_cover_budget_columns = 4   # chunk-columns refolded per refresh (amortises a full rebuild)
+
+[weather]
+# Spatial weather simulation (fire_engine\weather\). Synoptic flow = the slow
+# steering current (hours-scale, closed-form function of seed + game time)
+# that sets the base wind and carries storm cells. Units: m/s, game hours.
+weather_synoptic_components = 4      # vector sinusoids in the flow
+weather_synoptic_speed_min_ms = 1.5  # guaranteed wind-speed band (m/s)
+weather_synoptic_speed_max_ms = 11.0
+weather_synoptic_period_min_h = 2.5  # direction/speed drift period band (game h)
+weather_synoptic_period_max_h = 14.0
+# Storm cells: spatial showers/storms/cloud-banks/fog-banks that drift on the
+# synoptic flow. The natural spawn schedule is a pure function of (seed, day).
+weather_domain_m = 6000.0            # half-extent of the cell spawn square (±m around origin)
+weather_spawn_slots_per_day = 8      # candidate cell spawn slots per day
+weather_cell_radius_min_m = 350.0    # cell footprint radius band at peak (m)
+weather_cell_radius_max_m = 1200.0
+weather_cell_duration_min_s = 2400.0 # cell lifetime band (game s; 40 min .. 3 h)
+weather_cell_duration_max_s = 10800.0
+weather_storm_wind_max_ms = 9.0      # extra gust a THUNDERSTORM adds at its core (m/s)
+weather_fog_max_density = 0.028      # cap on FOG_BANK fog coefficient (1/m)
+weather_temp_mean_c = 12.0           # daily mean air temperature (°C)
+weather_temp_amp_c = 8.0             # daily temperature swing amplitude (°C)
+# Weather map (M3): derived raster of local weather around the player (render +
+# sampling cache; never saved). Ground wetness is closed-form quadrature.
+weather_map_cells = 128              # raster resolution (square, N×N texels)
+weather_map_cell_m = 24.0            # raster texel size (m) → 128×24 ≈ 3 km span
+weather_wetness_tau_s = 3600.0       # wetness decay time constant (game s)
+weather_wetness_step_s = 600.0       # quadrature step into the past (game s)
+weather_wetness_samples = 12         # past rain samples (window = step·samples)
+# Emergent humidity + fog (M5): fog is NOT a selectable state — it condenses
+# from conditions. humidity = base(day) + rain_gain·rain_recent +
+# wetness_gain·wetness, condensing to ground fog where it exceeds the
+# temperature-dependent saturation humidity in calm air (calm humid nights
+# after evening rain grow pre-dawn fog that burns off after sunrise). All
+# closed-form pure fn of (seed, t, pos). Units: humidity 0–1, °C, m/s, fog 1/m.
+weather_humidity_base_min = 0.35     # seeded per-day calm-air humidity baseline band
+weather_humidity_base_max = 0.65
+weather_humidity_rain_gain = 1.00    # humidity added per unit recent rain (0–1)
+weather_humidity_wetness_gain = 0.30 # humidity added per unit ground wetness (0–1)
+weather_humidity_recent_tau_s = 18000.0 # recent-rain decay time constant (game s; 5 h — air holds moisture for hours so evening rain feeds pre-dawn fog)
+weather_humidity_recent_step_s = 1800.0 # recent-rain quadrature step into past (game s)
+weather_humidity_recent_samples = 12 # recent-rain samples (window = step·samples = 6 h)
+weather_fog_emergent_max = 0.022     # max emergent fog coefficient at full condensation (1/m)
+weather_fog_sat_ref_c = 5.0          # reference temperature for saturation humidity (°C)
+weather_fog_sat_base = 0.63          # saturation humidity at the reference temperature (0–1)
+weather_fog_sat_slope_per_c = 0.011  # saturation humidity rise per °C above the reference
+weather_fog_condense_band = 0.10     # humidity overshoot over saturation for full condensation
+weather_fog_wind_full_ms = 1.0       # full fog at/below this wind speed (m/s)
+weather_fog_wind_none_ms = 3.0       # no emergent fog at/above this wind speed (m/s)
+# WMO cloud genera (M9): the sampled weather (coverage/density/precip + regime)
+# is mapped to layered altitude bands — high cirrus, mid alto-, low strato/
+# cumulus/cumulonimbus — by weather/clouds.py and mirrored in the cloud shader
+# (no new texture data). Altitudes/thicknesses in meters (world Z).
+cloud_genera_high_alt_m = 1400.0     # high (cirrus) band base altitude (m)
+cloud_genera_high_thick_m = 120.0    # high band thickness (m; thin veil)
+cloud_genera_mid_alt_m = 850.0       # mid (alto-) band base altitude (m)
+cloud_genera_mid_thick_m = 220.0     # mid band thickness (m)
+cloud_genera_low_alt_m = 500.0       # low (cumulus/stratus) band base altitude (m)
+cloud_genera_low_thick_m = 400.0     # low band thickness (m; storms deepen it)
+cloud_genera_high_cov_floor = 0.06   # cirrus present even in fair weather (residual floor)
+cloud_genera_high_cov_weight = 0.35  # extra high-band coverage per unit sampled coverage
+cloud_genera_high_density = 0.30     # ice cloud is thin: cap on high-band opacity
+cloud_genera_mid_cov_weight = 0.60   # mid-band coverage per unit sampled coverage
+cloud_genera_high_detail_scale = 0.45 # high band: stretched, smooth streaks
+cloud_genera_mid_detail_scale = 0.85  # mid band: moderate lumpiness
+cloud_genera_low_detail_scale = 1.30  # low band: billowy cumulus detail
+# Summon API + gust-front coupling (M8). Summoned storm cells spawn UPWIND of the
+# player so they drift in on the synoptic flow; a gust-front wind modifier kicks
+# the grass as the leading edge approaches. Units: meters, game seconds, m/s.
+weather_summon_upwind_m = 2500.0        # how far upwind a summoned cell spawns (m)
+weather_summon_rain_radius_m = 700.0    # summoned rainstorm footprint radius (m)
+weather_summon_rain_duration_s = 5400.0 # summoned rainstorm lifetime (game s; 90 min)
+weather_summon_rain_intensity = 0.85    # summoned rainstorm peak intensity (0–1)
+weather_summon_storm_radius_m = 950.0   # summoned thunderstorm footprint radius (m)
+weather_summon_storm_duration_s = 6000.0 # summoned thunderstorm lifetime (game s; 100 min)
+weather_summon_storm_intensity = 1.0    # summoned thunderstorm peak intensity (0–1)
+weather_summon_fog_radius_m = 600.0     # summoned fog-bank footprint radius (m)
+weather_summon_fog_duration_s = 7200.0  # summoned fog-bank lifetime (game s; 2 h)
+weather_summon_fog_intensity = 0.9      # summoned fog-bank peak intensity (0–1)
+weather_gustfront_range_m = 600.0       # register a gust-front modifier when a cell's leading edge is within this range of the player (m)
+weather_gustfront_strength_ms = 7.0     # peak added wind speed along the summoned gust front (m/s)
+weather_gustfront_width_m = 80.0        # gust-front band half-width (Gaussian sigma, m)
+# Procedural lightning (M7): deterministic Poisson strike schedule per active
+# THUNDERSTORM cell + a stepped-leader bolt grown through a seeded potential field.
+weather_lightning_strikes_per_min = 2.5  # peak strikes/min per cell (thinned by cell intensity)
+weather_lightning_cloud_base_m = 220.0   # cloud-base height above ground the bolt starts at (m)
+weather_lightning_ground_z_m = 8.0       # fallback ground-plane world Z when no cover heightmap (m)
+bolt_step_len_min_m = 5.0            # stepped-leader step length band (m)
+bolt_step_len_max_m = 15.0
+bolt_cone_deg = 38.0                 # half-angle of the downward candidate fan (deg)
+bolt_candidates = 7                  # K candidate directions per step
+bolt_softmax_temp = 0.35             # softmax temperature for the seeded direction pick
+bolt_branch_prob = 0.12              # per-step side-branch spawn probability
+bolt_max_steps = 400                 # hard cap on leader steps
+bolt_noise_gain = 0.6                # weight of the seeded "air resistance" value-noise in the score
+bolt_repulsion_gain = 0.45           # weight of repulsion from the existing channel
+bolt_branch_max_depth = 3            # branches stop spawning sub-branches past this depth
+
 [sky]
 sky_cloud_altitude_m = 96.0    # cloud layer base altitude (world Z, meters)
 sky_cloud_thickness_m = 8.0    # cloud layer vertical thickness (meters)
@@ -142,10 +248,17 @@ preset = "high"
 # gfx_cloud_light_steps = 8      # sun light-march steps (self-shadow; main cost)
 # gfx_cloud_resolution_scale = 1.0  # 0.5 = half-res clouds (big iGPU win)
 # gfx_cloud_max_dist_m = 6000.0  # far raymarch distance for clouds (meters)
+# gfx_weather_map = true         # spatial weather-map texture → per-step cloud coverage/density/precip (M4; off ⇒ flat ambient, pre-M4 look)
+# gfx_cloud_virga = true         # gray rain shafts below storm bases (needs gfx_weather_map)
+# gfx_cloud_genera = true        # M9: layered WMO genera (high cirrus / mid alto / low cumulus+cb), derived in-shader from the weather map (needs gfx_weather_map; off ⇒ single slab, pre-M9 look)
 # gfx_god_rays = true            # crepuscular rays through clouds
 # gfx_god_ray_samples = 32       # radial god-ray samples
 # gfx_foliage_shadow_refine = true  # per-fragment shadow refinement on foliage
 #                                # (grass/flora/trees; off on off/low presets)
+# gfx_rain_mode = "particles"    # "off" | "cylinders" (low) | "particles" (medium+) — GPU rain
+# gfx_rain_particles = 12000     # instanced rain-streak count in "particles" mode (7000 medium / 12000 high)
+# gfx_rain_occlusion = true      # discard rain under roofs via the cover heightmap (THE no-rain-under-roof fix)
+# gfx_lightning_bolts = true     # render procedural lightning bolts (M7; on low+, off on "off")
 #
 # --- Aesthetic tuning (NOT changed by the preset — tune these freely) --------
 # These control the LOOK of the sun/sky/flare, independent of quality preset.

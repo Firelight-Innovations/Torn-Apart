@@ -14,9 +14,10 @@ SkyState
 SkySystem
     Composer.  ``update()`` once per frame; ``state`` property for the last
     snapshot; ``weather`` attribute is the owned WeatherSystem.
-WeatherType, WeatherParams, WeatherSystem
-    Deterministic Markov weather schedule (Saveable, ``save_key="weather"``)
-    with 20-game-minute parameter blending and a ``force_weather`` override.
+WeatherType, LocalWeather, WeatherSystem
+    Spatial storm-cell weather (Saveable, ``save_key="weather"``) — re-exported
+    from :mod:`fire_engine.weather`; ``update()`` samples at the player and
+    blends a ``force_weather`` dev override over 20 game minutes.
 sun_direction, moon_direction
     Pure time-of-day → unit Vec3 celestial geometry (Z-up).
 
@@ -40,14 +41,16 @@ Quick-start example
 
 from fire_engine.sky.celestial import moon_direction, sun_direction
 from fire_engine.sky.sky_state import SkyState, SkySystem
-from fire_engine.sky.weather import WeatherParams, WeatherSystem, WeatherType
+from fire_engine.sky.weather_map_pack import pack_weather_map
+from fire_engine.weather import LocalWeather, WeatherSystem, WeatherType
 
 __all__ = [
     "SkyState",
     "SkySystem",
     "WeatherType",
-    "WeatherParams",
+    "LocalWeather",
     "WeatherSystem",
+    "pack_weather_map",
     "sun_direction",
     "moon_direction",
 ]

@@ -24,6 +24,7 @@ apply_brush    — the single terrain mutation path.
 raycast_voxel  — voxel DDA raycast (click → hit point).
 Hit            — raycast result dataclass.
 ChunkManager   — streaming store, chunk_provider, and Saveable("terrain").
+RainCoverField — top-down highest-solid-voxel cover heightmap (M6 rain cull).
 
 See ``docs/systems/terrain.md`` for the full contract (padding rule,
 light_sampler contract, chunk_provider contract, Saveable delta format).
@@ -47,6 +48,7 @@ from fire_engine.terrain.brush import (
 )
 from fire_engine.terrain.raycast import raycast_voxel, Hit
 from fire_engine.terrain.chunk_manager import ChunkManager
+from fire_engine.terrain.rain_cover import RainCoverField, OPEN_SKY_Z
 
 __all__ = [
     "Chunk",
@@ -67,4 +69,6 @@ __all__ = [
     "raycast_voxel",
     "Hit",
     "ChunkManager",
+    "RainCoverField",
+    "OPEN_SKY_Z",
 ]

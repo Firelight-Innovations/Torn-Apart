@@ -55,7 +55,7 @@ from fire_engine.sky.celestial import (
     smoothstep,
     sun_direction,
 )
-from fire_engine.sky.weather import WeatherParams, WeatherSystem
+from fire_engine.weather import LocalWeather, WeatherSystem
 
 __all__ = ["SkyState", "SkySystem", "MOON_CYCLE_DAYS"]
 
@@ -364,14 +364,20 @@ class SkySystem:
         # physics is seed-independent).  ~0.2 s at first construction.
         self._lut = _get_atmosphere_lut()
 
-    def update(self) -> SkyState:
+    def update(self, player_pos: tuple[float, float] | None = None) -> SkyState:
         """
         Recompute the sky snapshot from the current clock time.
 
         Call once per frame (cheap: a handful of scalar ramps — no arrays,
         no events, no render calls).  Reads ``clock.game_day`` and
-        ``clock.game_time_of_day``; advances the weather blend; caches and
-        returns the new :class:`SkyState`.
+        ``clock.game_time_of_day``; advances the weather to the player's local
+        sample; caches and returns the new :class:`SkyState`.
+
+        Parameters
+        ----------
+        player_pos : tuple[float, float] | None — world XY to sample weather
+            at; defaults to the origin (the renderer threads the camera
+            position through from M4 on, so distant storms sample correctly).
 
         Returns
         -------
@@ -381,7 +387,7 @@ class SkySystem:
         day = int(self._clock.game_day)
         tod = float(self._clock.game_time_of_day)
 
-        wp: WeatherParams = self.weather.update(day, tod)
+        wp: LocalWeather = self.weather.update(day, tod, player_pos)
 
         sun = sun_direction(tod)
         moon = moon_direction(tod)

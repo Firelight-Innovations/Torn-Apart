@@ -462,6 +462,27 @@ def build_demo(load_path: str | None = None):
     )
     app.sky_go = sky_go
 
+    # 10b-weather. Weather map (M4) — the spatial weather field (coverage /
+    #      density / precip / fog) the volumetric clouds sample per march step
+    #      so a passing storm has a dark, lowered, raining base while the sky a
+    #      kilometre away stays clear.  Headless WeatherMap lives on the
+    #      sky_system; this render component rasters it around the camera, packs
+    #      it to a small fp16 texture, and binds the weather-map uniform
+    #      contract on app.render (inherited by the cloud dome).  The
+    #      SkyRendererComponent is the sole driver of sky_system.update(), so
+    #      this component only READS the advanced weather (no double-update).
+    #      Gated by gfx_weather_map (kill switch); virga by gfx_cloud_virga.
+    from fire_engine.world.weather_renderer import WeatherMapComponent
+    weather_go = instantiate()
+    weather_go.name = "WeatherMap"
+    weather_go.add_component(
+        WeatherMapComponent,
+        base=app,
+        sky_system=sky_system,
+        clock=clock,
+    )
+    app.weather_go = weather_go
+
     # 10b-wind. Wind field — the spatially-varying, time-evolving wind that
     #      grass (and later flags/cloth/motes) samples instead of one flat
     #      scalar.  Construct the headless WindField (+ the venturi worker if
@@ -481,6 +502,13 @@ def build_demo(load_path: str | None = None):
     wind_field = WindField(cfg, worker=venturi_worker)
     app.wind_worker = venturi_worker        # exposed so main() can stop it on exit
     app.terrain_root.set_shader_input("u_wind_enabled", 0.0)
+
+    # 10b-gust. Couple the weather sim's gust fronts (M8) to the wind field: a
+    #      storm whose leading edge nears the player registers a GustFront wind
+    #      modifier so the grass kicks as the front arrives. The WindSystemComponent
+    #      already drives wind_field.update() each frame, so the registered fronts
+    #      take effect. No-op until attached (the weather sim stays headless).
+    sky_system.weather.attach_wind_field(wind_field)
 
     # 10c. GPU grass — instanced tufts inside every "grass" zone volume,
     #      placed entirely on the GPU (gl_InstanceID hash), lit by the same
@@ -610,6 +638,50 @@ def build_demo(load_path: str | None = None):
         lighting_pipeline=lighting_pipeline,
     )
     app.leaf_go = leaf_go
+
+    # 10e2. Volumetric rain (M6) — GPU-instanced falling streaks (or the cheap
+    #      camera-following cylinders on the low preset) that exist only inside
+    #      storm footprints (weather-map precip gate) and NEVER under a roof
+    #      (the rain-cover heightmap cull — the headline M6 fix).  The component
+    #      owns the headless RainCoverField, folds the loaded chunks' highest
+    #      solid voxel per column, uploads it to u_rain_height_tex with
+    #      committed-origin discipline, and subscribes to terrain events to
+    #      refold dirty columns.  Parents under terrain_root so the inherited
+    #      wind / fog / camera + weather-map contracts arrive automatically.
+    #      Gated by gfx_rain_mode ("off"/"cylinders"/"particles") +
+    #      gfx_rain_occlusion; GPU lighting backend only (disables itself on cpu).
+    from fire_engine.world.rain_renderer import RainRendererComponent
+    rain_go = instantiate()
+    rain_go.name = "Rain"
+    rain_go.add_component(
+        RainRendererComponent,
+        base=app,
+        sky_system=sky_system,
+        chunk_provider=chunk_manager,
+        lighting_pipeline=lighting_pipeline,
+        bus=bus,
+    )
+    app.rain_go = rain_go
+
+    # 10e2. Procedural lightning (M7) — subscribes to LightningStrikeEvents
+    #      published by the headless WeatherSystem schedule and renders pooled
+    #      stepped-leader bolts (camera-facing ribbons) with a two-phase flash,
+    #      a transient scene light, and a u_lightning_flash sky/cloud pulse;
+    #      re-publishes ThunderEvents (distance/343 delay).  Gated by
+    #      gfx_lightning_bolts; GPU lighting backend only (disables itself on
+    #      cpu — the headless strike schedule + thunder still run).
+    from fire_engine.world.lightning_renderer import LightningRendererComponent
+    lightning_go = instantiate()
+    lightning_go.name = "Lightning"
+    lightning_go.add_component(
+        LightningRendererComponent,
+        base=app,
+        sky_system=sky_system,
+        chunk_provider=chunk_manager,
+        lighting_pipeline=lighting_pipeline,
+        bus=bus,
+    )
+    app.lightning_go = lightning_go
 
     # 10f. Wind debug ball (dev-only, [debug] debug_wind_ball) — a bright
     #      procedural sphere on the ground near spawn pushed by WindField.sample

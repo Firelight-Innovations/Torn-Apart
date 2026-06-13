@@ -270,6 +270,10 @@ class WeatherSystem:
         self._temp_amp = float(config.weather_temp_amp_c)
         self._fog_max = float(config.weather_fog_max_density)
         self._storm_wind_max = float(config.weather_storm_wind_max_ms)
+        # Closed-form ground-wetness quadrature over the analytic rain history.
+        self._wet_tau = float(config.weather_wetness_tau_s)
+        self._wet_step = float(config.weather_wetness_step_s)
+        self._wet_samples = int(config.weather_wetness_samples)
 
         # Per-day natural cell cache (pure fn of seed+day; never saved).
         self._cell_cache: dict[int, list[StormCell]] = {}
@@ -335,18 +339,112 @@ class WeatherSystem:
             2.0 * math.pi * (tod_h - 15.0) / 24.0
         )
 
+    def sample_fields(
+        self, points_xy: np.ndarray, t_abs: float
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Vectorised core sampling: the raster channels at every query point.
+
+        This is the single source of truth for the spatial weather field —
+        :meth:`sample_local` calls it with one point and the weather-map raster
+        (M3) calls it over a whole grid, so a texel's rasterised value equals
+        ``sample_local`` at that texel center by construction.
+
+        Composition: the day regime sets the ambient cloud cover/density
+        (cosine-blended from the previous day's regime over the first game hour
+        after midnight); every active cell adds its footprint contribution to
+        coverage/density/rain, FOG_BANKs to fog, THUNDERSTORMs to a core gust.
+
+        Parameters
+        ----------
+        points_xy : np.ndarray — shape ``(N, 2)`` world-XY query points (m).
+        t_abs : float — absolute game seconds.
+
+        Returns
+        -------
+        tuple of five ``(N,)`` arrays — ``(coverage, density, rain, fog,
+        storm_gust)``; the first four are the raster channels (coverage,
+        density, rain, fog clamped/capped), the last feeds local wind speed.
+        """
+        pts = np.asarray(points_xy, dtype=np.float64).reshape(-1, 2)
+        n = pts.shape[0]
+        t = float(t_abs)
+        day = int(t // _DAY_S)
+        tod = t - day * _DAY_S
+
+        # Ambient regime, cosine-blended across the midnight hand-off so the
+        # base sky never snaps at 00:00.
+        cov_cur, den_cur = regime_ambient(day_regime(day))
+        if day > 0:
+            cov_prev, den_prev = regime_ambient(day_regime(day - 1))
+        else:
+            cov_prev, den_prev = cov_cur, den_cur
+        blend = 0.5 - 0.5 * math.cos(math.pi * min(tod / 3600.0, 1.0))
+        coverage = np.full(n, cov_prev + (cov_cur - cov_prev) * blend)
+        density = np.full(n, den_prev + (den_cur - den_prev) * blend)
+        rain = np.zeros(n)
+        fog_extra = np.zeros(n)
+        storm_gust = np.zeros(n)
+
+        for cell in self._active_cells(t):
+            c = cell.contribution(pts, t, self.synoptic)          # (N,)
+            coverage += c * _KIND_COV[cell.kind]
+            density += c * _KIND_DEN[cell.kind]
+            rain += c * _KIND_RAIN[cell.kind]
+            if cell.kind is CellKind.FOG_BANK:
+                fog_extra += c
+            elif cell.kind is CellKind.THUNDERSTORM:
+                storm_gust += c
+
+        np.clip(coverage, 0.0, 1.0, out=coverage)
+        np.clip(density, 0.0, 1.0, out=density)
+        np.clip(rain, 0.0, 1.0, out=rain)
+        fog = np.minimum(_FOG_BASELINE + fog_extra * _FOG_BANK_GAIN, self._fog_max)
+        return coverage, density, rain, fog, storm_gust
+
+    def wetness_at(self, points_xy: np.ndarray, t_abs: float) -> np.ndarray:
+        """
+        Closed-form ground wetness 0–1 at each query point.
+
+        Fixed-offset quadrature over the **analytic rain history** at each fixed
+        world point: the rain that fell there over the recent past, exponentially
+        decayed (recent rain weighs most).  No integrated state — wetness is a
+        pure function of (seed, time, position), so it recomputes for free on
+        load, like everything else here.
+
+        Parameters
+        ----------
+        points_xy : np.ndarray — shape ``(N, 2)`` world-XY query points (m).
+        t_abs : float — absolute game seconds.
+
+        Returns
+        -------
+        np.ndarray — shape ``(N,)``, ground wetness clamped to [0, 1].
+        """
+        pts = np.asarray(points_xy, dtype=np.float64).reshape(-1, 2)
+        t = float(t_abs)
+        acc = np.zeros(pts.shape[0])
+        for k in range(1, self._wet_samples + 1):
+            tk = t - k * self._wet_step
+            if tk < 0.0:                       # before world start: no history
+                break
+            weight = (self._wet_step / self._wet_tau) * math.exp(
+                -k * self._wet_step / self._wet_tau
+            )
+            _, _, rain_k, _, _ = self.sample_fields(pts, tk)
+            acc += weight * rain_k
+        np.clip(acc, 0.0, 1.0, out=acc)
+        return acc
+
     def sample_local(
         self, pos_xy: tuple[float, float], t_abs: float | None = None
     ) -> LocalWeather:
         """
-        Sample the natural weather at world position *pos_xy* and time *t_abs*.
+        Sample the full natural weather at world position *pos_xy* and *t_abs*.
 
-        Composition: the day regime sets the ambient cloud cover/density
-        (cosine-blended from the previous day's regime over the first game
-        hour after midnight); every active cell then adds its footprint
-        contribution to coverage/density/rain (and FOG_BANKs to fog).  Wind
-        direction is the synoptic flow; speed rises a little under cloud and a
-        lot inside a thunderstorm core.
+        A single-point wrapper over :meth:`sample_fields` (so it matches the
+        weather-map raster exactly) that also resolves wind, wetness, and
+        temperature into a complete :class:`LocalWeather`.
 
         Parameters
         ----------
@@ -361,55 +459,25 @@ class WeatherSystem:
         t = float(t_abs) if t_abs is not None else (
             self._last_abs_t if self._last_abs_t is not None else 0.0
         )
-        day = int(t // _DAY_S)
-        tod = t - day * _DAY_S
-        tod_h = tod / 3600.0
-
-        # Ambient regime, cosine-blended across the midnight hand-off so the
-        # base sky never snaps at 00:00.
-        cov_cur, den_cur = regime_ambient(day_regime(day))
-        if day > 0:
-            cov_prev, den_prev = regime_ambient(day_regime(day - 1))
-        else:
-            cov_prev, den_prev = cov_cur, den_cur
-        blend = 0.5 - 0.5 * math.cos(math.pi * min(tod / 3600.0, 1.0))
-        coverage = cov_prev + (cov_cur - cov_prev) * blend
-        density = den_prev + (den_cur - den_prev) * blend
-
-        # Cell contributions at this point.
         pt = np.array([[float(pos_xy[0]), float(pos_xy[1])]], dtype=np.float64)
-        rain = 0.0
-        fog_extra = 0.0
-        storm_gust = 0.0
-        for cell in self._active_cells(t):
-            c = float(cell.contribution(pt, t, self.synoptic)[0])
-            if c <= 0.0:
-                continue
-            coverage += c * _KIND_COV[cell.kind]
-            density += c * _KIND_DEN[cell.kind]
-            rain += c * _KIND_RAIN[cell.kind]
-            if cell.kind is CellKind.FOG_BANK:
-                fog_extra += c
-            elif cell.kind is CellKind.THUNDERSTORM:
-                storm_gust += c
-
-        coverage = _clamp01(coverage)
-        density = _clamp01(density)
-        rain = _clamp01(rain)
-        fog = min(_FOG_BASELINE + fog_extra * _FOG_BANK_GAIN, self._fog_max)
+        cov, den, rain, fog, gust = self.sample_fields(pt, t)
+        coverage = float(cov[0])
 
         wind_dir, syn_speed = self.synoptic.wind(t)
-        wind_speed = syn_speed * (0.7 + 0.5 * coverage) + storm_gust * self._storm_wind_max
-
+        wind_speed = (
+            syn_speed * (0.7 + 0.5 * coverage)
+            + float(gust[0]) * self._storm_wind_max
+        )
+        tod_h = (t % _DAY_S) / 3600.0
         return LocalWeather(
             cloud_coverage=coverage,
-            cloud_density=density,
-            fog_density=fog,
-            rain_intensity=rain,
+            cloud_density=float(den[0]),
+            fog_density=float(fog[0]),
+            rain_intensity=float(rain[0]),
             wind_dir=wind_dir,
             wind_speed=wind_speed,
             humidity=0.5,
-            wetness=0.0,
+            wetness=float(self.wetness_at(pt, t)[0]),
             temperature_c=self._temperature(tod_h),
         )
 

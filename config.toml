@@ -127,6 +127,13 @@ weather_storm_wind_max_ms = 9.0      # extra gust a THUNDERSTORM adds at its cor
 weather_fog_max_density = 0.028      # cap on FOG_BANK fog coefficient (1/m)
 weather_temp_mean_c = 12.0           # daily mean air temperature (°C)
 weather_temp_amp_c = 8.0             # daily temperature swing amplitude (°C)
+# Weather map (M3): derived raster of local weather around the player (render +
+# sampling cache; never saved). Ground wetness is closed-form quadrature.
+weather_map_cells = 128              # raster resolution (square, N×N texels)
+weather_map_cell_m = 24.0            # raster texel size (m) → 128×24 ≈ 3 km span
+weather_wetness_tau_s = 3600.0       # wetness decay time constant (game s)
+weather_wetness_step_s = 600.0       # quadrature step into the past (game s)
+weather_wetness_samples = 12         # past rain samples (window = step·samples)
 
 [sky]
 sky_cloud_altitude_m = 96.0    # cloud layer base altitude (world Z, meters)

@@ -614,6 +614,15 @@ class Config:
     weather_fog_max_density:       float = 0.028   # cap on FOG_BANK fog coefficient (1/m)
     weather_temp_mean_c:           float = 12.0    # daily mean air temperature (°C)
     weather_temp_amp_c:            float = 8.0     # daily temperature swing amplitude (°C)
+    # Weather map (M3): a derived raster of the local weather fields around the
+    # player — the render + sampling cache (never saved; recomputed each tick).
+    weather_map_cells:             int   = 128     # raster resolution (square, N×N texels)
+    weather_map_cell_m:            float = 24.0    # raster texel size (m) → 128×24 ≈ 3 km span
+    # Ground wetness (M3): closed-form fixed-offset quadrature over the analytic
+    # rain history at a point (no integrated state — recompute-free on load).
+    weather_wetness_tau_s:         float = 3600.0  # wetness decay time constant (game s)
+    weather_wetness_step_s:        float = 600.0   # quadrature step into the past (game s)
+    weather_wetness_samples:       int   = 12      # number of past rain samples (window = step·samples)
     # --- Graphics quality ([graphics] table; defaults == "high" preset) ---
     gfx_preset:                 str   = "high"
     gfx_post_process:           bool  = True

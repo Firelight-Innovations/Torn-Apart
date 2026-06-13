@@ -20,6 +20,7 @@ from fire_engine.weather.cells import (
 from fire_engine.weather.classify import WeatherType, classify
 from fire_engine.weather.synoptic import Synoptic
 from fire_engine.weather.system import LocalWeather, WeatherSystem
+from fire_engine.weather.weather_map import MAP_CHANNELS, WeatherMap
 
 __all__ = [
     "Synoptic",
@@ -33,4 +34,6 @@ __all__ = [
     "classify",
     "LocalWeather",
     "WeatherSystem",
+    "WeatherMap",
+    "MAP_CHANNELS",
 ]

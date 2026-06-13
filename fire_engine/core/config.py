@@ -735,6 +735,23 @@ class Config:
     cloud_genera_high_detail_scale: float = 0.45   # high band: stretched, smooth streaks
     cloud_genera_mid_detail_scale:  float = 0.85   # mid band: moderate lumpiness
     cloud_genera_low_detail_scale:  float = 1.30   # low band: billowy cumulus detail
+    # Summon API + gust-front coupling (M8). Summoned cells are spawned UPWIND of
+    # the player (so they drift in on the synoptic flow) with per-kind footprint
+    # defaults; the gust-front modifier kicks in when a cell's leading edge nears
+    # the player. All meters / game seconds / m/s — no magic numbers in code.
+    weather_summon_upwind_m:       float = 2500.0  # how far upwind a summoned cell spawns (m)
+    weather_summon_rain_radius_m:  float = 700.0   # summoned rainstorm footprint radius (m)
+    weather_summon_rain_duration_s: float = 5400.0 # summoned rainstorm lifetime (game s; 90 min)
+    weather_summon_rain_intensity: float = 0.85    # summoned rainstorm peak intensity (0–1)
+    weather_summon_storm_radius_m: float = 950.0   # summoned thunderstorm footprint radius (m)
+    weather_summon_storm_duration_s: float = 6000.0 # summoned thunderstorm lifetime (game s; 100 min)
+    weather_summon_storm_intensity: float = 1.0    # summoned thunderstorm peak intensity (0–1)
+    weather_summon_fog_radius_m:   float = 600.0   # summoned fog-bank footprint radius (m)
+    weather_summon_fog_duration_s: float = 7200.0  # summoned fog-bank lifetime (game s; 2 h)
+    weather_summon_fog_intensity:  float = 0.9     # summoned fog-bank peak intensity (0–1)
+    weather_gustfront_range_m:     float = 600.0   # register a gust-front modifier when a cell's leading edge is within this range of the player (m)
+    weather_gustfront_strength_ms: float = 7.0     # peak added wind speed along the summoned gust front (m/s)
+    weather_gustfront_width_m:     float = 80.0    # gust-front band half-width (Gaussian sigma, m)
     # --- Graphics quality ([graphics] table; defaults == "high" preset) ---
     gfx_preset:                 str   = "high"
     gfx_post_process:           bool  = True

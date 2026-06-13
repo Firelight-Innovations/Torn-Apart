@@ -108,6 +108,8 @@ flowchart TD
 
 **Reading the stack:** solid arrows = "may call directly downward." Any layer may additionally call the Foundation row directly, and any layer may publish/subscribe on the Event Bus for upward/sideways communication. Lighting is the only non-World layer allowed to touch the GPU.
 
+**Layer-1 service peers — `weather` / `wind` / `sky` import map:** these three are Layer-1 services (peers of Lighting/Resources). `sky` imports `weather` (it owns a `WeatherSystem`); `weather` imports `wind` (one-way, from M8 — only the modifier seam: `GustFront` / `add_modifier` / `remove_modifier`, lazily, so importing `weather` doesn't drag in `wind`); `wind` imports **neither** `sky` nor `weather` (its weather input is duck-typed). No cycle. All three are headless (numpy + `core` only); their panda3d upload/render bridges live in `world/` (`weather_renderer.py`, `wind_renderer.py`, `rain_renderer.py`, `devtools_overlay.py`). The `weather` summoned-cell delta + `wind` field are both seed/time pure → ~0 save bytes.
+
 ---
 
 ## 4a. System Diagrams

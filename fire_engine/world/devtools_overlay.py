@@ -143,6 +143,27 @@ class DevOverlay:
                 CallbackTool("environment", "Environment",
                              lambda s=sky: self._build_environment(s, app._clock))
             )
+
+        # --- M8: Environment summon panel (weather control) + debug keys. ----
+        # Reads sky_system.weather (the spatial WeatherSystem). Built defensively
+        # so a concurrent weather-API shift degrades to blanks, never a crash.
+        self._weather = getattr(sky, "weather", None) if sky is not None else None
+        self._rain_cover_np: Optional[NodePath] = None   # toggle overlay quad
+        if self._weather is not None and hasattr(self._weather, "summon_cell"):
+            self.manager.register_tool(
+                CallbackTool("env_summon", "Weather Control",
+                             self._build_weather_control)
+            )
+            # Debug keys (gated on a weather system being present):
+            #   K — stamp a synthetic cell at the camera,
+            #   L — fire a LightningStrikeEvent at the crosshair,
+            #   J — toggle the rain-cover overlay quad.
+            try:
+                app.accept("k", self._summon_cell_at_camera)
+                app.accept("l", self._fire_lightning_at_crosshair)
+                app.accept("j", self._toggle_rain_cover_overlay)
+            except Exception:  # noqa: BLE001 — input map may differ in tooling
+                pass
         self.manager.register_tool(InspectorTool(self.manager.selection))
         # Transform gizmo panel (Move / Rotate / Scale / Off) — switches the
         # active manipulator for the selected object.
@@ -298,6 +319,244 @@ class DevOverlay:
             weather.force_weather(self._weather_types[self._wx])
         except Exception:  # noqa: BLE001
             pass
+
+    # ------------------------------------------------------------------
+    # M8 — Weather Control panel (spatial summon API + nearest-cell readout)
+    # ------------------------------------------------------------------
+
+    def _camera_xy(self) -> tuple[float, float]:
+        """Player/camera world XY (meters) — the summon + readout reference."""
+        p = self._app.camera_go.transform.position
+        return (float(p.x), float(p.y))
+
+    def _time_abs(self) -> float:
+        """Absolute game seconds from the clock (day·86400 + time-of-day)."""
+        clk = self._app._clock
+        day = int(getattr(clk, "game_day", 0))
+        tod = float(getattr(clk, "game_time_of_day", 0.0))
+        return day * 86400.0 + tod
+
+    def _build_weather_control(self):
+        """
+        Build the "Weather Control" panel: summon buttons + a live read-out of
+        the local weather class and the nearest cell's kind / distance / bearing
+        / ETA.  Every engine access is guarded so a weather-API shift degrades to
+        blanks rather than crashing the overlay.
+        """
+        w = self._weather
+
+        def local_class() -> str:
+            try:
+                return getattr(w.current, "value", "?")
+            except Exception:  # noqa: BLE001
+                return "?"
+
+        def _local_sample():
+            try:
+                return w.sample_local(self._camera_xy(), self._time_abs())
+            except Exception:  # noqa: BLE001
+                return None
+
+        def humidity() -> str:
+            lw = _local_sample()
+            return _fmt(getattr(lw, "humidity", None)) if lw else "?"
+
+        def wetness() -> str:
+            lw = _local_sample()
+            return _fmt(getattr(lw, "wetness", None)) if lw else "?"
+
+        def _nearest():
+            """(cell, dist_m, bearing_deg, eta_s) for the nearest active cell."""
+            try:
+                cells = list(w.cells)
+                if not cells:
+                    return None
+                t = self._time_abs()
+                px, py = self._camera_xy()
+                import numpy as _np
+                cell = cells[0]                       # already nearest-first
+                c = cell.center(t, w.synoptic)
+                dx, dy = float(c[0]) - px, float(c[1]) - py
+                dist = float(_np.hypot(dx, dy))
+                bearing = (math.degrees(math.atan2(dx, dy))) % 360.0  # 0=+Y(N)
+                eta = float(w.cell_eta_s(cell, t, (px, py)))
+                return cell, dist, bearing, eta
+            except Exception:  # noqa: BLE001
+                return None
+
+        def near_kind() -> str:
+            n = _nearest()
+            return getattr(n[0].kind, "value", "?") if n else "(none)"
+
+        def near_dist() -> str:
+            n = _nearest()
+            return f"{n[1]:.0f} m" if n else "-"
+
+        def near_bearing() -> str:
+            n = _nearest()
+            return f"{n[2]:.0f} deg" if n else "-"
+
+        def near_eta() -> str:
+            n = _nearest()
+            if not n:
+                return "-"
+            eta = n[3]
+            if not math.isfinite(eta):
+                return "receding"
+            return f"{eta / 60.0:.1f} min"
+
+        sections = [
+            Section("Local", [
+                Field("class", FieldKind.LABEL, local_class),
+                Field("humidity", FieldKind.LABEL, humidity),
+                Field("wetness", FieldKind.LABEL, wetness),
+            ]),
+            Section("Nearest cell", [
+                Field("kind", FieldKind.LABEL, near_kind),
+                Field("distance", FieldKind.LABEL, near_dist),
+                Field("bearing", FieldKind.LABEL, near_bearing),
+                Field("ETA", FieldKind.LABEL, near_eta),
+            ]),
+        ]
+        buttons = [
+            Button("Summon Rainstorm",
+                   lambda: self._summon("summon_rainstorm")),
+            Button("Summon Thunderstorm",
+                   lambda: self._summon("summon_thunderstorm")),
+            Button("Summon Fog Bank",
+                   lambda: self._summon("summon_fog_bank")),
+            Button("Clear Skies", self._clear_skies),
+        ]
+        return sections, buttons
+
+    def _summon(self, method_name: str) -> None:
+        """Call a WeatherSystem summon wrapper aimed at the camera."""
+        w = self._weather
+        if w is None:
+            return
+        try:
+            getattr(w, method_name)(
+                time_abs=self._time_abs(), player_pos=self._camera_xy()
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _clear_skies(self) -> None:
+        """Clear summoned cells + suppress the current natural weather."""
+        try:
+            self._weather.clear_all()
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _summon_cell_at_camera(self) -> None:
+        """Debug key (K): stamp a synthetic thunderstorm right at the camera."""
+        w = self._weather
+        if w is None:
+            return
+        try:
+            from fire_engine.weather import CellKind
+            w.summon_cell(CellKind.THUNDERSTORM, time_abs=self._time_abs(),
+                          player_pos=self._camera_xy(), upwind_m=0.0)
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _fire_lightning_at_crosshair(self) -> None:
+        """
+        Debug key (L): publish a :class:`LightningStrikeEvent` at the crosshair.
+
+        Resolves the world point under the camera crosshair (terrain raycast,
+        falling back to a point 60 m ahead) and publishes the event on the bus
+        per the M7 contract.  The import resolves at boot once M7's event is
+        merged into ``core/event_bus`` — this file is excluded from the headless
+        suite, so it never needs the event to exist at test time.
+        """
+        bus = getattr(self._app, "_event_bus", None) or getattr(
+            self._app, "event_bus", None)
+        if bus is None:
+            return
+        try:
+            from fire_engine.core.event_bus import LightningStrikeEvent
+        except Exception:  # noqa: BLE001 — M7 not merged into this worktree yet
+            return
+
+        cam_tf = self._app.camera_go.transform
+        ground = cam_tf.position + cam_tf.forward * 60.0
+        ray = self._cursor_ray()
+        if ray is not None:
+            hit_pt = self._raycast_ground(*ray)
+            if hit_pt is not None:
+                ground = hit_pt
+        pos = (float(ground.x), float(ground.y), float(cam_tf.position.z))
+        ground_pos = (float(ground.x), float(ground.y), float(ground.z))
+        try:
+            ev = LightningStrikeEvent(
+                pos=pos, ground_pos=ground_pos,
+                seed=int(self._time_abs()) & 0x7FFFFFFF,
+                time_abs=self._time_abs(), cell_id=-1, intensity=1.0,
+            )
+            # Publish immediately if available, else defer.
+            publish = getattr(bus, "publish", None) or getattr(
+                bus, "publish_deferred", None)
+            if publish is not None:
+                publish(ev)
+        except Exception:  # noqa: BLE001 — defensive: contract may shift
+            pass
+
+    def _raycast_ground(self, origin, direction):
+        """World point where a ray hits terrain, or ``None`` (voxel raycast)."""
+        cm = getattr(self._app, "chunk_manager", None)
+        if cm is None:
+            return None
+        hit = raycast_voxel(origin, direction, cm.get_or_create,
+                            max_distance_m=_TERRAIN_RAY_MAX_M)
+        if hit is None:
+            return None
+        return getattr(hit, "world_point", None) or getattr(hit, "point", None)
+
+    def _toggle_rain_cover_overlay(self) -> None:
+        """
+        Debug key (J): toggle a translucent quad visualising the rain-cover
+        window (``RainCoverField`` — where rain is blocked by roofs/overhangs).
+
+        Draws a flat card spanning the cover field's footprint at the field
+        origin; a second press removes it.  Best-effort: no-op if the rain
+        component / cover field is not wired in.
+        """
+        if self._rain_cover_np is not None:
+            self._rain_cover_np.remove_node()
+            self._rain_cover_np = None
+            return
+        cover = self._rain_cover_field()
+        if cover is None:
+            return
+        try:
+            from panda3d.core import CardMaker
+            ox, oy = cover.origin_m
+            span = float(cover.cells) * float(cover.cell_m)
+            cm = CardMaker("rain_cover_overlay")
+            cm.set_frame(0.0, span, 0.0, span)
+            node = self._base.render.attach_new_node(cm.generate())
+            node.set_pos(float(ox), float(oy), 0.05)   # just above ground
+            node.set_p(-90)                            # lay flat (XY plane)
+            node.set_transparency(True)
+            node.set_color(0.2, 0.55, 1.0, 0.28)
+            node.set_light_off()
+            node.set_two_sided(True)
+            self._rain_cover_np = node
+        except Exception:  # noqa: BLE001
+            self._rain_cover_np = None
+
+    def _rain_cover_field(self):
+        """Locate the headless ``RainCoverField`` owned by the rain component."""
+        rain_go = getattr(self._app, "rain_go", None)
+        if rain_go is None:
+            return None
+        try:
+            from fire_engine.world.rain_renderer import RainRendererComponent
+            comp = rain_go.get_component(RainRendererComponent)
+            return getattr(comp, "_cover", None) if comp is not None else None
+        except Exception:  # noqa: BLE001
+            return None
 
     # ------------------------------------------------------------------
     # Enable / toggle

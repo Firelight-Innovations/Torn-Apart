@@ -76,6 +76,11 @@ from fire_engine.wind import GustFront
 field.add_modifier(GustFront(("storm", 1), direction=(1, 0), speed=14.0,
                              strength=8.0, width_m=24.0))
 ```
+From M8 the **weather** system is the real driver of this seam: the world layer
+calls `weather.attach_wind_field(field)` once, and `WeatherSystem.update()` then
+registers/removes a `GustFront` per nearby storm cell automatically (see
+`docs/systems/weather.md` → *M8 gust-front coupling*). `wind/` still never
+imports `weather/` — the dependency is one-way (weather → wind modifier seam).
 
 ## Gotchas
 - **Committed-origin discipline (WP3):** the GPU's `u_wind_origin` must be refreshed only together with a texture upload — never on a bare recenter — or the texels and origin disagree for a frame. (Mirror `lighting/gpu.py::_commit_assembly_result`.)

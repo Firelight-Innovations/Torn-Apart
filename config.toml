@@ -28,10 +28,10 @@ ground_texels_per_m = 16.0    # virtual texels/m for the GPU shader's non-repeat
 lighting_backend = "gpu"       # "gpu" = volumetric radiance cascades (GLSL compute); "cpu" = legacy baked vertex sunlight
 light_c0_cells = 96            # cascade-0 texels per axis (96 x 0.5 m = 48 m box around the camera)
 light_c0_cell_m = 0.5          # cascade-0 cell edge (meters) — one terrain voxel
-light_c1_cells = 96            # cascade-1 texels per axis (96 x 2.0 m = 192 m box, covers view distance)
-light_c1_cell_m = 2.0          # cascade-1 cell edge (meters)
-light_c2_cells = 64            # cascade-2 texels per axis (64 x 8.0 m = 512 m box) — coarse FAR cascade
-light_c2_cell_m = 8.0          # cascade-2 cell edge (meters); keeps distant terrain lit (low-res shadows + GI)
+light_c1_cells = 96            # cascade-1 texels per axis (96 x 1.0 m = 96 m box, mid-field detail)
+light_c1_cell_m = 1.0          # cascade-1 cell edge (meters) — halved from 2.0 for finer mid-range shadows (zero extra VRAM)
+light_c2_cells = 64            # cascade-2 texels per axis (64 x 4.0 m = 256 m box) — coarse FAR cascade, covers view distance
+light_c2_cell_m = 4.0          # cascade-2 cell edge (meters) — halved from 8.0; keeps distant terrain lit (finer shadows + GI)
 light_quant_m = 0.0625         # shading sample quantisation (meters) → 8x8x8 light pixels per voxel
 light_gi_rays = 16             # ray-marched GI: sphere directions gathered per cell
 light_gi_steps = 24            # max one-cell steps per GI ray (reach = steps x cell size)

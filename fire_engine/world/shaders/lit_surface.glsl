@@ -123,9 +123,11 @@ void sampleCascadeAt(sampler3D rad, sampler3D vs, sampler3D gm, vec3 uv,
 // second time per fragment with a different world point).
 //
 // Fade bands (fraction of half-extent): c0 0.14, c1 0.12, c2 0.10.  At
-// cell sizes 0.5/2/8 m and box half-extents 24/96/256 m these are ~3.4 m /
-// ~11.5 m / ~25.6 m wide — each comfortably wider than the next-coarser
-// cascade's cell so the blend never reveals that tier's texel grid.
+// cell sizes 0.5/1/4 m and box half-extents 24/48/128 m these are ~3.4 m /
+// ~5.8 m / ~12.8 m wide — each comfortably wider than the next-coarser
+// cascade's cell so the blend never reveals that tier's texel grid.  (The
+// width:next-cell ratio is invariant under uniform cell-size scaling, so the
+// fractions hold whatever the cascade cell sizes are.)
 void sampleCascades(vec3 wp, out vec3 radiance, out vec3 vis, out float occ) {
     vec3 r0, v0, r1, v1, r2, v2;
     float o0, o1, o2;

@@ -257,16 +257,16 @@ class Config:
                                    0.5 m cells).
     light_c0_cell_m      : float — cascade-0 cell edge in meters (0.5 = one
                                    terrain voxel).
-    light_c1_cells       : int   — cascade-1 texels per axis (96 → 192 m box).
-    light_c1_cell_m      : float — cascade-1 cell edge in meters (2.0).
-    light_c2_cells       : int   — cascade-2 texels per axis (64 → 512 m box):
+    light_c1_cells       : int   — cascade-1 texels per axis (96 → 96 m box).
+    light_c1_cell_m      : float — cascade-1 cell edge in meters (1.0).
+    light_c2_cells       : int   — cascade-2 texels per axis (64 → 256 m box):
                                    the coarse FAR cascade that keeps distant
                                    terrain (and the GI test room) lit with
                                    low-resolution shadows + GI once it leaves
                                    cascade 1, instead of falling back to flat
                                    sky ambient.  Assembled off-thread like the
                                    others.
-    light_c2_cell_m      : float — cascade-2 cell edge in meters (8.0).
+    light_c2_cell_m      : float — cascade-2 cell edge in meters (4.0).
     light_quant_m        : float — shading sample-grid quantisation in meters
                                    (0.0625 → 8×8×8 visible light pixels per
                                    0.5 m voxel — the pixelated-light look).
@@ -612,9 +612,9 @@ class Config:
     light_c0_cells:        int   = 96
     light_c0_cell_m:       float = 0.5
     light_c1_cells:        int   = 96
-    light_c1_cell_m:       float = 2.0
+    light_c1_cell_m:       float = 1.0
     light_c2_cells:        int   = 64
-    light_c2_cell_m:       float = 8.0
+    light_c2_cell_m:       float = 4.0
     light_quant_m:         float = 0.0625
     light_gi_rays:         int   = 16
     light_gi_steps:        int   = 24

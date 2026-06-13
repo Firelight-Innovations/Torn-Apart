@@ -675,6 +675,36 @@ class SkyRendererComponent(Component):
         clouds.set_shader_input("u_weather_map_enabled", 0)
         clouds.set_shader_input("u_weather_ambient", LVecBase2f(0.0, 0.0))
         clouds.set_shader_input("u_virga_enabled", 0)
+
+        # M9 WMO cloud genera: layered high/mid/low altitude bands derived
+        # in-shader from the weather map (no new texture data).  All static —
+        # config tunables pushed once here; the band selection is per-step in
+        # the shader from the existing coverage/density/precip channels.  Gated
+        # by gfx_cloud_genera (requires gfx_weather_map; off ⇒ single slab, the
+        # pre-M9 look — the shader's u_cloud_genera_enabled==0 path).
+        genera_on = (bool(getattr(cfg, "gfx_cloud_genera", False))
+                     and bool(getattr(cfg, "gfx_weather_map", False)))
+        clouds.set_shader_input("u_cloud_genera_enabled", 1 if genera_on else 0)
+        clouds.set_shader_input("u_genera_high_alt",
+                                float(getattr(cfg, "cloud_genera_high_alt_m", 1400.0)))
+        clouds.set_shader_input("u_genera_high_thick",
+                                float(getattr(cfg, "cloud_genera_high_thick_m", 120.0)))
+        clouds.set_shader_input("u_genera_mid_alt",
+                                float(getattr(cfg, "cloud_genera_mid_alt_m", 850.0)))
+        clouds.set_shader_input("u_genera_mid_thick",
+                                float(getattr(cfg, "cloud_genera_mid_thick_m", 220.0)))
+        clouds.set_shader_input("u_genera_high_floor",
+                                float(getattr(cfg, "cloud_genera_high_cov_floor", 0.06)))
+        clouds.set_shader_input("u_genera_high_cov_w",
+                                float(getattr(cfg, "cloud_genera_high_cov_weight", 0.35)))
+        clouds.set_shader_input("u_genera_high_density",
+                                float(getattr(cfg, "cloud_genera_high_density", 0.30)))
+        clouds.set_shader_input("u_genera_mid_cov_w",
+                                float(getattr(cfg, "cloud_genera_mid_cov_weight", 0.60)))
+        clouds.set_shader_input("u_genera_high_detail",
+                                float(getattr(cfg, "cloud_genera_high_detail_scale", 0.45)))
+        clouds.set_shader_input("u_genera_mid_detail",
+                                float(getattr(cfg, "cloud_genera_mid_detail_scale", 0.85)))
         self._cloud_np = clouds
 
     # ------------------------------------------------------------------

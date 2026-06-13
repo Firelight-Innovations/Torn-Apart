@@ -18,6 +18,16 @@ from fire_engine.weather.cells import (
     regime_ambient,
 )
 from fire_engine.weather.classify import WeatherType, classify
+from fire_engine.weather.clouds import (
+    BAND_HIGH,
+    BAND_LOW,
+    BAND_MID,
+    CloudBand,
+    CloudGenus,
+    CloudLayers,
+    classify_genus,
+    cloud_layers,
+)
 from fire_engine.weather.humidity import (
     condense_fraction,
     emergent_fog,
@@ -40,6 +50,14 @@ __all__ = [
     "regime_ambient",
     "WeatherType",
     "classify",
+    "CloudGenus",
+    "CloudBand",
+    "CloudLayers",
+    "classify_genus",
+    "cloud_layers",
+    "BAND_HIGH",
+    "BAND_MID",
+    "BAND_LOW",
     "humidity_base",
     "relative_humidity",
     "saturation_humidity",

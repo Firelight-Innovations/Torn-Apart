@@ -33,6 +33,24 @@
 // u_virga_enabled == 1, adds gray VIRGA shafts: density hanging below the cloud
 // base that erodes downward, lit as a desaturated gray so distant rain reads as
 // the classic shaft under a storm.
+//
+// M9 — WMO CLOUD GENERA (layered altitude bands)
+// ----------------------------------------------
+// When u_cloud_genera_enabled == 1 (requires the weather map) the single cloud
+// slab becomes THREE altitude bands, each with a genus-appropriate look, all
+// derived from the SAME weather-map channels (coverage/density/precip) — NO new
+// texture data, so the M3/M4 weather-map 4-channel packing contract is
+// untouched.  The bands mirror weather/clouds.py::cloud_layers exactly:
+//   * HIGH band (u_genera_high_alt..+thick): thin wispy CIRRUS / CIRROSTRATUS —
+//     low density (capped by u_genera_high_density), stretched smooth detail
+//     (u_genera_high_detail), a residual cover floor (u_genera_high_floor) so
+//     fair-weather cirrus is present even under high pressure.
+//   * MID band: ALTOCUMULUS / ALTOSTRATUS — fades in with moderate+ coverage.
+//   * LOW band: the existing CUMULUS / STRATUS / CUMULONIMBUS deck (precip
+//     lowers/darkens the base + drives virga, exactly as M4) — the storm tower
+//     deepens with precip.
+// With u_cloud_genera_enabled == 0 the shader marches the single low slab with
+// the original sampleDensity path → the pre-M9 look is bit-for-bit preserved.
 uniform vec3  u_cam_pos;
 uniform vec3  u_sun_dir;
 uniform vec3  u_moon_dir;
@@ -66,6 +84,21 @@ uniform float u_wmap_cells;            // texels per axis
 uniform int   u_weather_map_enabled;   // 0 ⇒ use flat u_coverage/u_cloud_density
 uniform vec2  u_weather_ambient;       // (coverage, density) fallback beyond edge
 uniform int   u_virga_enabled;         // 0 ⇒ no virga shafts (precip still darkens)
+
+// --- M9 WMO cloud genera (layered altitude bands; mirrors weather/clouds.py) ---
+uniform int   u_cloud_genera_enabled;  // 0 ⇒ single low slab (pre-M9 look)
+uniform float u_genera_high_alt;       // high (cirrus) band base altitude (m)
+uniform float u_genera_high_thick;     // high band thickness (m)
+uniform float u_genera_mid_alt;        // mid (alto-) band base altitude (m)
+uniform float u_genera_mid_thick;      // mid band thickness (m)
+// (low band base/thickness reuse u_altitude / u_thickness from the M4 slab.)
+uniform float u_genera_high_floor;     // residual high-band cover (fair-weather cirrus)
+uniform float u_genera_high_cov_w;     // extra high-band cover per unit sampled coverage
+uniform float u_genera_high_density;   // cap on high-band opacity (ice cloud is thin)
+uniform float u_genera_mid_cov_w;      // mid-band cover per unit sampled coverage
+uniform float u_genera_high_detail;    // high band detail-freq scale (stretched/smooth)
+uniform float u_genera_mid_detail;     // mid band detail-freq scale
+// (the LOW band keeps the original u_detail_scale — billowy cumulus already.)
 
 uniform sampler3D u_shape;
 uniform sampler3D u_detail;
@@ -121,10 +154,12 @@ vec3 sampleWeather(vec2 worldXY) {
     return vec3(cov, den, precip);
 }
 
-// Cloud density at world point p (0 = clear, →1 = dense).  *precip* (0..1) is
-// the local rain strength returned alongside — it lowers + darkens the storm
-// base and (out-param) drives the virga shaft below the slab.
-float sampleDensity(vec3 p, out float precipOut) {
+// LOW band (and the single-slab pre-M9 path): the CUMULUS / STRATUS /
+// CUMULONIMBUS deck.  Unchanged from M4 — precip lowers/darkens the base + drives
+// the virga shaft below.  *precip* (0..1) is returned alongside (it darkens the
+// lit colour in main()).  Marched between u_altitude and u_altitude+u_thickness
+// (extended down for virga).
+float lowBandDensity(vec3 p, out float precipOut) {
     vec3 wx = sampleWeather(p.xy);          // (coverage, density, precip), spatial
     float coverage = wx.x;
     float density  = wx.y;
@@ -176,6 +211,68 @@ float sampleDensity(vec3 p, out float precipOut) {
     return d * density;
 }
 
+// A thin upper band (MID alto- or HIGH cirrus) at [bandAlt, bandAlt+bandThick].
+// Mirrors weather/clouds.py: the band's coverage is a weighted fraction of the
+// sampled coverage (plus a floor for the always-present fair-weather cirrus),
+// its density is capped (ice cloud / mid sheets are thinner than the low deck),
+// and its detail frequency is scaled — high band stretched+smooth (cirrus
+// streaks), mid band moderately lumpy.  No precip / virga up here.  The noise is
+// sampled with an anisotropic (stretched in XY) lookup so the band reads as
+// flat sheets / streaks rather than vertical puffs.
+float upperBandDensity(vec3 p, float bandAlt, float bandThick,
+                       float covWeight, float covFloor, float densCap,
+                       float detailScale) {
+    vec3 wx = sampleWeather(p.xy);
+    float coverage = clamp(covFloor + covWeight * wx.x, 0.0, 1.0);
+    if (coverage <= 0.0) return 0.0;
+
+    float hf = clamp((p.z - bandAlt) / bandThick, 0.0, 1.0);
+    if (hf <= 0.0 || hf >= 1.0) return 0.0;
+    // Soft top+bottom feather → a flat sheet (no rounded cumulus profile).
+    float prof = smoothstep(0.0, 0.25, hf) * (1.0 - smoothstep(0.6, 1.0, hf));
+    if (prof <= 0.0) return 0.0;
+
+    // Stretched XY lookup (flatten Z) so the band is layered, not puffy; the
+    // detailScale spreads the streaks (low scale → long smooth cirrus tails).
+    vec3 wp = p + vec3(u_wind, 0.0);
+    vec3 q = vec3(wp.xy * detailScale, wp.z * 0.25);
+    vec4 sh = texture(u_shape, q * u_shape_scale);
+    float base = sh.r * prof;
+
+    float thresh = mix(0.85, 0.40, coverage);     // overcast fills, fair leaves gaps
+    float d = clamp(remap(base, thresh, min(thresh + 0.30, 1.0), 0.0, 1.0),
+                    0.0, 1.0);
+    if (d > 0.0) {
+        float fbm = sh.g * 0.5 + sh.b * 0.3 + sh.a * 0.2;
+        d = clamp(d - fbm * u_detail_strength * (1.0 - d), 0.0, 1.0);
+    }
+    return d * densCap;
+}
+
+// Cloud density at world point p across ALL active bands (0 = clear, →1 dense).
+// With genera off this is exactly lowBandDensity (the single slab) → pre-M9
+// look unchanged.  With genera on, dispatch by altitude into the low / mid /
+// high band (the bands don't overlap in Z, so at most one contributes per p).
+float sampleDensity(vec3 p, out float precipOut) {
+    precipOut = 0.0;
+    if (u_cloud_genera_enabled == 0)
+        return lowBandDensity(p, precipOut);
+
+    // Low band (incl. its virga reach below u_altitude): keep the full deck +
+    // precip/virga behaviour by deferring to lowBandDensity below its top.
+    if (p.z < u_altitude + u_thickness)
+        return lowBandDensity(p, precipOut);
+    // Mid band.
+    if (p.z < u_genera_mid_alt + u_genera_mid_thick)
+        return upperBandDensity(p, u_genera_mid_alt, u_genera_mid_thick,
+                                u_genera_mid_cov_w, 0.0, 0.65,
+                                u_genera_mid_detail);
+    // High band (cirrus): thin, stretched, with a fair-weather floor.
+    return upperBandDensity(p, u_genera_high_alt, u_genera_high_thick,
+                            u_genera_high_cov_w, u_genera_high_floor,
+                            u_genera_high_density, u_genera_high_detail);
+}
+
 // Transmittance from p toward the sun (self-shadowing) via a short cone march.
 float lightMarch(vec3 p) {
     float dsum = 0.0;
@@ -196,7 +293,12 @@ void main() {
     float virgaDepth = (u_virga_enabled != 0 && u_weather_map_enabled != 0)
                        ? 0.7 * u_thickness : 0.0;
     float A = u_altitude - virgaDepth;
+    // With genera on, the slab top rises to the top of the HIGH (cirrus) band so
+    // the mid + high bands are inside the marched range.  With genera off
+    // B == u_altitude+u_thickness exactly → identical bounds to pre-M9.
     float B = u_altitude + u_thickness;
+    if (u_cloud_genera_enabled != 0)
+        B = max(B, u_genera_high_alt + u_genera_high_thick);
 
     // Ray vs horizontal slab.
     float t0, t1;
@@ -215,10 +317,14 @@ void main() {
 
     // Scale the sample count with the (virga-)extended slab depth so dt — and
     // thus cloud-body sampling density — stays ~constant when virga widens the
-    // marched range.  Capped at 1.7× u_steps to bound the extra cost; with
-    // virga off thickFrac == 1 → exactly u_steps (pre-M4).
-    float thickFrac = (u_thickness + virgaDepth) / u_thickness;     // 1 .. 1.7
-    int nSteps = int(min(float(u_steps) * thickFrac, float(u_steps) * 1.7));
+    // marched range.  Capped to bound the extra cost; with virga AND genera off
+    // thickFrac == 1 → exactly u_steps (pre-M4).  When genera widens the range to
+    // the high band the cap rises to 2.2× (the empty gaps between bands are
+    // skipped cheaply by the dens<0.001 guard, so this isn't 2.2× the real work).
+    float marchDepth = B - A;
+    float thickFrac = marchDepth / u_thickness;
+    float capFrac = (u_cloud_genera_enabled != 0) ? 2.2 : 1.7;
+    int nSteps = int(min(float(u_steps) * thickFrac, float(u_steps) * capFrac));
     float steps = float(nSteps);
     float dt = (t1 - t0) / steps;
     float jitter = hash12(gl_FragCoord.xy + u_time);

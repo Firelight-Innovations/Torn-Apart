@@ -70,6 +70,7 @@ GRAPHICS_PRESETS: dict[str, dict] = {
         "gfx_clouds": False,
         "gfx_weather_map": False,
         "gfx_cloud_virga": False,
+        "gfx_cloud_genera": False,
         "gfx_god_rays": False,
         "gfx_foliage_shadow_refine": False,
         "gfx_rain_mode": "off",
@@ -90,6 +91,7 @@ GRAPHICS_PRESETS: dict[str, dict] = {
         "gfx_cloud_resolution_scale": 0.5,
         "gfx_weather_map": True,
         "gfx_cloud_virga": False,
+        "gfx_cloud_genera": False,
         "gfx_god_rays": False,
         "gfx_god_ray_samples": 16,
         "gfx_foliage_shadow_refine": False,
@@ -111,6 +113,7 @@ GRAPHICS_PRESETS: dict[str, dict] = {
         "gfx_cloud_resolution_scale": 1.0,
         "gfx_weather_map": True,
         "gfx_cloud_virga": True,
+        "gfx_cloud_genera": True,
         "gfx_god_rays": True,
         "gfx_god_ray_samples": 24,
         "gfx_foliage_shadow_refine": True,
@@ -132,6 +135,7 @@ GRAPHICS_PRESETS: dict[str, dict] = {
         "gfx_cloud_resolution_scale": 1.0,
         "gfx_weather_map": True,
         "gfx_cloud_virga": True,
+        "gfx_cloud_genera": True,
         "gfx_god_rays": True,
         "gfx_god_ray_samples": 32,
         "gfx_foliage_shadow_refine": True,
@@ -492,6 +496,13 @@ class Config:
                                     channel).  Requires ``gfx_weather_map``;
                                     off ⇒ storm bases still lower/darken but no
                                     virga streaks.
+    gfx_cloud_genera      : bool  — render layered WMO cloud genera (M9): a high
+                                    cirrus band, a mid alto- band and the low
+                                    cumulus/stratus/cumulonimbus deck, each with
+                                    a genus-appropriate look, derived in-shader
+                                    from the weather map (no extra texture data).
+                                    Requires ``gfx_weather_map``; off ⇒ the
+                                    single cloud slab (the pre-M9 look).
     gfx_god_rays          : bool  — screen-space crepuscular rays through clouds.
     gfx_god_ray_samples   : int   — radial sample count for god rays.
     gfx_rain_mode         : str   — volumetric rain mode: "off" (no rain),
@@ -703,6 +714,27 @@ class Config:
     weather_fog_condense_band:     float = 0.10    # humidity overshoot over saturation for full condensation
     weather_fog_wind_full_ms:      float = 1.0     # full fog at/below this wind speed (m/s)
     weather_fog_wind_none_ms:      float = 3.0     # no emergent fog at/above this wind speed (m/s)
+    # WMO cloud genera (M9): the sampled weather (coverage/density/precip +
+    # regime) is mapped to layered altitude bands — high cirrus, mid alto-,
+    # low strato/cumulus/cumulonimbus — by weather/clouds.py::cloud_layers
+    # (headless) and mirrored in-shader by cloud_volumetric.frag (no new
+    # texture data; the same coverage/density/precip channels drive the bands).
+    # base_altitude / thickness in meters (world Z); cov_weight/density 0–1;
+    # detail_scale is a multiplier on the renderer's base noise frequency
+    # (cirrus stretched+smooth → low; cumulus billowy → high).
+    cloud_genera_high_alt_m:       float = 1400.0  # high (cirrus) band base altitude (m)
+    cloud_genera_high_thick_m:     float = 120.0   # high band thickness (m; thin veil)
+    cloud_genera_mid_alt_m:        float = 850.0   # mid (alto-) band base altitude (m)
+    cloud_genera_mid_thick_m:      float = 220.0   # mid band thickness (m)
+    cloud_genera_low_alt_m:        float = 500.0   # low (cumulus/stratus) band base altitude (m)
+    cloud_genera_low_thick_m:      float = 400.0   # low band thickness (m; storms deepen it)
+    cloud_genera_high_cov_floor:   float = 0.06    # cirrus present even in fair weather (residual floor)
+    cloud_genera_high_cov_weight:  float = 0.35    # extra high-band coverage per unit sampled coverage
+    cloud_genera_high_density:     float = 0.30    # ice cloud is thin: cap on high-band opacity
+    cloud_genera_mid_cov_weight:   float = 0.60    # mid-band coverage per unit sampled coverage
+    cloud_genera_high_detail_scale: float = 0.45   # high band: stretched, smooth streaks
+    cloud_genera_mid_detail_scale:  float = 0.85   # mid band: moderate lumpiness
+    cloud_genera_low_detail_scale:  float = 1.30   # low band: billowy cumulus detail
     # --- Graphics quality ([graphics] table; defaults == "high" preset) ---
     gfx_preset:                 str   = "high"
     gfx_post_process:           bool  = True
@@ -722,6 +754,7 @@ class Config:
     gfx_cloud_max_dist_m:       float = 6000.0
     gfx_weather_map:            bool  = True
     gfx_cloud_virga:            bool  = True
+    gfx_cloud_genera:           bool  = True   # M9: layered WMO genera bands (high cirrus / mid alto / low cumulus+cb). Off ⇒ single-slab clouds (pre-M9 look). Requires gfx_weather_map.
     gfx_god_rays:               bool  = True
     gfx_god_ray_samples:        int   = 32
     gfx_foliage_shadow_refine:  bool  = True

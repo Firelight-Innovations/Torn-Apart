@@ -1,5 +1,5 @@
 # weather — System Doc
-keywords: weather, synoptic, wind direction, prevailing wind, storm, storm cell, front, air mass, displacement, D(t), drift, steering current, volumetric weather, regime, shower, thunderstorm, cloud bank, fog bank, classify, WeatherType, LocalWeather, sample_local, force_weather, humidity, relative_humidity, saturation_humidity, emergent fog, condensation, condense, ground fog, rain_recent_at, wetness_at, dew, mist
+keywords: weather, synoptic, wind direction, prevailing wind, storm, storm cell, front, air mass, displacement, D(t), drift, steering current, volumetric weather, regime, shower, thunderstorm, cloud bank, fog bank, classify, WeatherType, LocalWeather, sample_local, force_weather, humidity, relative_humidity, saturation_humidity, emergent fog, condensation, condense, ground fog, rain_recent_at, wetness_at, dew, mist, cloud genera, WMO genera, CloudGenus, cloud_layers, classify_genus, CloudLayers, CloudBand, cirrus, cirrostratus, altocumulus, altostratus, stratus, stratocumulus, cumulus, cumulonimbus, nimbostratus, cloud band, cloud altitude band, anvil, cirrus residual
 
 > Status: under construction (volumetric-weather branch). M1 (synoptic flow),
 > M2 (storm cells + local sampling + classify), M3 (weather map + ground
@@ -35,6 +35,10 @@ simulate local gusts (that's `wind/`), or own `SkyState` (that's `sky/`).
 | `humidity.py` (M5) | Emergent-fog formulas, all vectorised pure fns of resolved `Config`: `humidity_base(day, cfg)` (seeded per-day calm baseline); `relative_humidity(rain_recent, wetness, h_base, cfg)`; `saturation_humidity(T_c, cfg)` (rises with T); `condense_fraction(humidity, h_sat, cfg)`; `wind_gate(wind_speed, cfg)`; `emergent_fog(humidity, T_c, wind_speed, cfg) → (N,)` fog coefficient (1/m). |
 | `WeatherMap(config)` (M3) | Square `(cells, cells, 4)` float32 raster cache of the four spatial channels around a moving center (`weather_map_cells` × `weather_map_cell_m`). `rasterize(system, center_xy, t_abs) → (N,N,4)`; `texel_centers(center_xy) → (N*N, 2)`; `.cells`/`.cell_m`/`.span_m`. Layout `out[row=Y, col=X, channel]`. Pure derivation of the sim (never saved). |
 | `MAP_CHANNELS` | `("coverage", "density", "precip", "fog")` — the raster's last-axis channel order. |
+| `CloudGenus` (M9) | The 8 WMO genera the appearance model expresses: `CIRRUS`/`CIRROSTRATUS` (high), `ALTOCUMULUS`/`ALTOSTRATUS` (mid), `STRATOCUMULUS`/`STRATUS`/`CUMULUS`/`CUMULONIMBUS` (low). `str` Enum (`.value` = `"cirrus"`…`"cumulonimbus"`). NIMBOSTRATUS (low thick rain layer) is folded into STRATUS at high precip. |
+| `CloudBand` (M9) | `HIGH`/`MID`/`LOW` `int` Enum (0/1/2) — the altitude band a genus renders in; also the GPU band order. `BAND_HIGH`/`BAND_MID`/`BAND_LOW` are the bare-int aliases. |
+| `classify_genus(coverage, density, precip, regime) → (high, mid, low)` (M9) | Dominant genus per band — pure, vectorised fn of the sampled fields + the day `Regime`. Scalar in → a 3-tuple of `CloudGenus`; array in → three object ndarrays. CLOUD_BANK→stratus family, SHOWER→STRATUS rain layer, THUNDERSTORM(precip)→CUMULONIMBUS, HIGH_PRESSURE residual→CIRRUS, FRONTAL overcast→cirrostratus/altostratus/stratocumulus stack. |
+| `cloud_layers(coverage, density, precip, regime, config) → CloudLayers` (M9) | Continuous per-band layer params (the renderer's drive): `CloudLayers` bundles `genus_high/mid/low` + length-3 (high,mid,low) ndarrays `base_altitude_m` (strictly decreasing high→low), `thickness_m` (storms deepen the low slab), `coverage`, `density` (cirrus always thin), `detail_scale`. Pure, deterministic, continuous in the inputs (no jumps); zero save bytes. |
 
 ## Imports Allowed
 `core` (config, rng), numpy, stdlib.  From M8: `wind` (modifier seam only —
@@ -81,6 +85,20 @@ Subscribed: none.
   baseline + FOG_BANK fog and capped at `weather_fog_max_density`. So a calm
   humid night after evening rain grows ground fog through the cool pre-dawn,
   which burns off as the warming air's `h_sat` climbs back over the humidity.
+- **WMO cloud genera** (M9): `cloud_layers` / `classify_genus` are a pure,
+  closed-form, **vectorised** map from the *already-sampled* fields
+  (coverage/density/precip + day `Regime`) onto layered altitude bands — so
+  they cost **zero save bytes** and are **identical between the weather-map
+  raster and a local sample** (same fields in → same layers out). The mapping
+  is a strong function of the regime/cell hint: CLOUD_BANK (cover, no precip) →
+  stratus/stratocumulus; SHOWER (moderate precip) → STRATUS rain layer
+  (nimbostratus role); THUNDERSTORM (high precip) → CUMULONIMBUS tower (deeper,
+  darker low slab); HIGH_PRESSURE residual cover → CIRRUS high (fair-weather
+  "mares' tails", always present via a small cover floor); FRONTAL overcast
+  stacks cirrostratus → altostratus → stratocumulus. **Band altitudes are
+  strictly ordered** (`base_altitude_m[HIGH] > [MID] > [LOW]`) and the high band
+  density is always capped low (`cloud_genera_high_density`) — ice cloud is
+  thin. All `cloud_genera_*` tunables live in `[weather]`/`Config`.
 - `rain_recent_at` is the same fixed-offset exponential quadrature as
   `wetness_at` but with a longer decay (`weather_humidity_recent_tau_s`, ~5 h):
   the air stays muggy for hours after a shower while the ground dries in ~1 h,
@@ -121,6 +139,15 @@ print(ws.current, lw.rain_intensity, [c.kind.value for c in ws.cells])
   meant for scalar/per-cell evaluation; the per-frame budget is scalar-only.
 - `force_weather` is a dev shim over the legacy global states; the real spatial
   summon API lands in M8.  Legacy (old-Markov) save deltas still load.
+- **M9 genera reach the GPU with NO new texture data.** `cloud_layers` is the
+  *canonical headless* mapping (CPU consumers / tests / future content), but the
+  cloud shader does **not** read a genus code — it re-derives the same three
+  altitude bands from the existing `coverage`/`density`/`precip` weather-map
+  channels plus the `cloud_genera_*` band uniforms. This was deliberate: packing
+  a genus into a spare sub-channel would touch the M3/M4 weather-map **4-channel
+  packing contract**, which is shared/locked. `MAP_CHANNELS` is unchanged
+  (`coverage, density, precip, fog`). If you ever *do* need genus on the GPU as
+  data, add a *separate* small lookup — never repurpose a weather-map channel.
 - **M4 GPU contract**: `WeatherMap.rasterize` output is packed by
   `fire_engine.sky.pack_weather_map` (fp16 BGRA, row-major — no transpose) and
   uploaded by `world/weather_renderer.py::WeatherMapComponent`.  The cloud

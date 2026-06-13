@@ -163,6 +163,23 @@ weather_fog_sat_slope_per_c = 0.011  # saturation humidity rise per °C above th
 weather_fog_condense_band = 0.10     # humidity overshoot over saturation for full condensation
 weather_fog_wind_full_ms = 1.0       # full fog at/below this wind speed (m/s)
 weather_fog_wind_none_ms = 3.0       # no emergent fog at/above this wind speed (m/s)
+# WMO cloud genera (M9): the sampled weather (coverage/density/precip + regime)
+# is mapped to layered altitude bands — high cirrus, mid alto-, low strato/
+# cumulus/cumulonimbus — by weather/clouds.py and mirrored in the cloud shader
+# (no new texture data). Altitudes/thicknesses in meters (world Z).
+cloud_genera_high_alt_m = 1400.0     # high (cirrus) band base altitude (m)
+cloud_genera_high_thick_m = 120.0    # high band thickness (m; thin veil)
+cloud_genera_mid_alt_m = 850.0       # mid (alto-) band base altitude (m)
+cloud_genera_mid_thick_m = 220.0     # mid band thickness (m)
+cloud_genera_low_alt_m = 500.0       # low (cumulus/stratus) band base altitude (m)
+cloud_genera_low_thick_m = 400.0     # low band thickness (m; storms deepen it)
+cloud_genera_high_cov_floor = 0.06   # cirrus present even in fair weather (residual floor)
+cloud_genera_high_cov_weight = 0.35  # extra high-band coverage per unit sampled coverage
+cloud_genera_high_density = 0.30     # ice cloud is thin: cap on high-band opacity
+cloud_genera_mid_cov_weight = 0.60   # mid-band coverage per unit sampled coverage
+cloud_genera_high_detail_scale = 0.45 # high band: stretched, smooth streaks
+cloud_genera_mid_detail_scale = 0.85  # mid band: moderate lumpiness
+cloud_genera_low_detail_scale = 1.30  # low band: billowy cumulus detail
 
 [sky]
 sky_cloud_altitude_m = 96.0    # cloud layer base altitude (world Z, meters)
@@ -192,6 +209,7 @@ preset = "high"
 # gfx_cloud_max_dist_m = 6000.0  # far raymarch distance for clouds (meters)
 # gfx_weather_map = true         # spatial weather-map texture → per-step cloud coverage/density/precip (M4; off ⇒ flat ambient, pre-M4 look)
 # gfx_cloud_virga = true         # gray rain shafts below storm bases (needs gfx_weather_map)
+# gfx_cloud_genera = true        # M9: layered WMO genera (high cirrus / mid alto / low cumulus+cb), derived in-shader from the weather map (needs gfx_weather_map; off ⇒ single slab, pre-M9 look)
 # gfx_god_rays = true            # crepuscular rays through clouds
 # gfx_god_ray_samples = 32       # radial god-ray samples
 # gfx_foliage_shadow_refine = true  # per-fragment shadow refinement on foliage

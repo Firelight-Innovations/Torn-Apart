@@ -9,6 +9,11 @@ keywords: save, load, delta, msgpack, zlib, Saveable, header, F5, F9, atomic, Sa
 > debug); unknown keys in the file are ignored — so editor saves load in the
 > game and vice versa. Only ONE registered system may claim a given save_key.
 > `python main.py --load PATH` loads a save/scene at boot and retargets F5/F9.
+> The `editor_scene` delta is just the object list; each object now carries a
+> `components` list (`{type, enabled, params}`) inside its dict — no save-format
+> bump needed (the layer stores the delta verbatim). Pre-component saves have no
+> `components` key and migrate forward on load via `SceneObject.from_dict`
+> (synthesises the kind's defaults), so old `.ta` files keep loading.
 
 > One doc per code package; filename matches the package exactly (`docs/systems/save.md` ↔ `fire_engine/save/`).
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import NotRequired, TypedDict
 
-PROTOCOL_VERSION = 5
+PROTOCOL_VERSION = 6
 DAEMON_VERSION = "0.1.0"
 
 # Binary framing: [u32 magic][u32 schema_id][u32 payload_id][payload], little-endian.
@@ -36,11 +36,15 @@ class Method:
     EDIT_UNDO = "edit.undo"
     EDIT_REDO = "edit.redo"
     SCENE_TREE = "scene.tree"
+    SCENE_CATALOG = "scene.catalog"
     SCENE_CREATE = "scene.create"
     SCENE_RENAME = "scene.rename"
     SCENE_REPARENT = "scene.reparent"
     SCENE_SET_TRANSFORM = "scene.set_transform"
     SCENE_DELETE = "scene.delete"
+    SCENE_ADD_COMPONENT = "scene.add_component"
+    SCENE_REMOVE_COMPONENT = "scene.remove_component"
+    SCENE_SET_COMPONENT = "scene.set_component"
 
 class Notification:
     LOG = "log"
@@ -172,6 +176,12 @@ class SceneTreeParams(TypedDict):
 class SceneTreeResult(TypedDict):
     objects: object
 
+class SceneCatalogParams(TypedDict):
+    pass
+
+class SceneCatalogResult(TypedDict):
+    types: object
+
 class SceneCreateParams(TypedDict):
     kind: str
     parent: NotRequired[int]
@@ -223,4 +233,30 @@ class SceneDeleteParams(TypedDict):
 class SceneDeleteResult(TypedDict):
     ok: bool
     removed: object
+
+class SceneAddComponentParams(TypedDict):
+    id: int
+    type: str
+
+class SceneAddComponentResult(TypedDict):
+    ok: bool
+    object: object
+
+class SceneRemoveComponentParams(TypedDict):
+    id: int
+    index: int
+
+class SceneRemoveComponentResult(TypedDict):
+    ok: bool
+    object: object
+
+class SceneSetComponentParams(TypedDict):
+    id: int
+    index: int
+    params: NotRequired[object]
+    enabled: NotRequired[bool]
+
+class SceneSetComponentResult(TypedDict):
+    ok: bool
+    object: object
 

@@ -139,6 +139,30 @@ async def _cmd_delete(c: EditorClient, args) -> object:
     return await c.request("scene.delete", {"id": args.id})
 
 
+async def _cmd_catalog(c: EditorClient, args) -> object:
+    return await c.request("scene.catalog", {})
+
+
+async def _cmd_add_component(c: EditorClient, args) -> object:
+    return await c.request("scene.add_component", {"id": args.id, "type": args.type})
+
+
+async def _cmd_remove_component(c: EditorClient, args) -> object:
+    return await c.request("scene.remove_component", {"id": args.id, "index": args.index})
+
+
+async def _cmd_set_component(c: EditorClient, args) -> object:
+    params: dict = {"id": args.id, "index": args.index}
+    if args.params is not None:
+        parsed = json.loads(args.params)
+        if not isinstance(parsed, dict):
+            raise SystemExit("set-component: --params must be a JSON object")
+        params["params"] = parsed
+    if args.enabled is not None:
+        params["enabled"] = args.enabled
+    return await c.request("scene.set_component", params)
+
+
 async def _cmd_raycast(c: EditorClient, args) -> object:
     params = {"ox": args.ox, "oy": args.oy, "oz": args.oz,
               "dx": args.dx, "dy": args.dy, "dz": args.dz}
@@ -203,6 +227,10 @@ _HANDLERS = {
     "reparent": _cmd_reparent,
     "set-transform": _cmd_set_transform,
     "delete": _cmd_delete,
+    "catalog": _cmd_catalog,
+    "add-component": _cmd_add_component,
+    "remove-component": _cmd_remove_component,
+    "set-component": _cmd_set_component,
     "raycast": _cmd_raycast,
     "brush": _cmd_brush,
     "undo": _cmd_undo,
@@ -330,6 +358,25 @@ def _build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("delete", help="delete an object (and its descendants)")
     s.add_argument("id", type=int)
+
+    sub.add_parser("catalog", help="dump the built-in component catalog")
+
+    s = sub.add_parser("add-component", help="attach a component to an object")
+    s.add_argument("id", type=int)
+    s.add_argument("type", help="component type (e.g. Mesh, Light, SpawnPoint)")
+
+    s = sub.add_parser("remove-component", help="remove a component by index")
+    s.add_argument("id", type=int)
+    s.add_argument("index", type=int)
+
+    s = sub.add_parser("set-component", help="edit a component's params and/or enabled")
+    s.add_argument("id", type=int)
+    s.add_argument("index", type=int)
+    s.add_argument("--params", help="JSON object of param overrides")
+    s.add_argument("--enabled", dest="enabled", action="store_true", default=None,
+                   help="enable the component")
+    s.add_argument("--disabled", dest="enabled", action="store_false",
+                   help="disable the component")
 
     s = sub.add_parser("raycast", help="raycast the terrain")
     for k in ("ox", "oy", "oz", "dx", "dy", "dz"):

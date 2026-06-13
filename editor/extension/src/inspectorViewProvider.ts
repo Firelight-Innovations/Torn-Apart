@@ -12,6 +12,7 @@ export class InspectorViewProvider implements vscode.WebviewViewProvider {
 
   private view: vscode.WebviewView | undefined;
   private lastObject: SceneObjectDTO | null = null;
+  private lastCatalog: unknown[] | null = null;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -27,7 +28,8 @@ export class InspectorViewProvider implements vscode.WebviewViewProvider {
     view.webview.html = this.html(view.webview);
     view.webview.onDidReceiveMessage((msg) => {
       if (msg?.type === "ready") {
-        // The view resolves lazily (first reveal) — replay the cached selection.
+        // The view resolves lazily (first reveal) — replay cached state.
+        if (this.lastCatalog) this.postCatalog(this.lastCatalog);
         this.postObject(this.lastObject);
       } else if (msg) {
         this.onMessage(msg);
@@ -42,6 +44,12 @@ export class InspectorViewProvider implements vscode.WebviewViewProvider {
   postObject(obj: SceneObjectDTO | null): void {
     this.lastObject = obj;
     void this.view?.webview.postMessage({ type: "object", object: obj });
+  }
+
+  /** Provide the built-in component catalog (scene.catalog). Cached for lazy resolve. */
+  postCatalog(catalog: unknown[]): void {
+    this.lastCatalog = catalog;
+    void this.view?.webview.postMessage({ type: "catalog", catalog });
   }
 
   private html(webview: vscode.Webview): string {

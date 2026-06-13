@@ -1,5 +1,5 @@
 # editor — System Doc
-keywords: editor, fire editor, daemon, fire_editor, extension, vscode, cursor, websocket, json-rpc, protocol, schema, codegen, binary frame, handshake, hello, scene view, hierarchy, inspector, properties panel, gizmo, transform controls, texture lab, model workspace, ground lut, textured terrain, scene undo, save scene, scenes folder, resend
+keywords: editor, fire editor, daemon, fire_editor, extension, vscode, cursor, websocket, json-rpc, protocol, schema, codegen, binary frame, handshake, hello, scene view, hierarchy, inspector, properties panel, components, component stack, add component, component catalog, scene.catalog, scene.add_component, scene.set_component, light component, mesh component, gizmo, transform controls, texture lab, model workspace, ground lut, textured terrain, scene undo, save scene, scenes folder, resend
 
 > Documents the `editor/` tree: the headless Python daemon `editor/fire_editor/`,
 > the TypeScript VS Code/Cursor extension `editor/extension/`, and the shared
@@ -38,16 +38,17 @@ The editor is a standalone tool, not an importable engine package. Its surfaces:
 - `Dispatcher` / `RpcError` — transport-agnostic JSON-RPC 2.0 dispatch; handlers are `async (params) -> result`.
 - `EditorSession` — one open world: terrain `ChunkManager`, `LightGrid` + `SunlightComputer`, `SaveManager`, and the authoring `scene` (`SceneObjectStore`). `from_seed`, `from_save`, `region_coords`, `ensure_loaded`, `relight`, `mesh`, `raycast`, `save`.
 - `scene_objects` — a re-export **shim**: the authoring hierarchy now lives in the ENGINE at `fire_engine/scene/objects.py` (`SceneObjectStore` / `SceneObject`, kinds `empty|cube|sphere|light|spawn`) so the game's `SceneRuntime` consumes the identical schema (DECISIONS.md 2026-06-12). Deterministic integer ids (monotonic counter, no RNG); `create`, `rename`, `reparent` (cycle-rejecting), `set_transform`, `delete` (cascades), `tree` (flat DFS). Implements `Saveable` (`save_key="editor_scene"`) so the scene persists as a delta — an empty scene saves nothing.
+- **Components** — each `SceneObject` carries a `components` list (`{type, enabled, params}`) on top of its intrinsic Transform; `kind` only *seeds* it (`default_components_for_kind`), after which the list is the source of truth (an `empty` can get a Light; a `cube`'s Mesh can be removed — Unity-style). The catalog of built-in types (`Mesh`, `Light`, `SpawnPoint`) lives in `fire_engine/scene/components.py` (pure data, single source — the inspector fetches it via `scene.catalog` rather than hardcoding field lists). Store ops: `add_component(id,type)` (singleton-checked), `remove_component(id,index)`, `set_component(id,index,params?,enabled?)` (params validated+clamped to the catalog field types). Pre-component saves migrate forward in `SceneObject.from_dict` (the single migration seam).
 - `encode_frame` / `decode_frame` — protocol binary framing.
 - `encode_mesh_payload(coord, mesh)` / `decode_mesh_payload(bytes)` — MESH payload codec.
 - `texturecodec.encode_texture_payload(rgba)` / `decode_texture_payload(bytes)` — TEXTURE payload codec (`[u32 width][u32 height][rgba8]`); used by `world.ground_lut`.
 - `EditorServer` — `websockets` transport; `broadcast_binary`, `broadcast_notification`.
 - `services.chunks.ChunkService` — registers `world.open/save`, `world.ground_lut`, `chunks.set_center`, `scene.stats`, `terrain.raycast`, `terrain.brush`, `edit.undo/redo`; streams MESH frames and drives the undo stack. `EditorSession.ground_seed` (same `for_domain("terrain","ground")` derivation as main.py) and `ground_texels_per_m` ride in the `world.open` result config.
-- `services.scene.SceneService` — registers `scene.tree/create/rename/reparent/set_transform/delete`; mutates `session.scene`, pushes a `SceneCommand` onto the shared undo stack, and broadcasts `scene.changed` (full object list) after every change.
+- `services.scene.SceneService` — registers `scene.tree/create/rename/reparent/set_transform/delete`, the component ops `scene.add_component/remove_component/set_component`, and the static `scene.catalog`; mutates `session.scene`, pushes a `SceneCommand` onto the shared undo stack, and broadcasts `scene.changed` (full object list) after every change. `set_component` coalesces per `(id,index)` so a slider drag undoes in one step.
 - `commands.UndoStack` / `EditCommand` / `SceneCommand` — ONE chronological undo/redo stack for both edit types: `EditCommand` snapshots before/after material arrays over the brush AABB chunks (EDITOR_PRD §5.4); `SceneCommand` snapshots the full scene delta (tiny dicts). Consecutive `transform <id>` scene commands within ~1 s coalesce, so a throttled gizmo drag undoes in one step.
 - Generated constants in `fire_editor._generated` (`PROTOCOL_VERSION`, `BINARY_MAGIC`, `SchemaId`, `ErrorCode`, `Method`, `Notification`, typed param/result `TypedDict`s).
 
-**Methods (protocol_version 5):** `hello`, `ping`, `world.open {seed|save_path}`,
+**Methods (protocol_version 6):** `hello`, `ping`, `world.open {seed|save_path}`,
 `world.save {path}`, `world.ground_lut {}` (announces a TEXTURE binary frame
 carrying the procedural-ground palette LUT; result also returns
 `ground_seed`/`ground_texels_per_m` for the client-side ground shader),
@@ -55,9 +56,12 @@ carrying the procedural-ground palette LUT; result also returns
 sent-chunk cache so a freshly attached client gets the full region), `scene.stats`,
 `terrain.raycast {o*,d*,max_distance?}`, `terrain.brush {shape,x,y,z,mode,…}`,
 `edit.undo`, `edit.redo` (terrain AND scene ops — one chronological stack),
-`scene.tree`, `scene.create {kind,parent?,name?,x?,y?,z?}`,
+`scene.tree` (object dicts now include `components`), `scene.catalog {}` (built-in
+component types + field specs), `scene.create {kind,parent?,name?,x?,y?,z?}`,
 `scene.rename {id,name}`, `scene.reparent {id,parent?}`,
-`scene.set_transform {id,p*?,r*?,s*?}`, `scene.delete {id}`. Notifications: `log`,
+`scene.set_transform {id,p*?,r*?,s*?}`, `scene.delete {id}`,
+`scene.add_component {id,type}`, `scene.remove_component {id,index}`,
+`scene.set_component {id,index,params?,enabled?}`. Notifications: `log`,
 `chunk.ready`, `chunk.unload`, `stream.done`, `edit.state`, `scene.changed`. Full
 table in `editor/protocol/SCHEMA.md`.
 
@@ -102,13 +106,21 @@ synced both ways with the viewport (tree select → highlight gizmo; gizmo click
 **Extension inspector (properties panel):** `editor/extension/src/inspectorViewProvider.ts`
 (a `WebviewView` below the Hierarchy) + `src/webview/inspector.ts` (plain-DOM
 form bundled to `media/inspector.js`). Shows the selected object's name,
-kind/id, position (m), rotation (XYZ Euler **degrees** — converted to/from the
-wire's scalar-first quaternion by `src/webview/inspectorMath.ts`, unit-tested),
-and scale with a uniform-lock. Edits commit on change/Enter/blur →
-`scene.rename` / `scene.set_transform`; incoming `scene.changed` refreshes the
-form but never clobbers the field being typed in (echo guard). Selection is
-centralised in `extension.ts::setSelection` — tree click ↔ viewport click ↔
-inspector always agree.
+kind/id, the **Transform** (position (m), rotation as XYZ Euler **degrees** —
+converted to/from the wire's scalar-first quaternion by
+`src/webview/inspectorMath.ts`, unit-tested, with a uniform-scale lock), and a
+Unity-style **component stack** below it: one section per `components` entry
+(enable checkbox + remove ✕) with fields generated from the `scene.catalog`
+descriptors (number / color picker / enum / bool), plus a `[+ Add]` dropdown of
+catalog types not already present (singletons hidden once added). Edits commit on
+change/Enter/blur → `scene.rename` / `scene.set_transform` /
+`scene.add_component` / `scene.remove_component` / `scene.set_component`; the host
+fetches `scene.catalog` once after `world.open` and forwards it (`postCatalog`,
+cached for lazy view resolve). Incoming `scene.changed` refreshes the form but
+never clobbers the field being typed in (echo guard); component sections rebuild
+only on a structural change (component count/type), values patch in place.
+Selection is centralised in `extension.ts::setSelection` — tree click ↔ viewport
+click ↔ inspector always agree.
 
 **Save Scene:** command `fireEditor.saveScene` (+ `saveSceneAs`), bound to
 **Ctrl+S** when the Scene View panel or Hierarchy view is focused. First save

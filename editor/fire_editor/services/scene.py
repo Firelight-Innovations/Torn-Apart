@@ -1,10 +1,12 @@
 """SceneService — authoring hierarchy RPC (EDITOR_PRD Phase E2).
 
-Registers the ``scene.*`` methods that create, rename, reparent, transform and
-delete placeable objects in the open world's :class:`SceneObjectStore`. Every
-mutation broadcasts a ``scene.changed`` notification carrying the full object
-list, so the sidebar tree and the 3D viewport stay in sync without each having
-to diff. Pure control-channel JSON — no binary frames here.
+Registers the ``scene.*`` methods that create, rename, reparent, transform,
+delete and (add/remove/edit components on) placeable objects in the open
+world's :class:`SceneObjectStore`, plus ``scene.catalog`` (the static built-in
+component catalog the inspector renders from). Every mutation broadcasts a
+``scene.changed`` notification carrying the full object list, so the sidebar
+tree and the 3D viewport stay in sync without each having to diff. Pure
+control-channel JSON — no binary frames here.
 
 Every mutation also pushes a :class:`~fire_editor.commands.SceneCommand` onto
 the daemon's single undo stack (shared with terrain brushes), so Ctrl+Z walks
@@ -15,6 +17,8 @@ from __future__ import annotations
 
 import logging
 import time
+
+from fire_engine.scene.components import catalog_payload
 
 from .._generated import ErrorCode, Method, Notification
 from ..commands import SceneCommand
@@ -44,6 +48,10 @@ class SceneService:
         d.register(Method.SCENE_REPARENT, self.reparent)
         d.register(Method.SCENE_SET_TRANSFORM, self.set_transform)
         d.register(Method.SCENE_DELETE, self.delete)
+        d.register(Method.SCENE_CATALOG, self.catalog)
+        d.register(Method.SCENE_ADD_COMPONENT, self.add_component)
+        d.register(Method.SCENE_REMOVE_COMPONENT, self.remove_component)
+        d.register(Method.SCENE_SET_COMPONENT, self.set_component)
 
     # ------------------------------------------------------------------ #
     # Methods
@@ -124,6 +132,58 @@ class SceneService:
         self._push_history(f"delete {params['id']}", before, store.get_delta())
         await self._broadcast_changed(store)
         return {"ok": True, "removed": removed}
+
+    # ------------------------------------------------------------------ #
+    # Components
+    # ------------------------------------------------------------------ #
+    async def catalog(self, params: dict) -> dict:
+        """The built-in component catalog (static; no open world required)."""
+        return catalog_payload()
+
+    async def add_component(self, params: dict) -> dict:
+        store = self._require_session().scene
+        before = store.get_delta()
+        try:
+            obj = store.add_component(int(params["id"]), str(params["type"]))
+        except SceneError as e:
+            raise RpcError(ErrorCode.INVALID_PARAMS, str(e))
+        self._push_history(f"add component {obj['id']}", before, store.get_delta())
+        await self._broadcast_changed(store)
+        return {"ok": True, "object": obj}
+
+    async def remove_component(self, params: dict) -> dict:
+        store = self._require_session().scene
+        before = store.get_delta()
+        try:
+            obj = store.remove_component(int(params["id"]), int(params["index"]))
+        except SceneError as e:
+            raise RpcError(ErrorCode.INVALID_PARAMS, str(e))
+        self._push_history(f"remove component {obj['id']}", before, store.get_delta())
+        await self._broadcast_changed(store)
+        return {"ok": True, "object": obj}
+
+    async def set_component(self, params: dict) -> dict:
+        store = self._require_session().scene
+        index = int(params["index"])
+        enabled = params.get("enabled")
+        before = store.get_delta()
+        try:
+            obj = store.set_component(
+                int(params["id"]),
+                index,
+                params=params.get("params"),
+                enabled=None if enabled is None else bool(enabled),
+            )
+        except SceneError as e:
+            raise RpcError(ErrorCode.INVALID_PARAMS, str(e))
+        # Per-(object,index) label so a slider drag coalesces but editing a
+        # different component starts a new undo step.
+        self._push_history(
+            f"component {obj['id']}.{index}", before, store.get_delta(),
+            coalesce=True,
+        )
+        await self._broadcast_changed(store)
+        return {"ok": True, "object": obj}
 
     # ------------------------------------------------------------------ #
     # Internals

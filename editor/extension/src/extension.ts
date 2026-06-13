@@ -81,6 +81,19 @@ export function activate(context: vscode.ExtensionContext): void {
         });
         break;
       }
+      case "addComponent":
+        void sceneRequest(Method.SCENE_ADD_COMPONENT, { id: msg.id, type: msg.componentType });
+        break;
+      case "removeComponent":
+        void sceneRequest(Method.SCENE_REMOVE_COMPONENT, { id: msg.id, index: msg.index });
+        break;
+      case "setComponent": {
+        const out: Record<string, unknown> = { id: msg.id, index: msg.index };
+        if (msg.params !== undefined) out.params = msg.params;
+        if (msg.enabled !== undefined) out.enabled = msg.enabled;
+        void sceneRequest(Method.SCENE_SET_COMPONENT, out);
+        break;
+      }
     }
   });
   context.subscriptions.push(
@@ -321,6 +334,7 @@ async function doOpenWorld(params: Record<string, unknown>): Promise<void> {
     sceneView?.reset();
     sceneView?.postConfig(currentConfig);
     await requestGroundLut(); // new world -> new seed -> fresh ground LUT
+    await requestCatalog(); // component catalog for the inspector (static)
     await refreshHierarchy(); // a save may carry placed objects
     output.appendLine(
       `[extension] world open — seed ${res.seed}, edited chunks ${res.edited_chunks}`
@@ -404,6 +418,17 @@ async function requestGroundLut(): Promise<void> {
     await client.request(Method.WORLD_GROUND_LUT, {});
   } catch (e) {
     output.appendLine(`[extension] world.ground_lut failed: ${(e as Error).message}`);
+  }
+}
+
+/** Fetch the built-in component catalog and hand it to the inspector (static). */
+async function requestCatalog(): Promise<void> {
+  if (!client) return;
+  try {
+    const res = (await client.request(Method.SCENE_CATALOG, {})) as { types: unknown[] };
+    inspector.postCatalog(res.types ?? []);
+  } catch (e) {
+    output.appendLine(`[extension] scene.catalog failed: ${(e as Error).message}`);
   }
 }
 

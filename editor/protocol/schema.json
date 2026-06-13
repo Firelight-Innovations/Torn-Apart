@@ -1,6 +1,6 @@
 {
   "$comment": "SINGLE SOURCE OF TRUTH for the Fire Editor wire protocol. Both editor/fire_editor/_generated.py and editor/extension/src/protocol/generated.ts are produced from this file by codegen.py. Never hand-edit the generated files. Bump protocol_version on ANY incompatible change and regenerate both bindings in the same commit (EDITOR_PRD hard rule 6).",
-  "protocol_version": 5,
+  "protocol_version": 6,
   "daemon_version": "0.1.0",
   "binary": {
     "magic_hex": "0x46495245",
@@ -76,9 +76,14 @@
       "result": { "ok": "bool", "touched": "int", "label": "str", "can_undo": "bool", "can_redo": "bool" }
     },
     "scene.tree": {
-      "doc": "Full authoring hierarchy: a flat, depth-first list of object dicts (id, name, kind, parent, position, rotation, scale).",
+      "doc": "Full authoring hierarchy: a flat, depth-first list of object dicts (id, name, kind, parent, position, rotation, scale, components). components is a list of {type, enabled, params} (built-in component stack beyond the intrinsic Transform).",
       "params": {},
       "result": { "objects": "any" }
+    },
+    "scene.catalog": {
+      "doc": "The built-in component catalog: types the inspector can add/edit. Each entry is {type, label, multiple, fields:[{name, ui_type, default, label, min?, max?, choices?}]}. Static (no session needed); fetched once so the inspector renders component fields without hardcoding them.",
+      "params": {},
+      "result": { "types": "any" }
     },
     "scene.create": {
       "doc": "Create a placeable object. kind: empty|cube|sphere|light|spawn. Optional parent id and spawn position. Broadcasts scene.changed.",
@@ -104,6 +109,21 @@
       "doc": "Delete an object and all its descendants. Broadcasts scene.changed.",
       "params": { "id": "int" },
       "result": { "ok": "bool", "removed": "any" }
+    },
+    "scene.add_component": {
+      "doc": "Attach a built-in component (type from scene.catalog) to an object. Components are independent of kind; singletons reject a duplicate. Undoable; broadcasts scene.changed.",
+      "params": { "id": "int", "type": "str" },
+      "result": { "ok": "bool", "object": "any" }
+    },
+    "scene.remove_component": {
+      "doc": "Remove the component at index (0-based, over the object's components list). Undoable; broadcasts scene.changed.",
+      "params": { "id": "int", "index": "int" },
+      "result": { "ok": "bool", "object": "any" }
+    },
+    "scene.set_component": {
+      "doc": "Edit the component at index: merge validated params (unknown keys dropped, values coerced/clamped to the catalog field types) and/or toggle enabled. Rapid edits to the same component coalesce into one undo step. Broadcasts scene.changed.",
+      "params": { "id": "int", "index": "int", "params?": "any", "enabled?": "bool" },
+      "result": { "ok": "bool", "object": "any" }
     }
   },
   "notifications": {

@@ -32,7 +32,16 @@ Example::
 """
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass, field
+
+from fire_engine.scene.components import (
+    COMPONENT_CATALOG,
+    coerce_params,
+    default_components_for_kind,
+    is_known,
+    make_component,
+)
 
 # Object kinds the editor can place. "empty" is a bare transform (a grouping
 # node, like an empty Unity GameObject); the rest carry a default visual gizmo.
@@ -62,6 +71,11 @@ class SceneObject:
         position: Local translation in meters ``(x, y, z)``, Z-up.
         rotation: Local rotation quaternion ``(w, x, y, z)``.
         scale: Local scale factors ``(x, y, z)``.
+        components: Built-in components beyond the Transform — each a dict
+            ``{"type", "enabled", "params"}`` (see
+            :mod:`fire_engine.scene.components`). ``kind`` seeds these on
+            creation; thereafter the list is the source of truth for visuals.
+            The Transform is intrinsic (the TRS fields) and is NOT in this list.
     """
 
     id: int
@@ -71,6 +85,7 @@ class SceneObject:
     position: Vec3T = _ZERO
     rotation: QuatT = _IDENTITY_QUAT
     scale: Vec3T = _ONE
+    components: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         """Wire/serialisation form: plain JSON-friendly primitives."""
@@ -82,18 +97,28 @@ class SceneObject:
             "position": list(self.position),
             "rotation": list(self.rotation),
             "scale": list(self.scale),
+            "components": copy.deepcopy(self.components),
         }
 
     @staticmethod
     def from_dict(d: dict) -> "SceneObject":
+        kind = str(d["kind"])
+        # Migration seam (the ONLY one): pre-component saves lack "components",
+        # so synthesise the kind's defaults. New saves carry them verbatim.
+        raw = d.get("components")
+        components = (
+            default_components_for_kind(kind) if raw is None
+            else copy.deepcopy(list(raw))
+        )
         return SceneObject(
             id=int(d["id"]),
             name=str(d["name"]),
-            kind=str(d["kind"]),
+            kind=kind,
             parent=None if d.get("parent") is None else int(d["parent"]),
             position=tuple(float(v) for v in d.get("position", _ZERO)),  # type: ignore[arg-type]
             rotation=tuple(float(v) for v in d.get("rotation", _IDENTITY_QUAT)),  # type: ignore[arg-type]
             scale=tuple(float(v) for v in d.get("scale", _ONE)),  # type: ignore[arg-type]
+            components=components,
         )
 
 
@@ -176,6 +201,7 @@ class SceneObjectStore:
             kind=k,
             parent=None if parent is None else int(parent),
             position=tuple(float(v) for v in position),  # type: ignore[arg-type]
+            components=default_components_for_kind(k),
         )
         self._objects[obj.id] = obj
         self._next_id += 1
@@ -217,6 +243,63 @@ class SceneObjectStore:
             obj.rotation = tuple(float(v) for v in rotation)  # type: ignore[assignment]
         if scale is not None:
             obj.scale = tuple(float(v) for v in scale)  # type: ignore[assignment]
+        return obj.to_dict()
+
+    # ------------------------------------------------------------------ #
+    # Components
+    # ------------------------------------------------------------------ #
+    def add_component(self, obj_id: int, type_name: str) -> dict:
+        """Attach a built-in component of ``type_name`` to ``obj_id``.
+
+        Components are independent of ``kind`` (Unity-style) — an ``empty`` can
+        be given a Light. Singletons (every built-in) reject a second instance.
+        Raises :class:`SceneError` on unknown type or singleton violation.
+        """
+        obj = self.get(obj_id)
+        t = str(type_name)
+        if not is_known(t):
+            raise SceneError(
+                f"unknown component type {type_name!r}; expected one of "
+                f"{sorted(COMPONENT_CATALOG)}"
+            )
+        if not COMPONENT_CATALOG[t].multiple and any(
+                c.get("type") == t for c in obj.components):
+            raise SceneError(f"object {obj_id} already has a {t} component")
+        obj.components.append(make_component(t))
+        return obj.to_dict()
+
+    def remove_component(self, obj_id: int, index: int) -> dict:
+        """Remove the component at ``index`` (0-based). Raises on a bad index."""
+        obj = self.get(obj_id)
+        i = int(index)
+        if i < 0 or i >= len(obj.components):
+            raise SceneError(
+                f"object {obj_id} has no component at index {index}")
+        obj.components.pop(i)
+        return obj.to_dict()
+
+    def set_component(
+        self,
+        obj_id: int,
+        index: int,
+        *,
+        params: dict | None = None,
+        enabled: bool | None = None,
+    ) -> dict:
+        """Edit the component at ``index``: merge validated ``params`` and/or
+        toggle ``enabled``. Unknown/extraneous param keys are dropped and values
+        are coerced to the catalog field types. Raises on a bad index."""
+        obj = self.get(obj_id)
+        i = int(index)
+        if i < 0 or i >= len(obj.components):
+            raise SceneError(
+                f"object {obj_id} has no component at index {index}")
+        comp = obj.components[i]
+        if enabled is not None:
+            comp["enabled"] = bool(enabled)
+        if params:
+            clean = coerce_params(str(comp.get("type")), params)
+            comp.setdefault("params", {}).update(clean)
         return obj.to_dict()
 
     def delete(self, obj_id: int) -> list[int]:

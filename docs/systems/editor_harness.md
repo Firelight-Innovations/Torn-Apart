@@ -27,6 +27,9 @@ parallel, scriptable front door to the same daemon).
 - `fire_editor.RpcRemoteError` / `fire_editor.BinaryFrame` — error + decoded-frame types.
 - `tools/editor_client.py` — CLI; subcommands map 1:1 to RPC methods plus `serve`
   (persistent daemon + HTTP host for the browser harness) and `rpc`/`watch`.
+  Component subcommands: `catalog`, `add-component <id> <type>`,
+  `remove-component <id> <index>`,
+  `set-component <id> <index> [--params '<json>'] [--enabled|--disabled]`.
 - `editor/extension/src/protocol/rpcSession.ts` — `RpcSession`, the
   transport-agnostic JSON-RPC core shared by the extension `client.ts` and the
   browser `harnessBoot.ts` (one protocol implementation, no drift).

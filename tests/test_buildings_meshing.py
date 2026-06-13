@@ -149,3 +149,40 @@ class TestWholeBuilding:
         b = _demo_building()
         mesh = mesh_building(b, _CFG)
         assert mesh.positions[:, 2].min() < 1.0   # local, not offset by +8
+
+
+class TestDemoHouseDef:
+    """The registered procedural demo house (buildings/defs.py)."""
+
+    def test_get_is_deterministic(self):
+        from fire_engine.core.rng import set_world_seed
+        from fire_engine.procedural import get
+
+        set_world_seed(1337)
+        a = get("building_demo_house", ground_z=8.0)
+        b = get("building_demo_house", ground_z=8.0)
+        assert a.to_dict() == b.to_dict()
+
+    def test_demo_house_program(self):
+        from fire_engine.core.rng import set_world_seed
+        from fire_engine.procedural import get
+
+        set_world_seed(1337)
+        house = get("building_demo_house", ground_z=8.0)
+        assert len(house.storeys) == 2
+        # Storey 0 splits into two rooms (auto-detected from the divider).
+        assert len(house.storeys[0].rooms) == 2
+        assert house.foundation is not None and house.roof is not None
+        assert house.total_height_m == 6.0
+        assert len(house.storeys[0].stairs) == 1
+
+    def test_demo_house_meshing_deterministic(self):
+        from fire_engine.core.rng import set_world_seed
+        from fire_engine.procedural import get
+
+        set_world_seed(1337)
+        m1 = mesh_building(get("building_demo_house", ground_z=8.0), _CFG)
+        m2 = mesh_building(get("building_demo_house", ground_z=8.0), _CFG)
+        assert np.array_equal(m1.positions, m2.positions)
+        assert np.array_equal(m1.normals, m2.normals)
+        assert np.array_equal(m1.indices, m2.indices)

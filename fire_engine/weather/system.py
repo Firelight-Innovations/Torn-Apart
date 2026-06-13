@@ -231,6 +231,42 @@ def _local_from_dict(d: dict) -> LocalWeather:
     )
 
 
+# --- M8 summon/save ---------------------------------------------------------
+# Serialise a summoned :class:`StormCell` to/from a plain primitive dict (~80
+# bytes): every field is a float/str/list of floats — no live object refs, no
+# pickle (Hard Rule 3).  These params fully determine the cell's closed-form
+# track + footprint, so a round-trip reproduces the IDENTICAL future (positions
+# *and* the would-be strike schedule M7 derives from them).
+
+def _cell_to_dict(c: StormCell) -> dict:
+    """Serialise a summoned :class:`StormCell` to plain primitives (Saveable)."""
+    return {
+        "id": str(c.id),
+        "kind": c.kind.value,
+        "spawn_time": float(c.spawn_time),
+        "spawn_pos": [float(c.spawn_pos[0]), float(c.spawn_pos[1])],
+        "duration_s": float(c.duration_s),
+        "radius_m": float(c.radius_m),
+        "peak_intensity": float(c.peak_intensity),
+        "drift_bias": [float(c.drift_bias[0]), float(c.drift_bias[1])],
+    }
+
+
+def _cell_from_dict(d: dict) -> StormCell:
+    """Inverse of :func:`_cell_to_dict` (raises ``KeyError``/``ValueError`` on a
+    malformed dict — the caller guards the whole delta)."""
+    return StormCell(
+        id=str(d["id"]),
+        kind=CellKind(d["kind"]),
+        spawn_time=float(d["spawn_time"]),
+        spawn_pos=(float(d["spawn_pos"][0]), float(d["spawn_pos"][1])),
+        duration_s=float(d["duration_s"]),
+        radius_m=float(d["radius_m"]),
+        peak_intensity=float(d["peak_intensity"]),
+        drift_bias=(float(d["drift_bias"][0]), float(d["drift_bias"][1])),
+    )
+
+
 # ---------------------------------------------------------------------------
 # WeatherSystem
 # ---------------------------------------------------------------------------
@@ -290,8 +326,52 @@ class WeatherSystem:
 
         # Per-day natural cell cache (pure fn of seed+day; never saved).
         self._cell_cache: dict[int, list[StormCell]] = {}
-        # Summoned cells (M8) — saveable; empty for now.
+
+        # --- M8 summon/save ---
+        # Summoned cells (saveable deviation). Each is a first-class StormCell
+        # consumed by `_active_cells` exactly like a natural one, so it shows up
+        # in `_sample_core`, the `.cells` readout and the weather-map raster.
         self._summoned: list[StormCell] = []
+        # Monotonic counter for stable summoned-cell ids ("s:{n}").  Saved so
+        # ids never collide with pre-existing summoned cells after a load.
+        self._summon_seq: int = 0
+        # Suppressed natural-cell ids ("n:{day}:{slot}"): filtered out of every
+        # sample so a dev can "clear skies" without touching the seed.
+        self._suppressed: set[str] = set()
+        # Summon defaults per kind: (radius_m, duration_s, peak_intensity).
+        self._summon_defaults: dict[CellKind, tuple[float, float, float]] = {
+            CellKind.SHOWER: (
+                float(config.weather_summon_rain_radius_m),
+                float(config.weather_summon_rain_duration_s),
+                float(config.weather_summon_rain_intensity),
+            ),
+            CellKind.THUNDERSTORM: (
+                float(config.weather_summon_storm_radius_m),
+                float(config.weather_summon_storm_duration_s),
+                float(config.weather_summon_storm_intensity),
+            ),
+            CellKind.FOG_BANK: (
+                float(config.weather_summon_fog_radius_m),
+                float(config.weather_summon_fog_duration_s),
+                float(config.weather_summon_fog_intensity),
+            ),
+            CellKind.CLOUD_BANK: (
+                float(config.weather_summon_rain_radius_m),
+                float(config.weather_summon_rain_duration_s),
+                float(config.weather_summon_rain_intensity),
+            ),
+        }
+        self._summon_upwind_m = float(config.weather_summon_upwind_m)
+
+        # Gust-front coupling (M8): the wind field whose modifiers we register
+        # so a storm's leading edge kicks the grass.  Set by the world layer via
+        # `attach_wind_field`; None keeps the system fully headless / decoupled.
+        self._wind_field = None  # fire_engine.wind.WindField | None
+        self._gustfront_range_m = float(config.weather_gustfront_range_m)
+        self._gustfront_strength = float(config.weather_gustfront_strength_ms)
+        self._gustfront_width_m = float(config.weather_gustfront_width_m)
+        # cell.id -> live GustFront modifier currently registered for it.
+        self._active_fronts: dict[str, object] = {}
 
         # Active cells at the last update, sorted nearest-first to the player.
         self._cells: list[StormCell] = []
@@ -330,10 +410,21 @@ class WeatherSystem:
         return cached
 
     def _active_cells(self, t: float) -> list[StormCell]:
-        """All cells (natural ∪ summoned) alive at absolute time *t*."""
+        """
+        All cells (natural ∪ summoned) alive at absolute time *t*.
+
+        Natural cells whose id is in :attr:`_suppressed` are filtered out (a dev
+        "clear skies" hides the day's natural weather without touching the seed,
+        so the suppression survives save/load as a small id list).  Summoned
+        cells are appended verbatim — they are first-class participants in every
+        downstream sample (``_sample_core``, ``.cells``, the weather-map raster).
+        """
         day = int(t // _DAY_S)
         pool = self._cells_for_day(day - 1) + self._cells_for_day(day)
-        out = [c for c in pool if c.active(t)]
+        out = [
+            c for c in pool
+            if c.active(t) and c.id not in self._suppressed
+        ]
         out.extend(c for c in self._summoned if c.active(t))
         return out
 
@@ -341,6 +432,248 @@ class WeatherSystem:
     def cells(self) -> list[StormCell]:
         """Active cells as of the last :meth:`update`, nearest player first."""
         return self._cells
+
+    def cell_eta_s(
+        self, cell: StormCell, t: float, player_pos: tuple[float, float]
+    ) -> float:
+        """
+        Approximate game seconds until *cell*'s leading edge reaches the player.
+
+        A first-order estimate: the cell's current edge distance divided by its
+        closing speed (the component of the cell's instantaneous velocity toward
+        the player).  Returns ``0.0`` if the edge already covers the player and
+        ``inf`` if the cell is receding (closing speed ≤ 0).  Drives the
+        devtools "ETA" read-out; not part of the deterministic sim.
+
+        Parameters
+        ----------
+        cell : StormCell — the cell to time.
+        t : float — absolute game seconds.
+        player_pos : tuple[float, float] — world XY of the player (m).
+        """
+        origin = np.array(player_pos, dtype=np.float64)
+        center = cell.center(t, self.synoptic)
+        to_player = origin - center
+        dist = float(np.hypot(to_player[0], to_player[1]))
+        edge = dist - cell.radius(t)
+        if edge <= 0.0:
+            return 0.0
+        # Cell velocity = synoptic wind + drift_bias (dD/dt ≡ wind_vec).
+        vel = self.synoptic.wind_vec(t) + np.array(cell.drift_bias)
+        if dist < 1e-6:
+            return 0.0
+        closing = float(np.dot(vel, to_player / dist))   # m/s toward player
+        if closing <= 1e-6:
+            return float("inf")
+        return edge / closing
+
+    # ------------------------------------------------------------------
+    # M8 — Summon API (spatial dev/scripting control over weather)
+    # ------------------------------------------------------------------
+
+    def summon_cell(
+        self,
+        kind: CellKind,
+        *,
+        time_abs: float,
+        player_pos: tuple[float, float],
+        radius_m: float | None = None,
+        duration_s: float | None = None,
+        peak_intensity: float | None = None,
+        upwind_m: float | None = None,
+    ) -> str:
+        """
+        Spawn a summoned :class:`StormCell` UPWIND of the player and return its id.
+
+        The cell is placed ``upwind_m`` meters from *player_pos* in the
+        **opposite** direction to the synoptic wind at *time_abs*, so it drifts
+        *toward* the player on the steering current (``cell.center`` rides the
+        raw synoptic displacement — see :mod:`fire_engine.weather.cells`).  It is
+        a first-class participant in every sample from the moment it spawns
+        (``time_abs`` is its ``spawn_time``); radius/duration/intensity default
+        to the per-kind ``weather_summon_*`` config values.
+
+        The cell is fully described by its stored params, so it survives
+        save/load bit-identically (:meth:`get_delta` / :meth:`apply_delta`) —
+        the load-resume invariant: future positions *and* the would-be strike
+        schedule M7 derives from them round-trip exactly.
+
+        Parameters
+        ----------
+        kind : CellKind — what the summoned cell does.
+        time_abs : float — absolute game seconds = the cell's ``spawn_time``.
+        player_pos : tuple[float, float] — world XY the cell is aimed at (m).
+        radius_m, duration_s, peak_intensity : float | None — override the
+            per-kind ``weather_summon_*`` defaults when given.
+        upwind_m : float | None — spawn distance upwind; defaults to
+            ``weather_summon_upwind_m``.
+
+        Returns
+        -------
+        str — the new cell's stable id (``"s:{n}"``).
+
+        Example
+        -------
+        >>> cid = ws.summon_cell(CellKind.THUNDERSTORM, time_abs=3600.0,
+        ...                      player_pos=(0.0, 0.0))
+        >>> cid.startswith("s:")
+        True
+        """
+        kind = CellKind(kind)
+        r_def, d_def, p_def = self._summon_defaults[kind]
+        radius = float(radius_m) if radius_m is not None else r_def
+        duration = float(duration_s) if duration_s is not None else d_def
+        peak = float(peak_intensity) if peak_intensity is not None else p_def
+        dist = float(upwind_m) if upwind_m is not None else self._summon_upwind_m
+
+        # Spawn upwind: the synoptic wind blows TOWARD (ux, uy), so place the
+        # cell at player − dist·(ux, uy); it then drifts back over the player.
+        (ux, uy), _ = self.synoptic.wind(float(time_abs))
+        spawn_pos = (
+            float(player_pos[0]) - dist * ux,
+            float(player_pos[1]) - dist * uy,
+        )
+
+        cell_id = f"s:{self._summon_seq}"
+        self._summon_seq += 1
+        self._summoned.append(StormCell(
+            id=cell_id,
+            kind=kind,
+            spawn_time=float(time_abs),
+            spawn_pos=spawn_pos,
+            duration_s=duration,
+            radius_m=radius,
+            peak_intensity=peak,
+            drift_bias=(0.0, 0.0),
+        ))
+        return cell_id
+
+    def summon_rainstorm(
+        self, *, time_abs: float, player_pos: tuple[float, float], **kw
+    ) -> str:
+        """Convenience: summon a SHOWER (rainstorm) drifting toward the player."""
+        return self.summon_cell(
+            CellKind.SHOWER, time_abs=time_abs, player_pos=player_pos, **kw
+        )
+
+    def summon_thunderstorm(
+        self, *, time_abs: float, player_pos: tuple[float, float], **kw
+    ) -> str:
+        """Convenience: summon a THUNDERSTORM (rain + lightning + gust)."""
+        return self.summon_cell(
+            CellKind.THUNDERSTORM, time_abs=time_abs, player_pos=player_pos, **kw
+        )
+
+    def summon_fog_bank(
+        self, *, time_abs: float, player_pos: tuple[float, float], **kw
+    ) -> str:
+        """Convenience: summon a FOG_BANK drifting toward the player."""
+        return self.summon_cell(
+            CellKind.FOG_BANK, time_abs=time_abs, player_pos=player_pos, **kw
+        )
+
+    def suppress(self, cell_id: str) -> None:
+        """
+        Hide a cell from all future samples.
+
+        A natural-cell id (``"n:{day}:{slot}"``) is added to the suppression set
+        (it is filtered out of :meth:`_active_cells` — survives save/load as a
+        small id list); a summoned-cell id (``"s:{n}"``) is removed outright.
+        No-op for an unknown id.
+        """
+        cid = str(cell_id)
+        if cid.startswith("s:"):
+            self._summoned = [c for c in self._summoned if c.id != cid]
+            self._release_front(cid)
+        else:
+            self._suppressed.add(cid)
+
+    def clear_all(self) -> None:
+        """
+        Clear every summoned cell and suppress every natural cell active *now*.
+
+        Gives a dev a one-call "clear skies": summoned cells are dropped and the
+        natural cells alive at the last :meth:`update` are added to the
+        suppression set so the sky reads clear.  The suppression persists across
+        subsequent updates (and save/load) until new cells spawn into days that
+        were not suppressed — i.e. it clears the *current* weather, not all
+        future weather forever.  Registered gust fronts are released cleanly.
+        """
+        self._summoned.clear()
+        # Suppress the natural cells active at the last sampled time (the ones
+        # currently making weather); future days resume their natural schedule.
+        t = self._last_abs_t if self._last_abs_t is not None else 0.0
+        day = int(t // _DAY_S)
+        for c in self._cells_for_day(day - 1) + self._cells_for_day(day):
+            self._suppressed.add(c.id)
+        # Drop all live gust fronts (their cells are gone / suppressed).
+        for cid in list(self._active_fronts):
+            self._release_front(cid)
+
+    # ------------------------------------------------------------------
+    # M8 — GustFront coupling (a storm's leading edge kicks the grass)
+    # ------------------------------------------------------------------
+
+    def attach_wind_field(self, wind_field) -> None:
+        """
+        Wire the wind field so approaching storm cells register a gust front.
+
+        Called once by the world layer (the only place that holds both the
+        weather system and the :class:`~fire_engine.wind.WindField`).  ``None``
+        detaches and clears any live fronts — the system stays fully headless
+        and decoupled when no field is attached, so the headless test suite
+        never needs panda3d.
+        """
+        if wind_field is None:
+            for cid in list(self._active_fronts):
+                self._release_front(cid)
+        self._wind_field = wind_field
+
+    def _release_front(self, cell_id: str) -> None:
+        """Remove the gust-front modifier registered for *cell_id*, if any."""
+        front = self._active_fronts.pop(cell_id, None)
+        if front is not None and self._wind_field is not None:
+            self._wind_field.remove_modifier(front)
+
+    def _update_gust_fronts(self, t: float, player_pos: tuple[float, float]) -> None:
+        """
+        Register / release gust-front wind modifiers for nearby storm cells.
+
+        For each active cell whose **leading edge** (center distance − radius) is
+        within ``weather_gustfront_range_m`` of the player, ensure a
+        :class:`~fire_engine.wind.GustFront` is registered on the attached wind
+        field, travelling along the synoptic wind direction.  Cells that pass,
+        decay, or drift out of range have their front removed — balanced
+        register/remove so modifiers never accumulate or leak.  No-op when no
+        wind field is attached.
+        """
+        if self._wind_field is None:
+            return
+        from fire_engine.wind import GustFront
+
+        (ux, uy), _ = self.synoptic.wind(t)
+        origin = np.array(player_pos, dtype=np.float64)
+        active = self._active_cells(t)
+        near_ids: set[str] = set()
+        for cell in active:
+            center = cell.center(t, self.synoptic)
+            edge = float(np.hypot(*(center - origin))) - cell.radius(t)
+            if edge <= self._gustfront_range_m:
+                near_ids.add(cell.id)
+                if cell.id not in self._active_fronts:
+                    front = GustFront(
+                        seed_key=("weather", cell.id),
+                        direction=(ux, uy),
+                        speed=max(1.0, self._gustfront_strength),
+                        strength=self._gustfront_strength * cell.intensity(t),
+                        width_m=self._gustfront_width_m,
+                    )
+                    self._wind_field.add_modifier(front)
+                    self._active_fronts[cell.id] = front
+        # Release fronts whose cell is no longer near (passed / decayed / gone).
+        for cid in list(self._active_fronts):
+            if cid not in near_ids:
+                self._release_front(cid)
 
     # ------------------------------------------------------------------
     # Sampling
@@ -690,6 +1023,11 @@ class WeatherSystem:
         ))
         self._cells = cells
 
+        # --- M8 summon/save: keep gust-front wind modifiers in sync with the
+        # nearby cells (no-op when no wind field is attached). Self-contained so
+        # it never collides with M7's separate edit to this method. ---
+        self._update_gust_fronts(abs_t, pos)
+
         if self._override is not None:
             if self._override_start_abs_t is None:
                 self._override_start_abs_t = abs_t
@@ -788,38 +1126,88 @@ class WeatherSystem:
         Deviations from the procedural baseline (Saveable protocol).
 
         Natural weather recomputes from the seed, so it costs 0 bytes —
-        returns ``{}`` unless a dev override is active or a release blend is in
-        flight.  All values are plain primitives (no live objects, no pickle).
+        returns ``{}`` when no summons, no suppressions, and no dev override (or
+        release blend) exist.  Otherwise a small dict of plain primitives (no
+        live objects, no pickle, Hard Rule 3):
+
+        - ``summoned``: list of ~80-byte cell param dicts (:func:`_cell_to_dict`),
+        - ``summon_seq``: the id counter (so post-load summons keep unique ids),
+        - ``suppressed``: list of suppressed natural-cell ids,
+        - the legacy ``override`` / ``release_from`` / ``last_state`` keys when a
+          dev override (``force_weather``) is in flight.
+
+        The summoned-cell params fully determine each cell's closed-form track +
+        footprint, so a save→load mid-storm reproduces the IDENTICAL future
+        (positions and the would-be M7 strike schedule).
         """
+        delta: dict = {}
+
+        # --- M8 summon/save: spatial summons + natural-cell suppressions. ---
+        if self._summoned:
+            delta["summoned"] = [_cell_to_dict(c) for c in self._summoned]
+            delta["summon_seq"] = int(self._summon_seq)
+        if self._suppressed:
+            delta["suppressed"] = sorted(self._suppressed)
+
+        # Legacy dev-override shim (force_weather) — unchanged contract.
         if self._override is not None:
-            delta: dict = {"override": self._override.value}
+            delta["override"] = self._override.value
             if self._override_start_abs_t is not None:
                 delta["override_start_abs_t"] = float(self._override_start_abs_t)
             if self._override_from is not None:
                 delta["override_from"] = _local_to_dict(self._override_from)
             if self._last_state is not None:
                 delta["last_state"] = self._last_state.value
-            return delta
-        if self._release_from is not None:
-            delta = {"release_from": _local_to_dict(self._release_from)}
+        elif self._release_from is not None:
+            delta["release_from"] = _local_to_dict(self._release_from)
             if self._release_start_abs_t is not None:
                 delta["release_start_abs_t"] = float(self._release_start_abs_t)
             if self._last_state is not None:
                 delta["last_state"] = self._last_state.value
-            return delta
-        return {}
+
+        return delta
 
     def apply_delta(self, delta: dict) -> None:
         """
-        Restore override/release state from :meth:`get_delta` output.
+        Restore summons / suppressions / override from :meth:`get_delta` output.
 
         The natural baseline needs no restoration (recomputed from the seed).
-        Legacy deltas from the old Markov system are accepted: their
-        ``override``/``release_from`` keys map straight onto this shim; any
-        extra keys are ignored.
+        Summoned cells are reconstructed from their param dicts and the
+        suppression set from its id list, so the loaded system reproduces the
+        identical future.  A legacy or unknown-shaped delta is tolerated: a
+        malformed summoned-cell entry is skipped rather than crashing the load,
+        and legacy Markov deltas' ``override`` / ``release_from`` keys still map
+        straight onto the shim.
         """
-        if not delta:
+        if not isinstance(delta, dict) or not delta:
             return
+
+        # --- M8 summon/save: rebuild summoned cells + suppression set. ---
+        summoned: list[StormCell] = []
+        for d in delta.get("summoned", ()) or ():
+            try:
+                summoned.append(_cell_from_dict(d))
+            except (KeyError, ValueError, TypeError, IndexError):
+                continue  # skip a malformed/legacy entry rather than crash
+        if summoned:
+            self._summoned = summoned
+        if "summon_seq" in delta:
+            try:
+                self._summon_seq = int(delta["summon_seq"])
+            except (TypeError, ValueError):
+                pass
+        # Never let a stale counter alias an existing summoned id.
+        for c in self._summoned:
+            if c.id.startswith("s:"):
+                try:
+                    self._summon_seq = max(self._summon_seq, int(c.id[2:]) + 1)
+                except ValueError:
+                    pass
+        supp = delta.get("suppressed")
+        if isinstance(supp, (list, tuple)):
+            self._suppressed = {str(s) for s in supp}
+
+        # Legacy dev-override shim.
         if "override" in delta:
             self._override = WeatherType(delta["override"])
             self._override_start_abs_t = (

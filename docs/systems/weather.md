@@ -1,10 +1,11 @@
 # weather — System Doc
-keywords: weather, synoptic, wind direction, prevailing wind, storm, storm cell, front, air mass, displacement, D(t), drift, steering current, volumetric weather, regime, shower, thunderstorm, cloud bank, fog bank, classify, WeatherType, LocalWeather, sample_local, force_weather, humidity, relative_humidity, saturation_humidity, emergent fog, condensation, condense, ground fog, rain_recent_at, wetness_at, dew, mist
+keywords: weather, synoptic, wind direction, prevailing wind, storm, storm cell, front, air mass, displacement, D(t), drift, steering current, volumetric weather, regime, shower, thunderstorm, cloud bank, fog bank, classify, WeatherType, LocalWeather, sample_local, force_weather, humidity, relative_humidity, saturation_humidity, emergent fog, condensation, condense, ground fog, rain_recent_at, wetness_at, dew, mist, summon, summon_cell, summon_rainstorm, summon_thunderstorm, summon_fog_bank, clear_all, clear skies, suppress, suppressed, gust front, GustFront, attach_wind_field, cell_eta_s, ETA, save delta, get_delta, apply_delta, Saveable, load-resume
 
 > Status: under construction (volumetric-weather branch). M1 (synoptic flow),
 > M2 (storm cells + local sampling + classify), M3 (weather map + ground
-> wetness) and M5 (emergent humidity + condensation fog) shipped; lightning and
-> the spatial summon API land in M7–M8.  This doc grows with each milestone.
+> wetness), M5 (emergent humidity + condensation fog) and M8 (spatial summon
+> API + save delta + gust-front coupling) shipped; lightning lands in M7.  This
+> doc grows with each milestone.
 
 ## Role
 Headless spatial weather simulation — the layer between `sky/` (which
@@ -32,14 +33,19 @@ simulate local gusts (that's `wind/`), or own `SkyState` (that's `sky/`).
 | `WeatherType` | `clear`/`cloudy`/`overcast`/`fog`/`rain`/`storm` — exact legacy string values. |
 | `LocalWeather` | Frozen local sample: cloud_coverage/density, fog_density, rain_intensity, wind_dir/speed, humidity, wetness, temperature_c. First six map 1:1 onto `SkyState`. `humidity`/`wetness`/`temperature_c` are all live (M5). |
 | `WeatherSystem(config, bus=None)` | The system (`save_key="weather"`). `update(day, tod, player_pos=None) → LocalWeather`; `sample_local(pos_xy, t_abs) → LocalWeather`; `sample_fields(points_xy, t_abs) → (cov, den, rain, fog, gust)` vectorised core (fog includes emergent condensation); `wetness_at(points, t)` / `rain_recent_at(points, t)` closed-form moisture quadratures; `.cells` (active, nearest first); `.current` (label); `force_weather(type\|None)` dev override; `get_delta`/`apply_delta`. |
+| **M8 summon API** (on `WeatherSystem`) | `summon_cell(kind, *, time_abs, player_pos, radius_m=None, duration_s=None, peak_intensity=None, upwind_m=None) → str` spawns a saveable `StormCell` **upwind** of the player (it drifts in on the synoptic flow) and returns its `"s:{n}"` id; `summon_rainstorm` / `summon_thunderstorm` / `summon_fog_bank(*, time_abs, player_pos, **kw)` are per-kind wrappers. `suppress(cell_id)` hides a natural cell (id added to the suppression set) or drops a summoned one. `clear_all()` drops every summon **and** suppresses the natural cells active now (one-call "clear skies"; persists across `update` + save/load). `cell_eta_s(cell, t, player_pos) → float` ≈ game seconds until the cell's leading edge reaches the player (`0.0` if already covering, `inf` if receding) — the devtools ETA read-out. |
+| **M8 gust-front coupling** | `attach_wind_field(wind_field\|None)` wires (or detaches) the `wind/` field whose `GustFront` modifiers a nearby storm registers; called once by the world layer. `update()` then keeps fronts in sync: a cell whose leading edge is within `weather_gustfront_range_m` of the player gets a `GustFront` registered (along the synoptic direction, strength ∝ `cell.intensity`); it is removed cleanly when the cell passes/decays — balanced register/remove, no modifier leak. No-op when no field is attached (the system stays fully headless). |
 | `humidity.py` (M5) | Emergent-fog formulas, all vectorised pure fns of resolved `Config`: `humidity_base(day, cfg)` (seeded per-day calm baseline); `relative_humidity(rain_recent, wetness, h_base, cfg)`; `saturation_humidity(T_c, cfg)` (rises with T); `condense_fraction(humidity, h_sat, cfg)`; `wind_gate(wind_speed, cfg)`; `emergent_fog(humidity, T_c, wind_speed, cfg) → (N,)` fog coefficient (1/m). |
 | `WeatherMap(config)` (M3) | Square `(cells, cells, 4)` float32 raster cache of the four spatial channels around a moving center (`weather_map_cells` × `weather_map_cell_m`). `rasterize(system, center_xy, t_abs) → (N,N,4)`; `texel_centers(center_xy) → (N*N, 2)`; `.cells`/`.cell_m`/`.span_m`. Layout `out[row=Y, col=X, channel]`. Pure derivation of the sim (never saved). |
 | `MAP_CHANNELS` | `("coverage", "density", "precip", "fog")` — the raster's last-axis channel order. |
 
 ## Imports Allowed
-`core` (config, rng), numpy, stdlib.  From M8: `wind` (modifier seam only —
-`wind/` never imports `weather/`, no cycle).  **Never panda3d** (headless;
-AST-guarded once the package has its leak test).
+`core` (config, rng), numpy, stdlib.  From M8: `wind` (`GustFront` /
+`add_modifier` / `remove_modifier` — the modifier seam only; `wind/` never
+imports `weather/`, so no cycle).  The `wind` import is **lazy** (inside
+`_update_gust_fronts` / `attach_wind_field`) so importing `weather` never drags
+in `wind`.  **Never panda3d** (headless; AST-guarded once the package has its
+leak test).
 
 ## Events
 Published: `WeatherChangedEvent` (deferred) when the **committed** discrete
@@ -86,6 +92,28 @@ Subscribed: none.
   the air stays muggy for hours after a shower while the ground dries in ~1 h,
   so evening rain still feeds pre-dawn humidity. Both are pure fns of
   (seed, t, pos) — zero save bytes, recompute on load.
+- **Summons / suppressions (M8)** are the *only* saveable weather deviation
+  besides the legacy `force_weather` shim. `get_delta()` is `{}` for pure
+  natural weather (no summons, no suppressions, no override); otherwise a small
+  dict: `summoned` = list of ~80-byte primitive cell-param dicts
+  (id/kind/spawn_time/spawn_pos/duration_s/radius_m/peak_intensity/drift_bias),
+  `summon_seq` = the id counter, `suppressed` = list of suppressed natural-cell
+  ids. No live object refs, no pickle (Hard Rule 3). `apply_delta` reconstructs
+  the cells + suppression set and bumps `summon_seq` past any restored id; a
+  malformed/legacy entry is skipped, never fatal.
+- **Load-resume invariant**: a summoned cell is a pure closed-form function of
+  its stored params, so `apply_delta(get_delta())` on a fresh same-seed system
+  reproduces the **identical future** — sample fields *and* the would-be M7
+  strike positions/schedule round-trip bit-exact. (Weather doesn't emit strikes;
+  M7 does, off these params.) Summoned cells carry `drift_bias=(0,0)` and ride
+  the raw synoptic flow, exactly like natural cells.
+- **Gust-front coupling (M8)** lives entirely in `update()` (the
+  `_update_gust_fronts` helper) and the wind-field handle set by
+  `attach_wind_field`. It is purely derived state (which fronts are near the
+  player right now), never saved — `GustFront` is itself a pure fn of
+  (seed_key, t), so it adds zero save bytes. Register/remove is balanced per
+  update: at most one front per active cell, removed the instant the cell
+  leaves `weather_gustfront_range_m` or decays.
 
 ## Examples
 ```python
@@ -119,8 +147,25 @@ print(ws.current, lw.rain_intensity, [c.kind.value for c in ws.cells])
   label, for continuous values.
 - Don't sample `wind_vec`/`sample_local` with huge `(M,)` arrays per frame —
   meant for scalar/per-cell evaluation; the per-frame budget is scalar-only.
-- `force_weather` is a dev shim over the legacy global states; the real spatial
-  summon API lands in M8.  Legacy (old-Markov) save deltas still load.
+- `force_weather` is a dev shim over the legacy global states; the **real
+  spatial summon API is `summon_cell` / `clear_all` (M8)**.  The two coexist in
+  one delta — a save can carry both a forced override and summoned cells.
+  Legacy (old-Markov) save deltas still load (override/release keys only).
+- **A summoned cell is only "active" for `spawn_time < t`** (strict, like every
+  `StormCell`): summon at `time_abs = t0` then sample/`update` at exactly `t0`
+  and the cell is not live yet — advance time a hair. The devtools panel summons
+  at the current clock and the next frame is already `> t0`, so this only bites
+  tests that pin the same instant.
+- **`clear_all` suppresses the natural cells active at the last `update`**, not
+  all future weather — it clears the *current* sky. Days the player hasn't
+  reached yet resume their natural schedule. Call `update` before `clear_all`
+  if you want the player's current weather captured for suppression (the
+  devtools button does this implicitly — the overlay updates every frame).
+- **Gust fronts need `attach_wind_field` first.** With no field attached the
+  coupling is a silent no-op (so the headless suite never touches `wind`/panda3d).
+  The world layer must call `weather.attach_wind_field(wind_field)` once at boot
+  AND ensure something drives `wind_field.update()` each frame (the GPU
+  `WindSystemComponent` already does) for the registered fronts to take effect.
 - **M4 GPU contract**: `WeatherMap.rasterize` output is packed by
   `fire_engine.sky.pack_weather_map` (fp16 BGRA, row-major — no transpose) and
   uploaded by `world/weather_renderer.py::WeatherMapComponent`.  The cloud

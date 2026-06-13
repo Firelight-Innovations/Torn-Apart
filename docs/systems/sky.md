@@ -67,7 +67,9 @@ imports keep working; new code imports from `fire_engine.weather`.
 | `ws.current` | Property: discrete `WeatherType` (60-game-s hysteresis; override wins). |
 | `ws.update(game_day, game_time_of_day, player_pos=None) -> LocalWeather` | Local sample at the player; publishes `WeatherChangedEvent` (deferred) on a committed label change. |
 | `ws.force_weather(weather)` | Dev override (compat shim); `None` clears it and blends back to the natural spatial sample. |
-| `ws.get_delta() -> dict` | `{}` unless an override/release blend is active. |
+| `ws.summon_cell(kind, *, time_abs, player_pos, ...)` / `summon_rainstorm` / `summon_thunderstorm` / `summon_fog_bank` / `clear_all` / `suppress` (M8) | Spatial summon API — spawns saveable storm cells upwind of the player / clears them. See `docs/systems/weather.md`. |
+| `ws.attach_wind_field(field)` (M8) | Wire the `wind/` field so approaching storms register `GustFront` modifiers (world layer calls once at boot). |
+| `ws.get_delta() -> dict` | `{}` unless an override/release blend is active **or** summons/suppressions exist (M8). |
 | `ws.apply_delta(delta)` | Restore override state; subsequent behaviour identical. |
 | `BLEND_SECONDS`, `HYSTERESIS_SECONDS` | Override crossfade 1200 s (20 game min); classify hysteresis 60 game s. |
 
@@ -138,7 +140,7 @@ Never per-frame events: blended parameter changes are returned from `update()`, 
 - **Spatial model:** weather is sampled at `player_pos` (origin when `None`) from a per-day **regime** ambient plus every active drifting **storm cell** — see `docs/systems/weather.md`.  The discrete `current` label lags the continuous sample by a 60-game-s classification hysteresis (anti-flicker).
 - **Override blending:** `force_weather` (the dev shim) crossfades over `BLEND_SECONDS` = 20 game minutes with smoothstep — params never pop.  Per-state targets: CLEAR(coverage .12, density .35, fog .0008, rain 0) · CLOUDY(.45, .55, .0012, 0) · OVERCAST(.85, .80, .003, 0) · FOG(.55, .50, .025, 0, calm ×.30) · RAIN(.90, .85, .006, .7) · STORM(.98, .95, .008, 1.0, gusty ×1.9).  Wind comes from the closed-form **synoptic flow** (`fire_engine.weather.Synoptic`, exposed as `WeatherSystem.synoptic`): direction drifts smoothly over hours, speed = synoptic speed × the per-state multiplier above.  See `docs/systems/weather.md`.
 - `terrain_light_scale` components are always in `[0, 1.05]`; exactly (1, 1, 1) × weather-dim at clear noon.
-- Saves: `get_delta()` is `{}` on the natural schedule (baseline regenerates from seed).  Only `force_weather` overrides / in-flight release blends are snapshotted, as plain primitives.
+- Saves: `get_delta()` is `{}` on the natural schedule (baseline regenerates from seed).  `force_weather` overrides / in-flight release blends **and** M8 summons/suppressions are snapshotted, as plain primitives (summoned cells round-trip bit-exact so the loaded world reproduces the identical future — see `docs/systems/weather.md`).
 
 ## Examples
 

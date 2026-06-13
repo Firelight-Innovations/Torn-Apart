@@ -134,6 +134,26 @@ weather_map_cell_m = 24.0            # raster texel size (m) → 128×24 ≈ 3 k
 weather_wetness_tau_s = 3600.0       # wetness decay time constant (game s)
 weather_wetness_step_s = 600.0       # quadrature step into the past (game s)
 weather_wetness_samples = 12         # past rain samples (window = step·samples)
+# Emergent humidity + fog (M5): fog is NOT a selectable state — it condenses
+# from conditions. humidity = base(day) + rain_gain·rain_recent +
+# wetness_gain·wetness, condensing to ground fog where it exceeds the
+# temperature-dependent saturation humidity in calm air (calm humid nights
+# after evening rain grow pre-dawn fog that burns off after sunrise). All
+# closed-form pure fn of (seed, t, pos). Units: humidity 0–1, °C, m/s, fog 1/m.
+weather_humidity_base_min = 0.35     # seeded per-day calm-air humidity baseline band
+weather_humidity_base_max = 0.65
+weather_humidity_rain_gain = 1.00    # humidity added per unit recent rain (0–1)
+weather_humidity_wetness_gain = 0.30 # humidity added per unit ground wetness (0–1)
+weather_humidity_recent_tau_s = 18000.0 # recent-rain decay time constant (game s; 5 h — air holds moisture for hours so evening rain feeds pre-dawn fog)
+weather_humidity_recent_step_s = 1800.0 # recent-rain quadrature step into past (game s)
+weather_humidity_recent_samples = 12 # recent-rain samples (window = step·samples = 6 h)
+weather_fog_emergent_max = 0.022     # max emergent fog coefficient at full condensation (1/m)
+weather_fog_sat_ref_c = 5.0          # reference temperature for saturation humidity (°C)
+weather_fog_sat_base = 0.63          # saturation humidity at the reference temperature (0–1)
+weather_fog_sat_slope_per_c = 0.011  # saturation humidity rise per °C above the reference
+weather_fog_condense_band = 0.10     # humidity overshoot over saturation for full condensation
+weather_fog_wind_full_ms = 1.0       # full fog at/below this wind speed (m/s)
+weather_fog_wind_none_ms = 3.0       # no emergent fog at/above this wind speed (m/s)
 
 [sky]
 sky_cloud_altitude_m = 96.0    # cloud layer base altitude (world Z, meters)

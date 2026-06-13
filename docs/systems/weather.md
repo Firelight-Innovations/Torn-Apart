@@ -1,9 +1,10 @@
 # weather — System Doc
-keywords: weather, synoptic, wind direction, prevailing wind, storm, storm cell, front, air mass, displacement, D(t), drift, steering current, volumetric weather, regime, shower, thunderstorm, cloud bank, fog bank, classify, WeatherType, LocalWeather, sample_local, force_weather
+keywords: weather, synoptic, wind direction, prevailing wind, storm, storm cell, front, air mass, displacement, D(t), drift, steering current, volumetric weather, regime, shower, thunderstorm, cloud bank, fog bank, classify, WeatherType, LocalWeather, sample_local, force_weather, humidity, relative_humidity, saturation_humidity, emergent fog, condensation, condense, ground fog, rain_recent_at, wetness_at, dew, mist
 
-> Status: under construction (volumetric-weather branch). M1 (synoptic flow)
-> and M2 (storm cells + local sampling + classify) shipped; weather map,
-> emergent fog, lightning land in M3–M8.  This doc grows with each milestone.
+> Status: under construction (volumetric-weather branch). M1 (synoptic flow),
+> M2 (storm cells + local sampling + classify), M3 (weather map + ground
+> wetness) and M5 (emergent humidity + condensation fog) shipped; lightning and
+> the spatial summon API land in M7–M8.  This doc grows with each milestone.
 
 ## Role
 Headless spatial weather simulation — the layer between `sky/` (which
@@ -29,8 +30,9 @@ simulate local gusts (that's `wind/`), or own `SkyState` (that's `sky/`).
 | `day_regime(day)` / `regime_ambient(regime)` / `natural_cells(day, config)` | Pure-fn-of-(seed, day) spawn schedule (memoise per day). |
 | `classify(local) → WeatherType` | Discrete label from a `LocalWeather` sample (fog→storm→rain→overcast→cloudy→clear, first match wins). |
 | `WeatherType` | `clear`/`cloudy`/`overcast`/`fog`/`rain`/`storm` — exact legacy string values. |
-| `LocalWeather` | Frozen local sample: cloud_coverage/density, fog_density, rain_intensity, wind_dir/speed, humidity, wetness, temperature_c. First six map 1:1 onto `SkyState`. |
-| `WeatherSystem(config, bus=None)` | The system (`save_key="weather"`). `update(day, tod, player_pos=None) → LocalWeather`; `sample_local(pos_xy, t_abs) → LocalWeather`; `sample_fields(points_xy, t_abs) → (cov, den, rain, fog, gust)` vectorised core; `.cells` (active, nearest first); `.current` (label); `force_weather(type\|None)` dev override; `get_delta`/`apply_delta`. |
+| `LocalWeather` | Frozen local sample: cloud_coverage/density, fog_density, rain_intensity, wind_dir/speed, humidity, wetness, temperature_c. First six map 1:1 onto `SkyState`. `humidity`/`wetness`/`temperature_c` are all live (M5). |
+| `WeatherSystem(config, bus=None)` | The system (`save_key="weather"`). `update(day, tod, player_pos=None) → LocalWeather`; `sample_local(pos_xy, t_abs) → LocalWeather`; `sample_fields(points_xy, t_abs) → (cov, den, rain, fog, gust)` vectorised core (fog includes emergent condensation); `wetness_at(points, t)` / `rain_recent_at(points, t)` closed-form moisture quadratures; `.cells` (active, nearest first); `.current` (label); `force_weather(type\|None)` dev override; `get_delta`/`apply_delta`. |
+| `humidity.py` (M5) | Emergent-fog formulas, all vectorised pure fns of resolved `Config`: `humidity_base(day, cfg)` (seeded per-day calm baseline); `relative_humidity(rain_recent, wetness, h_base, cfg)`; `saturation_humidity(T_c, cfg)` (rises with T); `condense_fraction(humidity, h_sat, cfg)`; `wind_gate(wind_speed, cfg)`; `emergent_fog(humidity, T_c, wind_speed, cfg) → (N,)` fog coefficient (1/m). |
 | `WeatherMap(config)` (M3) | Square `(cells, cells, 4)` float32 raster cache of the four spatial channels around a moving center (`weather_map_cells` × `weather_map_cell_m`). `rasterize(system, center_xy, t_abs) → (N,N,4)`; `texel_centers(center_xy) → (N*N, 2)`; `.cells`/`.cell_m`/`.span_m`. Layout `out[row=Y, col=X, channel]`. Pure derivation of the sim (never saved). |
 | `MAP_CHANNELS` | `("coverage", "density", "precip", "fog")` — the raster's last-axis channel order. |
 
@@ -67,6 +69,23 @@ Subscribed: none.
   to fog; wind dir = synoptic, speed = `syn·(0.7+0.5·coverage) + Σ storm_gust`.
 - Regime ambient coverage sits cleanly inside the `classify` buckets so a
   cell-free day reads as its regime (HIGH→clear, MIXED→cloudy, FRONTAL→overcast).
+- **Emergent fog** (M5): fog is *not* a state — it condenses.
+  `humidity = clamp(h_base(day) + rain_gain·rain_recent + wetness_gain·wetness,
+  0, 1)` (`h_base` seeded per day, cosine-blended across midnight like the
+  ambient); it condenses where it exceeds the **temperature-dependent**
+  saturation `h_sat = clamp(sat_base + sat_slope·(T − sat_ref), 0.5, 1.0)`
+  (rises with T → fog forms in the cold, not the heat). `condense =
+  smoothstep(humidity − h_sat, 0, condense_band)`; wind gate `= 1 −
+  smoothstep(wind_speed, fog_wind_full, fog_wind_none)` (full ≤1 m/s, none
+  ≥3 m/s). `emergent_fog = fog_emergent_max·condense·gate`, **added** to the
+  baseline + FOG_BANK fog and capped at `weather_fog_max_density`. So a calm
+  humid night after evening rain grows ground fog through the cool pre-dawn,
+  which burns off as the warming air's `h_sat` climbs back over the humidity.
+- `rain_recent_at` is the same fixed-offset exponential quadrature as
+  `wetness_at` but with a longer decay (`weather_humidity_recent_tau_s`, ~5 h):
+  the air stays muggy for hours after a shower while the ground dries in ~1 h,
+  so evening rain still feeds pre-dawn humidity. Both are pure fns of
+  (seed, t, pos) — zero save bytes, recompute on load.
 
 ## Examples
 ```python
@@ -113,3 +132,15 @@ print(ws.current, lw.rain_intensity, [c.kind.value for c in ws.cells])
   pure fn of seed/center/`t_abs`); the `SkyRendererComponent` is the single
   driver of `sky_system.update(player_pos)`.  Don't add a second `update` caller
   or weather double-advances per frame.
+- **Emergent fog recursion guard**: `_sample_core` (no emergent fog) is the
+  routine the rain-history quadratures (`wetness_at` / `rain_recent_at`) call;
+  `sample_fields` adds the emergent term on top.  Emergent fog *depends* on the
+  rain history, so the quadratures must NOT call `sample_fields` (that would
+  recurse) — they call `_sample_core`. Keep that split.
+- Emergent fog needs **calm air** (the wind gate shuts above ~3 m/s) and a
+  point with rain in its recent past.  With the default synoptic band the flow
+  rarely drops below ~3 m/s and cells race across the map, so *natural* fixed-
+  point fog is uncommon — by design (fog is an occasional emergent treat, not a
+  daily event). In-game demo / tests force it via a near-still synoptic band
+  (which also keeps an injected cell roughly stationary so a point actually gets
+  rained on); see `tests/test_weather_fog.py`.

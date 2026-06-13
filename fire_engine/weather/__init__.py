@@ -18,6 +18,14 @@ from fire_engine.weather.cells import (
     regime_ambient,
 )
 from fire_engine.weather.classify import WeatherType, classify
+from fire_engine.weather.humidity import (
+    condense_fraction,
+    emergent_fog,
+    humidity_base,
+    relative_humidity,
+    saturation_humidity,
+    wind_gate,
+)
 from fire_engine.weather.synoptic import Synoptic
 from fire_engine.weather.system import LocalWeather, WeatherSystem
 from fire_engine.weather.weather_map import MAP_CHANNELS, WeatherMap
@@ -32,6 +40,12 @@ __all__ = [
     "regime_ambient",
     "WeatherType",
     "classify",
+    "humidity_base",
+    "relative_humidity",
+    "saturation_humidity",
+    "condense_fraction",
+    "wind_gate",
+    "emergent_fog",
     "LocalWeather",
     "WeatherSystem",
     "WeatherMap",

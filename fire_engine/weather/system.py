@@ -48,6 +48,11 @@ from fire_engine.weather.cells import (
     regime_ambient,
 )
 from fire_engine.weather.classify import WeatherType, classify
+from fire_engine.weather.humidity import (
+    emergent_fog,
+    humidity_base,
+    relative_humidity,
+)
 from fire_engine.weather.synoptic import Synoptic
 
 __all__ = ["LocalWeather", "WeatherSystem", "BLEND_SECONDS", "HYSTERESIS_SECONDS"]
@@ -128,8 +133,8 @@ class LocalWeather:
 
     The first six fields match the corresponding ``SkyState`` fields exactly
     (same names, units, meaning) so the sky composer fills ``SkyState``
-    one-to-one.  ``humidity``/``wetness`` are placeholders until the emergent
-    humidity model (M5/M6) fills them; ``temperature_c`` is already live.
+    one-to-one.  ``humidity`` is the live emergent relative humidity (M5);
+    ``wetness`` and ``temperature_c`` are already live.
 
     Attributes
     ----------
@@ -139,8 +144,9 @@ class LocalWeather:
     rain_intensity : float — 0–1 (0 = dry, 1 = torrential).
     wind_dir : tuple[float, float] — unit XY direction the wind blows TOWARD.
     wind_speed : float — m/s.
-    humidity : float — 0–1 relative humidity (placeholder 0.5 until M5).
-    wetness : float — 0–1 ground wetness (placeholder 0.0 until M6).
+    humidity : float — 0–1 emergent relative humidity (base + recent rain +
+        ground wetness).
+    wetness : float — 0–1 ground wetness.
     temperature_c : float — local air temperature, °C.
 
     Example
@@ -274,6 +280,13 @@ class WeatherSystem:
         self._wet_tau = float(config.weather_wetness_tau_s)
         self._wet_step = float(config.weather_wetness_step_s)
         self._wet_samples = int(config.weather_wetness_samples)
+        # "Recent rain" quadrature for emergent humidity — the same exponential
+        # form as the wetness window but with its own (longer) decay constant:
+        # the air stays muggy for hours after a shower even as the ground dries,
+        # so evening rain can still feed pre-dawn fog.
+        self._recent_tau = float(config.weather_humidity_recent_tau_s)
+        self._recent_step = float(config.weather_humidity_recent_step_s)
+        self._recent_samples = int(config.weather_humidity_recent_samples)
 
         # Per-day natural cell cache (pure fn of seed+day; never saved).
         self._cell_cache: dict[int, list[StormCell]] = {}
@@ -339,36 +352,21 @@ class WeatherSystem:
             2.0 * math.pi * (tod_h - 15.0) / 24.0
         )
 
-    def sample_fields(
-        self, points_xy: np.ndarray, t_abs: float
+    def _sample_core(
+        self, pts: np.ndarray, t: float
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """
-        Vectorised core sampling: the raster channels at every query point.
+        Recursion-safe core fields (no emergent fog) at *pts*, absolute *t*.
 
-        This is the single source of truth for the spatial weather field —
-        :meth:`sample_local` calls it with one point and the weather-map raster
-        (M3) calls it over a whole grid, so a texel's rasterised value equals
-        ``sample_local`` at that texel center by construction.
-
-        Composition: the day regime sets the ambient cloud cover/density
-        (cosine-blended from the previous day's regime over the first game hour
-        after midnight); every active cell adds its footprint contribution to
-        coverage/density/rain, FOG_BANKs to fog, THUNDERSTORMs to a core gust.
-
-        Parameters
-        ----------
-        points_xy : np.ndarray — shape ``(N, 2)`` world-XY query points (m).
-        t_abs : float — absolute game seconds.
-
-        Returns
-        -------
-        tuple of five ``(N,)`` arrays — ``(coverage, density, rain, fog,
-        storm_gust)``; the first four are the raster channels (coverage,
-        density, rain, fog clamped/capped), the last feeds local wind speed.
+        Returns ``(coverage, density, rain, fog_bank, storm_gust)`` where
+        ``fog_bank`` is the FOG_BANK + baseline fog coefficient *before* the
+        emergent humidity-condensation term is added.  The rain-history
+        quadratures (:meth:`wetness_at`, :meth:`rain_recent_at`) call this
+        instead of :meth:`sample_fields` so emergent fog — which *depends* on
+        that history — never recurses back into it.  ``pts`` is assumed already
+        a ``float64`` ``(N, 2)`` array.
         """
-        pts = np.asarray(points_xy, dtype=np.float64).reshape(-1, 2)
         n = pts.shape[0]
-        t = float(t_abs)
         day = int(t // _DAY_S)
         tod = t - day * _DAY_S
 
@@ -399,7 +397,95 @@ class WeatherSystem:
         np.clip(coverage, 0.0, 1.0, out=coverage)
         np.clip(density, 0.0, 1.0, out=density)
         np.clip(rain, 0.0, 1.0, out=rain)
-        fog = np.minimum(_FOG_BASELINE + fog_extra * _FOG_BANK_GAIN, self._fog_max)
+        fog_bank = _FOG_BASELINE + fog_extra * _FOG_BANK_GAIN
+        return coverage, density, rain, fog_bank, storm_gust
+
+    def _local_wind_speed(
+        self, coverage: np.ndarray, storm_gust: np.ndarray, t: float
+    ) -> np.ndarray:
+        """
+        Vectorised local wind speed (m/s) at *t* for each point.
+
+        The single definition shared by :meth:`sample_fields` (the emergent-fog
+        wind gate) and :meth:`sample_local` (the returned ``wind_speed``), so a
+        texel's fog equals ``sample_local`` fog at its center:
+        ``syn_speed·(0.7 + 0.5·coverage) + storm_gust·storm_wind_max``.
+        """
+        _, syn_speed = self.synoptic.wind(t)
+        return syn_speed * (0.7 + 0.5 * coverage) + storm_gust * self._storm_wind_max
+
+    def _emergent_fog(
+        self,
+        pts: np.ndarray,
+        coverage: np.ndarray,
+        storm_gust: np.ndarray,
+        t: float,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Emergent fog coefficient (1/m) and relative humidity at each point.
+
+        Closed-form condensation (see :mod:`fire_engine.weather.humidity`): the
+        local relative humidity (per-day baseline + recent rain + ground
+        wetness) condenses into ground fog where it exceeds the
+        temperature-dependent saturation humidity, gated off by wind.  Returns
+        ``(emergent_fog, humidity)`` — both shape ``(N,)``.
+        """
+        day = int(t // _DAY_S)
+        tod = t - day * _DAY_S
+        tod_h = tod / 3600.0
+        # Per-day calm-air humidity baseline, cosine-blended across the midnight
+        # hand-off over the first game hour (same shape as the regime ambient
+        # blend) so humidity — and the fog it drives — never snaps at 00:00.
+        h_cur = humidity_base(day, self._config)
+        h_prev = humidity_base(day - 1, self._config) if day > 0 else h_cur
+        blend = 0.5 - 0.5 * math.cos(math.pi * min(tod / 3600.0, 1.0))
+        h_base = h_prev + (h_cur - h_prev) * blend
+
+        temp = np.full(pts.shape[0], self._temperature(tod_h))
+        wind_speed = self._local_wind_speed(coverage, storm_gust, t)
+        rain_recent = self.rain_recent_at(pts, t)
+        wetness = self.wetness_at(pts, t)
+        humidity = relative_humidity(rain_recent, wetness, h_base, self._config)
+        fog = emergent_fog(humidity, temp, wind_speed, self._config)
+        return fog, humidity
+
+    def sample_fields(
+        self, points_xy: np.ndarray, t_abs: float
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Vectorised core sampling: the raster channels at every query point.
+
+        This is the single source of truth for the spatial weather field —
+        :meth:`sample_local` calls it with one point and the weather-map raster
+        (M3) calls it over a whole grid, so a texel's rasterised value equals
+        ``sample_local`` at that texel center by construction.
+
+        Composition: the day regime sets the ambient cloud cover/density
+        (cosine-blended from the previous day's regime over the first game hour
+        after midnight); every active cell adds its footprint contribution to
+        coverage/density/rain, FOG_BANKs to fog, THUNDERSTORMs to a core gust.
+        The fog channel also gains the **emergent** condensation term (humidity
+        past the temperature-dependent saturation in calm air — see
+        :mod:`fire_engine.weather.humidity`), so calm humid nights grow ground
+        fog with no scheduled "fog state"; the total is capped at
+        ``weather_fog_max_density``.
+
+        Parameters
+        ----------
+        points_xy : np.ndarray — shape ``(N, 2)`` world-XY query points (m).
+        t_abs : float — absolute game seconds.
+
+        Returns
+        -------
+        tuple of five ``(N,)`` arrays — ``(coverage, density, rain, fog,
+        storm_gust)``; the first four are the raster channels (coverage,
+        density, rain, fog clamped/capped), the last feeds local wind speed.
+        """
+        pts = np.asarray(points_xy, dtype=np.float64).reshape(-1, 2)
+        t = float(t_abs)
+        coverage, density, rain, fog_bank, storm_gust = self._sample_core(pts, t)
+        emergent, _ = self._emergent_fog(pts, coverage, storm_gust, t)
+        fog = np.minimum(fog_bank + emergent, self._fog_max)
         return coverage, density, rain, fog, storm_gust
 
     def wetness_at(self, points_xy: np.ndarray, t_abs: float) -> np.ndarray:
@@ -431,7 +517,43 @@ class WeatherSystem:
             weight = (self._wet_step / self._wet_tau) * math.exp(
                 -k * self._wet_step / self._wet_tau
             )
-            _, _, rain_k, _, _ = self.sample_fields(pts, tk)
+            _, _, rain_k, _, _ = self._sample_core(pts, tk)
+            acc += weight * rain_k
+        np.clip(acc, 0.0, 1.0, out=acc)
+        return acc
+
+    def rain_recent_at(self, points_xy: np.ndarray, t_abs: float) -> np.ndarray:
+        """
+        Closed-form "recent rain" measure 0–1 at each query point.
+
+        The same fixed-offset exponential quadrature as :meth:`wetness_at`, but
+        with its own (longer) decay constant ``weather_humidity_recent_tau_s``:
+        the air stays muggy for hours after a shower while the ground dries in
+        ~1 h, so evening rain still registers in the pre-dawn humidity and can
+        feed ground fog.  Feeds the emergent-humidity model
+        (:func:`fire_engine.weather.humidity.relative_humidity`).  Pure function
+        of (seed, time, position); recomputes for free on load.
+
+        Parameters
+        ----------
+        points_xy : np.ndarray — shape ``(N, 2)`` world-XY query points (m).
+        t_abs : float — absolute game seconds.
+
+        Returns
+        -------
+        np.ndarray — shape ``(N,)`` recent-rain measure clamped to [0, 1].
+        """
+        pts = np.asarray(points_xy, dtype=np.float64).reshape(-1, 2)
+        t = float(t_abs)
+        acc = np.zeros(pts.shape[0])
+        for k in range(1, self._recent_samples + 1):
+            tk = t - k * self._recent_step
+            if tk < 0.0:                       # before world start: no history
+                break
+            weight = (self._recent_step / self._recent_tau) * math.exp(
+                -k * self._recent_step / self._recent_tau
+            )
+            _, _, rain_k, _, _ = self._sample_core(pts, tk)
             acc += weight * rain_k
         np.clip(acc, 0.0, 1.0, out=acc)
         return acc
@@ -460,23 +582,23 @@ class WeatherSystem:
             self._last_abs_t if self._last_abs_t is not None else 0.0
         )
         pt = np.array([[float(pos_xy[0]), float(pos_xy[1])]], dtype=np.float64)
-        cov, den, rain, fog, gust = self.sample_fields(pt, t)
+        cov, den, rain, fog_bank, gust = self._sample_core(pt, t)
         coverage = float(cov[0])
 
-        wind_dir, syn_speed = self.synoptic.wind(t)
-        wind_speed = (
-            syn_speed * (0.7 + 0.5 * coverage)
-            + float(gust[0]) * self._storm_wind_max
-        )
+        emergent, humidity = self._emergent_fog(pt, cov, gust, t)
+        fog = float(min(fog_bank[0] + emergent[0], self._fog_max))
+
+        wind_dir, _ = self.synoptic.wind(t)
+        wind_speed = float(self._local_wind_speed(cov, gust, t)[0])
         tod_h = (t % _DAY_S) / 3600.0
         return LocalWeather(
             cloud_coverage=coverage,
             cloud_density=float(den[0]),
-            fog_density=float(fog[0]),
+            fog_density=fog,
             rain_intensity=float(rain[0]),
             wind_dir=wind_dir,
             wind_speed=wind_speed,
-            humidity=0.5,
+            humidity=float(humidity[0]),
             wetness=float(self.wetness_at(pt, t)[0]),
             temperature_c=self._temperature(tod_h),
         )

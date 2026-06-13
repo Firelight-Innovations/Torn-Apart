@@ -643,6 +643,25 @@ class Config:
     weather_wetness_tau_s:         float = 3600.0  # wetness decay time constant (game s)
     weather_wetness_step_s:        float = 600.0   # quadrature step into the past (game s)
     weather_wetness_samples:       int   = 12      # number of past rain samples (window = step·samples)
+    # Emergent humidity + fog (M5): fog condenses from conditions, not a state.
+    # humidity = base(day) + rain_gain·rain_recent + wetness_gain·wetness; it
+    # condenses to fog where it exceeds the temperature-dependent saturation
+    # humidity in calm air. All closed-form pure fn of (seed, t, pos). See
+    # weather/humidity.py. Units: relative humidity 0–1, °C, m/s, fog 1/m.
+    weather_humidity_base_min:     float = 0.35    # seeded per-day calm-air humidity baseline band
+    weather_humidity_base_max:     float = 0.65
+    weather_humidity_rain_gain:    float = 1.00    # humidity added per unit recent rain (0–1)
+    weather_humidity_wetness_gain: float = 0.30    # humidity added per unit ground wetness (0–1)
+    weather_humidity_recent_tau_s:    float = 18000.0  # recent-rain decay time constant (game s; 5 h — air holds moisture for hours so evening rain feeds pre-dawn fog)
+    weather_humidity_recent_step_s:   float = 1800.0   # recent-rain quadrature step into past (game s)
+    weather_humidity_recent_samples:  int   = 12       # recent-rain samples (window = step·samples = 6 h)
+    weather_fog_emergent_max:      float = 0.022   # max emergent fog coefficient at full condensation (1/m)
+    weather_fog_sat_ref_c:         float = 5.0     # reference temperature for saturation humidity (°C)
+    weather_fog_sat_base:          float = 0.63    # saturation humidity at the reference temperature (0–1)
+    weather_fog_sat_slope_per_c:   float = 0.011   # saturation humidity rise per °C above the reference
+    weather_fog_condense_band:     float = 0.10    # humidity overshoot over saturation for full condensation
+    weather_fog_wind_full_ms:      float = 1.0     # full fog at/below this wind speed (m/s)
+    weather_fog_wind_none_ms:      float = 3.0     # no emergent fog at/above this wind speed (m/s)
     # --- Graphics quality ([graphics] table; defaults == "high" preset) ---
     gfx_preset:                 str   = "high"
     gfx_post_process:           bool  = True

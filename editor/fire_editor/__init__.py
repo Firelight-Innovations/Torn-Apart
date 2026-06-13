@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from ._generated import DAEMON_VERSION, PROTOCOL_VERSION
 from .binary import BinaryFrameError, decode_frame, encode_frame
+from .client import BinaryFrame, EditorClient, RpcRemoteError, spawn_daemon
 from .daemon import Daemon
 from .meshcodec import decode_mesh_payload, encode_mesh_payload
 from .rpc import Dispatcher, RpcError
@@ -25,6 +26,10 @@ __all__ = [
     "Dispatcher",
     "RpcError",
     "EditorSession",
+    "EditorClient",
+    "RpcRemoteError",
+    "BinaryFrame",
+    "spawn_daemon",
     "encode_frame",
     "decode_frame",
     "BinaryFrameError",

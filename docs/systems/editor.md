@@ -120,6 +120,12 @@ so Ctrl+S round-trips the opened file. Load the result in the game with
 **CLI:** `python -m fire_editor --port <p> [--host 127.0.0.1] [--log-level info]`
 — announces `{"event":"listening","port":N}` on stdout; logs to stderr.
 
+**Agent harness:** an agent can drive *and* visually verify the editor headlessly
+(no VS Code) via `fire_editor.EditorClient`/`spawn_daemon`, the
+`tools/editor_client.py` CLI (`serve` hosts a browser viewport that runs the same
+`sceneView.js` bundle), and `window.fireHarness`/`__fireSceneDebug` in that page.
+See `docs/systems/editor_harness.md`.
+
 **Protocol — `editor/protocol/` (single source):**
 - `schema.json` — the one source of truth for the wire protocol.
 - `codegen.py` — regenerates `fire_editor/_generated.py` and `extension/src/protocol/generated.ts`. Run `python editor/protocol/codegen.py` after any `schema.json` change (hard rule 6).

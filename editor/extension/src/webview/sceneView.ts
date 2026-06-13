@@ -14,14 +14,7 @@ import { TransformControls } from "three/examples/jsm/controls/TransformControls
 import { decodeMeshPayload, chunkKey } from "../protocol/meshPayload";
 import { decodeTexturePayload } from "../protocol/texturePayload";
 import { makeGroundMaterial } from "./groundMaterial";
-
-declare function acquireVsCodeApi(): {
-  postMessage(msg: unknown): void;
-  getState(): unknown;
-  setState(s: unknown): void;
-};
-
-const vscode = acquireVsCodeApi();
+import { host } from "./host";
 
 THREE.Object3D.DEFAULT_UP = new THREE.Vector3(0, 0, 1);
 
@@ -195,7 +188,7 @@ function sendTransform(node: THREE.Object3D, force: boolean): void {
   if (!force && now - lastTransformSent < TRANSFORM_THROTTLE_MS) return;
   lastTransformSent = now;
   const q = node.quaternion; // three is (x,y,z,w); wire is (w,x,y,z)
-  vscode.postMessage({
+  host.post({
     type: "transform",
     id,
     position: [node.position.x, node.position.y, node.position.z],
@@ -472,7 +465,7 @@ renderer.domElement.addEventListener("mousedown", (e) => {
       const picked = raycastObjects();
       if (picked != null) {
         selectObjectLocal(picked);
-        vscode.postMessage({ type: "selectObject", id: picked });
+        host.post({ type: "selectObject", id: picked });
         return;
       }
       // Carve: hand the daemon the ray through the cursor; it does the
@@ -480,7 +473,7 @@ renderer.domElement.addEventListener("mousedown", (e) => {
       raycaster.setFromCamera(ndc, camera);
       const o = camera.position;
       const d = raycaster.ray.direction;
-      vscode.postMessage({
+      host.post({
         type: "edit",
         ox: o.x, oy: o.y, oz: o.z,
         dx: d.x, dy: d.y, dz: d.z,
@@ -550,12 +543,12 @@ renderer.domElement.addEventListener(
 
 window.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.code === "KeyZ") {
-    vscode.postMessage({ type: "undo" });
+    host.post({ type: "undo" });
     e.preventDefault();
     return;
   }
   if ((e.ctrlKey || e.metaKey) && (e.code === "KeyY" || (e.shiftKey && e.code === "KeyZ"))) {
-    vscode.postMessage({ type: "redo" });
+    host.post({ type: "redo" });
     e.preventDefault();
     return;
   }
@@ -581,7 +574,7 @@ window.addEventListener("keydown", (e) => {
   }
   if (e.code === "Escape" && selectedObjectId != null) {
     selectObjectLocal(null);
-    vscode.postMessage({ type: "selectObject", id: null });
+    host.post({ type: "selectObject", id: null });
   }
 });
 window.addEventListener("keyup", (e) => keys.delete(e.code));
@@ -596,6 +589,51 @@ let lastCenterSent = new THREE.Vector3(Infinity, Infinity, Infinity);
 let lastTime = performance.now();
 let lastFocusSent = 0;
 let fps = 0;
+
+// Place the camera deterministically (harness screenshots). Accepts an explicit
+// position and either yaw/pitch or a look-at target (default: origin). Forces a
+// fresh stream-center so chunks load around the new pose.
+function applyCameraPose(p: {
+  x?: number; y?: number; z?: number;
+  yaw?: number; pitch?: number;
+  tx?: number; ty?: number; tz?: number;
+}): void {
+  if (typeof p.x === "number" && typeof p.y === "number" && typeof p.z === "number") {
+    camera.position.set(p.x, p.y, p.z);
+  }
+  if (typeof p.yaw === "number") yaw = p.yaw;
+  if (typeof p.pitch === "number") pitch = p.pitch;
+  if (p.yaw === undefined && p.pitch === undefined) {
+    const dir = new THREE.Vector3(
+      (p.tx ?? 0) - camera.position.x,
+      (p.ty ?? 0) - camera.position.y,
+      (p.tz ?? 0) - camera.position.z
+    );
+    if (dir.lengthSq() > 1e-6) {
+      yaw = Math.atan2(dir.y, dir.x);
+      pitch = Math.atan2(dir.z, Math.hypot(dir.x, dir.y));
+    }
+  }
+  lastCenterSent = new THREE.Vector3(Infinity, Infinity, Infinity);
+}
+
+// Numeric viewport state for harness assertions / Chrome MCP readbacks. Not used
+// by VS Code; harmless there. Read it with `window.__fireSceneDebug.snapshot()`.
+const fireSceneDebug = {
+  snapshot() {
+    return {
+      chunks: chunks.size,
+      verts: totalVerts,
+      tris: Math.round(totalTris),
+      objects: objectGizmos.size,
+      selected: selectedObjectId,
+      hasGround: groundMaterial !== null,
+      fps: Math.round(fps),
+      camera: { x: camera.position.x, y: camera.position.y, z: camera.position.z },
+    };
+  },
+};
+(window as unknown as { __fireSceneDebug?: unknown }).__fireSceneDebug = fireSceneDebug;
 
 function tick(): void {
   const now = performance.now();
@@ -626,7 +664,7 @@ function tick(): void {
   // Re-center streaming when the camera crosses ~half a chunk.
   if (camera.position.distanceTo(lastCenterSent) > chunkMeters * 0.5) {
     lastCenterSent = camera.position.clone();
-    vscode.postMessage({
+    host.post({
       type: "camera",
       x: camera.position.x,
       y: camera.position.y,
@@ -638,7 +676,7 @@ function tick(): void {
   if (now - lastFocusSent > 250) {
     lastFocusSent = now;
     const focus = camera.position.clone().addScaledVector(forwardVector(), 18);
-    vscode.postMessage({ type: "focus", x: focus.x, y: focus.y, z: focus.z });
+    host.post({ type: "focus", x: focus.x, y: focus.y, z: focus.z });
   }
 
   if (groundMaterial) {
@@ -702,6 +740,9 @@ window.addEventListener("message", (event) => {
     case "frame":
       frameObject(Number(msg.id));
       break;
+    case "cameraPose":
+      applyCameraPose(msg);
+      break;
     case "editState": {
       const st = (msg.state ?? {}) as { edited_chunks?: number };
       const dirtyEl = document.getElementById("dirty");
@@ -726,5 +767,5 @@ document.getElementById("gizmoRotate")?.addEventListener("click", () => setGizmo
 document.getElementById("gizmoScale")?.addEventListener("click", () => setGizmoMode("scale"));
 setGizmoMode("translate");
 
-vscode.postMessage({ type: "ready" });
+host.post({ type: "ready" });
 requestAnimationFrame(tick);

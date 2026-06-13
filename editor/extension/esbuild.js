@@ -40,7 +40,11 @@ const webviewConfig = {
   format: "iife",
   sourcemap: true,
   logLevel: "info",
-  entryPoints: ["src/webview/sceneView.ts", "src/webview/inspector.ts"],
+  entryPoints: [
+    "src/webview/sceneView.ts",
+    "src/webview/inspector.ts",
+    "src/webview/harnessBoot.ts",
+  ],
   outdir: "media",
   minify: production,
 };

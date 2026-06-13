@@ -2,6 +2,7 @@
 // Owns the WebviewPanel, builds its HTML (CSP + nonce + bundled three.js app),
 // relays mesh/unload/config down to the webview and camera moves back up.
 import * as vscode from "vscode";
+import { VIEWPORT_CSS, VIEWPORT_BODY_HTML } from "./webview/viewportMarkup";
 
 export type MessageHandler = (msg: Record<string, unknown>) => void;
 
@@ -101,61 +102,10 @@ export class SceneViewPanel {
 <meta http-equiv="Content-Security-Policy"
   content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<style>
-  html, body { margin: 0; padding: 0; overflow: hidden; background: #101418; height: 100%; }
-  #stats {
-    position: fixed; top: 8px; left: 10px; z-index: 10;
-    font: 12px/1.4 var(--vscode-editor-font-family, monospace);
-    color: #cfe3f2; text-shadow: 0 1px 2px #000; pointer-events: none;
-  }
-  #hint {
-    position: fixed; bottom: 8px; left: 10px; z-index: 10;
-    font: 11px var(--vscode-editor-font-family, monospace); color: #7da3ba;
-  }
-  #palette {
-    position: fixed; top: 8px; right: 10px; z-index: 10;
-    background: rgba(16,20,24,0.85); border: 1px solid #2a3a48; border-radius: 6px;
-    padding: 8px 10px; color: #cfe3f2;
-    font: 12px var(--vscode-editor-font-family, monospace); display: flex; flex-direction: column; gap: 6px;
-  }
-  #palette label { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
-  #palette select, #palette input { background: #1a2430; color: #cfe3f2; border: 1px solid #2a3a48; }
-  #dirty { color: #e0b341; }
-  #gizmoModes { display: flex; gap: 4px; }
-  #gizmoModes button {
-    flex: 1; background: #1a2430; color: #cfe3f2; border: 1px solid #2a3a48;
-    border-radius: 3px; padding: 2px 0; cursor: pointer;
-    font: 11px var(--vscode-editor-font-family, monospace);
-  }
-  #gizmoModes button.active { background: #2d4a66; border-color: #4f9fe0; }
-</style>
+<style>${VIEWPORT_CSS}</style>
 </head>
 <body>
-  <div id="stats">waiting for daemon…</div>
-  <div id="palette">
-    <div id="gizmoModes">
-      <button id="gizmoMove" title="Move (W)">Move</button>
-      <button id="gizmoRotate" title="Rotate (E)">Rotate</button>
-      <button id="gizmoScale" title="Scale (R)">Scale</button>
-    </div>
-    <strong>Brush <span id="dirty"></span></strong>
-    <label>shape
-      <select id="brushShape">
-        <option value="sphere">sphere</option>
-        <option value="box">box</option>
-        <option value="cylinder">cylinder</option>
-      </select>
-    </label>
-    <label>mode
-      <select id="brushMode">
-        <option value="remove">remove</option>
-        <option value="add">add</option>
-      </select>
-    </label>
-    <label>size <input id="brushSize" type="range" min="0.5" max="8" step="0.5" value="2" /></label>
-    <label>material <input id="brushMaterial" type="number" min="0" max="255" value="1" style="width:48px" /></label>
-  </div>
-  <div id="hint">Right-drag look + WASD/QE fly · Middle-drag pan · Scroll zoom · Alt+Left orbit · Left-click select/carve · W/E/R move/rotate/scale gizmo · F frame · Esc deselect · Ctrl+Z/Y undo · G wire · B borders</div>
+${VIEWPORT_BODY_HTML}
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;

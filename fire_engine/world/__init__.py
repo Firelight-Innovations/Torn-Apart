@@ -82,6 +82,16 @@ try:
 except ImportError:
     SkyRendererComponent = None  # type: ignore[assignment,misc]
 
+try:
+    from fire_engine.world.weather_renderer import WeatherMapComponent
+except ImportError:
+    WeatherMapComponent = None  # type: ignore[assignment,misc]
+
+try:
+    from fire_engine.world.rain_renderer import RainRendererComponent
+except ImportError:
+    RainRendererComponent = None  # type: ignore[assignment,misc]
+
 __all__ = [
     # Transform hierarchy
     "Transform",
@@ -104,5 +114,7 @@ __all__ = [
     "to_geom",                 # Phase 3: MeshArrays → Panda3D Geom (bulk writes)
     "to_geom_node",            # Phase 3: MeshArrays → Panda3D GeomNode
     "DevOverlay",              # Dev tools: in-game DirectGUI debug overlay renderer
-    "SkyRendererComponent",    # Sky/weather: dome + boxy clouds + rain + fog renderer
+    "SkyRendererComponent",    # Sky/weather: dome + volumetric clouds + fog renderer
+    "WeatherMapComponent",     # M4: spatial weather-map texture upload + uniforms
+    "RainRendererComponent",   # M6: volumetric rain (cover-culled + storm-gated)
 ]

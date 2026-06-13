@@ -542,3 +542,22 @@ ARCHITECTURE.md §5.7 reserved `fire_engine/buildings/` as a "blocks + primitive
 - **D4** room auto-detection (planar half-edge minimal cycles, endpoint-snap; v1 requires walls to meet at endpoints — no mid-span T-split) → commit 2 (`rooms.py`).
 - **D5** meshing by partition not CSG (arc→chords, centerline ±t/2 miter, opening-rect face partition, ear-clipped slabs → `terrain.meshing.MeshArrays`) → commit 3.
 - **D6** mesh emitted in building-local space; renderer applies the node transform (move/rotate = transform write, no remesh; `building.vert` must compute `v_world` via `p3d_ModelMatrix`) → commit 7.
+
+---
+
+## 2026-06-13 — Weather M8 (summon API + save delta + gust-front coupling)
+
+### Summoned cells reuse the natural StormCell path instead of a parallel "summon" type
+- **Q:** A summoned storm must drive coverage/rain/fog, the `.cells` readout, the weather-map raster, and (for M7) the strike schedule. Make it a new bespoke object, or a plain `StormCell` like the natural ones?
+- **Choice:** `WeatherSystem.summon_cell` appends a normal `StormCell` (id `"s:{n}"`) to `self._summoned`; `_active_cells` already unions natural ∪ summoned, so every downstream sampler picks it up with **zero** new branches. Placement is **upwind**: the cell spawns `weather_summon_upwind_m` opposite the synoptic blow direction at `time_abs`, so it drifts over the player on the steering current. `drift_bias=(0,0)` — it rides the raw synoptic flow exactly like a natural cell.
+- **Why:** The closed-form `StormCell` is already the unit of weather; reusing it means a summon is a first-class participant everywhere for free and the M7 strike scheduler needs no special case. Upwind placement makes "summon a storm" read as a storm *arriving*, not popping onto your head.
+
+### Save delta = summoned-cell param list + suppressed-id list (no live refs)
+- **Q:** How do summons/suppressions persist with the no-pickle, seed+delta save model and the load-resume invariant (identical future incl. would-be strikes)?
+- **Choice:** `get_delta()` is `{}` for pure natural weather; otherwise `{summoned: [~80-byte primitive cell dicts], summon_seq: int, suppressed: [ids], ...legacy override keys}`. `apply_delta` rebuilds the cells from params (a malformed entry is skipped, never fatal) and bumps `summon_seq` past any restored id. Because a `StormCell` is a pure fn of its params, the reconstructed cell reproduces the identical track + footprint → identical future samples AND would-be strike positions. `clear_all` suppresses the natural cells active *now* (current-weather clear, not all-future).
+- **Why:** Params, not state, is the only thing a closed-form cell needs to round-trip — keeps the delta tiny and pickle-free while guaranteeing determinism. Legacy Markov override deltas still load (their keys map onto the retained `force_weather` shim), so old saves don't break.
+
+### Gust-front coupling lives in `update()` behind an injected wind-field handle
+- **Q:** Where does the "storm's leading edge kicks the grass" coupling live without `wind/` importing `weather/` or `weather/` pulling panda3d into the headless suite?
+- **Choice:** `attach_wind_field(field)` (world layer calls once) stores the field; `update()` → `_update_gust_fronts` registers one `GustFront` per cell whose leading edge is within `weather_gustfront_range_m`, removes it when the cell passes/decays (balanced; tracked in `_active_fronts`). The `wind` import is **lazy/local**, so importing `weather` never imports `wind`, and with no field attached the whole thing is a silent no-op (headless tests use a tiny fake field).
+- **Why:** One-way dependency (weather → wind modifier seam) matches the existing `WindModifier` seam design; keeping the field injected (not imported at module scope) preserves the headless-testable guarantee and the zero-save-bytes property (`GustFront` is itself pure in (seed_key, t)).

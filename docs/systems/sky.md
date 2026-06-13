@@ -1,11 +1,11 @@
 # sky — System Doc
-keywords: sky, skybox, sky dome, day night cycle, daynight, sun, moon, stars, star field, galaxy, milky way, weather, rain, fog, storm, wind, clouds, cloud coverage, celestial, time of day, sunrise, sunset, dawn, dusk, twilight, daylight, moon phase, sky gradient, zenith, horizon, fog color, fog density, terrain light scale, SkyState, SkySystem, WeatherSystem, WeatherType, WeatherParams, sun_direction, moon_direction, force_weather, WeatherChangedEvent, markov, night_sky, rain_streak, atmosphere, rayleigh, mie, scattering, transmittance, sun_radiance, moon_radiance, sky_ambient, physical sky, single scattering, earth shadow, moon_surface, external_lighting, cloud_noise, bake_shape_noise, bake_detail_noise, worley, perlin-worley, volumetric clouds, 3d noise, tileable noise, to_panda_texture_3d, sampler3D, cloud density field
+keywords: sky, skybox, sky dome, day night cycle, daynight, sun, moon, stars, star field, galaxy, milky way, weather, rain, fog, storm, wind, clouds, cloud coverage, celestial, time of day, sunrise, sunset, dawn, dusk, twilight, daylight, moon phase, sky gradient, zenith, horizon, fog color, fog density, terrain light scale, SkyState, SkySystem, WeatherSystem, WeatherType, LocalWeather, storm cell, regime, classify, sample_local, player_pos, sun_direction, moon_direction, force_weather, WeatherChangedEvent, night_sky, rain_streak, atmosphere, rayleigh, mie, scattering, transmittance, sun_radiance, moon_radiance, sky_ambient, physical sky, single scattering, earth shadow, moon_surface, external_lighting, cloud_noise, bake_shape_noise, bake_detail_noise, worley, perlin-worley, volumetric clouds, 3d noise, tileable noise, to_panda_texture_3d, sampler3D, cloud density field
 
 > One doc per code package; filename matches the package exactly (`docs/systems/sky.md` ↔ `fire_engine/sky/`).
 
 ## Role
 
-`sky/` is the **headless half of the procedural sky + weather feature** — a Layer 1 Service, peer of `lighting/`.  Once per frame, `SkySystem.update()` reads the game clock and produces a frozen `SkyState` snapshot: sun/moon directions, sky gradient colors, blended weather parameters (clouds, fog, rain, wind), star visibility, the legacy `terrain_light_scale` multiplier, and the **HDR radiance contract** (`sun_radiance` / `moon_radiance` / `sky_ambient`) consumed by the GPU volumetric lighting pipeline.  Weather follows a **deterministic Markov chain** over 2-game-hour segments — the entire schedule is a pure function of `(world_seed, game_day, segment)`, so saves cost ~0 bytes unless a dev override is active.
+`sky/` is the **headless half of the procedural sky + weather feature** — a Layer 1 Service, peer of `lighting/`.  Once per frame, `SkySystem.update()` reads the game clock and produces a frozen `SkyState` snapshot: sun/moon directions, sky gradient colors, blended weather parameters (clouds, fog, rain, wind), star visibility, the legacy `terrain_light_scale` multiplier, and the **HDR radiance contract** (`sun_radiance` / `moon_radiance` / `sky_ambient`) consumed by the GPU volumetric lighting pipeline.  Weather is **spatial** — `SkySystem` asks the `fire_engine/weather/` system for the `LocalWeather` at the player's position (drifting storm cells over a per-day regime; see `docs/systems/weather.md`).  It is a pure function of `(world_seed, game time, position)`, so saves cost ~0 bytes unless a dev override is active.
 
 **The sky is physically simulated** (`sky/atmosphere.py`): an Earth-like Rayleigh + Mie **single-scattering** model (spherical planet, exponential density, nested sun-ray transmittance with planet occlusion → the earth-shadow twilight arch).  It is evaluated twice from the same constants: in numpy here (a boot-time LUT over sun elevation feeds `SkySystem`'s per-frame scalar interpolation) and per pixel in the GLSL dome shader (`world/sky_shaders.py`) — so the *picture* of the sunset and the *light* it casts on terrain agree by construction.  Sunsets turn the actual scene light orange because `sun_radiance` follows the modelled transmittance.
 
@@ -43,22 +43,35 @@ All symbols below are re-exported from `fire_engine.sky` (`__init__.py`).
 |---|---|
 | `SkySystem(config, clock, bus)` | Composer.  Constructs its `WeatherSystem` internally. |
 | `sky.weather` | The owned `WeatherSystem` (register it with SaveManager). |
-| `sky.update() -> SkyState` | Reads `clock.game_day` / `clock.game_time_of_day`, computes + caches.  Call once per frame. |
+| `sky.update(player_pos=None) -> SkyState` | Reads `clock.game_day` / `clock.game_time_of_day`, samples weather at `player_pos` (origin if `None`), computes + caches.  Call once per frame. |
 | `sky.state` | Property: last computed `SkyState` (`update()` invoked lazily if never run). |
 
-### Weather (`sky/weather.py`)
+### Weather-map GPU pack (`sky/weather_map_pack.py`) — headless, M4
+
+| Symbol | Description |
+|---|---|
+| `pack_weather_map(raster) -> bytes` | Pack a `(cells, cells, 4)` float32 `WeatherMap.rasterize` output into Panda3D 2-D-texture RAM bytes: **little-endian float16, row-major `(row=Y, col=X)`, BGRA** (no transpose — the raster is already row-major, unlike `pack_wind_field`'s `[x,y]` field).  Logical RGBA = `(coverage, density, precip, fog)`; BGRA is the `F_rgba16` data-texture quirk (same swap `pack_wind_field` / `lighting/volume.pack_volume` apply).  Panda3D un-swizzles BGRA→RGBA on sample, so the shader reads `texture(...).rgba == (coverage, density, precip, fog)`.  Pure, thread-safe, no panda3d.  Layout pinned by `tests/test_weather_map_pack.py`.  Uploaded by `world/weather_renderer.py::WeatherMapComponent`. |
+
+### Weather (now `fire_engine/weather/`; `sky/weather.py` is a re-export shim)
+
+The weather model moved into its own headless package when it became spatial
+(drifting storm cells sampled at the player) — see `docs/systems/weather.md`
+for the full contract.  `sky/weather.py` re-exports the names below so old
+imports keep working; new code imports from `fire_engine.weather`.
 
 | Symbol | Description |
 |---|---|
 | `WeatherType` | `str` Enum: `CLEAR, CLOUDY, OVERCAST, FOG, RAIN, STORM` (values `"clear"`…`"storm"`). |
-| `WeatherParams` | Frozen dataclass: `cloud_coverage, cloud_density, fog_density, rain_intensity, wind_dir, wind_speed` — same units as `SkyState`. |
-| `WeatherSystem(config, bus=None)` | Saveable (`save_key = "weather"`). |
-| `ws.current` | Property: discrete `WeatherType` as of the last `update()` (override wins). |
-| `ws.update(game_day, game_time_of_day) -> WeatherParams` | Blended params; publishes `WeatherChangedEvent` (deferred) on discrete change. |
-| `ws.force_weather(weather)` | Dev override; `None` clears it and blends back to the natural schedule. |
-| `ws.get_delta() -> dict` | `{}` unless an override/release blend is active. |
+| `LocalWeather` | Frozen sample: `cloud_coverage, cloud_density, fog_density, rain_intensity, wind_dir, wind_speed` (+ `humidity, wetness, temperature_c`) — first six same units as `SkyState`. |
+| `WeatherSystem(config, bus=None)` | Saveable (`save_key = "weather"`); owns the synoptic flow + storm cells. |
+| `ws.current` | Property: discrete `WeatherType` (60-game-s hysteresis; override wins). |
+| `ws.update(game_day, game_time_of_day, player_pos=None) -> LocalWeather` | Local sample at the player; publishes `WeatherChangedEvent` (deferred) on a committed label change. |
+| `ws.force_weather(weather)` | Dev override (compat shim); `None` clears it and blends back to the natural spatial sample. |
+| `ws.summon_cell(kind, *, time_abs, player_pos, ...)` / `summon_rainstorm` / `summon_thunderstorm` / `summon_fog_bank` / `clear_all` / `suppress` (M8) | Spatial summon API — spawns saveable storm cells upwind of the player / clears them. See `docs/systems/weather.md`. |
+| `ws.attach_wind_field(field)` (M8) | Wire the `wind/` field so approaching storms register `GustFront` modifiers (world layer calls once at boot). |
+| `ws.get_delta() -> dict` | `{}` unless an override/release blend is active **or** summons/suppressions exist (M8). |
 | `ws.apply_delta(delta)` | Restore override state; subsequent behaviour identical. |
-| `SEGMENT_SECONDS`, `SEGMENTS_PER_DAY`, `BLEND_SECONDS` | 7200 s, 12, 1200 s (20 game minutes). |
+| `BLEND_SECONDS`, `HYSTERESIS_SECONDS` | Override crossfade 1200 s (20 game min); classify hysteresis 60 game s. |
 
 ### Celestial (`sky/celestial.py`) — pure functions
 
@@ -92,7 +105,8 @@ Headless numpy (no panda3d); `world/texture_bridge.to_panda_texture_3d` uploads 
 ### Related (owned elsewhere)
 
 - `"night_sky"` / `"rain_streak"` / `"moon_surface"` procedural textures — see `docs/systems/procedural.md`.  The moon disc texture is seeded per world (`for_domain`): every world grows different craters/maria.
-- The render half: dome single-scatter shader, 2.5×-sized limb-darkened sun disc + textured moon disc with phase terminator, cloud/rain renderers, and the `SkyRendererComponent(external_lighting=...)` flag — `world/sky_renderer.py` / `world/sky_shaders.py`.  Under HDR output (`u_hdr_output=1`) the sun disc/halo gains and the scattered-sky brightness are config-exposed `gfx_*` uniforms pushed once at build (`_build_dome`): `gfx_sun_disc_intensity`, `gfx_sun_halo_intensity`, `gfx_sun_min_brightness` (transmittance floor that keeps a grazing sunrise/sunset sun bright instead of fading, hue preserved), `gfx_sky_inscatter_scale` (sky-radiance multiplier — lower to cut the washed-out look when the sun is low, without dimming the disc).  See `docs/systems/world.md` "Aesthetic vs quality config".
+- The render half: dome single-scatter shader, 2.5×-sized limb-darkened sun disc + textured moon disc with phase terminator, cloud/rain renderers, and the `SkyRendererComponent(external_lighting=...)` flag — `world/sky_renderer.py` / `world/sky_shaders.py`.  `SkyRendererComponent` is the **sole driver** of `sky_system.update(player_pos)` (threads the camera world XY through, M4); other readers consume the already-advanced weather.
+- The M4 **weather-map** render bridge `world/weather_renderer.py::WeatherMapComponent` rasters the spatial weather field (`WeatherMap`) around the camera, packs it with `pack_weather_map`, and binds the weather-map uniform contract on `render` (`u_weather_map`, `u_wmap_origin`, `u_wmap_cell_m`, `u_wmap_cells`, `u_weather_map_enabled`, `u_weather_ambient`, `u_virga_enabled`).  `cloud_volumetric.frag` samples it per march step at the **raw world XY** (never `+u_wind` — the map already encodes cell drift) for spatial coverage/density/precip, edge-fading to `u_weather_ambient` past the map; precip lowers/darkens storm bases and (medium+ preset) adds gray **virga** shafts.  Gated by `gfx_weather_map` / `gfx_cloud_virga`.  **M9 WMO genera** (`gfx_cloud_genera`, medium+; needs `gfx_weather_map`): the single cloud slab becomes three altitude bands — high cirrus, mid alto-, low cumulus/stratus/cumulonimbus — derived in-shader from the same coverage/density/precip channels (no new texture data; the weather-map 4-channel pack is unchanged).  Headless companion `fire_engine.weather.cloud_layers` / `classify_genus`; band tunables are `cloud_genera_*` in `[weather]` — see `docs/systems/weather.md` "WMO cloud genera".  Under HDR output (`u_hdr_output=1`) the sun disc/halo gains and the scattered-sky brightness are config-exposed `gfx_*` uniforms pushed once at build (`_build_dome`): `gfx_sun_disc_intensity`, `gfx_sun_halo_intensity`, `gfx_sun_min_brightness` (transmittance floor that keeps a grazing sunrise/sunset sun bright instead of fading, hue preserved), `gfx_sky_inscatter_scale` (sky-radiance multiplier — lower to cut the washed-out look when the sun is low, without dimming the disc).  See `docs/systems/world.md` "Aesthetic vs quality config".
 - `[sky]` config table (`sky_cloud_altitude_m`, `sky_cloud_thickness_m`, `sky_cloud_cell_m`, `sky_star_count`) — see `docs/systems/core.md`.
 - `clock.game_time_scale` (read/write, dev time scrubbing) — see `docs/systems/core.md`.
 
@@ -110,7 +124,7 @@ Headless numpy (no panda3d); `world/texture_bridge.to_panda_texture_3d` uploads 
 ### Published
 | Event | When | Publisher |
 |---|---|---|
-| `WeatherChangedEvent(previous, current, day)` | Discrete weather state changes (at most once per segment boundary, or on `force_weather` toggle).  `previous`/`current` are `WeatherType.value` strings. | `WeatherSystem.update()` via `bus.publish_deferred` |
+| `WeatherChangedEvent(previous, current, day)` | Committed discrete weather label changes (after 60-game-s classify hysteresis, or on a `force_weather` toggle).  `previous`/`current` are `WeatherType.value` strings. | `WeatherSystem.update()` via `bus.publish_deferred` |
 
 Never per-frame events: blended parameter changes are returned from `update()`, not published.
 
@@ -122,11 +136,11 @@ Never per-frame events: blended parameter changes are returned from `update()`, 
 - **Z-up, forward = +Y, east/right = +X.**  Directions are unit `Vec3` pointing FROM the scene TOWARD the body.  Distances meters, time seconds, angles radians.  Colors are linear RGB tuples, components 0–1.
 - `time_of_day_s` is `clock.game_time_of_day`: seconds in `[0, 86400)`, 0 = midnight.  Fixed v0 schedule: sunrise 06:00, sunset 18:00; the sun arc tilts 20° toward −Y (southern sky), the moon 12°.
 - `fog_density` is the exponential fog coefficient in **1/m** (transmittance `e^(−density·distance)`).
-- **Determinism:** the weather schedule and all natural (un-forced) params are pure functions of `(world_seed, game_day, game_time_of_day)`.  Two fresh `SkySystem`s with the same seed and clock state produce bit-identical `SkyState`s.  All randomness flows through `for_domain("weather", ...)`.
-- **Day anchoring:** each day's segment 0 is drawn from a fixed initial distribution (≈ stationary) instead of chaining from the previous day — this bounds recompute to ≤ 12 Markov steps per day.  The midnight hand-off is still parameter-blended.  STORM is rare and (almost) only reachable from RAIN; FOG probability is ×3 in segments 2–4 (04:00–10:00).
-- **Blending:** every transition (natural, force, release) crossfades over `BLEND_SECONDS` = 20 game minutes with smoothstep — params never pop.  Per-state targets: CLEAR(coverage .12, density .35, fog .0008, rain 0) · CLOUDY(.45, .55, .0012, 0) · OVERCAST(.85, .80, .003, 0) · FOG(.55, .50, .025, 0, low wind) · RAIN(.90, .85, .006, .7) · STORM(.98, .95, .008, 1.0, high wind).  Wind direction is per-day from `for_domain("weather", "wind", day)`.
+- **Determinism:** all natural (un-forced) weather is a pure function of `(world_seed, game time, position)`.  Two fresh `SkySystem`s with the same seed, clock state, and `player_pos` produce bit-identical `SkyState`s.  All randomness flows through `for_domain("weather", ...)`.
+- **Spatial model:** weather is sampled at `player_pos` (origin when `None`) from a per-day **regime** ambient plus every active drifting **storm cell** — see `docs/systems/weather.md`.  The discrete `current` label lags the continuous sample by a 60-game-s classification hysteresis (anti-flicker).
+- **Override blending:** `force_weather` (the dev shim) crossfades over `BLEND_SECONDS` = 20 game minutes with smoothstep — params never pop.  Per-state targets: CLEAR(coverage .12, density .35, fog .0008, rain 0) · CLOUDY(.45, .55, .0012, 0) · OVERCAST(.85, .80, .003, 0) · FOG(.55, .50, .025, 0, calm ×.30) · RAIN(.90, .85, .006, .7) · STORM(.98, .95, .008, 1.0, gusty ×1.9).  Wind comes from the closed-form **synoptic flow** (`fire_engine.weather.Synoptic`, exposed as `WeatherSystem.synoptic`): direction drifts smoothly over hours, speed = synoptic speed × the per-state multiplier above.  See `docs/systems/weather.md`.
 - `terrain_light_scale` components are always in `[0, 1.05]`; exactly (1, 1, 1) × weather-dim at clear noon.
-- Saves: `get_delta()` is `{}` on the natural schedule (baseline regenerates from seed).  Only `force_weather` overrides / in-flight release blends are snapshotted, as plain primitives.
+- Saves: `get_delta()` is `{}` on the natural schedule (baseline regenerates from seed).  `force_weather` overrides / in-flight release blends **and** M8 summons/suppressions are snapshotted, as plain primitives (summoned cells round-trip bit-exact so the loaded world reproduces the identical future — see `docs/systems/weather.md`).
 
 ## Examples
 
@@ -183,7 +197,7 @@ dusk_moon = moon_direction(17.5 * 3600.0) # already above the east horizon
 
 1. **Call `update()` once per frame, after `clock.update()`.**  `SkyState` is a snapshot of the clock at call time; the `state` property does NOT recompute (except a single lazy first call).
 
-2. **`set_world_seed` is global** — `WeatherSystem` memoises its schedule per instance, so changing the seed mid-life leaves stale cached segments.  Seeds change only at boot/world-load; build a fresh `SkySystem` afterwards (tests: fully consume one instance before reseeding).
+2. **`set_world_seed` is global** — `WeatherSystem` memoises natural cells per day per instance, so changing the seed mid-life leaves a stale cell cache.  Seeds change only at boot/world-load; build a fresh `SkySystem` afterwards (tests: fully consume one instance before reseeding).
 
 3. **`force_weather` anchors at the *next* `update()`** — the blend starts from the next frame's params, so forcing then asserting targets immediately will fail; advance game time past `BLEND_SECONDS` first.
 
@@ -206,5 +220,7 @@ dusk_moon = moon_direction(17.5 * 3600.0) # already above the east horizon
 12. **`SkyRendererComponent(external_lighting=True)` is mandatory on the GPU lighting backend** — otherwise the sky renderer's `terrain_root.set_color_scale` and Panda3D `Fog` double-apply on top of the volumetric terrain shader.  main.py wires this from `config.lighting_backend`.
 
 13. **Overcast attenuates `sun_radiance` by ×(1 − 0.92·coverage·density)** — under a storm the direct sun is nearly gone and the scene is lit almost entirely by the (desaturated) `sky_ambient`.  That is intended: overcast light IS diffuse.
+
+15. **M7 lightning flash (`u_lightning_flash`).** `sky_dome.frag` and `cloud_volumetric.frag` add a small **additive** whitening (cloud term scaled by the cloud alpha so clear sky doesn't glow) driven by `u_lightning_flash`, pulsed on `base.render` by `world/lightning_renderer.py` during a nearby strike.  It is additive ON PURPOSE — never an exposure change, which would fight the HDR auto-adaptation.  The uniform defaults to 0 (Panda3D supplies 0 for an unbound declared input), so the dome/clouds render fine even when the lightning renderer is disabled.
 
 14. **Dome fog/sun composite ORDER (sky_dome.frag).**  The froxel fog is composited over the BACKGROUND sky first (`col = col*fogA + fogRGB`); the sun/moon **discs + halos are added AFTER, attenuated by the fog transmittance `fogA` only** — never by the inscatter `fogRGB`.  This is what lets a bright HDR sun punch through fog (dimmed, not erased).  Reversing the order (disc into `col` before fog) re-introduces the "sun hidden behind a grey fog layer" bug.  The disc/halo brightness is `discGain`/`haloGain`, which jump far above 1.0 when `u_hdr_output` is on so bloom bleeds the disc into a soft blob; the legacy (post-off) path keeps the original 14.0/0.55 clamped-disc values.  The atmosphere reads as a flat gradient ONLY when its >1.0 radiance is clamped — with HDR post-processing the physical dark→red/orange→bright sunrise progression emerges from the existing scattering with no extra hand-painting.

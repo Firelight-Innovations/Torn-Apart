@@ -1,0 +1,38 @@
+site_name: Torn Apart — Engine Docs
+site_description: Grep-first knowledge base for the Firelight engine (Torn Apart).
+docs_dir: docs
+site_dir: site
+use_directory_urls: true
+
+# Nav is auto-generated from the docs/ tree (which mirrors the package tree), so
+# new leaf-package docs appear without editing this file and `--strict` does not
+# flag "page exists but not in nav". The strict build is the gate's free
+# broken-link / dead-nav checker (standard 15) — see docs/systems/standards.md.
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - search.suggest
+    - content.code.copy
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: ["."]
+          options:
+            docstring_style: google
+            show_source: false
+            show_root_heading: true
+            members_order: source
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences

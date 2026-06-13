@@ -52,12 +52,28 @@ affected light column; the next streaming pass remeshes those chunks with fresh 
 ## Testing
 
 ```bash
-pytest -q                 # full headless suite (no window / GPU): 257 passed, 1 deselected
+pytest -q                 # full headless suite (no window / GPU)
 pytest -m window          # the one GPU-required test: the real-.egg ResourceManager loader
 ```
 
 The headless suite runs without a window because **only `world/` and `lighting/` may import
 panda3d** — every other package is pure Python/numpy and fully testable headless.
+
+### Standards gate
+
+A machine-enforced code-quality, structure, docs & testing gate keeps the repo clean as it
+scales (it is built to survive many AI agents working in parallel). A standards violation fails
+the build exactly like a failing test, and each failure delegates the fix to a scoped sub-agent.
+
+```bash
+pip install -r requirements-dev.txt   # gate toolchain (ruff, mypy, pylint, vulture, mkdocs, …)
+pre-commit install                    # run the gate on every commit
+pytest -q tests/standards/            # lint + types + structure + docs gates
+pytest -m coverage                    # branch-coverage ratchet (CI/nightly; heavy)
+```
+
+The full rule set, toolchain, and limits live in [docs/systems/standards.md](docs/systems/standards.md)
+(limits in `pyproject.toml [tool.firelight]`).
 
 ### Offscreen tools (no window needed)
 

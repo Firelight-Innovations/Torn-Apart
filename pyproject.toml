@@ -1,0 +1,177 @@
+# pyproject.toml — Torn Apart / Firelight engine
+#
+# Single home for the code-quality, structure, docs & testing standards gate.
+# Every tool below is wired into the headless pytest suite (tests/standards/)
+# and into .pre-commit-config.yaml, so a standards violation fails the build
+# exactly like a failing test.
+#
+# Docs: docs/systems/standards.md
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "torn-apart"
+version = "0.0.0"
+description = "Fantasy post-apocalyptic sandbox RPG — custom engine on Panda3D."
+requires-python = ">=3.11"
+# Runtime deps live in requirements.txt; dev/gate deps in requirements-dev.txt.
+dynamic = ["dependencies"]
+
+[tool.setuptools]
+# The engine is a single import package; the editor/tools/tests are not shipped.
+packages = ["fire_engine"]
+
+# ---------------------------------------------------------------------------
+# Firelight standards gate — single source of truth for the structure limits.
+# tools/standards_config.py reads these; the custom checks and the docs all
+# point here so the numbers can be tuned in exactly one place.
+# ---------------------------------------------------------------------------
+[tool.firelight]
+# Source roots the structure/docs/test-presence checks walk.
+source_roots = ["fire_engine"]
+# Directory the per-module test mirror lives under (standard 17).
+test_root = "tests"
+# Directory the per-package system docs live under (standard 13).
+docs_root = "docs/systems"
+# Structure limits (standards 6, 7, 8).
+max_subdirs = 5            # max sub-folders per folder
+max_modules_per_dir = 10   # max .py modules per folder (excl. __init__.py); 5 is the stretch target
+max_lines = 500            # max source lines per module
+# Coverage ratchet floor (branch coverage %). Set to the current measured value
+# (rounded down) so the gate is real immediately and can only climb. See
+# DECISIONS.md "coverage ratchet". Raise this as coverage improves; never lower.
+coverage_fail_under = 0.0
+# One-public-class-per-module (standard 10). Files allowed to group trivial
+# tightly-coupled support types (std 11 exemption) — matched on basename.
+grouping_modules = ["events.py", "types.py", "constants.py", "enums.py", "protocols.py"]
+# Paths (relative to repo root, prefix match) excluded from ALL custom checks.
+exclude = [
+    ".git", ".venv", "venv", "saves", "assets", "scenes",
+    "build", "dist", "site", "__pycache__", ".pytest_cache",
+    ".mypy_cache", ".ruff_cache", "node_modules",
+]
+
+# ---------------------------------------------------------------------------
+# Ruff — linter AND formatter (owns formatting, import sort, dead imports/vars,
+# commented-out code, complexity, perf, numpy lints).
+# Note: ANN (annotations) is intentionally NOT enabled — mypy owns typing so we
+# don't double-report.
+# ---------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = [
+    ".venv", "saves", "assets", "scenes", "site", "build", "dist",
+    "vulture_whitelist.py",
+]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W",   # pycodestyle + pyflakes (incl. F401 unused import, F841 unused var)
+    "I",             # isort — import ordering
+    "UP",            # pyupgrade
+    "B",             # flake8-bugbear
+    "C90",           # mccabe complexity
+    "PERF",          # perflint — performance anti-patterns
+    "NPY",           # numpy-specific lints (NPY002 = legacy np.random, etc.)
+    "ERA",           # eradicate — commented-out code
+    "SIM",           # flake8-simplify
+    "RUF",           # ruff-native rules
+]
+# Determinism (CLAUDE.md rule 2): forbid the global numpy RNG outright.
+# NPY002 already flags np.random.*; keep it on.
+ignore = [
+    # The docstrings are product (CLAUDE.md) and deliberately use em-dashes (—),
+    # ellipses (…) and arrows. The ambiguous-unicode rules would fight that house
+    # style across the whole tree without catching a real defect.
+    "RUF001", "RUF002", "RUF003",
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 12
+
+[tool.ruff.lint.per-file-ignores]
+# Tests may use asserts, fixtures, and longer arrange blocks.
+"tests/**" = ["C901", "PERF"]
+"tools/**" = ["C901"]
+
+[tool.ruff.format]
+# ruff format is the sole formatter (replaces black). This is the source of truth.
+quote-style = "double"
+indent-style = "space"
+
+# ---------------------------------------------------------------------------
+# mypy --strict — owns type checking / annotation coverage.
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.11"
+strict = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_calls = true
+warn_return_any = true
+no_implicit_optional = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_unused_configs = true
+# Keep noise down: only type the engine package by default.
+files = ["fire_engine"]
+exclude = '(^|/)(\.venv|saves|assets|scenes|build|dist|site)/'
+
+[[tool.mypy.overrides]]
+# Panda3D ships no usable stubs and is import-restricted to world/ & lighting/.
+# Narrow override only — the rest of the tree stays fully strict.
+module = ["panda3d.*", "direct.*"]
+ignore_missing_imports = true
+
+# ---------------------------------------------------------------------------
+# pylint — narrow: only the two checks Ruff/mypy can't do.
+#   R0801 duplicate-code (cross-file copy-paste)
+#   C0302 too-many-lines (= max-module-lines, 500)
+# Invoked as: pylint --disable=all --enable=duplicate-code,too-many-lines
+# ---------------------------------------------------------------------------
+[tool.pylint.main]
+ignore-paths = [
+    ".*/\\.venv/.*", ".*/saves/.*", ".*/assets/.*",
+    ".*/scenes/.*", ".*/build/.*", ".*/site/.*",
+]
+
+[tool.pylint.format]
+max-module-lines = 500
+
+[tool.pylint."messages control"]
+disable = ["all"]
+enable = ["duplicate-code", "too-many-lines"]
+
+[tool.pylint.similarities]
+min-similarity-lines = 8
+ignore-comments = true
+ignore-docstrings = true
+ignore-imports = true
+ignore-signatures = true
+
+# ---------------------------------------------------------------------------
+# vulture — cross-module dead code.
+# Names referenced only via the Unity-style lifecycle or the Saveable protocol
+# live in vulture_whitelist.py.
+# ---------------------------------------------------------------------------
+[tool.vulture]
+min_confidence = 80
+paths = ["fire_engine", "vulture_whitelist.py"]
+exclude = [".venv/", "saves/", "assets/", "scenes/", "build/", "site/"]
+
+# ---------------------------------------------------------------------------
+# Coverage — branch mode, ratchet threshold (see DECISIONS.md).
+# ---------------------------------------------------------------------------
+[tool.coverage.run]
+branch = true
+source = ["fire_engine"]
+omit = ["*/__init__.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+# Threshold is enforced via tests/standards/test_coverage.py (ratchet); see
+# [tool.firelight] / DECISIONS.md for the current floor.

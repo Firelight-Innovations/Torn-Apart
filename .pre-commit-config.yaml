@@ -1,0 +1,69 @@
+# .pre-commit-config.yaml — Firelight standards gate (pre-commit hooks).
+#
+# Catches violations before a commit exists. Fast local feedback: the lint/type
+# hooks run on CHANGED files only; the structure/docs checks are cheap O(tree)
+# walks. The full suite + branch coverage runs in CI/nightly (pytest -m coverage),
+# not here.
+#
+# Setup:  pip install -r requirements-dev.txt && pre-commit install
+# Docs:   docs/systems/standards.md#integration
+
+default_language_version:
+  python: python3.11
+
+repos:
+  # --- Ruff: lint + format (changed files only) ---
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.17
+    hooks:
+      - id: ruff
+        name: ruff (lint)
+        args: [--fix]
+      - id: ruff-format
+        name: ruff (format)
+
+  # --- Local hooks: run the same tools the pytest gates run ---
+  - repo: local
+    hooks:
+      - id: mypy-strict
+        name: mypy --strict
+        entry: python -m mypy
+        language: system
+        types: [python]
+        pass_filenames: false
+        # mypy reads files=fire_engine from pyproject; whole-package check.
+
+      - id: pylint-narrow
+        name: pylint (duplicate-code, too-many-lines)
+        entry: python -m pylint --disable=all --enable=duplicate-code,too-many-lines fire_engine
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      - id: vulture
+        name: vulture (dead code)
+        entry: python -m vulture fire_engine vulture_whitelist.py
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      - id: repo-structure
+        name: repo-structure gate (deep & narrow, one idea per file)
+        entry: python tools/check_repo_structure.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: docs-gate
+        name: docs gate (Docs: pointers + system-doc schema)
+        entry: python tools/check_docs.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: mkdocs-strict
+        name: mkdocs build --strict (dead-link / nav check)
+        entry: python -m mkdocs build --strict --site-dir site
+        language: system
+        pass_filenames: false
+        always_run: true

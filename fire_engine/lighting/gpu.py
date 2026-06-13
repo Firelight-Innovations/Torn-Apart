@@ -325,6 +325,9 @@ class GpuLightingPipeline:
         self._tree_occluders: "TreeOccluderSet | None" = None
         # Cascade indices whose GPU volume predates the current occluder set.
         self._tree_occ_stale: set[int] = set()
+        # Non-terrain geometry occupancy providers (buildings, future props).
+        # Store-only in v1 — see :meth:`register_geometry_provider`.
+        self._geometry_providers: list = []
         self._box_uniforms: tuple | None = None   # cached LVecBase4f lists
         # Auto-exposure (eye adaptation): headless meter; `exposure` is the
         # final tonemap exposure consumed by the terrain + sky shaders.
@@ -699,6 +702,32 @@ class GpuLightingPipeline:
         # first assembly automatically.
         self._tree_occ_stale = {c.index for c in self.cascades
                                 if c.window.origin_cell is not None}
+
+    def register_geometry_provider(self, provider) -> None:
+        """
+        Register a non-terrain :class:`~fire_engine.lighting.volume.GeometryOccupancyProvider`
+        (e.g. the building occlusion rasterizer) so it can splat its solids
+        into the cascades.
+
+        **v1 is store-only**: the provider is recorded but NOT yet threaded
+        into the async :class:`CascadeAssemblyWorker`.  Live providers need
+        snapshot semantics for thread safety (the worker assembles off the main
+        thread while buildings may be mutated), which is deliberate future
+        scope — wiring this list into the assembly job is the next step.  The
+        synchronous ``assemble_geometry(..., providers=...)`` path already
+        honours providers and is exercised by the lighting-volume tests; this
+        registry is where the pipeline will pass them once snapshotting lands.
+
+        Parameters
+        ----------
+        provider : GeometryOccupancyProvider
+            Structural provider (no import coupling to the buildings package).
+        """
+        self._geometry_providers.append(provider)
+
+    def geometry_providers(self) -> tuple:
+        """The registered geometry providers (store-only in v1)."""
+        return tuple(self._geometry_providers)
 
     def _apply_edits_sync(self) -> None:
         """

@@ -353,6 +353,22 @@ def build_demo(load_path: str | None = None):
     )
     zone_store.mark_baseline()
 
+    # 7c. Buildings — free-form floorplan structures (fire_engine/buildings/).
+    #     The BuildingManager is ALWAYS constructed + registered with the save
+    #     manager (so the "buildings" save key exists), but the demo house is
+    #     only placed behind the [debug] debug_demo_building flag.  Adding it
+    #     before mark_baseline() makes the procedural house part of the save
+    #     baseline (ZoneStore pattern): an untouched world keeps a ~0-byte
+    #     "buildings" delta, and the house regenerates on load.
+    from fire_engine.buildings import BuildingManager
+    building_manager = BuildingManager(cfg, bus)
+    if cfg.debug_demo_building:
+        from fire_engine.procedural import get as _get_def
+        building_manager.add(
+            _get_def("building_demo_house", ground_z=cfg.ground_height_m))
+    building_manager.mark_baseline()
+    app.building_manager = building_manager
+
     # 6. Lighting.  Two backends (config.lighting_backend):
     #    "gpu" — volumetric radiance cascades; the mesher bakes NO light
     #            (light_sampler=None → full-bright vertex colours carrying
@@ -381,6 +397,7 @@ def build_demo(load_path: str | None = None):
     save_manager.register(chunk_manager)
     save_manager.register(sky_system.weather)
     save_manager.register(zone_store)
+    save_manager.register(building_manager)
 
     # 9. Player — attach a FlyController to the camera GameObject.  The App
     #    forwards InputState to all FlyControllers each frame.
@@ -521,6 +538,28 @@ def build_demo(load_path: str | None = None):
         bus=bus,
     )
     app.tree_go = tree_go
+
+    # 10c-b. Buildings — free-form lit structures (world/building_renderer.py).
+    #      Always register the lighting occupancy provider (store-only no-op in
+    #      v1 — buildings are lit but don't yet shadow the cascades).  The
+    #      render component draws the manager's buildings; behind the
+    #      debug_demo_building flag the manager holds the demo house, otherwise
+    #      it is empty (the component just draws nothing).  GPU backend only.
+    if lighting_pipeline is not None:
+        from fire_engine.buildings.occlusion import BuildingOccupancyRasterizer
+        lighting_pipeline.register_geometry_provider(
+            BuildingOccupancyRasterizer(building_manager))
+    from fire_engine.world.building_renderer import BuildingRendererComponent
+    building_go = instantiate()
+    building_go.name = "Buildings"
+    building_go.add_component(
+        BuildingRendererComponent,
+        base=app,
+        building_manager=building_manager,
+        lighting_pipeline=lighting_pipeline,
+        bus=bus,
+    )
+    app.building_go = building_go
 
     # 10d. Wind system render component — uploads the WindField snapshot as
     #      u_wind_tex on terrain_root each frame and flips u_wind_enabled to 1

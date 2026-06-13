@@ -178,6 +178,72 @@ class TestAssembleCascade0:
 
 
 # ---------------------------------------------------------------------------
+# Geometry-occupancy providers (buildings / future props)
+# ---------------------------------------------------------------------------
+
+class _RecordingProvider:
+    """Records the args it was handed and stamps occupancy into one cell."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple] = []
+
+    def rasterize_occupancy(self, origin_cell, cells, cell_m,
+                            albedo_occ, emission) -> None:
+        self.calls.append((origin_cell, cells, cell_m,
+                           albedo_occ.shape, emission.shape))
+        albedo_occ[2, 2, 2, 3] = 200          # mark a cell solid
+
+
+class TestGeometryProviders:
+    def _window(self):
+        win = VolumeWindow(cells=32, cell_m=VOXEL, snap_cells=8)
+        win.recenter((8.0, 8.0, 8.0))
+        return win
+
+    def test_empty_providers_is_byte_identical(self):
+        chunk = _Chunk()
+        chunk.materials[5, 6, 7] = 1
+        a = assemble_geometry(self._window(), {(0, 0, 0): chunk}, _palette(),
+                              chunk_size=CHUNK, voxel_size=VOXEL)
+        b = assemble_geometry(self._window(), {(0, 0, 0): chunk}, _palette(),
+                              chunk_size=CHUNK, voxel_size=VOXEL, providers=())
+        assert a.albedo_occ.tobytes() == b.albedo_occ.tobytes()
+        assert a.emission.tobytes() == b.emission.tobytes()
+
+    def test_provider_receives_window_params(self):
+        prov = _RecordingProvider()
+        win = self._window()
+        vol = assemble_geometry(win, {}, _palette(), chunk_size=CHUNK,
+                                voxel_size=VOXEL, providers=(prov,))
+        assert len(prov.calls) == 1
+        origin, cells, cell_m, ashape, eshape = prov.calls[0]
+        assert origin == win.origin_cell
+        assert cells == win.cells
+        assert cell_m == win.cell_m
+        assert ashape == (win.cells,) * 3 + (4,)
+        assert eshape == (win.cells,) * 3 + (4,)
+        # The provider's write landed in the returned volume.
+        assert vol.albedo_occ[2, 2, 2, 3] == 200
+
+    def test_building_rasterizer_is_protocol_and_noop(self):
+        from fire_engine.buildings.occlusion import BuildingOccupancyRasterizer
+        from fire_engine.lighting.volume import GeometryOccupancyProvider
+
+        rasterizer = BuildingOccupancyRasterizer(manager=None)
+        assert isinstance(rasterizer, GeometryOccupancyProvider)
+        chunk = _Chunk()
+        chunk.materials[5, 6, 7] = 1
+        base = assemble_geometry(self._window(), {(0, 0, 0): chunk}, _palette(),
+                                 chunk_size=CHUNK, voxel_size=VOXEL)
+        withb = assemble_geometry(self._window(), {(0, 0, 0): chunk}, _palette(),
+                                  chunk_size=CHUNK, voxel_size=VOXEL,
+                                  providers=(rasterizer,))
+        # v1 no-op: byte-identical to the no-provider assembly.
+        assert base.albedo_occ.tobytes() == withb.albedo_occ.tobytes()
+        assert base.emission.tobytes() == withb.emission.tobytes()
+
+
+# ---------------------------------------------------------------------------
 # assemble_geometry — cascade 1 (2.0 m cells, 4^3 voxels per cell)
 # ---------------------------------------------------------------------------
 

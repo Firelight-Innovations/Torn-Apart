@@ -24,6 +24,8 @@ events exported from this module are:
     TerrainEditedEvent(chunk_coords, brush) — brush edit completed
     GameDayTickEvent(day)         — one in-game day has elapsed
     WeatherChangedEvent(previous, current, day) — discrete weather state changed
+    BuildingChangedEvent(building_id, change, bounds_min, bounds_max)
+                                  — a building was added/modified/removed
 
 Example
 -------
@@ -133,6 +135,33 @@ class GameDayTickEvent:
         The new day number (starts at 0; increments each in-game day).
     """
     day: int
+
+
+@dataclass(frozen=True)
+class BuildingChangedEvent:
+    """
+    Published by ``fire_engine.buildings.BuildingManager`` whenever a building
+    is added, modified, or removed.  A state-change notification (never per
+    frame) — the World layer's building renderer rebuilds the affected node,
+    and the lighting layer can invalidate the cascades overlapping the bounds.
+
+    Attributes
+    ----------
+    building_id : int
+        Manager-assigned id of the building that changed.
+    change : str
+        ``"added"``, ``"modified"``, or ``"removed"``.
+    bounds_min : tuple[float, float, float]
+        Conservative world-space AABB minimum corner in meters
+        (``Building.world_aabb()``); for ``"removed"`` it is the last-known
+        bounds so listeners can invalidate the vacated region.
+    bounds_max : tuple[float, float, float]
+        World-space AABB maximum corner in meters.
+    """
+    building_id: int
+    change: str
+    bounds_min: tuple[float, float, float]
+    bounds_max: tuple[float, float, float]
 
 
 # ---------------------------------------------------------------------------

@@ -37,6 +37,7 @@ _LIT_FRAGMENTS = [
     "grass.frag",
     "flora.frag",
     "tree.frag",
+    "building.frag",
     "mote_leaf.frag",
 ]
 
@@ -146,6 +147,10 @@ class TestSamplerBudget:
         # GL 3.3 guarantees exactly 16 — one slot of headroom, no more.
         assert self._sampler_count(_composed("terrain.frag")) == 15
 
+    def test_building_sampler_budget(self):
+        # 9 cascade + 1 fog + 1 albedo (p3d_Texture0) = 11 of the 16 budget.
+        assert self._sampler_count(_composed("building.frag")) == 11
+
     def test_all_lit_fragments_within_gl33_minimum(self):
         for name in _LIT_FRAGMENTS:
             assert self._sampler_count(_composed(name)) <= 16, name
@@ -153,7 +158,8 @@ class TestSamplerBudget:
 
 class TestTierSelection:
     def test_refine_consumers_define_lit_refine(self):
-        for name in ("terrain.frag", "grass.frag", "flora.frag", "tree.frag"):
+        for name in ("terrain.frag", "grass.frag", "flora.frag", "tree.frag",
+                     "building.frag"):
             raw = _raw(name)
             assert "#define LIT_REFINE 1" in raw, name
             # The define must precede the include or the guard never fires.
@@ -166,6 +172,6 @@ class TestTierSelection:
 
     def test_foliage_refine_calls_are_gated(self):
         # Foliage refinement must sit behind the u_refine preset knob.
-        for name in ("grass.frag", "flora.frag", "tree.frag"):
+        for name in ("grass.frag", "flora.frag", "tree.frag", "building.frag"):
             raw = _raw(name)
             assert "u_refine > 0.5" in raw, name

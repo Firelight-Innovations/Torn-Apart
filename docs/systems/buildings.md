@@ -14,6 +14,7 @@ Free-form floorplan buildings (ARCHITECTURE.md §5.7) — the data model and imp
 - `StairsStub`, `Foundation`, `RoofSlab` — data carriers (see docstrings).
 - `WallKind`, `OpeningKind` — enums (str values in dicts).
 - All model types have `to_dict()`/`from_dict()` over plain primitives (no numpy in the dicts, no pickle).
+- `rooms.detect_room_polygons(walls, *, snap_eps_m, arc_segments_per_quarter) -> list[float64 (N,2)]` — the room auto-detection engine `Storey.detect_rooms` delegates to. Tessellates each wall, snaps endpoints onto a `snap_eps_m` grid, builds a planar half-edge graph and traces its minimal cycles (next dart = the one clockwise of the reverse dart around the shared node); returns every CCW positive-area bounded face. Pure numpy + model; the graph trace is a bounded Python loop over wall segments (dozens, not thousands — flagged per Hard Rule 4).
 
 ## Imports Allowed
 procedural, terrain, core (ARCHITECTURE.md §4a.2). **Never panda3d** — rendering goes through `world/building_renderer.py`; light occlusion through the structural `GeometryOccupancyProvider` protocol in `lighting/volume.py` (no import in either direction).

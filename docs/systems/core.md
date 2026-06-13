@@ -72,6 +72,7 @@ All symbols below are re-exported from `fire_engine.core` (`__init__.py`).
 | `TerrainEditedEvent(chunk_coords, brush)` | Brush edit applied to terrain voxel data. |
 | `GameDayTickEvent(day)` | In-game day counter incremented. |
 | `WeatherChangedEvent(previous, current, day)` | Discrete weather state changed (`WeatherType.value` strings, e.g. `"clear"` → `"rain"`).  Published by `fire_engine.sky.WeatherSystem` via `publish_deferred`. |
+| `BuildingChangedEvent(building_id, change, bounds_min, bounds_max)` | A building was added/modified/removed (`change` ∈ `"added"`/`"modified"`/`"removed"`); `bounds_*` are the world AABB.  Published by `fire_engine.buildings.BuildingManager`. |
 
 ### RNG (`core/rng.py`)
 

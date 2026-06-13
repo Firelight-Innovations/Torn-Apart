@@ -33,6 +33,7 @@ Example
     b.set_foundation()
 """
 
+from fire_engine.buildings.manager import BuildingManager
 from fire_engine.buildings.model import (
     Building,
     BuildingDefaults,
@@ -50,6 +51,7 @@ from fire_engine.buildings.model import (
 __all__ = [
     "Building",
     "BuildingDefaults",
+    "BuildingManager",
     "Foundation",
     "Opening",
     "OpeningKind",

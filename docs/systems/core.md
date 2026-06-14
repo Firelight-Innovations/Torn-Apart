@@ -1,5 +1,5 @@
 # core — System Doc
-keywords: vec3, quat, quaternion, math3d, event bus, eventbus, publish, subscribe, drain, rng, seed, for_domain, config, clock, fixed_update, lod, lodpolicy, logging, math, rotation, euler, hpr, slerp, chunk loaded, game day, terrain edited, weather changed, world seed, determinism, blake2b, float32, z-up, forward, right, up, meters, radians, fixed_dt, spiral of death, saveable, get_state, set_state, game_time_scale, time scale, sky config, cloud altitude, star count, shader_source, load_glsl, glsl, shader file, vert, frag, comp, syntax highlighting, include, glsl include, shader include, lit_surface, graphics, graphics quality, preset, gfx, post process, postprocess, hdr, bloom, fxaa, lens flare, volumetric clouds, cloud quality, god rays, render scale, quality preset, resolve_graphics_preset, GRAPHICS_PRESETS, off low medium high
+keywords: vec3, quat, quaternion, math3d, event bus, eventbus, publish, subscribe, drain, rng, seed, for_domain, config, clock, fixed_update, lod, lodpolicy, logging, math, rotation, euler, hpr, slerp, chunk loaded, game day, terrain edited, weather changed, world seed, determinism, blake2b, float32, z-up, forward, right, up, meters, radians, fixed_dt, spiral of death, saveable, get_state, set_state, game_time_scale, time scale, sky config, cloud altitude, star count, shader_source, load_glsl, glsl, shader file, vert, frag, comp, syntax highlighting, include, glsl include, shader include, lit_surface, graphics, graphics quality, preset, gfx, post process, postprocess, hdr, bloom, fxaa, lens flare, volumetric clouds, cloud quality, god rays, render scale, quality preset, resolve_graphics_preset, GRAPHICS_PRESETS, off low medium high, profiler, profiling, perf, frame time, fps, budget, stutter, hitch, scope, counter, snapshot, get_profiler, init_profiler, Profiler, frame_time_stats, ring buffer, p99, 1% low, prime suspect
 
 > One doc per code package; filename matches the package exactly (`docs/systems/core.md` ↔ `fire_engine/core/`).
 
@@ -14,8 +14,9 @@ keywords: vec3, quat, quaternion, math3d, event bus, eventbus, publish, subscrib
 - **Frame Clock** with fixed-step accumulator and in-game calendar.
 - **LOD Policy** (shared distance-band thresholds for World and Terrain).
 - **Logging** (`get_logger`) with a consistent format.
+- **Performance profiler** (`Profiler`, `get_profiler`, `init_profiler`) — the engine-agnostic frame timer + numpy ring buffer + hitch detection. Headless, observational only; the panda3d overlay/PStats bridge live in `render/`. **Full details: `docs/systems/profiler.md`.**
 
-`core/` deliberately does NOT: render anything, touch the Panda3D scene graph, know about terrain chunks, or hold game-world state.  It is stateless except for the global world seed in `rng.py`.
+`core/` deliberately does NOT: render anything, touch the Panda3D scene graph, know about terrain chunks, or hold game-world state.  It is stateless except for the global world seed in `rng.py` (and the process-wide `Profiler` singleton, which holds only observational timing).
 
 ## Public API
 

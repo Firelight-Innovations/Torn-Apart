@@ -585,6 +585,31 @@ class Config:
     gfx_sky_inscatter_scale: float — multiplier on the scattered-sky radiance
                                     (lower = dimmer sky, less low-sun wash-out;
                                     does not touch the sun disc).
+
+    Profiler fields (from [profiler] table, prefix ``profiler_``)
+    -------------------------------------------------------------
+    Drive the frame profiler (``fire_engine/core/profiler.py``) + its overlay /
+    PStats bridge.  Everything is observational — never affects the sim or saves.
+
+    profiler_enabled            : bool  — master switch.  False ⇒ scopes are
+                                  no-ops, no ring buffer / overlay / PStats
+                                  objects are constructed (truly free).
+    profiler_overlay_enabled    : bool  — build the in-game F3 overlay (only
+                                  when profiler_enabled).
+    profiler_frame_budget_ms    : float — per-frame budget in ms (200 FPS = 5.0).
+    profiler_history_frames     : int   — ring-buffer length (percentile span).
+    profiler_hitch_abs_ms       : float — absolute hitch threshold floor (ms).
+    profiler_hitch_rel_mult     : float — hitch when ms > max(abs, mult × median).
+    profiler_hitch_window       : int   — frames the rolling median spans.
+    profiler_max_scopes         : int   — preallocated per-scope columns.
+    profiler_max_counters       : int   — preallocated per-counter columns.
+    profiler_recent_hitches     : int   — recent hitches kept in the snapshot.
+    profiler_overlay_graph_frames : int — frames drawn in the overlay graph.
+    profiler_overlay_hz         : float — overlay refresh rate (Hz).
+    profiler_snapshot_enabled   : bool  — periodically write snapshot JSON.
+    profiler_snapshot_path      : str   — snapshot JSON path (AI-agent contract).
+    profiler_snapshot_interval_s: float — seconds between snapshot writes.
+    profiler_pstats             : bool  — connect to a PStats server at boot.
     """
 
     world_seed:           int   = 1337
@@ -865,6 +890,28 @@ class Config:
     gfx_sun_halo_intensity:     float = 1.8
     gfx_sun_min_brightness:     float = 0.25
     gfx_sky_inscatter_scale:    float = 0.9
+    # --- Performance profiler ([profiler] table; fire_engine/core/profiler.py) ---
+    # The engine-agnostic frame profiler + its render-side overlay / PStats
+    # bridge.  Nearly free enabled, truly free disabled (no buffers / overlay /
+    # PStats objects are constructed when ``profiler_enabled`` is false).  All
+    # thresholds/sizes here so nothing is a magic number.  See
+    # docs/systems/profiler.md.
+    profiler_enabled:           bool  = False
+    profiler_overlay_enabled:   bool  = True
+    profiler_frame_budget_ms:   float = 5.0
+    profiler_history_frames:    int   = 1024
+    profiler_hitch_abs_ms:      float = 8.0
+    profiler_hitch_rel_mult:    float = 1.5
+    profiler_hitch_window:      int   = 120
+    profiler_max_scopes:        int   = 64
+    profiler_max_counters:      int   = 32
+    profiler_recent_hitches:    int   = 16
+    profiler_overlay_graph_frames: int = 240
+    profiler_overlay_hz:        float = 8.0
+    profiler_snapshot_enabled:  bool  = False
+    profiler_snapshot_path:     str   = "profiling/latest.json"
+    profiler_snapshot_interval_s: float = 1.0
+    profiler_pstats:            bool  = False
 
     # ------------------------------------------------------------------
     # Derived read-only properties
@@ -895,8 +942,9 @@ def load_config(path: str = "config.toml") -> Config:
 
     The TOML file may have ``[debug]``, ``[sky]``, ``[terrain]``,
     ``[lighting]``, ``[fog]``, ``[grass]``, ``[flora]``, ``[trees]``,
-    ``[buildings]``, ``[wind]``, ``[rain]``, ``[weather]`` and ``[graphics]``
-    tables; their keys are flattened into the same ``Config`` struct.  Any key
+    ``[buildings]``, ``[wind]``, ``[rain]``, ``[weather]``, ``[graphics]`` and
+    ``[profiler]`` tables; their keys are flattened into the same ``Config``
+    struct.  Any key
     absent from the file falls back to the
     ``Config`` dataclass default.
 
@@ -936,7 +984,8 @@ def load_config(path: str = "config.toml") -> Config:
     # just carry fully-named Config fields; [graphics] is special — its keys go
     # through preset expansion first (see resolve_graphics_preset).
     _TABLES = ("debug", "sky", "terrain", "lighting", "fog", "grass", "flora",
-               "trees", "buildings", "wind", "rain", "weather", "graphics")
+               "trees", "buildings", "wind", "rain", "weather", "graphics",
+               "profiler")
     flat: dict = {k: v for k, v in raw.items() if k not in _TABLES}
     for table in _TABLES:
         if table == "graphics":

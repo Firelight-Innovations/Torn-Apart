@@ -4,6 +4,10 @@ __pycache__/
 saves/
 .pytest_cache/
 
+# Profiler run artifacts (tools/profile_run.py reports + rolling snapshot) —
+# outputs, not source.
+profiling/
+
 # Standards-gate / tooling artifacts
 .mypy_cache/
 .ruff_cache/

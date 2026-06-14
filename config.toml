@@ -222,6 +222,28 @@ bolt_noise_gain = 0.6                # weight of the seeded "air resistance" val
 bolt_repulsion_gain = 0.45           # weight of repulsion from the existing channel
 bolt_branch_max_depth = 3            # branches stop spawning sub-branches past this depth
 
+[profiler]
+# Frame performance profiler (fire_engine/core/profiler.py) + its in-game F3
+# overlay and PStats bridge. Target: 200+ FPS at max settings = a 5 ms budget.
+# Smoothness beats average FPS — stutter (hitch) detection is first-class.
+# Nearly free enabled, truly free disabled. All times in ms / seconds.
+profiler_enabled = false           # master switch (set true to profile; F3 toggles the overlay)
+profiler_overlay_enabled = true    # build the in-game F3 overlay when enabled
+profiler_frame_budget_ms = 5.0     # per-frame budget (200 FPS); over this is "red"
+profiler_history_frames = 1024     # ring-buffer length (frames spanned by percentile stats)
+profiler_hitch_abs_ms = 8.0        # absolute hitch threshold floor (ms)
+profiler_hitch_rel_mult = 1.5      # a frame is a hitch when ms > max(abs, mult x rolling median)
+profiler_hitch_window = 120        # frames the rolling median (relative threshold) spans
+profiler_max_scopes = 64           # preallocated per-scope columns
+profiler_max_counters = 32         # preallocated per-counter columns
+profiler_recent_hitches = 16       # recent hitches kept in the JSON snapshot
+profiler_overlay_graph_frames = 240  # frames drawn in the overlay frame-time graph
+profiler_overlay_hz = 8.0          # overlay refresh rate (Hz) — low so it barely costs anything
+profiler_snapshot_enabled = false  # periodically write the JSON snapshot (the AI-agent contract)
+profiler_snapshot_path = "profiling/latest.json"  # where the live snapshot is written
+profiler_snapshot_interval_s = 1.0 # seconds between snapshot writes
+profiler_pstats = false            # connect to a PStats server at boot (run the pstats GUI separately)
+
 [sky]
 sky_cloud_altitude_m = 96.0    # cloud layer base altitude (world Z, meters)
 sky_cloud_thickness_m = 8.0    # cloud layer vertical thickness (meters)

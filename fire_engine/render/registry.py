@@ -61,6 +61,21 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Type, TypeVar
 
 from fire_engine.core.math3d import Vec3, Quat
+from fire_engine.core.profiler import get_profiler
+
+# Cache of (phase, component_type) -> compound scope name, so the per-frame hot
+# path builds no strings after the first sight of a type.  Names look like
+# "Update:WeatherMapComponent" so the profiler/overlay breakdown attributes
+# cost to the exact component bucket (the weather system shows up by name).
+_SCOPE_NAME_CACHE: dict[tuple[str, type], str] = {}
+
+
+def _scope_name(phase: str, t: type) -> str:
+    key = (phase, t)
+    name = _SCOPE_NAME_CACHE.get(key)
+    if name is None:
+        name = _SCOPE_NAME_CACHE[key] = f"{phase}:{t.__name__}"
+    return name
 
 if TYPE_CHECKING:
     from fire_engine.render.component  import Component
@@ -154,6 +169,7 @@ class _ComponentRegistry:
         6. Deferred destroy flush               — on_disable + on_destroy
         """
         dt = clock.dt
+        prof = get_profiler()
 
         # -- 1. Awake + on_enable -----------------------------------------
         # Snapshot the queue so components added inside awake() go to NEXT frame.
@@ -178,26 +194,33 @@ class _ComponentRegistry:
                 comp._started = True
 
         # -- 3. update -----------------------------------------------------
-        for bucket in list(_STATE.buckets.values()):
+        # One profiler scope per component TYPE bucket so the per-frame
+        # breakdown shows exactly which component kind is hot (e.g.
+        # "Update:WeatherMapComponent").  scope() is a no-op when the profiler
+        # is disabled, so this costs a bool check + a cached dict lookup.
+        for t, bucket in list(_STATE.buckets.items()):
             bucket_snap = bucket[:]
-            for comp in bucket_snap:
-                if self._is_active(comp):
-                    comp.update(dt)
+            with prof.scope(_scope_name("Update", t)):
+                for comp in bucket_snap:
+                    if self._is_active(comp):
+                        comp.update(dt)
 
         # -- 4. late_update ------------------------------------------------
-        for bucket in list(_STATE.buckets.values()):
+        for t, bucket in list(_STATE.buckets.items()):
             bucket_snap = bucket[:]
-            for comp in bucket_snap:
-                if self._is_active(comp):
-                    comp.late_update(dt)
+            with prof.scope(_scope_name("LateUpdate", t)):
+                for comp in bucket_snap:
+                    if self._is_active(comp):
+                        comp.late_update(dt)
 
         # -- 5. fixed_update (driven by clock accumulator) -----------------
         for fixed_dt in clock.fixed_steps():
-            for bucket in list(_STATE.buckets.values()):
+            for t, bucket in list(_STATE.buckets.items()):
                 bucket_snap = bucket[:]
-                for comp in bucket_snap:
-                    if self._is_active(comp):
-                        comp.fixed_update(fixed_dt)
+                with prof.scope(_scope_name("FixedUpdate", t)):
+                    for comp in bucket_snap:
+                        if self._is_active(comp):
+                            comp.fixed_update(fixed_dt)
 
         # -- 6. Deferred destroy -------------------------------------------
         self._flush_destroy()

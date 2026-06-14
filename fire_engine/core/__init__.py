@@ -34,6 +34,11 @@ LOD
 
 Logging
     get_logger              — obtain a named Logger with sane formatting
+
+Profiler
+    Profiler                — per-frame hierarchical timer + numpy ring buffer
+    get_profiler            — the process-wide Profiler singleton (no-op until init)
+    init_profiler           — configure the singleton from Config at boot
 """
 
 from fire_engine.core.math3d import Vec3, Quat
@@ -52,6 +57,7 @@ from fire_engine.core.config import Config, load_config
 from fire_engine.core.clock import Clock
 from fire_engine.core.lod import LODPolicy
 from fire_engine.core.log import get_logger
+from fire_engine.core.profiler import Profiler, get_profiler, init_profiler
 
 __all__ = [
     # Math
@@ -78,4 +84,8 @@ __all__ = [
     "LODPolicy",
     # Logging
     "get_logger",
+    # Profiler
+    "Profiler",
+    "get_profiler",
+    "init_profiler",
 ]

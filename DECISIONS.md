@@ -584,3 +584,28 @@ ARCHITECTURE.md §5.7 reserved `fire_engine/buildings/` as a "blocks + primitive
   - **Panda3D typing override is narrow.** `mypy --strict` stays global; only `panda3d.*`/`direct.*` get `ignore_missing_imports` (no usable stubs, and they're import-restricted to `world/`/`lighting/` anyway). The gate itself is never weakened to silence Panda3D.
   - **Test mirror accepts legacy flat layout.** Canonical is `tests/<path-under-source-root>/test_<stem>.py`; the existing flat `tests/test_<stem>.py` is also accepted so the present suite is recognised while new code goes deep-and-narrow.
   - **Rollout is hard-fail, fixes deferred.** The gate was installed and verified to *detect* violations (structure 149, docs 849, plus lint/type findings) but the existing violations were **not** fixed in this change — per the owner's instruction a later dedicated agent does the per-package cleanup once new features have landed. The checks are layout-driven, so they keep working across the in-flight package reorg without edits.
+
+## 2026-06-13 — Performance profiler (headless core + overlay + PStats + harness)
+
+### `frame_ms` is wall-clock between successive `begin_frame()` calls (full frame, incl. render)
+- **Q:** Should the headline frame time measure only the CPU/Python loop body, or the true full frame including the GPU render/flip/vsync after the task returns?
+- **Choice:** Full frame = delta between two successive `begin_frame()` calls; the previous frame is committed at the next `begin_frame()` once its duration is known. `end_frame()` also records the loop-body (CPU) time as the `frame_cpu_ms` counter, so the CPU-vs-total split is visible. The gap `frame_ms − Σ(top-level scopes)` ≈ render + overhead (also in PStats).
+- **Why:** The 200+ FPS / 5 ms target is a *total*-frame budget; measuring only the CPU body would under-report. Cost: the last frame of a run isn't committed (no following `begin_frame`); `tools/profile_run.py` steps one extra frame. An injectable `time_source` keeps tests exact.
+
+### Module-level singleton (`get_profiler`/`init_profiler`), not threaded context
+- **Q:** Reachable from the app loop, the registry, and `world/sky/` without threading a handle everywhere. Global or DI?
+- **Choice:** A process-wide singleton in `core/profiler.py`, mirroring the existing `ComponentRegistry` singleton. `init_profiler(config)` mutates it in place; `get_profiler()` returns it; direct `Profiler(...)` for headless tests.
+- **Why:** Matches the established registry pattern, not a rogue global. In-place mutation lets `tools/profile_run.py` force the profiler ON after `build_demo()` (config defaults OFF) without re-plumbing boot.
+
+### Config is flat `profiler_*` fields + a `[profiler]` table
+- **Choice:** Flat `profiler_*` fields on `Config` + `[profiler]` in the table-flatten list, matching every other subsystem (`fog_*`, `gfx_*`, `wind_*`).
+- **Why:** Nested config objects exist nowhere else here.
+
+### Per-component-type scopes in the registry; explicit `Weather:Update` in `world/sky/`
+- **Choice:** `ComponentRegistry.run_frame` (in `render/registry.py`) wraps each per-type bucket in `Update:<Type>` / `LateUpdate:<Type>` / `FixedUpdate:<Type>` scopes (cached names; no-op when disabled). `world/sky/sky_state.py::SkySystem.update` adds an explicit `Weather:Update` scope around the weather sim advance. Both stay panda3d-free (import only `core.profiler`).
+- **Why:** Automatic, exhaustive per-component attribution surfaces the weather render component and the headless weather sim by name, with zero per-frame event traffic (Hard Rule 5). A first windowed run already flagged `LateUpdate:LightningRendererComponent` at ~20 ms.
+
+### Layout: built on `perf-profiler` (pre-reorg), then reconciled onto the post-reorg `render/` layout for merge
+- **Q:** The profiler was developed on a branch off the pre-reorg `world/` layout; master meanwhile landed the `world/`→`render/` reorg (+ standards-gate, editor).
+- **Choice:** Re-applied the profiler changes onto master's new layout as a single linear commit: panda3d mirrors live in `render/profiler_bridge.py` + `render/profiler_overlay.py`; loop instrumentation in `render/app.py` + `render/registry.py`; weather scope in `world/sky/sky_state.py`; core unchanged location (`core/profiler.py`). Doc kept as the flat `docs/systems/profiler.md` (the profiler spans `core/` + `render/`, not one package).
+- **Why:** Cleaner and more reviewable than a rename-conflict-laden 3-way merge; ships as a fast-forwardable commit on master.

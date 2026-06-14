@@ -46,6 +46,7 @@ from fire_engine.core.clock import Clock
 from fire_engine.core.config import Config
 from fire_engine.core.event_bus import EventBus
 from fire_engine.core.math3d import Vec3
+from fire_engine.core.profiler import get_profiler as _profiler
 from fire_engine.world.sky.celestial import (
     DAYLIGHT_Z_HI,
     DAYLIGHT_Z_LO,
@@ -387,7 +388,11 @@ class SkySystem:
         day = int(self._clock.game_day)
         tod = float(self._clock.game_time_of_day)
 
-        wp: LocalWeather = self.weather.update(day, tod, player_pos)
+        # Profile the weather sim advance explicitly so its cost is never hidden
+        # inside the generic SkyRendererComponent update bucket (it was a recent
+        # perf regression suspect).  No-op when the profiler is disabled.
+        with _profiler().scope("Weather:Update"):
+            wp: LocalWeather = self.weather.update(day, tod, player_pos)
 
         sun = sun_direction(tod)
         moon = moon_direction(tod)

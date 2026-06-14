@@ -73,6 +73,7 @@ from panda3d.core import (  # type: ignore[import]
     loadPrcFileData,
 )
 
+from fire_engine.core.profiler import init_profiler
 from fire_engine.render.registry import ComponentRegistry, instantiate
 from fire_engine.render.camera import CameraComponent
 
@@ -186,6 +187,18 @@ class App(ShowBase):
         self._clock     = clock
         self._event_bus = event_bus
 
+        # Performance profiler (core, panda3d-free) — configure the process
+        # singleton from config.  No-op + zero buffers when disabled.  The
+        # overlay / PStats bridge are constructed only when enabled (see
+        # _setup_profiler, called after the window + camera exist).
+        self._profiler = init_profiler(config)
+        self._profiler_overlay = None   # ProfilerOverlay | None (F3)
+        self._profiler_bridge = None    # PStatsBridge | None
+        self._snapshot_path: str | None = None
+        self._snapshot_interval_s = float(
+            getattr(config, "profiler_snapshot_interval_s", 1.0))
+        self._last_snapshot_t = 0.0
+
         self.input_state = InputState()
         self._escape_was_down = False
         # Skip the first mouse-delta sample after capture is (re)enabled so the
@@ -285,9 +298,64 @@ class App(ShowBase):
         self.accept("escape", self._on_escape)
 
         # ------------------------------------------------------------------
+        # Profiler render-side wiring (overlay + PStats bridge) — only when on.
+        # ------------------------------------------------------------------
+        self._setup_profiler()
+
+        # ------------------------------------------------------------------
         # Register the per-frame task
         # ------------------------------------------------------------------
         self.taskMgr.add(self._frame_task, "TornApartFrame")
+
+    # ------------------------------------------------------------------
+    # Profiler setup (boot wiring)
+    # ------------------------------------------------------------------
+
+    def _setup_profiler(self) -> None:
+        """
+        Wire the render-side profiler pieces when ``profiler_enabled``.
+
+        Constructs nothing when the profiler is off (truly free).  When on:
+          - builds the PStats bridge + (optionally) connects to a PStats server
+            so the standalone ``pstats`` GUI can attach (config.profiler_pstats);
+          - builds the F3 in-game overlay (config.profiler_overlay_enabled) and
+            binds F3 to toggle it;
+          - arms the rolling JSON snapshot writer (config.profiler_snapshot_*).
+
+        Each piece is wrapped in try/except so a profiler failure never takes
+        down the game — it logs and disables that piece.
+        """
+        cfg = self._config
+        if not getattr(cfg, "profiler_enabled", False):
+            return
+
+        # PStats bridge: mirror core scopes/counters into PStatCollectors and,
+        # if requested, connect so the pstats GUI shows the App/Cull/Draw split
+        # alongside our custom collectors.
+        if getattr(cfg, "profiler_pstats", False):
+            try:
+                from fire_engine.render.profiler_bridge import PStatsBridge
+                self._profiler_bridge = PStatsBridge(self._profiler, connect=True)
+            except Exception as exc:  # noqa: BLE001  (diagnostics; never fatal)
+                from fire_engine.core.log import get_logger
+                get_logger("profiler").warning(
+                    "PStats bridge unavailable: %s", exc)
+
+        # In-game overlay (F3).
+        if getattr(cfg, "profiler_overlay_enabled", True):
+            try:
+                from fire_engine.render.profiler_overlay import ProfilerOverlay
+                self._profiler_overlay = ProfilerOverlay(self, self._profiler, cfg)
+                self.accept("f3", self._profiler_overlay.toggle)
+            except Exception as exc:  # noqa: BLE001
+                from fire_engine.core.log import get_logger
+                get_logger("profiler").warning(
+                    "Profiler overlay unavailable: %s", exc)
+
+        # Rolling JSON snapshot (the AI-agent contract).
+        if getattr(cfg, "profiler_snapshot_enabled", False):
+            self._snapshot_path = getattr(
+                cfg, "profiler_snapshot_path", "profiling/latest.json")
 
     # ------------------------------------------------------------------
     # Input handlers
@@ -418,25 +486,37 @@ class App(ShowBase):
           8. Sync camera transform → Panda3D NodePath
           9. Return task.cont (let Panda3D render)
         """
+        prof = self._profiler
+        # begin_frame finalizes the PREVIOUS frame (its full wall duration —
+        # incl. the render/flip that happened after last frame's end_frame — is
+        # now known) and resets the per-frame accumulators.  No-op when off.
+        prof.begin_frame()
+
         real_dt = globalClock.get_dt()  # Panda3D's frame time  # noqa: F821
 
         # 1. Input
-        self._collect_input()
+        with prof.scope("Input"):
+            self._collect_input()
 
         # 2. Clock
-        self._clock.update(real_dt)
+        with prof.scope("Clock"):
+            self._clock.update(real_dt)
 
         # 3. Push input state to FlyController components
         #    FlyController exposes set_input_state(InputState); App calls it here.
-        self._push_input_to_controllers()
+        with prof.scope("Input"):
+            self._push_input_to_controllers()
 
-        # 4. Registry (awake / start / update / fixed / late)
-        ComponentRegistry.run_frame(self._clock)
+        # 4. Registry (awake / start / update / fixed / late).  The registry
+        #    adds child scopes per component type ("Update:<Type>").
+        with prof.scope("Update"):
+            ComponentRegistry.run_frame(self._clock)
 
         # 5. integration hook: chunk streaming (Phase 3)
         #    Stream chunks around the camera, then drain the manager's
         #    pending_meshes / unloaded_this_frame into the scene graph.
-        self._stream_and_upload_terrain()
+        with prof.scope("ChunkStream"):
+            self._stream_and_upload_terrain()
 
         # 6. integration hook: lighting (Phase 4)
         #    CPU backend: no-op — sunlight is event-driven (SunlightComputer
@@ -446,27 +526,54 @@ class App(ShowBase):
         #    (inject / gather / fog) dispatch, and the lit-surface uniforms
         #    refresh on ``render`` (inherited by every lit shader).
         if self.lighting_pipeline is not None:
-            sky_state = (self.sky_system.state
-                         if self.sky_system is not None else None)
-            self.lighting_pipeline.update(
-                self.camera_go.transform.position, sky_state, real_dt)
-            self.lighting_pipeline.update_surface_inputs(
-                self.render, sky_state)
+            with prof.scope("Lighting"):
+                sky_state = (self.sky_system.state
+                             if self.sky_system is not None else None)
+                self.lighting_pipeline.update(
+                    self.camera_go.transform.position, sky_state, real_dt)
+                self.lighting_pipeline.update_surface_inputs(
+                    self.render, sky_state)
 
         # 6b. integration hook: HDR post-processing (Phase 2+)
         #     Refresh per-frame post inputs (bloom strength, lens-flare sun
         #     position, …).  The scene already rendered into the HDR buffer; the
         #     composite + effect passes run as render2d cards after this task.
         if self.post_process is not None:
-            self.post_process.update(self.lighting_pipeline)
+            with prof.scope("PostProcess"):
+                self.post_process.update(self.lighting_pipeline)
 
         # 7. EventBus drain
-        self._event_bus.drain()
+        with prof.scope("EventDrain"):
+            self._event_bus.drain()
 
         # 8. Camera sync (Transform → Panda3D NodePath)
-        self.camera_comp.sync_to_panda()
+        with prof.scope("CameraSync"):
+            self.camera_comp.sync_to_panda()
+
+        # end_frame closes the loop body (records the CPU-frame time); the full
+        # frame_ms is finalized at the next begin_frame.  Then refresh the
+        # low-Hz overlay and write the rolling JSON snapshot if it's due.
+        prof.end_frame()
+        if self._profiler_overlay is not None:
+            self._profiler_overlay.update()
+        self._maybe_write_snapshot()
 
         return task.cont
+
+    def _maybe_write_snapshot(self) -> None:
+        """Write the rolling profiler JSON snapshot if the interval elapsed."""
+        if self._snapshot_path is None:
+            return
+        import time as _time
+        now = _time.perf_counter()
+        if now - self._last_snapshot_t < self._snapshot_interval_s:
+            return
+        self._last_snapshot_t = now
+        try:
+            self._profiler.write_snapshot(self._snapshot_path)
+        except OSError as exc:
+            from fire_engine.core.log import get_logger
+            get_logger("profiler").warning("snapshot write failed: %s", exc)
 
     def _push_input_to_controllers(self) -> None:
         """

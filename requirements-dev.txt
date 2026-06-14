@@ -1,32 +1,9 @@
-# requirements-dev.txt — Firelight standards gate toolchain (pinned).
-#
-# Install:  pip install -r requirements-dev.txt
-# These tools back tests/standards/ and .pre-commit-config.yaml. Runtime deps
-# stay in requirements.txt. Pins are exact so every agent runs the same gate.
-#
-# Docs: docs/systems/standards.md#toolchain
+# Optional developer / profiling tools — NOT runtime dependencies.
+# Install with:  pip install -r requirements-dev.txt
+-r requirements.txt
 
-# --- Lint + format (one source of truth for formatting) ---
-ruff==0.15.17
-
-# --- Type checking (mypy --strict owns typing; Ruff ANN stays off) ---
-mypy==2.1.0
-
-# --- Narrow cross-file checks Ruff/mypy can't do ---
-pylint==4.0.5            # duplicate-code (R0801) + too-many-lines (C0302)
-vulture==2.16            # cross-module dead code
-
-# --- Testing, coverage, property tests, parallelism ---
-pytest-cov==7.1.0
-coverage==7.14.1
-pytest-xdist==3.8.0
-hypothesis==6.155.2
-
-# --- Docs site + strict build check ---
-mkdocs==1.6.1
-mkdocs-material==9.7.6
-mkdocstrings==1.0.4
-mkdocstrings-python==2.0.4
-
-# --- Pre-commit hook runner ---
-pre-commit==4.6.0
+# Sampling profiler for Python hot-spots the named profiler scopes don't cover.
+# Attaches to a running game by PID; emits speedscope JSON (opens in
+# speedscope.app and the Perfetto UI) and `py-spy dump` for a stuck process.
+# See docs/systems/profiler.md.
+py-spy==0.4.0

@@ -16,7 +16,7 @@ import websockets
 from fire_engine.core import Clock, EventBus, load_config
 from fire_engine.core.rng import set_world_seed
 from fire_engine.save import SaveManager
-from fire_engine.terrain import ChunkManager, generate_chunk
+from fire_engine.world.terrain import ChunkManager, generate_chunk
 
 from fire_editor import Daemon, EditorSession, decode_frame, decode_mesh_payload
 from fire_editor._generated import PROTOCOL_VERSION, SchemaId

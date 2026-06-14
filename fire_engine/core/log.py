@@ -47,7 +47,7 @@ def get_logger(name: str) -> logging.Logger:
 
     Example
     -------
-    >>> log = get_logger("fire_engine.terrain.chunk_manager")
+    >>> log = get_logger("fire_engine.world.terrain.chunk_manager")
     >>> log.debug("Streaming chunk (1, 2, 0)")
     """
     global _handler_installed

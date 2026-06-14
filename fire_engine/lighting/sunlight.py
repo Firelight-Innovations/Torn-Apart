@@ -304,7 +304,7 @@ class SunlightComputer:
     -------
     >>> from fire_engine.core import load_config, EventBus
     >>> from fire_engine.core.rng import set_world_seed
-    >>> from fire_engine.terrain import ChunkManager
+    >>> from fire_engine.world.terrain import ChunkManager
     >>> from fire_engine.lighting import LightGrid, SunlightComputer
     >>> set_world_seed(1337)
     >>> cfg = load_config()

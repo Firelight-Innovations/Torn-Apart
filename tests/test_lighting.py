@@ -23,7 +23,7 @@ import pytest
 
 from fire_engine.core import EventBus, TerrainEditedEvent, ChunkLoadedEvent, load_config
 from fire_engine.core.rng import set_world_seed
-from fire_engine.terrain.chunk import Chunk
+from fire_engine.world.terrain.chunk import Chunk
 from fire_engine.lighting import (
     LightGrid,
     occupancy_from_materials,

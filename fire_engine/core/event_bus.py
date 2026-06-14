@@ -101,7 +101,7 @@ class TerrainEditedEvent:
 @dataclass(frozen=True)
 class WeatherChangedEvent:
     """
-    Published by the WeatherSystem (``fire_engine.sky``) whenever the discrete
+    Published by the WeatherSystem (``fire_engine.world.sky``) whenever the discrete
     weather state changes — at most once per 2-game-hour segment boundary,
     or when a dev override is applied/cleared.  Published via
     ``bus.publish_deferred`` (state-change notification; never per-frame).
@@ -130,7 +130,7 @@ class LightningStrikeEvent:
     Published by the WeatherSystem (M7) when a thunderstorm cell fires a strike.
 
     One event per scheduled strike (deterministic Poisson schedule per active
-    THUNDERSTORM cell — see ``fire_engine.weather.lightning``).  Carried via
+    THUNDERSTORM cell — see ``fire_engine.world.weather.lightning``).  Carried via
     ``bus.publish_deferred`` (state-change notification, never per-frame data
     plumbing).  The render half (``world/lightning_renderer.py``) subscribes,
     generates the bolt geometry from ``seed`` (deterministic), animates the
@@ -152,7 +152,7 @@ class LightningStrikeEvent:
     time_abs : float
         Absolute game time of the strike, seconds (day·86400 + time-of-day).
     cell_id : int
-        Source :class:`~fire_engine.weather.StormCell` id, hashed to an int
+        Source :class:`~fire_engine.world.weather.StormCell` id, hashed to an int
         (the cell's stable string id digested deterministically).
     intensity : float
         0–1 strike brightness / scale (peak cell intensity at strike time).

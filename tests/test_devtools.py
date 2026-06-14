@@ -16,9 +16,9 @@ import numpy as np
 import pytest
 
 from fire_engine.core.math3d import Vec3, Quat
-from fire_engine.world.gameobject import GameObject
-from fire_engine.world.component import Component
-from fire_engine.world.registry import ComponentRegistry
+from fire_engine.render.gameobject import GameObject
+from fire_engine.render.component import Component
+from fire_engine.render.registry import ComponentRegistry
 
 from fire_engine.devtools import (
     Selection,
@@ -247,14 +247,14 @@ def test_inspector_tool_tracks_selection_revision():
 
 
 def test_is_chunk_distinguishes_chunk_from_gameobject():
-    from fire_engine.terrain.chunk import Chunk
+    from fire_engine.world.terrain.chunk import Chunk
 
     assert is_chunk(Chunk((0, 0, 0))) is True
     assert is_chunk(GameObject(name="Obj")) is False
 
 
 def test_describe_chunk_reports_voxel_stats():
-    from fire_engine.terrain.chunk import Chunk
+    from fire_engine.world.terrain.chunk import Chunk
 
     chunk = Chunk((1, 0, -1))                 # all-air baseline
     chunk.materials[0, 0, 0] = 1             # one solid voxel
@@ -273,7 +273,7 @@ def test_describe_chunk_reports_voxel_stats():
 
 
 def test_inspector_tool_routes_chunk_to_chunk_describer():
-    from fire_engine.terrain.chunk import Chunk
+    from fire_engine.world.terrain.chunk import Chunk
 
     mgr = DevToolsManager()
     tool = InspectorTool(mgr.selection)

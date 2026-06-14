@@ -2,7 +2,7 @@
 keywords: dev tools, developer overlay, debug menu, debug overlay, in-game editor, imgui, dear imgui, directgui, inspector, hierarchy, selection, picking, outline, gizmo, spawn, performance stats, fps overlay, noclip, dev camera, panel, field, tool, DevToolsManager, DevOverlay, describe_object, ray_aabb, editor scene objects, authored objects, gizmo write-back
 
 > One doc per code package, but this system spans **two**: the headless brain
-> `fire_engine/devtools/` and its Panda3D renderer `fire_engine/world/devtools_overlay.py`
+> `fire_engine/devtools/` and its Panda3D renderer `fire_engine/render/devtools_overlay.py`
 > (the only panda3d-touching half, per CLAUDE.md hard rule 1). They are documented
 > together here because they are one feature; `world.md` cross-links back.
 >
@@ -62,12 +62,12 @@ From `fire_engine/devtools/__init__.py`:
 - `Gizmo(pivot, size, mode)` — `pick(ray_o, ray_d) -> Handle | None` (hit-test handles) and `begin(handle, ray_o, ray_d, pos, rot, scale) -> DragState`.
 - `update_drag(state, ray_o, ray_d) -> (Vec3, Quat, Vec3)` — resolve a live drag into the object's new local position / rotation / scale (absolute from the captured reference).
 
-From `fire_engine/world/__init__.py` (panda3d-backed; `None` if panda3d missing):
+From `fire_engine/render/__init__.py` (panda3d-backed; `None` if panda3d missing):
 - `DevOverlay(app, manager=None)` — the DirectGUI renderer. `toggle()` (bind to F1), `set_enabled(bool)`, `handle_world_click() -> bool`, `end_gizmo_drag()` (bind to `mouse1-up`), `spawn_cube()`, and `.actions` (the "World" `ActionsTool`) / `.manager`.
 
 ## Imports Allowed
 - `fire_engine/devtools/` may import: `core` (math3d, config, clock — duck-typed) and `numpy`. It reads chunks **duck-typed** (`describe_chunk`/`is_chunk` touch only `materials`/`coord`/`chunk_meters`/`world_origin`/`dirty`/`edited`) — it does **not** import `terrain`. **Not** `world` at runtime (TYPE_CHECKING only), so it and its tests never pull panda3d into the import graph. **Never** panda3d, lighting, save.
-- `fire_engine/world/devtools_overlay.py` may import: panda3d (`direct.gui`, `panda3d.core`), `core`, `devtools`, `terrain` (`raycast_voxel`, for chunk picking — an allowed downward dep), and `world.registry` (`instantiate`). It is a `world/` module, so panda3d is allowed here and nowhere else for this feature.
+- `fire_engine/render/devtools_overlay.py` may import: panda3d (`direct.gui`, `panda3d.core`), `core`, `devtools`, `terrain` (`raycast_voxel`, for chunk picking — an allowed downward dep), and `world.registry` (`instantiate`). It is a `world/` module, so panda3d is allowed here and nowhere else for this feature.
 
 ## Events
 Published: none. The overlay drives engine state through direct public-API calls
@@ -103,7 +103,7 @@ mgr.register_tool(WeatherTool(sky))
 
 Wire the overlay into the app (in `main.py`, after the App + camera exist):
 ```python
-from fire_engine.world import DevOverlay
+from fire_engine.render import DevOverlay
 overlay = DevOverlay(app)
 overlay.actions.add_action("Fire Explosion", fire_explosion)
 app.accept("f1", overlay.toggle)

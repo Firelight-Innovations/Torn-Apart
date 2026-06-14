@@ -15,7 +15,7 @@ so a scene saved in the editor materialises as live GameObjects on load:
 
 This module is headless (zero panda3d imports): all rendering/lighting is
 delegated to a ``visual_factory`` constructed in ``world/`` (see
-``fire_engine.world.scene_visuals.SceneVisualFactory``). With
+``fire_engine.render.scene_visuals.SceneVisualFactory``). With
 ``visual_factory=None`` (tests, dedicated servers) objects still instantiate
 with correct transforms — they just have no visuals.
 
@@ -37,9 +37,9 @@ from fire_engine.core.math3d import Quat, Vec3
 from fire_engine.scene.objects import SceneObjectStore
 
 if TYPE_CHECKING:
-    from fire_engine.world.gameobject import GameObject
+    from fire_engine.render.gameobject import GameObject
 
-# NOTE: fire_engine.world is imported INSIDE rebuild(), not at module level.
+# NOTE: fire_engine.render is imported INSIDE rebuild(), not at module level.
 # Importing any world submodule executes the world package __init__, which
 # pulls panda3d when it is installed — and this module reaches the editor
 # daemon via the fire_editor.scene_objects shim, where panda3d is forbidden
@@ -105,7 +105,7 @@ class SceneRuntime:
         ``keep_world=False`` and THEN writes local TRS — the store's transforms
         are local to the parent, exactly like ``scene.set_transform``.
         """
-        from fire_engine.world.registry import destroy, instantiate
+        from fire_engine.render.registry import destroy, instantiate
 
         if self.visual_factory is not None:
             self.visual_factory.teardown()

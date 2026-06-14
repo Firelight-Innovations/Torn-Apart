@@ -66,7 +66,7 @@ field = bake_grass_height_field(vol, chunk_manager.chunks, cfg)
 A `"trees"` volume feeds two independent renderers, both keyed on the same box:
 
 - **3-D trees** — `TreeRendererComponent` (`world/tree_renderer.py`) draws `bake_tree_instances(vol, cfg, chunks, mix, counts, "trees")` instanced variant meshes (+ far-LOD impostors), standing on the baked height field. Density: `params["density"]` or `config.tree_density_per_m2` (0.02/m² = one tree per 50 m²); species via `params["species_mix"]` (e.g. `"tree_gnarled_oak:3,tree_dead:1"`) or `config.tree_default_species`.
-- **Leaf litter** — the wind system's `LeafLitterComponent` (`world/mote_renderer.py`) instances `leaf_instance_count(vol, cfg)` gust-driven leaves seeded by `leaf_hash_seed(vol)`. Density: `params["leaf_density"]` (default `config.wind_leaf_density_per_m2 = 0.15`); leaves spawn biased low, settle in calm air and stream out in gusts/storms. Full reference: `docs/systems/wind.md`.
+- **Leaf litter** — the wind system's `LeafLitterComponent` (`world/mote_renderer.py`) instances `leaf_instance_count(vol, cfg)` gust-driven leaves seeded by `leaf_hash_seed(vol)`. Density: `params["leaf_density"]` (default `config.wind_leaf_density_per_m2 = 0.15`); leaves spawn biased low, settle in calm air and stream out in gusts/storms. Full reference: `docs/systems/world.wind.md`.
 
 Both rebuild when `ZoneStore.version` changes, so planting a forest is one `zones.add("trees", ...)` — trees and the leaves blowing under them arrive together. The placement rng and the leaf hash seed come from different `for_domain` keys and never correlate. `"bushes"` volumes work the same way (bush config fields, no leaf litter); `"flowers"` volumes belong to the sprite-flora renderer.
 

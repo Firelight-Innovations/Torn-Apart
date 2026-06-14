@@ -60,14 +60,15 @@ def _slug(heading: str) -> str:
 
 
 def _doc_path_for(pkg_dir: Path, cfg: StandardsConfig) -> Path:
-    """Map a package directory to its mirrored ``docs/systems/<path>.md``.
+    """Map a package directory to its system doc (dotted full package path).
 
     ``fire_engine/core`` -> ``docs/systems/core.md``;
-    ``fire_engine/procedural/textures`` -> ``docs/systems/procedural/textures.md``.
+    ``fire_engine/world/terrain`` -> ``docs/systems/world.terrain.md``;
+    ``fire_engine/simulation/player`` -> ``docs/systems/simulation.player.md``.
     """
     rel = pkg_dir.relative_to(REPO_ROOT)
-    inner = Path(*rel.parts[1:])  # drop the source-root package component
-    return REPO_ROOT / cfg.docs_root / inner.with_suffix(".md")
+    dotted = ".".join(rel.parts[1:])  # drop source-root pkg; dots encode nesting
+    return REPO_ROOT / cfg.docs_root / f"{dotted}.md"
 
 
 def _packages(cfg: StandardsConfig) -> list[Path]:

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from fire_engine.sky.weather_map_pack import pack_weather_map
+from fire_engine.world.sky.weather_map_pack import pack_weather_map
 
 
 def _synthetic_raster(cells: int = 8) -> np.ndarray:
@@ -81,7 +81,7 @@ def test_rejects_bad_shape():
 def test_round_trips_real_raster():
     # End-to-end against a real WeatherMap raster (the production input type).
     from fire_engine.core import EventBus, load_config, set_world_seed
-    from fire_engine.weather import WeatherMap, WeatherSystem
+    from fire_engine.world.weather import WeatherMap, WeatherSystem
 
     set_world_seed(1337)
     cfg = load_config()
@@ -106,7 +106,7 @@ def test_no_panda3d_import():
     import ast
     from pathlib import Path
 
-    src = (Path(__file__).parent.parent / "fire_engine" / "sky"
+    src = (Path(__file__).parent.parent / "fire_engine" / "world" / "sky"
            / "weather_map_pack.py")
     tree = ast.parse(src.read_text(encoding="utf-8"))
     offenders: list[str] = []

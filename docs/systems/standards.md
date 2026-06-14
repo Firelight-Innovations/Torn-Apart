@@ -125,12 +125,12 @@ Every public module/class/function docstring carries a resolvable pointer:
 def apply_brush(...) -> None:
     """Carve terrain under a brush.
 
-    Docs: docs/systems/terrain.md#public-api
+    Docs: docs/systems/world.terrain.md#public-api
     """
 ```
 
-A package's doc is its mirrored path: `fire_engine/procedural/textures/` →
-`docs/systems/procedural/textures.md`, carrying the full H2 schema and a
+A package's doc is its dotted full path: `fire_engine/world/terrain/` →
+`docs/systems/world.terrain.md`, carrying the full H2 schema and a
 `keywords:` line.
 
 ### Integration

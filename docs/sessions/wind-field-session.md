@@ -10,7 +10,7 @@ cloth, hair, water, physics, procedural wind audio tomorrow). Five commits:
 
 | Commit | Package | Contents |
 |---|---|---|
-| `3de7660` | WP1 | Headless `fire_engine/wind/`: 12 seeded spectral gust modes advecting downwind (pure function of seed + game time + position, **zero save bytes**), `WindField.sample()` CPU seam, `pack_wind_field()` fp16 pack, `WindRegion` recenter, `WindModifier`/`GustFront` volumetric-weather seam, `[wind]` config. 25 tests. |
+| `3de7660` | WP1 | Headless `fire_engine/world/wind/`: 12 seeded spectral gust modes advecting downwind (pure function of seed + game time + position, **zero save bytes**), `WindField.sample()` CPU seam, `pack_wind_field()` fp16 pack, `WindRegion` recenter, `WindModifier`/`GustFront` volumetric-weather seam, `[wind]` config. 25 tests. |
 | `7265d9b` | WP2 | `VenturiWorker` (off-main-thread, mirrors the lighting assembly worker) + `solve_venturi` blockage-crowding model: wind speeds up ~1.4× through gaps, deflects around walls, updrafts over obstacles. 12 tests. |
 | `82b412a` | WP3 | `world/wind_renderer.py` uploads the field as a 64×64 RGBA16F texture and binds the `u_wind_*` contract on `terrain_root`; `grass.vert` samples **local** wind per blade (gust bands visibly travel), scalar SkyState path kept as fallback. |
 | `741410c` | WP4 | GPU-instanced dust motes (camera-anchored wrapping lattice) + leaf litter per `ZoneStore` volume tagged `"trees"`; both sprites are runtime `ProceduralTextureDef`s (no assets). 21 tests. |

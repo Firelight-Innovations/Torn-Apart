@@ -76,7 +76,7 @@ building_arc_segments_per_quarter = 8    # arc-wall tessellation: chords per qua
 building_snap_eps_m = 0.01               # room-detection endpoint snap tolerance (1 cm)
 
 [wind]
-# Spatially-varying wind field (fire_engine/wind/): a 64x64-cell x 4 m (256 m)
+# Spatially-varying wind field (fire_engine/world/wind/): a 64x64-cell x 4 m (256 m)
 # player-centred grid of horizontal wind velocity built from seeded spectral
 # gust modes that advect downwind, plus an analytic vertical profile.
 # Units: meters, m/s, rad/s, seconds.
@@ -126,7 +126,7 @@ rain_cover_cell_m = 1.0         # column edge (meters) — matches the light-cel
 rain_cover_budget_columns = 4   # chunk-columns refolded per refresh (amortises a full rebuild)
 
 [weather]
-# Spatial weather simulation (fire_engine\weather\). Synoptic flow = the slow
+# Spatial weather simulation (fire_engine\world\weather\). Synoptic flow = the slow
 # steering current (hours-scale, closed-form function of seed + game time)
 # that sets the base wind and carries storm cells. Units: m/s, game hours.
 weather_synoptic_components = 4      # vector sinusoids in the flow

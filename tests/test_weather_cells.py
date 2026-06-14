@@ -13,7 +13,7 @@ Coverage
   synoptic displacement; drift_bias bends the track linearly in time.
 - Natural spawn is a pure function of (seed, day); different seeds differ;
   THUNDERSTORM radii are biased to the upper half of the band.
-- No panda3d import leaks into fire_engine/weather/.
+- No panda3d import leaks into fire_engine/world/weather/.
 """
 
 from __future__ import annotations
@@ -26,13 +26,13 @@ import pytest
 
 from fire_engine.core import load_config
 from fire_engine.core.rng import set_world_seed
-from fire_engine.weather.cells import (
+from fire_engine.world.weather.cells import (
     CellKind,
     StormCell,
     day_regime,
     natural_cells,
 )
-from fire_engine.weather.synoptic import Synoptic
+from fire_engine.world.weather.synoptic import Synoptic
 
 DAY = 24 * 3600.0
 
@@ -212,14 +212,14 @@ class TestNaturalSchedule:
 
 
 # ---------------------------------------------------------------------------
-# Hard-rule guard: no panda3d under fire_engine/weather/
+# Hard-rule guard: no panda3d under fire_engine/world/weather/
 # ---------------------------------------------------------------------------
 
 class TestNoPanda3D:
     def test_no_panda3d_import_in_weather_package(self):
         import ast
 
-        weather_dir = Path(__file__).parent.parent / "fire_engine" / "weather"
+        weather_dir = Path(__file__).parent.parent / "fire_engine" / "world" / "weather"
         offenders = []
         for src in weather_dir.glob("*.py"):
             tree = ast.parse(src.read_text(encoding="utf-8"), filename=str(src))

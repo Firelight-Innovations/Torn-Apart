@@ -20,8 +20,8 @@ import numpy as np
 
 from fire_engine.core import EventBus, load_config
 from fire_engine.core.rng import set_world_seed
-from fire_engine.weather import WeatherMap, WeatherSystem
-from fire_engine.weather.cells import CellKind, natural_cells
+from fire_engine.world.weather import WeatherMap, WeatherSystem
+from fire_engine.world.weather.cells import CellKind, natural_cells
 
 DAY = 24 * 3600.0
 

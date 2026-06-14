@@ -2,7 +2,7 @@
 buildings/meshing.py — turn a :class:`~fire_engine.buildings.model.Building`
 into renderable triangle geometry.
 
-The output is a :class:`fire_engine.terrain.meshing.MeshArrays` — the same flat
+The output is a :class:`fire_engine.world.terrain.meshing.MeshArrays` — the same flat
 (non-vertex-shared) triangle-soup contract terrain uses — so the World layer's
 ``world/geometry_bridge.py`` uploads buildings with the existing bulk path.
 Two differences from terrain meshes, both deliberate and documented:
@@ -43,7 +43,7 @@ import numpy as np
 
 from fire_engine.buildings.model import Building, Wall, _convex_hull
 from fire_engine.buildings.triangulate import triangulate_polygon
-from fire_engine.terrain.meshing import MeshArrays
+from fire_engine.world.terrain.meshing import MeshArrays
 
 __all__ = ["mesh_building", "mesh_wall", "mesh_slab"]
 

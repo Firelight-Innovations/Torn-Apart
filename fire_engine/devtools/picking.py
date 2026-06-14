@@ -26,7 +26,7 @@ import numpy as np
 from fire_engine.core.math3d import Vec3
 
 if TYPE_CHECKING:
-    from fire_engine.world.gameobject import GameObject
+    from fire_engine.render.gameobject import GameObject
 
 
 @dataclass

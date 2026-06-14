@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any, Callable, Optional
 if TYPE_CHECKING:
     # Duck-typed at runtime; imported only for type-checkers so this module
     # never pulls world/ (and therefore panda3d) into the import graph.
-    from fire_engine.world.gameobject import GameObject
+    from fire_engine.render.gameobject import GameObject
 
 
 class Selection:

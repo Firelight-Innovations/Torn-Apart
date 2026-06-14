@@ -75,7 +75,7 @@ from fire_engine.lighting.volume import (
 )
 
 if TYPE_CHECKING:
-    from fire_engine.sky.sky_state import SkyState
+    from fire_engine.world.sky.sky_state import SkyState
 
 _log = get_logger("lighting.gpu")
 

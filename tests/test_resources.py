@@ -420,7 +420,7 @@ def test_load_triangle_egg_with_panda3d():
         # but with a clean private loaders state to avoid polluting the global.
         import fire_engine.resources.loaders as _loaders
         from fire_engine.resources.manager import ResourceManager
-        from fire_engine.world.resource_adapter import register_panda_loaders
+        from fire_engine.render.resource_adapter import register_panda_loaders
 
         manager = ResourceManager()
         register_panda_loaders(manager)

@@ -65,7 +65,7 @@ def main() -> None:
 
     import main as demo
     from fire_engine.core.math3d import Vec3, Quat
-    from fire_engine.terrain import raycast_voxel
+    from fire_engine.world.terrain import raycast_voxel
 
     sys.path.insert(0, str(_REPO_ROOT / "tools"))
     from screenshot import _apply_sky_settings

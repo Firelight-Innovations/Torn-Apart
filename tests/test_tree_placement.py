@@ -29,7 +29,7 @@ POOLS = {"tree_gnarled_oak": 8, "tree_dead": 6}
 
 
 def _flat_chunks(cfg, coords):
-    from fire_engine.terrain.generation import generate_chunk
+    from fire_engine.world.terrain.generation import generate_chunk
 
     class _Chunk:
         def __init__(self, materials):

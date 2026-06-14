@@ -27,8 +27,8 @@ import re
 from fire_engine.core.shader_source import load_glsl
 
 _REPO = pathlib.Path(__file__).resolve().parents[1]
-_WORLD_ANCHOR = str(_REPO / "fire_engine" / "world" / "fake.py")
-_SHADER_DIR = _REPO / "fire_engine" / "world" / "shaders"
+_WORLD_ANCHOR = str(_REPO / "fire_engine" / "render" / "fake.py")
+_SHADER_DIR = _REPO / "fire_engine" / "render" / "shaders"
 
 # Every fragment shader that draws a lit surface.  flora.frag doubles as
 # the tree-impostor fragment (tree_renderer.py uses it verbatim).

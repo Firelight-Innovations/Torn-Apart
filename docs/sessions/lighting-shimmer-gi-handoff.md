@@ -125,7 +125,7 @@ by the owner.
 
 ## What I changed this session (now committed)
 
-**Albedo procedural-ground anti-aliasing** in `fire_engine/world/shaders/terrain.frag`:
+**Albedo procedural-ground anti-aliasing** in `fire_engine/render/shaders/terrain.frag`:
 - The ground albedo is a hard per-texel **world-space hash** (the pixel-art
   blocks), indexed into `u_ground_lut`. Hard hash = white noise → aliases hard
   under minification.
@@ -155,7 +155,7 @@ the owner's / prior-session changes, committed together as a checkpoint.)
 vec3 nm = texture(p3d_Texture1, v_uv).xyz * 2.0 - 1.0;   // tangent-space normal map
 vec3 N  = normalize(t * nm.x + b * nm.y + n * max(nm.z, 0.3));
 ```
-`fire_engine/world/texture_bridge.py:116-117` (also 161-162, 203-204) — **all**
+`fire_engine/render/texture_bridge.py:116-117` (also 161-162, 203-204) — **all**
 terrain textures, including the normal map, are bound:
 ```python
 tex.set_minfilter(SamplerState.FT_nearest)   # no mipmaps
@@ -177,7 +177,7 @@ dirt/grass shimmer **disappears**, the normal map is the cause — proceed to fi
 If it persists, the normal map is innocent (it may be a flat default) → go to
 Hypothesis B / C. Also confirm whether the terrain normal map even has detail
 (check where `p3d_Texture1` is assigned for terrain Geoms in
-`fire_engine/world/geometry_bridge.py` and what generates it).
+`fire_engine/render/geometry_bridge.py` and what generates it).
 
 ### Candidate fixes (in order of preference)
 1. **Derivative-fade the normal-map influence** toward the geometric normal `n`
@@ -281,14 +281,14 @@ nearest, that's another aliasing source the LOD won't fully hide).
 
 ## Key files / lines
 
-- `fire_engine/world/shaders/terrain.frag` — surface shading. Albedo LOD:
+- `fire_engine/render/shaders/terrain.frag` — surface shading. Albedo LOD:
   `groundOctave`/`groundNoise`; normal map L154-155; light quant L161; cascade
   sampling L66-92; composite `hdr` ~L218.
-- `fire_engine/world/texture_bridge.py:116-117, 161-162, 203-204` — `FT_nearest`,
+- `fire_engine/render/texture_bridge.py:116-117, 161-162, 203-204` — `FT_nearest`,
   no mipmaps (Hypothesis A source).
-- `fire_engine/world/terrain_shader.py` — compiles shader, binds ground LUT
+- `fire_engine/render/terrain_shader.py` — compiles shader, binds ground LUT
   (`extra_materials`).
-- `fire_engine/world/geometry_bridge.py` — terrain Geom texture stages
+- `fire_engine/render/geometry_bridge.py` — terrain Geom texture stages
   (where `p3d_Texture1` is assigned; confirm normal-map detail here).
 - `fire_engine/lighting/gpu.py` — cascades, uniforms, assembly scheduling, fog
   (cascade-2 + worker added this batch).

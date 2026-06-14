@@ -26,7 +26,7 @@ from fire_engine.devtools.fields import Panel
 from fire_engine.devtools.tools import DevTool
 
 if TYPE_CHECKING:
-    from fire_engine.world.gameobject import GameObject
+    from fire_engine.render.gameobject import GameObject
 
 
 class DevToolsManager:

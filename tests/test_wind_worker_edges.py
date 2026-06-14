@@ -21,7 +21,7 @@ import numpy as np
 import pytest
 
 from fire_engine.core.config import Config
-from fire_engine.wind import (
+from fire_engine.world.wind import (
     VenturiJob,
     VenturiResult,
     VenturiWorker,

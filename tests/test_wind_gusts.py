@@ -14,7 +14,7 @@ import pytest
 
 from fire_engine.core.config import Config
 from fire_engine.core.rng import set_world_seed
-from fire_engine.wind.gusts import GustModes, build_modes, eval_gusts
+from fire_engine.world.wind.gusts import GustModes, build_modes, eval_gusts
 
 # ---------------------------------------------------------------------------
 # Shared fixtures / helpers

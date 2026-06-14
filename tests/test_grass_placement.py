@@ -64,7 +64,7 @@ class _Chunk:
 
 
 def _flat_chunks(cfg: Config, coords):
-    from fire_engine.terrain.generation import generate_chunk
+    from fire_engine.world.terrain.generation import generate_chunk
     return {c: _Chunk(generate_chunk(c, cfg)) for c in coords}
 
 
@@ -128,14 +128,14 @@ class TestHashLowbias32:
 
     def test_glsl_mirror_constants_in_shader(self):
         """The GLSL grass.vert must carry the same lowbias32 multipliers."""
-        src = (_REPO / "fire_engine" / "world" / "shaders" / "grass.vert"
+        src = (_REPO / "fire_engine" / "render" / "shaders" / "grass.vert"
                ).read_text(encoding="utf-8").lower()
         for const in ("0x7feb352du", "0x846ca68bu"):
             assert const in src, f"GLSL constant missing: {const}"
 
     def test_glsl_chain_xor_constants_in_shader(self):
         """The GLSL grass.vert must carry the four inter-link XOR constants."""
-        src = (_REPO / "fire_engine" / "world" / "shaders" / "grass.vert"
+        src = (_REPO / "fire_engine" / "render" / "shaders" / "grass.vert"
                ).read_text(encoding="utf-8").lower()
         for const in ("0x9e3779b9u", "0x85ebca6bu", "0xc2b2ae35u",
                       "0x27d4eb2fu"):

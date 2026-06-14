@@ -29,8 +29,8 @@ import pytest
 
 from fire_engine.core import load_config
 from fire_engine.core.rng import set_world_seed
-from fire_engine.weather.cells import CellKind, StormCell, natural_cells
-from fire_engine.weather.lightning import (
+from fire_engine.world.weather.cells import CellKind, StormCell, natural_cells
+from fire_engine.world.weather.lightning import (
     StrikeParams,
     cell_id_int,
     scheduled_strikes,
@@ -150,7 +150,7 @@ class TestCellIdInt:
         project_root = str(Path(__file__).parent.parent.resolve())
         script = (
             "import sys, os; sys.path.insert(0, os.getcwd()); "
-            "from fire_engine.weather.lightning import cell_id_int; "
+            "from fire_engine.world.weather.lightning import cell_id_int; "
             "print(cell_id_int('n:5:2'))"
         )
         result = subprocess.run(

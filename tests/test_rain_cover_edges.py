@@ -22,8 +22,8 @@ import pytest
 from dataclasses import replace
 
 from fire_engine.core import load_config
-from fire_engine.terrain.chunk import Chunk
-from fire_engine.terrain.rain_cover import RainCoverField, OPEN_SKY_Z
+from fire_engine.world.terrain.chunk import Chunk
+from fire_engine.world.terrain.rain_cover import RainCoverField, OPEN_SKY_Z
 
 
 # ---------------------------------------------------------------------------

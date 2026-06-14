@@ -18,7 +18,7 @@ import math
 import numpy as np
 import pytest
 
-from fire_engine.sky import atmosphere
+from fire_engine.world.sky import atmosphere
 
 
 # ---------------------------------------------------------------------------

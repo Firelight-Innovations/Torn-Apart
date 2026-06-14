@@ -19,7 +19,7 @@ import pytest
 from fire_engine.core.math3d import Vec3, Quat
 from fire_engine.scene import SceneRuntime
 from fire_engine.scene.objects import SceneObjectStore
-from fire_engine.world.registry import ComponentRegistry
+from fire_engine.render.registry import ComponentRegistry
 
 _EPS = 1e-6
 

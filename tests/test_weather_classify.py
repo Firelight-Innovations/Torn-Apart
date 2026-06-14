@@ -19,8 +19,8 @@ from __future__ import annotations
 
 import pytest
 
-from fire_engine.weather.classify import WeatherType, classify
-from fire_engine.weather.system import LocalWeather
+from fire_engine.world.weather.classify import WeatherType, classify
+from fire_engine.world.weather.system import LocalWeather
 
 # ---------------------------------------------------------------------------
 # Threshold constants (read directly from the source; if the module ever

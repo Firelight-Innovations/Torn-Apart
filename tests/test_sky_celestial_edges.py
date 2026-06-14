@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 
 from fire_engine.core.math3d import Vec3
-from fire_engine.sky.celestial import (
+from fire_engine.world.sky.celestial import (
     DAYLIGHT_Z_HI,
     DAYLIGHT_Z_LO,
     GAME_SECONDS_PER_DAY,

@@ -12,8 +12,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from fire_engine.terrain.chunk import Chunk
-from fire_engine.terrain.meshing import (
+from fire_engine.world.terrain.chunk import Chunk
+from fire_engine.world.terrain.meshing import (
     MeshArrays,
     WORLD_FLOOR_SOLID,
     build_mesh,

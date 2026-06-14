@@ -34,10 +34,10 @@ import pytest
 from fire_engine.core import load_config, EventBus
 from fire_engine.core.math3d import Vec3
 from fire_engine.core.rng import set_world_seed
-from fire_engine.terrain.chunk import Chunk
-from fire_engine.terrain.generation import generate_chunk
-from fire_engine.terrain.raycast import raycast_voxel, Hit
-from fire_engine.terrain.chunk_manager import ChunkManager
+from fire_engine.world.terrain.chunk import Chunk
+from fire_engine.world.terrain.generation import generate_chunk
+from fire_engine.world.terrain.raycast import raycast_voxel, Hit
+from fire_engine.world.terrain.chunk_manager import ChunkManager
 
 
 # ---------------------------------------------------------------------------

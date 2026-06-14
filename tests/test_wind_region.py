@@ -24,7 +24,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from fire_engine.wind.region import WindRegion
+from fire_engine.world.wind.region import WindRegion
 
 
 # ---------------------------------------------------------------------------

@@ -23,8 +23,8 @@ import numpy as np
 import pytest
 
 from fire_engine.core import load_config
-from fire_engine.weather.cells import Regime
-from fire_engine.weather.clouds import (
+from fire_engine.world.weather.cells import Regime
+from fire_engine.world.weather.clouds import (
     BAND_HIGH,
     BAND_LOW,
     BAND_MID,

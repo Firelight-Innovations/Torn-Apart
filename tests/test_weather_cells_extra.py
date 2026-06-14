@@ -29,7 +29,7 @@ import pytest
 
 from fire_engine.core import load_config
 from fire_engine.core.rng import set_world_seed
-from fire_engine.weather.cells import (
+from fire_engine.world.weather.cells import (
     CellKind,
     Regime,
     StormCell,
@@ -37,7 +37,7 @@ from fire_engine.weather.cells import (
     natural_cells,
     regime_ambient,
 )
-from fire_engine.weather.synoptic import Synoptic
+from fire_engine.world.weather.synoptic import Synoptic
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -450,7 +450,7 @@ class TestNaturalCellsDeterminism:
         """
         cfg = load_config()
         # Find a HIGH_PRESSURE day in first 50 days.
-        from fire_engine.weather.cells import Regime
+        from fire_engine.world.weather.cells import Regime
         set_world_seed(_FIXED_SEED)
         for d in range(50):
             if day_regime(d) is Regime.HIGH_PRESSURE:

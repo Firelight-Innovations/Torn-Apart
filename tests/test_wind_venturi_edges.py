@@ -16,8 +16,8 @@ import numpy as np
 import pytest
 
 from fire_engine.core.config import Config
-from fire_engine.wind import VenturiJob, VenturiResult, solve_venturi
-from fire_engine.wind.venturi import column_solid_fraction
+from fire_engine.world.wind import VenturiJob, VenturiResult, solve_venturi
+from fire_engine.world.wind.venturi import column_solid_fraction
 
 # ---------------------------------------------------------------------------
 # Constants (match the existing test file)

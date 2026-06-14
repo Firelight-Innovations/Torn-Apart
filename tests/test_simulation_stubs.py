@@ -22,13 +22,13 @@ import pytest
 # Imports
 # ---------------------------------------------------------------------------
 
-import fire_engine.ai as _ai_pkg
-import fire_engine.economy as _econ_pkg
-import fire_engine.politics as _pol_pkg
+import fire_engine.simulation.ai as _ai_pkg
+import fire_engine.simulation.economy as _econ_pkg
+import fire_engine.simulation.politics as _pol_pkg
 
-from fire_engine.ai import NPCArchetype
-from fire_engine.economy import GoodDef
-from fire_engine.politics import FactionDef
+from fire_engine.simulation.ai import NPCArchetype
+from fire_engine.simulation.economy import GoodDef
+from fire_engine.simulation.politics import FactionDef
 
 
 # ---------------------------------------------------------------------------
@@ -54,19 +54,19 @@ class TestPackageExports:
 
     def test_ai_all_contains_npcarchetype(self):
         assert "NPCArchetype" in _ai_pkg.__all__, (
-            f"fire_engine.ai.__all__ = {_ai_pkg.__all__!r} — "
+            f"fire_engine.simulation.ai.__all__ = {_ai_pkg.__all__!r} — "
             "'NPCArchetype' is missing"
         )
 
     def test_economy_all_contains_gooddef(self):
         assert "GoodDef" in _econ_pkg.__all__, (
-            f"fire_engine.economy.__all__ = {_econ_pkg.__all__!r} — "
+            f"fire_engine.simulation.economy.__all__ = {_econ_pkg.__all__!r} — "
             "'GoodDef' is missing"
         )
 
     def test_politics_all_contains_factiondef(self):
         assert "FactionDef" in _pol_pkg.__all__, (
-            f"fire_engine.politics.__all__ = {_pol_pkg.__all__!r} — "
+            f"fire_engine.simulation.politics.__all__ = {_pol_pkg.__all__!r} — "
             "'FactionDef' is missing"
         )
 

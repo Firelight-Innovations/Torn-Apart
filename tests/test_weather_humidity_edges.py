@@ -28,7 +28,7 @@ import pytest
 
 from fire_engine.core import load_config
 from fire_engine.core.rng import set_world_seed
-from fire_engine.weather import humidity as H
+from fire_engine.world.weather import humidity as H
 
 
 # ---------------------------------------------------------------------------

@@ -20,7 +20,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from fire_engine.wind.modifiers import GustFront, WindModifier
+from fire_engine.world.wind.modifiers import GustFront, WindModifier
 
 
 # ---------------------------------------------------------------------------

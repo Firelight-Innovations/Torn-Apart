@@ -27,13 +27,13 @@ import numpy as np
 # ---------------------------------------------------------------------------
 # We do this at collection time so we get one clear skip rather than 35 errors.
 try:
-    from fire_engine.world.component import Component           # noqa: F401 — probe
-    from fire_engine.world.gameobject import GameObject        # noqa: F401
-    from fire_engine.world.registry import ComponentRegistry, instantiate
+    from fire_engine.render.component import Component           # noqa: F401 — probe
+    from fire_engine.render.gameobject import GameObject        # noqa: F401
+    from fire_engine.render.registry import ComponentRegistry, instantiate
     from fire_engine.core.clock import Clock
     from fire_engine.core.event_bus import EventBus
     from fire_engine.core.math3d import Vec3, Quat
-    from fire_engine.player.fly_controller import FlyController, _PITCH_LIMIT
+    from fire_engine.simulation.player.fly_controller import FlyController, _PITCH_LIMIT
     _IMPORT_OK = True
     _IMPORT_ERROR = None
 except ImportError as _e:

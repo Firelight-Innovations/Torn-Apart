@@ -23,7 +23,7 @@ import pytest
 
 from fire_engine.core.config import Config
 from fire_engine.core.rng import set_world_seed
-from fire_engine.weather.synoptic import Synoptic
+from fire_engine.world.weather.synoptic import Synoptic
 
 DAY = 86400.0
 

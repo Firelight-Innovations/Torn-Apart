@@ -27,9 +27,9 @@ from fire_engine.core import EventBus, load_config
 from fire_engine.core.math3d import Vec3
 from fire_engine.core.rng import set_world_seed
 from fire_engine.save import Saveable
-from fire_engine.terrain import ChunkManager, apply_brush, SphereBrush, BrushMode
-from fire_engine.terrain.chunk import Chunk
-from fire_engine.terrain.chunk_manager import (
+from fire_engine.world.terrain import ChunkManager, apply_brush, SphereBrush, BrushMode
+from fire_engine.world.terrain.chunk import Chunk
+from fire_engine.world.terrain.chunk_manager import (
     _MAX_LOADS_PER_FRAME,
     _Z_MIN,
     _Z_MAX,
@@ -451,7 +451,7 @@ class TestDeltaRoundTrip:
 
     def test_reset_restores_baseline_materials(self, cfg):
         """After reset_to_baseline, materials match the pure generate_chunk output."""
-        from fire_engine.terrain.generation import generate_chunk
+        from fire_engine.world.terrain.generation import generate_chunk
         cm = _make_cm(cfg)
         _carve(cm)
         edited_coords = [c for c, ch in cm.chunks.items() if ch.edited]

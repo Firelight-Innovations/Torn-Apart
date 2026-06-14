@@ -34,7 +34,6 @@ from fire_engine.lighting.occluders import (
     CANOPY_CENTER_FRAC,
     CANOPY_HALF_HEIGHT_FRAC,
     TRUNK_SIDE_M,
-    TRUNK_TOP_FRAC,
 )
 from fire_engine.lighting.palette import MaterialPalette
 from fire_engine.procedural.flora.mesher import TreeMesh, mesh_leaf_area_m2
@@ -307,8 +306,8 @@ class TestLeafArea:
 
     def test_oak_leafier_than_dead_tree(self):
         # The real species: sigma's input must rank a leafy oak above a snag.
-        from fire_engine.core.rng import set_world_seed, for_domain
-        from fire_engine.procedural.flora.species import gnarled_oak, dead_tree
+        from fire_engine.core.rng import for_domain, set_world_seed
+        from fire_engine.procedural.flora.species import dead_tree, gnarled_oak
 
         set_world_seed(424242)
         oak = gnarled_oak.GnarledOakDef().generate(for_domain("procedural", "tree_gnarled_oak"))

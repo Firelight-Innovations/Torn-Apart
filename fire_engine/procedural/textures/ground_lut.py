@@ -38,7 +38,7 @@ Example
 
 from __future__ import annotations
 
-from typing import Mapping, Tuple
+from collections.abc import Mapping
 
 import numpy as np
 
@@ -46,7 +46,7 @@ __all__ = ["build_ground_lut"]
 
 
 def build_ground_lut(
-    entries: Mapping[int, Tuple[np.ndarray, np.ndarray]],
+    entries: Mapping[int, tuple[np.ndarray, np.ndarray]],
     levels: int = 256,
 ) -> np.ndarray:
     """

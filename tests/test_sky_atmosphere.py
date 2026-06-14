@@ -11,7 +11,6 @@ from __future__ import annotations
 import math
 
 import numpy as np
-import pytest
 
 from fire_engine.core import Clock, EventBus, load_config
 from fire_engine.core.rng import set_world_seed
@@ -162,7 +161,7 @@ class TestMoonSurface:
 
     def test_deterministic_per_seed(self):
         import fire_engine.procedural  # noqa: F401
-        from fire_engine.procedural import get, clear_cache
+        from fire_engine.procedural import clear_cache, get
 
         set_world_seed(1337)
         clear_cache()
@@ -174,7 +173,7 @@ class TestMoonSurface:
 
     def test_different_seed_different_moon(self):
         import fire_engine.procedural  # noqa: F401
-        from fire_engine.procedural import get, clear_cache
+        from fire_engine.procedural import clear_cache, get
 
         set_world_seed(1337)
         clear_cache()

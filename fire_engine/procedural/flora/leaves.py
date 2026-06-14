@@ -67,7 +67,7 @@ class Leaves:
         return int(self.radius.shape[0])
 
     @staticmethod
-    def empty() -> "Leaves":
+    def empty() -> Leaves:
         """A zero-leaf instance (leafless species)."""
         return Leaves(
             center=np.empty((0, 3), dtype=np.float32),

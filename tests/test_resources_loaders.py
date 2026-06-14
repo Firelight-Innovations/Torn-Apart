@@ -16,8 +16,8 @@ Headless only — no panda3d imports, no real file I/O.
 from __future__ import annotations
 
 import os
-import pytest
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # Helpers — snapshot + restore the real _LOADERS table so these tests don't

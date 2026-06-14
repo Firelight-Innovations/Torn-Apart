@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from fire_engine.core.shader_source import load_glsl
 
-__all__ = ["LIGHTNING_VERTEX", "LIGHTNING_FRAGMENT"]
+__all__ = ["LIGHTNING_FRAGMENT", "LIGHTNING_VERTEX"]
 
 
 LIGHTNING_VERTEX = load_glsl(__file__, "lightning.vert")

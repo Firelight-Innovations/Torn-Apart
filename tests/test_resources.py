@@ -20,11 +20,8 @@ Excluded from the default headless run via ``addopts = -m "not window"`` in
 from __future__ import annotations
 
 import os
-import importlib
-import sys
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers: fake loaders module for headless isolation
@@ -382,7 +379,7 @@ class TestDefaultManager:
     """The module-level default_manager and convenience functions work correctly."""
 
     def test_default_manager_exists(self):
-        from fire_engine.resources import default_manager, ResourceManager
+        from fire_engine.resources import ResourceManager, default_manager
 
         assert isinstance(default_manager, ResourceManager)
 
@@ -438,9 +435,8 @@ def test_load_triangle_egg_with_panda3d():
     try:
         # Create a fresh ResourceManager backed by the real loaders module
         # but with a clean private loaders state to avoid polluting the global.
-        import fire_engine.resources.loaders as _loaders
-        from fire_engine.resources.manager import ResourceManager
         from fire_engine.render.resource_adapter import register_panda_loaders
+        from fire_engine.resources.manager import ResourceManager
 
         manager = ResourceManager()
         register_panda_loaders(manager)

@@ -184,8 +184,8 @@ class VenturiWorker:
     """
 
     def __init__(self) -> None:
-        self._in: "queue.Queue[VenturiJob | None]" = queue.Queue()
-        self._out: "queue.Queue[VenturiResult]" = queue.Queue()
+        self._in: queue.Queue[VenturiJob | None] = queue.Queue()
+        self._out: queue.Queue[VenturiResult] = queue.Queue()
         self._thread: threading.Thread | None = None
         self._pending = 0
 
@@ -237,7 +237,7 @@ class VenturiWorker:
                 break
             try:
                 self._out.put(solve_venturi(job))
-            except Exception:  # noqa: BLE001 — never let the worker die silently
+            except Exception:
                 _log.exception("Venturi solve failed (origin %r, seq %d)", job.origin_cell, job.seq)
                 # Post a valid IDENTITY result so the consumer never starves —
                 # a raised job must not leave the field stuck without a

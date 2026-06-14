@@ -19,9 +19,9 @@ from .._generated import ErrorCode, Method, Notification, SchemaId
 from ..binary import encode_frame
 from ..commands import EditCommand, SceneCommand, UndoStack
 from ..meshcodec import encode_mesh_payload
-from ..texturecodec import encode_texture_payload
 from ..rpc import RpcError
 from ..session import EditorSession
+from ..texturecodec import encode_texture_payload
 
 log = logging.getLogger("fire_editor.chunks")
 
@@ -167,7 +167,7 @@ class ChunkService:
             )
         except asyncio.CancelledError:
             raise
-        except Exception:  # noqa: BLE001 — background task: log, don't crash the daemon
+        except Exception:
             log.exception("chunk streaming failed")
 
     # ------------------------------------------------------------------ #

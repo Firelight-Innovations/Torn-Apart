@@ -83,8 +83,8 @@ if TYPE_CHECKING:
     from fire_engine.world.wind.worker import VenturiWorker
 
 __all__ = [
-    "WindSnapshot",
     "WindField",
+    "WindSnapshot",
     "pack_wind_field",
     "vertical_profile",
 ]
@@ -209,7 +209,7 @@ class WindField:
     64
     """
 
-    def __init__(self, config: Config, worker: "VenturiWorker | None" = None) -> None:
+    def __init__(self, config: Config, worker: VenturiWorker | None = None) -> None:
         self._cfg = config
         self._worker = worker  # VenturiWorker | None (terrain funneling)
         self._region = WindRegion(

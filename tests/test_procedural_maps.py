@@ -10,14 +10,12 @@ No panda3d imports.  Pure numpy assertions, no per-element Python loops.
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from fire_engine.procedural.maps import (
     black_emission_map,
     derive_normal_map,
     flat_normal_map,
 )
-
 
 # ---------------------------------------------------------------------------
 # flat_normal_map

@@ -34,7 +34,8 @@ Usage
 
 from __future__ import annotations
 
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 # ---------------------------------------------------------------------------
 # Public type alias
@@ -93,7 +94,7 @@ class UnknownResourceFormatError(Exception):
 # Module-level dispatch table: suffix (lowercase, with dot) → loader callable.
 # Entries are initialised to None for known suffixes to distinguish
 # "recognised but not yet registered" from "completely unknown".
-_LOADERS: dict[str, Optional[LoaderCallable]] = {
+_LOADERS: dict[str, LoaderCallable | None] = {
     # --- 3D models (Panda3D loader registered by world/resource_adapter.py) ---
     ".egg": None,
     ".bam": None,

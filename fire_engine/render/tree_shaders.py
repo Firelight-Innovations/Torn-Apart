@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from fire_engine.core.shader_source import load_glsl
 
-__all__ = ["TREE_VERTEX", "TREE_FRAGMENT", "TREE_IMPOSTOR_VERTEX"]
+__all__ = ["TREE_FRAGMENT", "TREE_IMPOSTOR_VERTEX", "TREE_VERTEX"]
 
 
 TREE_VERTEX = load_glsl(__file__, "tree.vert")

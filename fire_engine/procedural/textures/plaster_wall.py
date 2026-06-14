@@ -45,7 +45,7 @@ import numpy as np
 from fire_engine.procedural.defs import register_def
 from fire_engine.procedural.textures.base import ProceduralTextureDef, pixel_noise
 
-__all__ = ["PlasterWallDef", "PLASTER_PALETTE", "PLASTER_THRESHOLDS"]
+__all__ = ["PLASTER_PALETTE", "PLASTER_THRESHOLDS", "PlasterWallDef"]
 
 
 # Weathered lime plaster — 6 colours, dark flake → bleached highlight.

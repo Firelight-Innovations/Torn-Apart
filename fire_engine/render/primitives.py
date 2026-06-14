@@ -25,7 +25,7 @@ from panda3d.core import (  # type: ignore[import]
     NodePath,
 )
 
-__all__ = ["build_sphere_geom", "make_sphere_node", "load_cube_model", "CUBE_MODEL_SCALE"]
+__all__ = ["CUBE_MODEL_SCALE", "build_sphere_geom", "load_cube_model", "make_sphere_node"]
 
 # Panda3D's stock "models/misc/rgbCube" spans -1..1 per axis; scaling it by 0.5
 # yields a 1 m cube at unit GameObject scale. Multiply this into any per-axis

@@ -22,18 +22,14 @@ All tests are headless: no panda3d, no fire_engine.world, no fire_engine.lightin
 
 from __future__ import annotations
 
-import pytest
-
 from fire_engine.core.clock import (
-    Clock,
-    MAX_FIXED_STEPS,
-    DEFAULT_GAME_TIME_SCALE,
     _GAME_SECONDS_PER_DAY,
+    DEFAULT_GAME_TIME_SCALE,
+    MAX_FIXED_STEPS,
+    Clock,
 )
 from fire_engine.core.config import load_config
 from fire_engine.core.event_bus import EventBus, GameDayTickEvent
-from fire_engine.core.rng import set_world_seed
-
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures

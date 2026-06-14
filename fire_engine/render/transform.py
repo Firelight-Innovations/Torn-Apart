@@ -46,7 +46,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from fire_engine.core.math3d import Vec3, Quat
+from fire_engine.core.math3d import Quat, Vec3
 
 if TYPE_CHECKING:
     pass  # no circular imports needed currently
@@ -162,13 +162,13 @@ class Transform:
     """
 
     __slots__ = (
+        "_children",
+        "_dirty",
         "_local_position",
         "_local_rotation",
         "_local_scale",
         "_parent",
-        "_children",
         "_world_matrix",  # (4,4) float64 or None when dirty
-        "_dirty",
         "game_object",  # back-reference set by GameObject after construction
     )
 
@@ -190,18 +190,18 @@ class Transform:
     # ------------------------------------------------------------------
 
     @property
-    def parent(self) -> "Transform | None":
+    def parent(self) -> Transform | None:
         """Parent transform, or None if this is a root transform."""
         return self._parent
 
     @property
-    def children(self) -> tuple["Transform", ...]:
+    def children(self) -> tuple[Transform, ...]:
         """Read-only tuple of immediate child transforms."""
         return tuple(self._children)
 
     def set_parent(
         self,
-        p: "Transform | None",
+        p: Transform | None,
         keep_world: bool = True,
     ) -> None:
         """

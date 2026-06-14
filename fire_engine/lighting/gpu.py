@@ -57,15 +57,15 @@ from fire_engine.core import (
     get_logger,
 )
 from fire_engine.lighting import glsl
-from fire_engine.lighting.exposure import ExposureMeter
-from fire_engine.lighting.lights import LightSet, OccluderSet, MAX_OCCLUDERS
-from fire_engine.lighting.occluders import TreeOccluderSet
-from fire_engine.lighting.palette import MaterialPalette, build_default_palette
 from fire_engine.lighting.assembly_worker import (
     AssemblyJob,
     CascadeAssemblyWorker,
     assemble_packed,
 )
+from fire_engine.lighting.exposure import ExposureMeter
+from fire_engine.lighting.lights import MAX_OCCLUDERS, LightSet, OccluderSet
+from fire_engine.lighting.occluders import TreeOccluderSet
+from fire_engine.lighting.palette import MaterialPalette, build_default_palette
 from fire_engine.lighting.volume import (
     EMISSION_SCALE,
     VolumeWindow,
@@ -318,7 +318,7 @@ class GpuLightingPipeline:
         # Static tree/bush occluders (lighting/occluders.py): splatted into
         # every assembled geometry volume so the light marches see trees.
         # Set by the tree renderer via :meth:`set_static_occluders`.
-        self._tree_occluders: "TreeOccluderSet | None" = None
+        self._tree_occluders: TreeOccluderSet | None = None
         # Cascade indices whose GPU volume predates the current occluder set.
         self._tree_occ_stale: set[int] = set()
         # Non-terrain geometry occupancy providers (buildings, future props).
@@ -516,7 +516,7 @@ class GpuLightingPipeline:
     # Per-frame driver
     # ------------------------------------------------------------------
 
-    def update(self, camera_pos, sky_state: "SkyState | None", dt: float) -> None:
+    def update(self, camera_pos, sky_state: SkyState | None, dt: float) -> None:
         """
         Advance the GPU lighting one frame.
 
@@ -656,7 +656,7 @@ class GpuLightingPipeline:
     # Cascade volume assembly (off-thread; see assembly_worker.py)
     # ------------------------------------------------------------------
 
-    def _assemble_and_upload_sync(self, casc: "_Cascade") -> None:
+    def _assemble_and_upload_sync(self, casc: _Cascade) -> None:
         """
         Gather + upload one cascade volume inline on the main thread.
 
@@ -685,7 +685,7 @@ class GpuLightingPipeline:
         casc.needs_inject = True
         self._tree_occ_stale.discard(casc.index)
 
-    def set_static_occluders(self, occluders: "TreeOccluderSet | None") -> None:
+    def set_static_occluders(self, occluders: TreeOccluderSet | None) -> None:
         """
         Replace the static tree/bush occluder set the cascades are lit with.
 
@@ -831,7 +831,7 @@ class GpuLightingPipeline:
             self._pending_coords.clear()
             self._load_dirty_timer = 0.0
 
-    def _submit_assembly(self, casc: "_Cascade", origin_cell) -> None:
+    def _submit_assembly(self, casc: _Cascade, origin_cell) -> None:
         """Snapshot the chunks a reassembly will read and enqueue the job."""
         coords = window_chunk_span(
             origin_cell,
@@ -902,7 +902,7 @@ class GpuLightingPipeline:
         casc.needs_inject = True
 
     def _shift_radiance(
-        self, casc: "_Cascade", old_origin: tuple[int, int, int], new_origin: tuple[int, int, int]
+        self, casc: _Cascade, old_origin: tuple[int, int, int], new_origin: tuple[int, int, int]
     ) -> None:
         """
         Copy ``casc``'s current radiance into its other ping-pong texture,
@@ -1024,7 +1024,7 @@ class GpuLightingPipeline:
         # Radiance/origins are per-frame (ping-pong + window scroll).
         self.update_surface_inputs(node, None)
 
-    def update_surface_inputs(self, node: NodePath, sky_state: "SkyState | None") -> None:
+    def update_surface_inputs(self, node: NodePath, sky_state: SkyState | None) -> None:
         """
         Refresh the per-frame lighting uniforms on a render NodePath.
 
@@ -1089,7 +1089,7 @@ class GpuLightingPipeline:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _sky_inputs(sky_state: "SkyState | None") -> tuple:
+    def _sky_inputs(sky_state: SkyState | None) -> tuple:
         """
         Extract (sun_dir, sun_radiance, moon_dir, moon_radiance, sky_ambient)
         from a SkyState, with graceful fallbacks for older SkyState versions

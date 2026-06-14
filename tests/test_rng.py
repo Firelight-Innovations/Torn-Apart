@@ -15,10 +15,8 @@ import subprocess
 import sys
 
 import numpy as np
-import pytest
 
-from fire_engine.core.rng import set_world_seed, for_domain
-
+from fire_engine.core.rng import for_domain, set_world_seed
 
 # ---------------------------------------------------------------------------
 # In-process determinism

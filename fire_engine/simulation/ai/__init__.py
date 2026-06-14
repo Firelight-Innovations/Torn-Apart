@@ -16,7 +16,7 @@ class NPCArchetype:
     Implement in a later session per ARCHITECTURE.md §5.8.
     """
 
-    def generate(self, rng, **params):  # noqa: ANN001, ANN003
+    def generate(self, rng, **params):
         raise NotImplementedError(
             "NPCArchetype.generate is future scope — see ARCHITECTURE.md §5.8 "
             "(AI API). Not part of Session 1."

@@ -28,7 +28,7 @@ from fire_engine.procedural.flora.leaves import Leaves
 from fire_engine.procedural.flora.skeleton import TreeSkeleton
 from fire_engine.procedural.textures.base import pixel_noise
 
-__all__ = ["rasterize_impostor", "impostor_atlas"]
+__all__ = ["impostor_atlas", "rasterize_impostor"]
 
 
 def rasterize_impostor(

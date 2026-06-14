@@ -28,10 +28,11 @@ def run(
     settle_frames: int = 140,
 ) -> Path:
     import numpy as np
+
     import main as demo
-    from fire_engine.core.math3d import Vec3, Quat
-    from fire_engine.world.weather import CellKind, StormCell
     from fire_engine.core.event_bus import LightningStrikeEvent
+    from fire_engine.core.math3d import Quat, Vec3
+    from fire_engine.world.weather import CellKind, StormCell
 
     app = demo.build_demo()
     app.input_state.mouse_captured = False
@@ -109,7 +110,7 @@ def run(
 
     out_path = _REPO_ROOT / "tools" / "out" / out_name
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    from panda3d.core import PNMImage, Filename
+    from panda3d.core import Filename, PNMImage
 
     img = PNMImage()
     if app.win.get_screenshot(img):

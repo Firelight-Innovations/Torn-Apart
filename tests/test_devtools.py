@@ -15,35 +15,34 @@ import math
 import numpy as np
 import pytest
 
-from fire_engine.core.math3d import Vec3, Quat
-from fire_engine.render.gameobject import GameObject
-from fire_engine.render.component import Component
-from fire_engine.render.registry import ComponentRegistry
-
+from fire_engine.core.math3d import Quat, Vec3
 from fire_engine.devtools import (
-    Selection,
-    Selectable,
-    ray_aabb,
-    pick,
-    describe_object,
-    describe_chunk,
-    is_chunk,
-    FieldKind,
-    PerformanceTool,
-    InspectorTool,
     ActionsTool,
-    ClockTool,
-    CallbackTool,
-    DevToolsManager,
-    Section,
-    Field,
     Button,
+    CallbackTool,
+    ClockTool,
+    DevToolsManager,
+    Field,
+    FieldKind,
     Gizmo,
     GizmoMode,
     HandleType,
+    InspectorTool,
+    PerformanceTool,
+    Section,
+    Selectable,
+    Selection,
+    describe_chunk,
+    describe_object,
+    is_chunk,
+    pick,
+    ray_aabb,
     update_drag,
 )
-from fire_engine.devtools.gizmo import ray_plane_intersect, closest_on_axis
+from fire_engine.devtools.gizmo import closest_on_axis, ray_plane_intersect
+from fire_engine.render.component import Component
+from fire_engine.render.gameobject import GameObject
+from fire_engine.render.registry import ComponentRegistry
 
 
 @pytest.fixture(autouse=True)
@@ -56,7 +55,7 @@ def _clean_registry():
 
 # A component with a tunable of every reflected kind.
 class TunableComponent(Component):
-    __slots__ = ("speed", "label", "flag", "offset")
+    __slots__ = ("flag", "label", "offset", "speed")
 
     def __init__(self) -> None:
         super().__init__()

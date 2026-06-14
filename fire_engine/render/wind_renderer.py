@@ -91,8 +91,8 @@ from fire_engine.core import (
     TerrainEditedEvent,
     get_logger,
 )
-from fire_engine.world.wind import pack_wind_field
 from fire_engine.render.component import Component
+from fire_engine.world.wind import pack_wind_field
 
 __all__ = ["WindSystemComponent"]
 
@@ -308,7 +308,7 @@ class WindSystemComponent(Component):
         if self.worker is not None:
             try:
                 self.worker.stop(join=True)
-            except Exception:  # noqa: BLE001  (shutdown best-effort)
+            except Exception:
                 pass
             self.worker = None
         self._tex = None

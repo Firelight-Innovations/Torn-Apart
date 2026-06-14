@@ -18,22 +18,19 @@ No panda3d imports; all headless.
 
 from __future__ import annotations
 
-import math
-
 import numpy as np
 import pytest
 
-from fire_engine.core.math3d import Vec3, Quat
+from fire_engine.core.math3d import Quat, Vec3
 from fire_engine.devtools import (
+    DragState,
     Gizmo,
     GizmoMode,
-    HandleType,
     Handle,
-    DragState,
+    HandleType,
     update_drag,
 )
-from fire_engine.devtools.gizmo import ray_plane_intersect, closest_on_axis
-
+from fire_engine.devtools.gizmo import closest_on_axis, ray_plane_intersect
 
 # ===========================================================================
 # Helpers

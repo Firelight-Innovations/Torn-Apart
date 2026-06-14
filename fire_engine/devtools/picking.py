@@ -19,7 +19,7 @@ No panda3d imports — headless-testable.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -50,7 +50,7 @@ class Selectable:
     in the Inspector).
     """
 
-    game_object: "GameObject"
+    game_object: GameObject
     half_extents: Vec3
 
     def world_aabb(self) -> tuple[np.ndarray, np.ndarray]:
@@ -74,7 +74,7 @@ def ray_aabb(
     direction: Vec3,
     box_min: np.ndarray,
     box_max: np.ndarray,
-) -> Optional[float]:
+) -> float | None:
     """
     Slab-method ray vs. axis-aligned box intersection.
 
@@ -119,7 +119,7 @@ def pick(
     origin: Vec3,
     direction: Vec3,
     selectables: list[Selectable],
-) -> "Optional[GameObject]":
+) -> GameObject | None:
     """
     Return the nearest GameObject whose AABB the ray hits, or ``None``.
 
@@ -144,8 +144,8 @@ def pick(
         if go is not None:
             selection.set(go)
     """
-    best_t: Optional[float] = None
-    best_go: "Optional[GameObject]" = None
+    best_t: float | None = None
+    best_go: GameObject | None = None
     for sel in selectables:
         bmin, bmax = sel.world_aabb()
         t = ray_aabb(origin, direction, bmin, bmax)

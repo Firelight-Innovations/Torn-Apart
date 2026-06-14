@@ -18,10 +18,8 @@ numpy vectorised expressions.
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from fire_engine.world.wind.modifiers import GustFront, WindModifier
-
 
 # ---------------------------------------------------------------------------
 # Grid helpers — build once, reuse across tests.
@@ -70,7 +68,6 @@ class TestWindModifierProtocol:
 
     def test_protocol_is_runtime_checkable(self):
         """WindModifier is decorated @runtime_checkable so isinstance works."""
-        import typing
 
         assert (
             hasattr(WindModifier, "__protocol_attrs__")

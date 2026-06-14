@@ -60,7 +60,7 @@ class BuildingDef(ProceduralDef):
         house = get("building_demo_house", ground_z=8.0)   # a Building
     """
 
-    def generate(self, rng: np.random.Generator, **params) -> Building:  # noqa: D401
+    def generate(self, rng: np.random.Generator, **params) -> Building:
         raise NotImplementedError(
             "BuildingDef subclasses must implement generate() -> Building. "
             "See ARCHITECTURE.md §5.7 and docs/systems/buildings.md."

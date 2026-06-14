@@ -23,19 +23,19 @@ from .rpc import Dispatcher, RpcError
 from .session import EditorSession
 
 __all__ = [
+    "DAEMON_VERSION",
+    "PROTOCOL_VERSION",
+    "BinaryFrame",
+    "BinaryFrameError",
     "Daemon",
     "Dispatcher",
-    "RpcError",
-    "EditorSession",
     "EditorClient",
+    "EditorSession",
+    "RpcError",
     "RpcRemoteError",
-    "BinaryFrame",
-    "spawn_daemon",
-    "encode_frame",
     "decode_frame",
-    "BinaryFrameError",
-    "encode_mesh_payload",
     "decode_mesh_payload",
-    "PROTOCOL_VERSION",
-    "DAEMON_VERSION",
+    "encode_frame",
+    "encode_mesh_payload",
+    "spawn_daemon",
 ]

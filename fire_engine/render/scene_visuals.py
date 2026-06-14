@@ -45,19 +45,19 @@ from typing import TYPE_CHECKING
 from panda3d.core import GeomNode, LQuaternionf, NodePath  # type: ignore[import]
 
 from fire_engine.core.math3d import Vec3
-from fire_engine.scene.components import (
-    default_components_for_kind,
-    default_params,
-)
 from fire_engine.render.primitives import (
     CUBE_MODEL_SCALE,
     build_sphere_geom,
     load_cube_model,
 )
+from fire_engine.scene.components import (
+    default_components_for_kind,
+    default_params,
+)
 
 if TYPE_CHECKING:
-    from fire_engine.scene.runtime import SceneRuntime
     from fire_engine.render.gameobject import GameObject
+    from fire_engine.scene.runtime import SceneRuntime
 
 log = logging.getLogger(__name__)
 
@@ -79,19 +79,19 @@ class SceneVisualFactory:
         self._app = app
         self._pipeline = lighting_pipeline
         self._overlay = dev_overlay
-        self.runtime: "SceneRuntime | None" = None  # set by main.py for write-back
-        self._nodes: dict["GameObject", NodePath] = {}
-        self._node_scale: dict["GameObject", float] = {}  # model-unit fixup
-        self._light_ids: dict["GameObject", int] = {}
-        self._ids: dict["GameObject", int] = {}  # go -> scene object id
-        self._last_synced: dict["GameObject", tuple] = {}
+        self.runtime: SceneRuntime | None = None  # set by main.py for write-back
+        self._nodes: dict[GameObject, NodePath] = {}
+        self._node_scale: dict[GameObject, float] = {}  # model-unit fixup
+        self._light_ids: dict[GameObject, int] = {}
+        self._ids: dict[GameObject, int] = {}  # go -> scene object id
+        self._last_synced: dict[GameObject, tuple] = {}
         self._warned_no_pipeline = False
         app.taskMgr.add(self._sync_task, "scene-visuals-sync")
 
     # ------------------------------------------------------------------ #
     # Runtime contract
     # ------------------------------------------------------------------ #
-    def attach(self, go: "GameObject", kind: str, obj: dict) -> None:
+    def attach(self, go: GameObject, kind: str, obj: dict) -> None:
         """Give ``go`` its in-game visuals by walking its component list.
 
         ``kind`` is only a fallback for pre-component data; the components list
@@ -119,7 +119,7 @@ class SceneVisualFactory:
             half = 0.5 if has_mesh else 0.25
             self._overlay.manager.add_selectable(go, Vec3(half, half, half))
 
-    def _attach_mesh(self, go: "GameObject", obj: dict, primitive: str) -> None:
+    def _attach_mesh(self, go: GameObject, obj: dict, primitive: str) -> None:
         if primitive == "sphere":
             node = GeomNode(f"scene_sphere_{obj['id']}")
             node.add_geom(build_sphere_geom(0.5))
@@ -135,7 +135,7 @@ class SceneVisualFactory:
                 self._nodes[go] = model
                 self._node_scale[go] = CUBE_MODEL_SCALE
 
-    def _attach_light(self, go: "GameObject", params: dict) -> None:
+    def _attach_light(self, go: GameObject, params: dict) -> None:
         if self._pipeline is None:
             if not self._warned_no_pipeline:
                 log.info("authored lights skipped: no GPU lighting pipeline")

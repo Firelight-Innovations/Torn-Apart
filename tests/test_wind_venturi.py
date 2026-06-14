@@ -28,7 +28,6 @@ from fire_engine.core.config import Config
 from fire_engine.core.rng import set_world_seed
 from fire_engine.world.wind import (
     VenturiJob,
-    VenturiResult,
     VenturiWorker,
     WindField,
     solve_venturi,

@@ -76,8 +76,8 @@ from fire_engine.core import (
     TerrainEditedEvent,
     get_logger,
 )
-from fire_engine.render.component import Component
 from fire_engine.render import grass_shaders
+from fire_engine.render.component import Component
 from fire_engine.zones import (
     bake_grass_height_field,
     grass_hash_seed,

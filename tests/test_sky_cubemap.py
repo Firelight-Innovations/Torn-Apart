@@ -16,7 +16,7 @@ from fire_engine.core.rng import set_world_seed
 
 def _fresh_registry():
     """Reset + re-register the night-sky defs only (fast, isolated)."""
-    from fire_engine.procedural.registry import reset_registry, register
+    from fire_engine.procedural.registry import register, reset_registry
     from fire_engine.procedural.textures.night_sky import (
         NightSkyCubeDef,
         NightSkyDef,

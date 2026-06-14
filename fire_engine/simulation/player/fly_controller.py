@@ -60,8 +60,8 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
+from fire_engine.core.math3d import Quat, Vec3
 from fire_engine.render.component import Component
-from fire_engine.core.math3d import Vec3, Quat
 
 if TYPE_CHECKING:
     from fire_engine.render.app import InputState
@@ -91,12 +91,12 @@ class FlyController(Component):
     """
 
     __slots__ = (
-        "move_speed",
-        "sprint_mult",
-        "mouse_sensitivity",
-        "yaw",
-        "pitch",
         "_input",
+        "mouse_sensitivity",
+        "move_speed",
+        "pitch",
+        "sprint_mult",
+        "yaw",
     )
 
     def __init__(
@@ -113,13 +113,13 @@ class FlyController(Component):
         self.yaw: float = 0.0  # radians, world Z
         self.pitch: float = 0.0  # radians, local X
 
-        self._input: "InputState | None" = None
+        self._input: InputState | None = None
 
     # ------------------------------------------------------------------
     # Input setter (called by App before update)
     # ------------------------------------------------------------------
 
-    def set_input_state(self, state: "InputState") -> None:
+    def set_input_state(self, state: InputState) -> None:
         """
         Provide the current frame's input state.
 

@@ -39,10 +39,11 @@ Example
 
 from __future__ import annotations
 
-from typing import Iterator, TYPE_CHECKING
+from collections.abc import Iterator
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from fire_engine.core.event_bus import EventBus, GameDayTickEvent
+    from fire_engine.core.event_bus import EventBus
 
 
 # Spiral-of-death guard: never tick fixed_update more than this per frame.
@@ -79,7 +80,7 @@ class Clock:
     def __init__(
         self,
         fixed_dt: float = 0.02,
-        bus: "EventBus | None" = None,
+        bus: EventBus | None = None,
         game_time_scale: float = DEFAULT_GAME_TIME_SCALE,
     ) -> None:
         self._fixed_dt: float = float(fixed_dt)

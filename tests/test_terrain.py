@@ -10,13 +10,13 @@ import hashlib
 import numpy as np
 import pytest
 
-from fire_engine.core import load_config, EventBus
+from fire_engine.core import EventBus, load_config
 from fire_engine.core.math3d import Vec3
 from fire_engine.core.rng import set_world_seed
 from fire_engine.world.terrain.chunk import Chunk
-from fire_engine.world.terrain.generation import generate_chunk
-from fire_engine.world.terrain.meshing import build_mesh, WORLD_FLOOR_SOLID
 from fire_engine.world.terrain.chunk_manager import ChunkManager
+from fire_engine.world.terrain.generation import generate_chunk
+from fire_engine.world.terrain.meshing import WORLD_FLOOR_SOLID, build_mesh
 
 
 @pytest.fixture
@@ -305,7 +305,7 @@ class TestRemeshEdited:
 
     def _crater(self, cm):
         """Carve a corner-spanning crater; return apply_brush's touched set."""
-        from fire_engine.world.terrain.brush import apply_brush, SphereBrush, BrushMode
+        from fire_engine.world.terrain.brush import BrushMode, SphereBrush, apply_brush
 
         return apply_brush(
             SphereBrush(2.5),

@@ -43,9 +43,9 @@ from typing import TYPE_CHECKING, Any
 
 from panda3d.core import (  # type: ignore[import]
     FrameBufferProperties,
-    LVecBase2f,
     LPoint2f,
     LPoint3f,
+    LVecBase2f,
     Shader,
     Texture,
 )
@@ -84,7 +84,7 @@ class PostProcessPipeline:
         sun is occluded by terrain.
     """
 
-    def __init__(self, base: Any, config: "Config") -> None:
+    def __init__(self, base: Any, config: Config) -> None:
         self.base = base
         self.config = config
         self.enabled: bool = bool(getattr(config, "gfx_post_process", True))
@@ -114,7 +114,7 @@ class PostProcessPipeline:
 
         try:
             self._build()
-        except Exception as exc:  # noqa: BLE001 — never fatal; fall back to legacy
+        except Exception as exc:
             _log.warning(
                 "Post-processing setup failed (%s); falling back to in-shader tonemapping.", exc
             )
@@ -405,7 +405,7 @@ class PostProcessPipeline:
                         'Set [graphics] gfx_hdr_format = "rgba8" to '
                         "silence this, or use a different GPU."
                     )
-        except Exception as exc:  # noqa: BLE001 — diagnostics only
+        except Exception as exc:
             _log.debug("Buffer property query failed: %s", exc)
 
     def _set_hdr_output(self, on: bool) -> None:

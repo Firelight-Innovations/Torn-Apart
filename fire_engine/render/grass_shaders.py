@@ -44,7 +44,7 @@ from __future__ import annotations
 
 from fire_engine.core.shader_source import load_glsl
 
-__all__ = ["GRASS_VERTEX", "GRASS_FRAGMENT"]
+__all__ = ["GRASS_FRAGMENT", "GRASS_VERTEX"]
 
 
 GRASS_VERTEX = load_glsl(__file__, "grass.vert")

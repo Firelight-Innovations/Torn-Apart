@@ -14,7 +14,6 @@ from __future__ import annotations
 import math
 
 import numpy as np
-import pytest
 
 from fire_engine.core.rng import for_domain, set_world_seed
 from fire_engine.procedural.flora import (
@@ -26,7 +25,6 @@ from fire_engine.procedural.flora import (
     mesh_leaves,
 )
 from fire_engine.procedural.flora.mesher import TreeMesh, mesh_leaf_area_m2
-
 
 # ---------------------------------------------------------------------------
 # Shared fixtures

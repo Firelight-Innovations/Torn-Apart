@@ -85,11 +85,11 @@ class Component:
     8. on_destroy  (deferred to end of the frame that called destroy())
     """
 
-    __slots__ = ("game_object", "transform", "enabled", "_started")
+    __slots__ = ("_started", "enabled", "game_object", "transform")
 
     def __init__(self) -> None:
-        self.game_object: "GameObject | None" = None
-        self.transform: "Transform | None" = None
+        self.game_object: GameObject | None = None
+        self.transform: Transform | None = None
         self.enabled: bool = True
         self._started: bool = False  # tracks whether start() has run
 

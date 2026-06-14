@@ -26,8 +26,6 @@ Example
 
 from __future__ import annotations
 
-from typing import Any
-
 from fire_engine.core import get_logger
 from fire_engine.zones.volume import ZoneVolume
 

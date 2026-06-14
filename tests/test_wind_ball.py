@@ -21,7 +21,6 @@ from fire_engine.core.rng import set_world_seed
 from fire_engine.world.wind import BallParams, WindField, debug_ball_step
 from fire_engine.world.wind.debug import debug_ball_step as _direct_import  # name check
 
-
 SEED = 1337
 
 

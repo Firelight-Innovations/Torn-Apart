@@ -12,10 +12,9 @@ from __future__ import annotations
 import asyncio
 
 import numpy as np
+from fire_editor import Daemon, EditorSession
 
 from fire_engine.core import load_config
-
-from fire_editor import Daemon, EditorSession
 
 BRUSH = {"shape": "sphere", "x": 0.0, "y": 0.0, "z": 7.5, "mode": "remove", "radius": 2.0}
 SURFACE = (0, 0, 0)

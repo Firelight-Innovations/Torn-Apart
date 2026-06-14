@@ -74,8 +74,8 @@ from panda3d.core import (  # type: ignore[import]
 
 from fire_engine.core import get_logger
 from fire_engine.core.rng import for_domain
-from fire_engine.render.component import Component
 from fire_engine.render import mote_shaders
+from fire_engine.render.component import Component
 from fire_engine.zones import leaf_hash_seed, leaf_instance_count
 
 __all__ = ["DustMoteComponent", "LeafLitterComponent"]
@@ -128,9 +128,10 @@ def _build_quad_geom() -> Geom:
 def _mote_texture(name: str):
     """The procedural ``name`` texture as a Panda3D texture (linear-filtered
     so the soft dust falloff / leaf edges don't look chunky billboarded)."""
+    from panda3d.core import SamplerState  # type: ignore[import]
+
     from fire_engine.procedural import get as get_procedural
     from fire_engine.render.texture_bridge import to_panda_texture
-    from panda3d.core import SamplerState  # type: ignore[import]
 
     tex = to_panda_texture(get_procedural(name))
     tex.set_minfilter(SamplerState.FT_linear)

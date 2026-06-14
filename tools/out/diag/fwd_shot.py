@@ -1,13 +1,16 @@
-import sys, math
+import math
+import sys
 from pathlib import Path
 
 _R = Path(__file__).resolve().parents[3]
 if str(_R) not in sys.path:
     sys.path.insert(0, str(_R))
-import numpy as np, main as demo
-from fire_engine.core.math3d import Vec3, Quat
-from panda3d.core import PNMImage, Filename
 import os
+
+from panda3d.core import Filename, PNMImage
+
+import main as demo
+from fire_engine.core.math3d import Quat, Vec3
 
 FLY = int(sys.argv[1])
 NAME = sys.argv[2]

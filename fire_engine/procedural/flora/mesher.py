@@ -43,7 +43,7 @@ from fire_engine.procedural.flora.skeleton import (
     _normalize,
 )
 
-__all__ = ["TreeMesh", "mesh_branches", "mesh_leaves", "merge_parts", "mesh_leaf_area_m2"]
+__all__ = ["TreeMesh", "merge_parts", "mesh_branches", "mesh_leaf_area_m2", "mesh_leaves"]
 
 
 @dataclass
@@ -89,7 +89,7 @@ class TreeMesh:
         return int(self.positions.shape[0])
 
     @staticmethod
-    def empty() -> "TreeMesh":
+    def empty() -> TreeMesh:
         """A zero-vertex mesh part."""
         return TreeMesh(
             positions=np.empty((0, 3), dtype=np.float32),

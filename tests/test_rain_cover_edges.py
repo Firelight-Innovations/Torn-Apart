@@ -17,14 +17,14 @@ New coverage beyond test_rain_cover.py:
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import numpy as np
 import pytest
-from dataclasses import replace
 
 from fire_engine.core import load_config
 from fire_engine.world.terrain.chunk import Chunk
-from fire_engine.world.terrain.rain_cover import RainCoverField, OPEN_SKY_Z
-
+from fire_engine.world.terrain.rain_cover import OPEN_SKY_Z, RainCoverField
 
 # ---------------------------------------------------------------------------
 # Shared fixtures

@@ -28,43 +28,44 @@ camera.py, per the world-layer boundary.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
+
+from direct.gui import DirectGuiGlobals as DGG  # type: ignore[import]
 
 # Panda3D imports are allowed in world/ per ARCHITECTURE §3.
 from direct.gui.DirectGui import (  # type: ignore[import]
-    DirectFrame,
-    DirectLabel,
     DirectButton,
     DirectEntry,
+    DirectFrame,
+    DirectLabel,
 )
-from direct.gui import DirectGuiGlobals as DGG  # type: ignore[import]
 from panda3d.core import (  # type: ignore[import]
     LineSegs,
-    Point3,
     LQuaternionf,
-    TextNode,
     NodePath,
+    Point3,
+    TextNode,
 )
 
 from fire_engine.core.math3d import Vec3
-from fire_engine.world.terrain import raycast_voxel
-from fire_engine.render.registry import instantiate
 from fire_engine.devtools import (
-    DevToolsManager,
-    PerformanceTool,
-    InspectorTool,
     ActionsTool,
-    ClockTool,
-    CallbackTool,
-    FieldKind,
-    Field,
-    Section,
     Button,
+    CallbackTool,
+    ClockTool,
+    DevToolsManager,
+    Field,
+    FieldKind,
     Gizmo,
     GizmoMode,
-    update_drag,
+    InspectorTool,
+    PerformanceTool,
+    Section,
     is_chunk,
+    update_drag,
 )
+from fire_engine.render.registry import instantiate
+from fire_engine.world.terrain import raycast_voxel
 
 if TYPE_CHECKING:
     from fire_engine.render.app import App
@@ -125,7 +126,7 @@ class DevOverlay:
         overlay.actions.add_action("Fire Explosion", explode_at_camera)
     """
 
-    def __init__(self, app: "App", manager: "Optional[DevToolsManager]" = None) -> None:
+    def __init__(self, app: App, manager: DevToolsManager | None = None) -> None:
         self._app = app
         self._base = app
         self.manager = manager if manager is not None else DevToolsManager()
@@ -151,7 +152,7 @@ class DevOverlay:
         # Reads sky_system.weather (the spatial WeatherSystem). Built defensively
         # so a concurrent weather-API shift degrades to blanks, never a crash.
         self._weather = getattr(sky, "weather", None) if sky is not None else None
-        self._rain_cover_np: Optional[NodePath] = None  # toggle overlay quad
+        self._rain_cover_np: NodePath | None = None  # toggle overlay quad
         if self._weather is not None and hasattr(self._weather, "summon_cell"):
             self.manager.register_tool(
                 CallbackTool("env_summon", "Weather Control", self._build_weather_control)
@@ -164,7 +165,7 @@ class DevOverlay:
                 app.accept("k", self._summon_cell_at_camera)
                 app.accept("l", self._fire_lightning_at_crosshair)
                 app.accept("j", self._toggle_rain_cover_overlay)
-            except Exception:  # noqa: BLE001 — input map may differ in tooling
+            except Exception:
                 pass
         self.manager.register_tool(InspectorTool(self.manager.selection))
         # Transform gizmo panel (Move / Rotate / Scale / Off) — switches the
@@ -183,20 +184,20 @@ class DevOverlay:
         self._widgets: list[object] = []  # DirectGui items to destroy on rebuild
         self._updaters: list = []  # per-frame value refreshers
         self._last_sig: tuple | None = None  # (tool_id, revision) signature
-        self._outline_np: Optional[NodePath] = None
+        self._outline_np: NodePath | None = None
 
         # Transform gizmo state -------------------------------------------
-        self._gizmo_mode: "Optional[GizmoMode]" = GizmoMode.TRANSLATE
+        self._gizmo_mode: GizmoMode | None = GizmoMode.TRANSLATE
         self._gizmo_drag = None  # DragState | None (active drag)
-        self._gizmo_go: "Optional[GameObject]" = None
-        self._gizmo_np: Optional[NodePath] = None
+        self._gizmo_go: GameObject | None = None
+        self._gizmo_np: NodePath | None = None
 
         # Spawned prop visuals: GameObject -> NodePath
-        self._spawned: "dict[GameObject, NodePath]" = {}
+        self._spawned: dict[GameObject, NodePath] = {}
         self._spawn_count = 0
         # Emissive props: GameObject -> (light_id, AreaLight) registered on
         # the GPU lighting pipeline (the cube becomes an emissive box light).
-        self._emissive: "dict[GameObject, tuple[int, object]]" = {}
+        self._emissive: dict[GameObject, tuple[int, object]] = {}
 
         # Weather-cycle state for the Environment panel (None = natural schedule).
         self._weather_types: list = []
@@ -206,7 +207,7 @@ class DevOverlay:
 
             self._weather_types = list(WeatherType) + [None]
             self._wx = len(self._weather_types) - 1
-        except Exception:  # noqa: BLE001 — sky feature may be absent
+        except Exception:
             pass
 
         # Default selection so the inspector shows something on first open.
@@ -276,13 +277,13 @@ class DevOverlay:
         def set_tod_hours(h) -> None:
             try:
                 clock.game_time_of_day = (float(h) % 24.0) * 3600.0
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
 
         def set_scale(v) -> None:
             try:
                 clock.game_time_scale = float(v)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
 
         def state_attr(name):
@@ -341,7 +342,7 @@ class DevOverlay:
         self._wx = (self._wx + 1) % len(self._weather_types)
         try:
             weather.force_weather(self._weather_types[self._wx])
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
     # ------------------------------------------------------------------
@@ -372,13 +373,13 @@ class DevOverlay:
         def local_class() -> str:
             try:
                 return getattr(w.current, "value", "?")
-            except Exception:  # noqa: BLE001
+            except Exception:
                 return "?"
 
         def _local_sample():
             try:
                 return w.sample_local(self._camera_xy(), self._time_abs())
-            except Exception:  # noqa: BLE001
+            except Exception:
                 return None
 
         def humidity() -> str:
@@ -406,7 +407,7 @@ class DevOverlay:
                 bearing = (math.degrees(math.atan2(dx, dy))) % 360.0  # 0=+Y(N)
                 eta = float(w.cell_eta_s(cell, t, (px, py)))
                 return cell, dist, bearing, eta
-            except Exception:  # noqa: BLE001
+            except Exception:
                 return None
 
         def near_kind() -> str:
@@ -464,14 +465,14 @@ class DevOverlay:
             return
         try:
             getattr(w, method_name)(time_abs=self._time_abs(), player_pos=self._camera_xy())
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
     def _clear_skies(self) -> None:
         """Clear summoned cells + suppress the current natural weather."""
         try:
             self._weather.clear_all()
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
     def _summon_cell_at_camera(self) -> None:
@@ -488,7 +489,7 @@ class DevOverlay:
                 player_pos=self._camera_xy(),
                 upwind_m=0.0,
             )
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
     def _fire_lightning_at_crosshair(self) -> None:
@@ -506,7 +507,7 @@ class DevOverlay:
             return
         try:
             from fire_engine.core.event_bus import LightningStrikeEvent
-        except Exception:  # noqa: BLE001 — M7 not merged into this worktree yet
+        except Exception:
             return
 
         cam_tf = self._app.camera_go.transform
@@ -531,7 +532,7 @@ class DevOverlay:
             publish = getattr(bus, "publish", None) or getattr(bus, "publish_deferred", None)
             if publish is not None:
                 publish(ev)
-        except Exception:  # noqa: BLE001 — defensive: contract may shift
+        except Exception:
             pass
 
     def _raycast_ground(self, origin, direction):
@@ -575,7 +576,7 @@ class DevOverlay:
             node.set_light_off()
             node.set_two_sided(True)
             self._rain_cover_np = node
-        except Exception:  # noqa: BLE001
+        except Exception:
             self._rain_cover_np = None
 
     def _rain_cover_field(self):
@@ -588,7 +589,7 @@ class DevOverlay:
 
             comp = rain_go.get_component(RainRendererComponent)
             return getattr(comp, "_cover", None) if comp is not None else None
-        except Exception:  # noqa: BLE001
+        except Exception:
             return None
 
     # ------------------------------------------------------------------
@@ -726,12 +727,12 @@ class DevOverlay:
         ]
         return sections, buttons
 
-    def _set_gizmo_mode(self, mode: "Optional[GizmoMode]") -> None:
+    def _set_gizmo_mode(self, mode: GizmoMode | None) -> None:
         """Switch the active gizmo tool (``None`` hides the gizmo)."""
         self._gizmo_mode = mode
         self._gizmo_drag = None  # cancel any in-flight drag on a mode switch
 
-    def _gizmo_target(self) -> "Optional[GameObject]":
+    def _gizmo_target(self) -> GameObject | None:
         """
         The object the gizmo currently manipulates, or ``None``.
 
@@ -748,7 +749,7 @@ class DevOverlay:
             return None
         return go
 
-    def _gizmo_pivot_size(self, go) -> "tuple[Vec3, float]":
+    def _gizmo_pivot_size(self, go) -> tuple[Vec3, float]:
         """Gizmo pivot (object origin) + a camera-distance-scaled world size."""
         pivot = go.transform.local_position
         cam = self._app.camera_go.transform.position
@@ -910,7 +911,7 @@ class DevOverlay:
     # Spawning dev props
     # ------------------------------------------------------------------
 
-    def spawn_cube(self) -> "GameObject":
+    def spawn_cube(self) -> GameObject:
         """
         Spawn a 1 m cube 5 m in front of the camera, select it, and make it
         pickable.  The cube has no components — it's a transform you can move and
@@ -1137,7 +1138,7 @@ class DevOverlay:
         for w in self._widgets:
             try:
                 w.destroy()
-            except Exception:  # noqa: BLE001 — defensive teardown
+            except Exception:
                 pass
         self._widgets.clear()
         self._updaters.clear()
@@ -1340,7 +1341,7 @@ class DevOverlay:
         # a focused entry is left untouched until Enter / click-off commits it.
         try:
             return bool(entry.guiItem.get_focus())
-        except Exception:  # noqa: BLE001
+        except Exception:
             return False
 
     def _refresh_scalar(self, entry: DirectEntry, fld) -> None:

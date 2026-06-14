@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Iterable
+from collections.abc import Iterable
 
 import websockets
 from websockets.legacy.server import WebSocketServerProtocol

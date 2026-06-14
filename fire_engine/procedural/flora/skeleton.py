@@ -54,7 +54,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-__all__ = ["TreeSkeleton", "SkeletonBuilder", "validate_skeleton"]
+__all__ = ["SkeletonBuilder", "TreeSkeleton", "validate_skeleton"]
 
 _UP = np.array([0.0, 0.0, 1.0], dtype=np.float32)
 _TWO_PI = 2.0 * math.pi

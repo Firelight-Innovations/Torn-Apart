@@ -14,9 +14,7 @@ import json
 from pathlib import Path
 
 import pytest
-
 import websockets
-
 from fire_editor import Daemon, decode_frame, encode_frame
 from fire_editor._generated import PROTOCOL_VERSION, ErrorCode, SchemaId
 from fire_editor.binary import BinaryFrameError

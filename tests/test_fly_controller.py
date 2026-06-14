@@ -20,21 +20,22 @@ from __future__ import annotations
 
 import math
 import types
-import pytest
+
 import numpy as np
+import pytest
 
 # ---------------------------------------------------------------------------
 # Headless import check  — skip entire module if panda3d leaks in
 # ---------------------------------------------------------------------------
 # We do this at collection time so we get one clear skip rather than 35 errors.
 try:
+    from fire_engine.core.clock import Clock
+    from fire_engine.core.event_bus import EventBus
+    from fire_engine.core.math3d import Quat, Vec3
     from fire_engine.render.component import Component  # noqa: F401 — probe
     from fire_engine.render.gameobject import GameObject  # noqa: F401
     from fire_engine.render.registry import ComponentRegistry, instantiate
-    from fire_engine.core.clock import Clock
-    from fire_engine.core.event_bus import EventBus
-    from fire_engine.core.math3d import Vec3, Quat
-    from fire_engine.simulation.player.fly_controller import FlyController, _PITCH_LIMIT
+    from fire_engine.simulation.player.fly_controller import _PITCH_LIMIT, FlyController
 
     _IMPORT_OK = True
     _IMPORT_ERROR = None
@@ -513,11 +514,11 @@ class TestHorizontal:
 class TestPitchLimit:
     def test_pitch_limit_value(self):
         """_PITCH_LIMIT is exactly math.radians(89) (pin constant)."""
-        assert _PITCH_LIMIT == pytest.approx(math.radians(89.0), abs=1e-10)
+        assert pytest.approx(math.radians(89.0), abs=1e-10) == _PITCH_LIMIT
 
     def test_pitch_limit_less_than_half_pi(self):
         """_PITCH_LIMIT < π/2 (ensures we never hit the gimbal singularity)."""
-        assert _PITCH_LIMIT < math.pi / 2
+        assert math.pi / 2 > _PITCH_LIMIT
 
 
 # ---------------------------------------------------------------------------

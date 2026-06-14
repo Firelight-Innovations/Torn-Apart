@@ -15,7 +15,7 @@ class GoodDef:
     Implement in a later session per ARCHITECTURE.md §5.9.
     """
 
-    def generate(self, rng, **params):  # noqa: ANN001, ANN003
+    def generate(self, rng, **params):
         raise NotImplementedError(
             "GoodDef.generate is future scope — see ARCHITECTURE.md §5.9 "
             "(Economy API). Not part of Session 1."

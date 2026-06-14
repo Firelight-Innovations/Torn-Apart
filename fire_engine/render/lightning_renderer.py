@@ -45,8 +45,6 @@ from __future__ import annotations
 import math
 from typing import Any
 
-import numpy as np
-
 # Panda3D imports allowed in world/ per ARCHITECTURE §3.
 from panda3d.core import (  # type: ignore[import]
     BoundingBox,
@@ -73,10 +71,10 @@ from fire_engine.core import (
     ThunderEvent,
     get_logger,
 )
+from fire_engine.render import lightning_shaders
+from fire_engine.render.component import Component
 from fire_engine.world.terrain import RainCoverField
 from fire_engine.world.weather import generate_bolt
-from fire_engine.render.component import Component
-from fire_engine.render import lightning_shaders
 
 __all__ = ["LightningRendererComponent"]
 

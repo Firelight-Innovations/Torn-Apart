@@ -25,7 +25,6 @@ from fire_engine.core import Config
 from fire_engine.core.rng import set_world_seed
 from fire_engine.zones import ZoneVolume, leaf_hash_seed, leaf_instance_count
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -36,13 +35,13 @@ def _gen(name: str, seed: int, **params) -> np.ndarray:
     registry cache so seed changes actually re-generate)."""
     set_world_seed(seed)
     if name == "dust_mote":
-        from fire_engine.procedural.textures.dust_mote import DustMoteDef
         from fire_engine.core.rng import for_domain
+        from fire_engine.procedural.textures.dust_mote import DustMoteDef
 
         return DustMoteDef().generate(for_domain("procedural", "dust_mote"), **params)
     if name == "leaf_sprite":
-        from fire_engine.procedural.textures.leaf_sprite import LeafSpriteDef
         from fire_engine.core.rng import for_domain
+        from fire_engine.procedural.textures.leaf_sprite import LeafSpriteDef
 
         return LeafSpriteDef().generate(for_domain("procedural", "leaf_sprite"), **params)
     raise ValueError(name)

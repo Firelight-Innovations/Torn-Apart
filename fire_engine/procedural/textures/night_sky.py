@@ -59,7 +59,7 @@ import numpy as np
 from fire_engine.procedural.defs import register_def
 from fire_engine.procedural.textures.base import ProceduralTextureDef, value_noise
 
-__all__ = ["NightSkyDef", "NightSkyCubeDef", "cube_face_directions"]
+__all__ = ["NightSkyCubeDef", "NightSkyDef", "cube_face_directions"]
 
 
 # ---------------------------------------------------------------------------

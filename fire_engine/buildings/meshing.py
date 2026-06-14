@@ -45,7 +45,7 @@ from fire_engine.buildings.model import Building, Wall, _convex_hull
 from fire_engine.buildings.triangulate import triangulate_polygon
 from fire_engine.world.terrain.meshing import MeshArrays
 
-__all__ = ["mesh_building", "mesh_wall", "mesh_slab"]
+__all__ = ["mesh_building", "mesh_slab", "mesh_wall"]
 
 _EPS = 1e-9
 

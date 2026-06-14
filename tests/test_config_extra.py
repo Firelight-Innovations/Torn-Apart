@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import dataclasses
 import warnings
-from pathlib import Path
 
 import pytest
 

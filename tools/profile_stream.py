@@ -42,7 +42,7 @@ from fire_engine.core.math3d import Vec3
 class _Stat:
     """Accumulates per-call millisecond samples for one labelled substep."""
 
-    __slots__ = ("samples", "count")
+    __slots__ = ("count", "samples")
 
     def __init__(self) -> None:
         self.samples: list[float] = []

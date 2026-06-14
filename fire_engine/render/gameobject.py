@@ -29,10 +29,10 @@ Example
 from __future__ import annotations
 
 import uuid
-from typing import TYPE_CHECKING, Type, TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
-from fire_engine.render.transform import Transform
 from fire_engine.render.component import Component
+from fire_engine.render.transform import Transform
 
 if TYPE_CHECKING:
     pass
@@ -68,13 +68,13 @@ class GameObject:
     """
 
     __slots__ = (
+        "_components",
+        "active_self",
         "id",
+        "layer",
         "name",
         "tag",
-        "layer",
-        "active_self",
         "transform",
-        "_components",
     )
 
     def __init__(
@@ -119,7 +119,7 @@ class GameObject:
     # Component management
     # ------------------------------------------------------------------
 
-    def add_component(self, t: Type[T], **kwargs) -> T:
+    def add_component(self, t: type[T], **kwargs) -> T:
         """
         Construct a component of type *t*, attach it, and schedule awake/start.
 
@@ -158,7 +158,7 @@ class GameObject:
 
         return component
 
-    def get_component(self, t: Type[T]) -> "T | None":
+    def get_component(self, t: type[T]) -> T | None:
         """
         Return the first component of type *t* attached to this GameObject,
         or None if none is attached.
@@ -189,7 +189,7 @@ class GameObject:
                 return c  # type: ignore[return-value]
         return None
 
-    def get_components(self, t: Type[T]) -> list[T]:
+    def get_components(self, t: type[T]) -> list[T]:
         """
         Return all components of type *t* attached to this GameObject.
 
@@ -203,7 +203,7 @@ class GameObject:
         """
         return [c for c in self._components if isinstance(c, t)]  # type: ignore[misc]
 
-    def get_component_in_children(self, t: Type[T]) -> "T | None":
+    def get_component_in_children(self, t: type[T]) -> T | None:
         """
         Return the first component of type *t* in this object or any
         descendant (breadth-first).

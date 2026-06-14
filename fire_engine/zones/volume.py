@@ -158,7 +158,7 @@ class ZoneVolume:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ZoneVolume":
+    def from_dict(cls, data: dict[str, Any]) -> ZoneVolume:
         """Inverse of :meth:`to_dict`."""
         return cls(
             id=int(data["id"]),

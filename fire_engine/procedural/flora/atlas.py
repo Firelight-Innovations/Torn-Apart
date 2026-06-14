@@ -25,7 +25,7 @@ import numpy as np
 
 from fire_engine.procedural.textures.base import pixel_noise
 
-__all__ = ["AtlasLayout", "bark_texture", "leaf_texture", "compose_atlas"]
+__all__ = ["AtlasLayout", "bark_texture", "compose_atlas", "leaf_texture"]
 
 
 @dataclass(frozen=True)

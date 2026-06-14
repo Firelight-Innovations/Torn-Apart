@@ -62,8 +62,8 @@ from fire_engine.core import (
     TerrainEditedEvent,
     get_logger,
 )
-from fire_engine.render.component import Component
 from fire_engine.render import flora_shaders
+from fire_engine.render.component import Component
 
 # Weather → sway mapping shared with grass so the scalar fallback moves all
 # vegetation in lockstep (flora scales it per kind via u_sway_gain).

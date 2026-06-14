@@ -19,7 +19,6 @@ from __future__ import annotations
 import math
 
 import numpy as np
-import pytest
 
 from fire_engine.core.config import Config
 from fire_engine.core.rng import set_world_seed

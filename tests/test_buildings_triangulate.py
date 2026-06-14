@@ -13,7 +13,6 @@ import pytest
 
 from fire_engine.buildings.triangulate import triangulate_polygon
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

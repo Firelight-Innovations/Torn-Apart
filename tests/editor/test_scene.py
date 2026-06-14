@@ -14,12 +14,7 @@ import asyncio
 import json
 
 import numpy as np
-import pytest
 import websockets
-
-from fire_engine.core.math3d import Vec3
-from fire_engine.world.terrain import BrushMode, SphereBrush, apply_brush
-
 from fire_editor import (
     Daemon,
     EditorSession,
@@ -29,6 +24,9 @@ from fire_editor import (
     encode_mesh_payload,
 )
 from fire_editor._generated import PROTOCOL_VERSION, SchemaId
+
+from fire_engine.core.math3d import Vec3
+from fire_engine.world.terrain import BrushMode, SphereBrush, apply_brush
 
 SEED = 1337
 SURFACE = (0, 0, 0)  # spans z [0,16) m; flat ground at 8 m -> non-empty mesh

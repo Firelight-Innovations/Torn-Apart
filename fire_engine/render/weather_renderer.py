@@ -98,9 +98,9 @@ from panda3d.core import (  # type: ignore[import]
 )
 
 from fire_engine.core import get_logger
+from fire_engine.render.component import Component
 from fire_engine.world.sky import pack_weather_map
 from fire_engine.world.weather import WeatherMap
-from fire_engine.render.component import Component
 
 __all__ = ["WeatherMapComponent"]
 

@@ -42,7 +42,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from fire_engine.procedural.defs import ProceduralDef, register_def
+from fire_engine.procedural.defs import register_def
 from fire_engine.procedural.textures.base import ProceduralTextureDef, value_noise
 
 __all__ = ["WastelandGroundDef"]

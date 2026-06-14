@@ -33,17 +33,17 @@ def _fresh_registry():
     # We need to reset first, then re-trigger auto-registration.
     # The cleanest way without module-reload tricks is to call reset_registry
     # and then re-register the built-in defs directly.
-    from fire_engine.procedural.registry import reset_registry, register
-    from fire_engine.procedural.textures.wasteland_ground import WastelandGroundDef
+    from fire_engine.procedural.registry import register, reset_registry
+    from fire_engine.procedural.textures.dirt_ground import DirtGroundDef
+    from fire_engine.procedural.textures.grass_ground import GrassGroundDef
+    from fire_engine.procedural.textures.grass_tuft import GrassTuftDef
+    from fire_engine.procedural.textures.moon_surface import MoonSurfaceDef
     from fire_engine.procedural.textures.night_sky import (
         NightSkyCubeDef,
         NightSkyDef,
     )
     from fire_engine.procedural.textures.rain_streak import RainStreakDef
-    from fire_engine.procedural.textures.grass_ground import GrassGroundDef
-    from fire_engine.procedural.textures.dirt_ground import DirtGroundDef
-    from fire_engine.procedural.textures.moon_surface import MoonSurfaceDef
-    from fire_engine.procedural.textures.grass_tuft import GrassTuftDef
+    from fire_engine.procedural.textures.wasteland_ground import WastelandGroundDef
 
     reset_registry()
     register(WastelandGroundDef())
@@ -177,7 +177,7 @@ class TestCacheIdentity:
         )
 
     def test_clear_cache_breaks_identity(self):
-        from fire_engine.procedural.registry import get, clear_cache
+        from fire_engine.procedural.registry import clear_cache, get
 
         arr1 = get("wasteland_ground")
         clear_cache()
@@ -274,10 +274,10 @@ class TestRegisterDefDecorator:
 
     def test_custom_def_deterministic(self):
         """Custom def uses for_domain RNG → same seed = same output."""
-        from fire_engine.procedural.defs import ProceduralDef, register_def
-        from fire_engine.procedural.textures.base import value_noise
-        from fire_engine.procedural.registry import get, reset_registry
         from fire_engine.core.rng import set_world_seed
+        from fire_engine.procedural.defs import ProceduralDef, register_def
+        from fire_engine.procedural.registry import get, reset_registry
+        from fire_engine.procedural.textures.base import value_noise
 
         @register_def
         class NoiseDef(ProceduralDef):
@@ -288,7 +288,6 @@ class TestRegisterDefDecorator:
 
         set_world_seed(11)
         reset_registry()
-        from fire_engine.procedural.defs import register_def as _rd  # re-apply
 
         # Re-register after reset
         from fire_engine.procedural.registry import register
@@ -311,7 +310,7 @@ class TestRegisterDefDecorator:
 
 class TestValueNoise:
     def test_shape_and_dtype(self):
-        from fire_engine.core.rng import set_world_seed, for_domain
+        from fire_engine.core.rng import for_domain, set_world_seed
         from fire_engine.procedural.textures.base import value_noise
 
         set_world_seed(0)
@@ -321,7 +320,7 @@ class TestValueNoise:
         assert h.dtype == np.float32
 
     def test_range(self):
-        from fire_engine.core.rng import set_world_seed, for_domain
+        from fire_engine.core.rng import for_domain, set_world_seed
         from fire_engine.procedural.textures.base import value_noise
 
         set_world_seed(0)
@@ -331,7 +330,7 @@ class TestValueNoise:
         assert float(h.max()) <= 1.0, f"max={h.max()} above 1"
 
     def test_deterministic(self):
-        from fire_engine.core.rng import set_world_seed, for_domain
+        from fire_engine.core.rng import for_domain, set_world_seed
         from fire_engine.procedural.textures.base import value_noise
 
         set_world_seed(7)
@@ -341,7 +340,7 @@ class TestValueNoise:
         assert np.array_equal(h1, h2)
 
     def test_different_seeds_differ(self):
-        from fire_engine.core.rng import set_world_seed, for_domain
+        from fire_engine.core.rng import for_domain, set_world_seed
         from fire_engine.procedural.textures.base import value_noise
 
         set_world_seed(1)
@@ -481,7 +480,7 @@ class TestRainStreakTexture:
 
 class TestPixelNoise:
     def test_shape_and_dtype(self):
-        from fire_engine.core.rng import set_world_seed, for_domain
+        from fire_engine.core.rng import for_domain, set_world_seed
         from fire_engine.procedural.textures.base import pixel_noise
 
         set_world_seed(0)
@@ -491,7 +490,7 @@ class TestPixelNoise:
         assert pn.dtype == np.float32
 
     def test_range(self):
-        from fire_engine.core.rng import set_world_seed, for_domain
+        from fire_engine.core.rng import for_domain, set_world_seed
         from fire_engine.procedural.textures.base import pixel_noise
 
         set_world_seed(0)
@@ -501,7 +500,7 @@ class TestPixelNoise:
         assert float(pn.max()) <= 1.0, f"max={pn.max()} above 1"
 
     def test_deterministic(self):
-        from fire_engine.core.rng import set_world_seed, for_domain
+        from fire_engine.core.rng import for_domain, set_world_seed
         from fire_engine.procedural.textures.base import pixel_noise
 
         set_world_seed(7)
@@ -511,7 +510,7 @@ class TestPixelNoise:
         assert np.array_equal(pn1, pn2), "pixel_noise must be deterministic for same seed"
 
     def test_different_seeds_differ(self):
-        from fire_engine.core.rng import set_world_seed, for_domain
+        from fire_engine.core.rng import for_domain, set_world_seed
         from fire_engine.procedural.textures.base import pixel_noise
 
         set_world_seed(1)
@@ -522,7 +521,7 @@ class TestPixelNoise:
 
     def test_blocks_are_constant(self):
         """Nearest-neighbour: adjacent pixels in same coarse cell must be equal."""
-        from fire_engine.core.rng import set_world_seed, for_domain
+        from fire_engine.core.rng import for_domain, set_world_seed
         from fire_engine.procedural.textures.base import pixel_noise
 
         set_world_seed(5)

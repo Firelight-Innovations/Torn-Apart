@@ -116,7 +116,7 @@ def _load_model(path: str) -> Any:
     panda_filename = Filename.fromOsSpecific(path)
     nodepath = p3d_loader.loadModel(panda_filename)
     if nodepath is None:
-        raise IOError(f"Panda3D Loader returned None for model: {path!r}")
+        raise OSError(f"Panda3D Loader returned None for model: {path!r}")
     return nodepath
 
 
@@ -149,7 +149,7 @@ def _load_audio(path: str) -> Any:
         )
     sound = base.loader.loadSfx(path)
     if sound is None:
-        raise IOError(f"Panda3D audio loader returned None for: {path!r}")
+        raise OSError(f"Panda3D audio loader returned None for: {path!r}")
     return sound
 
 
@@ -204,7 +204,7 @@ def _load_texture_image(path: str) -> Any:
 # ---------------------------------------------------------------------------
 
 
-def register_panda_loaders(resource_manager: "ResourceManager") -> None:
+def register_panda_loaders(resource_manager: ResourceManager) -> None:
     """
     Inject panda3d-backed loader callables into the Resource Manager's loader
     registry.

@@ -19,10 +19,15 @@ import numpy as np
 import pytest
 
 from fire_engine.core.rng import set_world_seed
+from fire_engine.lighting.assembly_worker import (
+    AssemblyJob,
+    CascadeAssemblyWorker,
+    assemble_packed,
+)
 from fire_engine.lighting.lights import (
-    AreaLight,
     LIGHT_TYPE_AREA,
     LIGHT_TYPE_POINT,
+    AreaLight,
     LightSet,
     PointLight,
 )
@@ -32,11 +37,6 @@ from fire_engine.lighting.volume import (
     ChunkBlockCache,
     VolumeWindow,
     assemble_geometry,
-)
-from fire_engine.lighting.assembly_worker import (
-    AssemblyJob,
-    CascadeAssemblyWorker,
-    assemble_packed,
 )
 from fire_engine.procedural.maps import (
     black_emission_map,
@@ -278,7 +278,7 @@ class TestAssembleCascade1:
             win, {(0, 0, 0): chunk}, _palette(), chunk_size=CHUNK, voxel_size=VOXEL
         )
         # 2 solid voxels of the cell's 4^3 = 64 sub-voxels → round(255*2/64).
-        assert vol.albedo_occ[0, 0, 0, 3] == int(round(255.0 * 2 / 64))
+        assert vol.albedo_occ[0, 0, 0, 3] == round(255.0 * 2 / 64)
         np.testing.assert_allclose(
             vol.albedo_occ[0, 0, 0, :3],
             np.clip(np.array([0.2, 0.5, 0.1]) * 255, 0, 255).astype(np.uint8),
@@ -498,7 +498,7 @@ class TestFractionalOccupancy:
         vol = assemble_geometry(
             win, {(0, 0, 0): chunk}, _palette(), chunk_size=CHUNK, voxel_size=VOXEL
         )
-        assert vol.albedo_occ[0, 0, 0, 3] == int(round(255.0 / 64.0))
+        assert vol.albedo_occ[0, 0, 0, 3] == round(255.0 / 64.0)
 
     def test_albedo_still_max_material(self):
         # Albedo RGB selection unchanged: max material id wins within a cell.

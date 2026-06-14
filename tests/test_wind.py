@@ -35,12 +35,10 @@ from fire_engine.core.rng import set_world_seed
 from fire_engine.world.wind import (
     GustFront,
     WindField,
-    WindSnapshot,
     pack_wind_field,
     vertical_profile,
 )
 from fire_engine.world.wind.gusts import build_modes, eval_gusts
-
 
 SEED = 1337
 

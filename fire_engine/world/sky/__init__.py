@@ -45,12 +45,12 @@ from fire_engine.world.sky.weather_map_pack import pack_weather_map
 from fire_engine.world.weather import LocalWeather, WeatherSystem, WeatherType
 
 __all__ = [
+    "LocalWeather",
     "SkyState",
     "SkySystem",
-    "WeatherType",
-    "LocalWeather",
     "WeatherSystem",
+    "WeatherType",
+    "moon_direction",
     "pack_weather_map",
     "sun_direction",
-    "moon_direction",
 ]

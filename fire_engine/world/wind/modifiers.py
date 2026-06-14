@@ -43,7 +43,7 @@ from typing import Protocol, runtime_checkable
 
 import numpy as np
 
-__all__ = ["WindModifier", "GustFront"]
+__all__ = ["GustFront", "WindModifier"]
 
 
 @runtime_checkable

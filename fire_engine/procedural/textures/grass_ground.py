@@ -48,7 +48,7 @@ import numpy as np
 from fire_engine.procedural.defs import register_def
 from fire_engine.procedural.textures.base import ProceduralTextureDef, pixel_noise
 
-__all__ = ["GrassGroundDef", "GRASS_PALETTE", "GRASS_THRESHOLDS"]
+__all__ = ["GRASS_PALETTE", "GRASS_THRESHOLDS", "GrassGroundDef"]
 
 
 # ---------------------------------------------------------------------------

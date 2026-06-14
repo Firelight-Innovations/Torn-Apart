@@ -32,14 +32,14 @@ Usage
 from __future__ import annotations
 
 import numpy as np
-from panda3d.core import Texture, SamplerState  # type: ignore[import]
+from panda3d.core import SamplerState, Texture  # type: ignore[import]
 
 __all__ = [
-    "to_panda_texture",
+    "to_data_texture_f32",
     "to_field_texture",
     "to_panda_cubemap",
+    "to_panda_texture",
     "to_panda_texture_3d",
-    "to_data_texture_f32",
 ]
 
 

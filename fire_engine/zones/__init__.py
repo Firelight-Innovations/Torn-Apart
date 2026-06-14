@@ -10,8 +10,12 @@ grass renderer (``world/grass_renderer.py``).
 See ``docs/systems/zones.md`` for the full reference.
 """
 
-from fire_engine.zones.volume import ZoneVolume
-from fire_engine.zones.store import ZoneStore
+from fire_engine.zones.flora_placement import (
+    FLORA_KINDS,
+    flora_hash_seed,
+    flora_instance_attribs,
+    flora_instance_count,
+)
 from fire_engine.zones.grass_placement import (
     HEIGHT_SENTINEL,
     bake_grass_height_field,
@@ -22,12 +26,7 @@ from fire_engine.zones.grass_placement import (
     leaf_hash_seed,
     leaf_instance_count,
 )
-from fire_engine.zones.flora_placement import (
-    FLORA_KINDS,
-    flora_hash_seed,
-    flora_instance_attribs,
-    flora_instance_count,
-)
+from fire_engine.zones.store import ZoneStore
 from fire_engine.zones.tree_placement import (
     SCALE_JITTER,
     TREE_KINDS,
@@ -36,26 +35,27 @@ from fire_engine.zones.tree_placement import (
     instances_data_block,
     species_mix_from_params,
 )
+from fire_engine.zones.volume import ZoneVolume
 
 __all__ = [
-    "ZoneVolume",
-    "ZoneStore",
+    "FLORA_KINDS",
     "HEIGHT_SENTINEL",
+    "SCALE_JITTER",
+    "TREE_KINDS",
+    "TreeInstances",
+    "ZoneStore",
+    "ZoneVolume",
     "bake_grass_height_field",
+    "bake_tree_instances",
+    "flora_hash_seed",
+    "flora_instance_attribs",
+    "flora_instance_count",
     "grass_hash_seed",
     "grass_instance_count",
     "hash_lowbias32",
     "instance_attribs",
+    "instances_data_block",
     "leaf_hash_seed",
     "leaf_instance_count",
-    "FLORA_KINDS",
-    "flora_hash_seed",
-    "flora_instance_attribs",
-    "flora_instance_count",
-    "SCALE_JITTER",
-    "TREE_KINDS",
-    "TreeInstances",
-    "bake_tree_instances",
-    "instances_data_block",
     "species_mix_from_params",
 ]

@@ -39,7 +39,7 @@ class WeatherType(str, Enum):
     STORM = "storm"
 
 
-def classify(lw: "LocalWeather") -> WeatherType:
+def classify(lw: LocalWeather) -> WeatherType:
     """
     Bucket a :class:`LocalWeather` sample into a :class:`WeatherType`.
 

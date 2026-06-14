@@ -64,22 +64,22 @@ import math
 import numpy as np
 
 __all__ = [
-    "BETA_RAYLEIGH",
-    "BETA_MIE",
-    "MIE_G",
-    "RAYLEIGH_SCALE_HEIGHT_M",
-    "MIE_SCALE_HEIGHT_M",
-    "PLANET_RADIUS_M",
-    "ATMOSPHERE_TOP_M",
-    "OBSERVER_ALTITUDE_M",
-    "SUN_TOA_RADIANCE",
-    "SUN_GROUND_SCALE",
     "AMBIENT_SCALE",
+    "ATMOSPHERE_TOP_M",
+    "BETA_MIE",
+    "BETA_RAYLEIGH",
+    "MIE_G",
+    "MIE_SCALE_HEIGHT_M",
+    "OBSERVER_ALTITUDE_M",
+    "PLANET_RADIUS_M",
+    "RAYLEIGH_SCALE_HEIGHT_M",
     "SUN_FADE_LO_Z",
-    "transmittance",
-    "sun_radiance",
-    "sky_radiance",
+    "SUN_GROUND_SCALE",
+    "SUN_TOA_RADIANCE",
     "sky_ambient",
+    "sky_radiance",
+    "sun_radiance",
+    "transmittance",
 ]
 
 # ---------------------------------------------------------------------------

@@ -38,27 +38,27 @@ Quick start
 """
 
 from fire_engine.lighting.light_grid import (
+    LIGHT_AMBIENT,
+    LIGHT_FULL,
     LightGrid,
     occupancy_from_materials,
-    LIGHT_FULL,
-    LIGHT_AMBIENT,
-)
-from fire_engine.lighting.sunlight import (
-    SunlightComputer,
-    make_light_sampler,
 )
 from fire_engine.lighting.lights import (
     AreaLight,
     LightSet,
     PointLight,
 )
+from fire_engine.lighting.occluders import (
+    TreeOccluderSet,
+    splat_tree_occluders,
+)
 from fire_engine.lighting.palette import (
     MaterialPalette,
     build_default_palette,
 )
-from fire_engine.lighting.occluders import (
-    TreeOccluderSet,
-    splat_tree_occluders,
+from fire_engine.lighting.sunlight import (
+    SunlightComputer,
+    make_light_sampler,
 )
 from fire_engine.lighting.volume import (
     EMISSION_SCALE,

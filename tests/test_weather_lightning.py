@@ -31,7 +31,6 @@ from fire_engine.core.rng import set_world_seed
 from fire_engine.world.weather.bolt import BoltGeometry, generate_bolt
 from fire_engine.world.weather.cells import CellKind, StormCell, natural_cells
 from fire_engine.world.weather.lightning import (
-    StrikeParams,
     cell_id_int,
     scheduled_strikes,
 )

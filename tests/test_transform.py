@@ -14,11 +14,8 @@ from __future__ import annotations
 
 import math
 
-import pytest
-
-from fire_engine.render.transform import Transform, Space
-from fire_engine.core.math3d import Vec3, Quat
-
+from fire_engine.core.math3d import Quat, Vec3
+from fire_engine.render.transform import Space, Transform
 
 EPS = 1e-4  # float32 accumulation tolerance for composed matrices
 

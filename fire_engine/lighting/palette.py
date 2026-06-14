@@ -71,7 +71,7 @@ class MaterialPalette:
     albedo: np.ndarray = field(default_factory=lambda: np.zeros((256, 3), dtype=np.float32))
     emission: np.ndarray = field(default_factory=lambda: np.zeros((256, 3), dtype=np.float32))
 
-    def with_emission(self, material: int, rgb: tuple[float, float, float]) -> "MaterialPalette":
+    def with_emission(self, material: int, rgb: tuple[float, float, float]) -> MaterialPalette:
         """
         Return a copy of this palette with ``material``'s emission set.
 
@@ -104,7 +104,7 @@ def _mean_texture_rgb(def_name: str) -> tuple[float, float, float] | None:
         from fire_engine.procedural import get as get_procedural
 
         rgba = get_procedural(def_name)  # (H, W, 4) uint8
-    except Exception as exc:  # noqa: BLE001  (missing def is non-fatal)
+    except Exception as exc:
         _log.warning("Palette: no texture def %r (%s)", def_name, exc)
         return None
     srgb = rgba[..., :3].astype(np.float32) / 255.0

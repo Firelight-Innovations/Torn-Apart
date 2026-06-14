@@ -90,10 +90,11 @@ def _flip_fraction(a: np.ndarray, b: np.ndarray, threshold: float):
 
 
 def probe(args) -> float:
+    from panda3d.core import GraphicsOutput, Texture
+
     import main as demo
-    from fire_engine.core.math3d import Vec3, Quat
+    from fire_engine.core.math3d import Quat, Vec3
     from fire_engine.simulation.player.fly_controller import FlyController
-    from panda3d.core import Texture, GraphicsOutput
     from tools.screenshot import _apply_sky_settings
 
     app = demo.build_demo()
@@ -119,7 +120,7 @@ def probe(args) -> float:
         # the bowl opens to the sky — screenshot.py's cam.z-8 placement carves
         # a sealed underground cave that never shows) so the probe sweeps the
         # shadowed dirt walls the owner sees shimmering after shooting.
-        from fire_engine.world.terrain import SphereBrush, BrushMode, apply_brush
+        from fire_engine.world.terrain import BrushMode, SphereBrush, apply_brush
 
         cam = app.camera_go.transform.position
         gz = float(app._config.ground_height_m)

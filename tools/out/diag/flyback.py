@@ -1,13 +1,14 @@
-import sys, math
+import math
+import sys
 from pathlib import Path
 
 _R = Path(__file__).resolve().parents[3]
 if str(_R) not in sys.path:
     sys.path.insert(0, str(_R))
-import numpy as np
+from panda3d.core import Filename, PNMImage
+
 import main as demo
-from fire_engine.core.math3d import Vec3, Quat
-from panda3d.core import PNMImage, Filename
+from fire_engine.core.math3d import Quat, Vec3
 
 app = demo.build_demo()
 app.input_state.mouse_captured = False
@@ -47,7 +48,8 @@ img = PNMImage()
 if app.win.get_screenshot(img):
     img.write(Filename.from_os_specific(str(out)))
 print("WROTE", out)
-import os, sys
+import os
+import sys
 
 sys.stdout.flush()
 os._exit(0)

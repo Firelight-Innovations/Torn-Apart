@@ -48,10 +48,9 @@ before cache lookup, so ``assets\\models\\foo.egg`` and
 from __future__ import annotations
 
 import os
-from typing import Any, Optional, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 import fire_engine.resources.loaders as _default_loaders_module
-
 
 # ---------------------------------------------------------------------------
 # Handle
@@ -82,7 +81,7 @@ class Handle:
         manager.release(handle)
     """
 
-    __slots__ = ("resource", "path", "refcount")
+    __slots__ = ("path", "refcount", "resource")
 
     def __init__(self, resource: Any, path: str) -> None:
         self.resource: Any = resource
@@ -155,7 +154,7 @@ class ResourceManager:
 
     def __init__(
         self,
-        loaders_module: Optional[Any] = None,
+        loaders_module: Any | None = None,
     ) -> None:
         # If no loaders module is injected, use the real module-level one.
         self._loaders = loaders_module if loaders_module is not None else _default_loaders_module
@@ -293,7 +292,7 @@ class ResourceManager:
             if callable(cleanup):
                 try:
                     cleanup()
-                except Exception:  # noqa: BLE001
+                except Exception:
                     pass
         return len(to_remove)
 

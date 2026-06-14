@@ -39,7 +39,7 @@ import numpy as np
 
 from fire_engine.core.rng import for_domain
 
-__all__ = ["bake_shape_noise", "bake_detail_noise"]
+__all__ = ["bake_detail_noise", "bake_shape_noise"]
 
 
 def _smoothstep(f: np.ndarray) -> np.ndarray:

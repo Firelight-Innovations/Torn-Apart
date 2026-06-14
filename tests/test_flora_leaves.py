@@ -18,7 +18,6 @@ from fire_engine.core.rng import for_domain, set_world_seed
 from fire_engine.procedural.flora import SkeletonBuilder, leaves_at_tips
 from fire_engine.procedural.flora.leaves import Leaves
 
-
 # ---------------------------------------------------------------------------
 # Shared skeleton factory (mirrors the gnarled-oak recipe used in skeleton
 # tests so we have a tree with tip segments at multiple heights).

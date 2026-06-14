@@ -11,7 +11,7 @@ exception becomes an ``INTERNAL_ERROR`` with the message attached.
 
 from __future__ import annotations
 
-from typing import Awaitable, Callable
+from collections.abc import Awaitable, Callable
 
 from ._generated import ErrorCode
 
@@ -100,7 +100,7 @@ class Dispatcher:
             if is_notification:
                 return None
             return self._error(msg_id, e.code, e.message, e.data)
-        except Exception as e:  # noqa: BLE001 — boundary: never let a handler kill the daemon
+        except Exception as e:
             if is_notification:
                 return None
             return self._error(msg_id, ErrorCode.INTERNAL_ERROR, f"{type(e).__name__}: {e}")

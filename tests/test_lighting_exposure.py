@@ -37,7 +37,7 @@ import numpy as np
 import pytest
 
 from fire_engine.core.config import Config
-from fire_engine.lighting.exposure import ExposureMeter, _RAY_DIRS, _RAY_WEIGHTS
+from fire_engine.lighting.exposure import _RAY_DIRS, _RAY_WEIGHTS, ExposureMeter
 
 CHUNK = 32  # voxels per chunk edge, matches engine default
 

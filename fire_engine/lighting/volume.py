@@ -52,14 +52,14 @@ from fire_engine.lighting.occluders import TreeOccluderSet, splat_tree_occluders
 from fire_engine.lighting.palette import MaterialPalette
 
 __all__ = [
-    "VolumeWindow",
-    "GeometryVolume",
-    "GeometryOccupancyProvider",
-    "assemble_geometry",
-    "window_chunk_span",
-    "pack_volume",
-    "ChunkBlockCache",
     "EMISSION_SCALE",
+    "ChunkBlockCache",
+    "GeometryOccupancyProvider",
+    "GeometryVolume",
+    "VolumeWindow",
+    "assemble_geometry",
+    "pack_volume",
+    "window_chunk_span",
 ]
 
 
@@ -315,11 +315,11 @@ def assemble_geometry(
     palette: MaterialPalette,
     chunk_size: int,
     voxel_size: float,
-    cache: "ChunkBlockCache | None" = None,
-    occluders: "TreeOccluderSet | None" = None,
+    cache: ChunkBlockCache | None = None,
+    occluders: TreeOccluderSet | None = None,
     trunk_occ: float = 0.0,
     canopy_gain: float = 0.0,
-    providers: "tuple[GeometryOccupancyProvider, ...]" = (),
+    providers: tuple[GeometryOccupancyProvider, ...] = (),
 ) -> GeometryVolume:
     """
     Slice loaded chunks into one contiguous geometry block for ``window``.
@@ -580,14 +580,14 @@ class ChunkBlockCache:
     def __init__(self, max_entries: int = 4096) -> None:
         self.max_entries = int(max_entries)
         # key: (coord, cell_m) -> (material_id, solid_count) read-only arrays.
-        self._store: "OrderedDict[tuple, tuple[np.ndarray, np.ndarray]]" = OrderedDict()
+        self._store: OrderedDict[tuple, tuple[np.ndarray, np.ndarray]] = OrderedDict()
         self._lock = threading.Lock()
 
     def get(
         self,
         coord: tuple[int, int, int],
         cell_m: float,
-    ) -> "tuple[np.ndarray, np.ndarray] | None":
+    ) -> tuple[np.ndarray, np.ndarray] | None:
         """
         Return the cached ``(material_id, solid_count)`` mini-block for
         ``(coord, cell_m)``, or ``None`` on a miss.  Marks the entry MRU.

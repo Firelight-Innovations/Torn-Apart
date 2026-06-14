@@ -24,11 +24,11 @@ Usage
     from fire_engine.save import SaveManager, Saveable, SaveIncompatibleError
 """
 
-from fire_engine.save.saveable import Saveable, SaveIncompatibleError
 from fire_engine.save.save_manager import SaveManager
+from fire_engine.save.saveable import Saveable, SaveIncompatibleError
 
 __all__ = [
+    "SaveIncompatibleError",
     "SaveManager",
     "Saveable",
-    "SaveIncompatibleError",
 ]

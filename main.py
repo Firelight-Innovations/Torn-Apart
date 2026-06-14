@@ -39,29 +39,19 @@ import math
 import sys
 from pathlib import Path
 
+# --- Procedural content: importing the package auto-registers the
+#     "wasteland_ground" texture def (and any other built-ins). --------------
+import fire_engine.procedural  # noqa: F401  (import-for-side-effect: registration)
+
 # --- Foundation layer (panda3d-free) -------------------------------------
 from fire_engine.core import (
     Clock,
     EventBus,
-    load_config,
     get_logger,
+    load_config,
 )
-from fire_engine.core.rng import set_world_seed
 from fire_engine.core.math3d import Vec3
-
-# --- Procedural content: importing the package auto-registers the
-#     "wasteland_ground" texture def (and any other built-ins). --------------
-import fire_engine.procedural  # noqa: F401  (import-for-side-effect: registration)
-from fire_engine.procedural import get as get_procedural
-
-# --- Terrain (Layer 2) ----------------------------------------------------
-from fire_engine.world.terrain import (
-    ChunkManager,
-    SphereBrush,
-    BrushMode,
-    apply_brush,
-    raycast_voxel,
-)
+from fire_engine.core.rng import set_world_seed
 
 # --- Lighting (Layer 2) ---------------------------------------------------
 from fire_engine.lighting import (
@@ -69,12 +59,22 @@ from fire_engine.lighting import (
     SunlightComputer,
     make_light_sampler,
 )
+from fire_engine.procedural import get as get_procedural
+
+# --- Save subsystem -------------------------------------------------------
+from fire_engine.save import SaveIncompatibleError, SaveManager
 
 # --- Player (thin control layer) ------------------------------------------
 from fire_engine.simulation.player import FlyController
 
-# --- Save subsystem -------------------------------------------------------
-from fire_engine.save import SaveManager, SaveIncompatibleError
+# --- Terrain (Layer 2) ----------------------------------------------------
+from fire_engine.world.terrain import (
+    BrushMode,
+    ChunkManager,
+    SphereBrush,
+    apply_brush,
+    raycast_voxel,
+)
 
 _log = get_logger("main")
 
@@ -238,7 +238,7 @@ def _load_proof_model(app) -> None:
     The model is parented under render near the origin, slightly above ground.
     """
     try:
-        from fire_engine.resources import default_manager, acquire
+        from fire_engine.resources import acquire, default_manager
 
         fixture = Path(__file__).resolve().parent / "tests" / "fixtures" / "triangle.egg"
         handle = acquire(default_manager.load(str(fixture)))
@@ -247,7 +247,7 @@ def _load_proof_model(app) -> None:
         nodepath.set_pos(0.0, 0.0, 12.0)  # near spawn, small + visible
         nodepath.set_scale(2.0)
         _log.info("Loaded proof model tests/fixtures/triangle.egg")
-    except Exception as exc:  # noqa: BLE001  (demo proof; never fatal)
+    except Exception as exc:
         _log.warning("Proof model load skipped: %s", exc)
 
 
@@ -311,12 +311,12 @@ def build_demo(load_path: str | None = None):
                 "Integrated GPU in use — restart the game to pick up the "
                 "high-performance GPU preference written this boot."
             )
-    except Exception as exc:  # noqa: BLE001  (diagnostics; never fatal)
+    except Exception as exc:
         _log.debug("Renderer query failed: %s", exc)
 
     # 4. Resource manager loaders — register AFTER the window/loader exists.
-    from fire_engine.resources import default_manager
     from fire_engine.render.resource_adapter import register_panda_loaders
+    from fire_engine.resources import default_manager
 
     register_panda_loaders(default_manager)
 
@@ -1022,8 +1022,8 @@ def build_demo(load_path: str | None = None):
     # objects become real PointLights, the first "spawn" sets the player start.
     # Registered AFTER terrain/weather/zones so deltas apply in a stable order,
     # and after the overlay/lighting exist (the visual factory needs both).
-    from fire_engine.scene import SceneRuntime
     from fire_engine.render.scene_visuals import SceneVisualFactory
+    from fire_engine.scene import SceneRuntime
 
     scene_visuals = SceneVisualFactory(app, lighting_pipeline, overlay)
     scene_runtime = SceneRuntime(visual_factory=scene_visuals)
@@ -1230,7 +1230,7 @@ def _to_ground_texture():
 
         rgba = get_procedural("wasteland_ground")  # (256,256,4) uint8
         return to_panda_texture(rgba)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         _log.warning("Ground texture build failed (untextured terrain): %s", exc)
         return None
 
@@ -1267,12 +1267,13 @@ def _to_material_textures(triples: bool = False):
                 MATERIAL_DIRT: to_panda_texture(get_procedural("dirt_ground")),
                 MATERIAL_GRASS: to_panda_texture(get_procedural("grass_ground")),
             }
+        import numpy as np
+
         from fire_engine.procedural.maps import (
             black_emission_map,
             derive_normal_map,
             flat_normal_map,
         )
-        import numpy as np
 
         emis_tex = to_panda_texture(black_emission_map())
         flat_n_tex = to_panda_texture(flat_normal_map())
@@ -1306,7 +1307,7 @@ def _to_material_textures(triples: bool = False):
             textures[mid] = flat_triple(mid)
         textures[_MAT_GI_GLOW] = flat_triple(_MAT_GI_GLOW, emissive=True)
         return textures
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         _log.warning("Material textures build failed (fallback texture): %s", exc)
         return None
 

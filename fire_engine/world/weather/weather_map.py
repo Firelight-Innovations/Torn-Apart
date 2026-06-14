@@ -29,7 +29,7 @@ import numpy as np
 
 from fire_engine.core.config import Config
 
-__all__ = ["WeatherMap", "MAP_CHANNELS"]
+__all__ = ["MAP_CHANNELS", "WeatherMap"]
 
 #: Channel order of the raster's last axis.
 MAP_CHANNELS: tuple[str, ...] = ("coverage", "density", "precip", "fog")

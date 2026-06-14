@@ -22,7 +22,6 @@ Covers
 from __future__ import annotations
 
 import logging
-import importlib
 
 import pytest
 
@@ -278,7 +277,6 @@ class TestDistinctLoggers:
 class TestHeadless:
     def test_no_panda3d_import(self):
         """log.py must not import panda3d (hard engine rule)."""
-        import sys
 
         # If panda3d was imported transitively by log.py it would appear here.
         # We can check the module's globals for any panda3d reference.

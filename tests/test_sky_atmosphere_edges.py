@@ -16,10 +16,8 @@ from __future__ import annotations
 import math
 
 import numpy as np
-import pytest
 
 from fire_engine.world.sky import atmosphere
-
 
 # ---------------------------------------------------------------------------
 # Helpers

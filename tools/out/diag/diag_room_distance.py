@@ -1,10 +1,11 @@
 """Capture the Cornell GI room from increasing camera distances to find where
 the cascade-transition breaks the interior lighting."""
 
-import math, sys
+import math
 from pathlib import Path
+
 import main as demo
-from fire_engine.core.math3d import Vec3, Quat
+from fire_engine.core.math3d import Quat, Vec3
 
 app = demo.build_demo()
 app.input_state.mouse_captured = False

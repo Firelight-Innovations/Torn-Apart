@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import numpy as np
 
-__all__ = ["derive_normal_map", "flat_normal_map", "black_emission_map"]
+__all__ = ["black_emission_map", "derive_normal_map", "flat_normal_map"]
 
 
 def derive_normal_map(rgba: np.ndarray, strength: float = 1.4) -> np.ndarray:

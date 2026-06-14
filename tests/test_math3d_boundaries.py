@@ -16,8 +16,7 @@ import math
 import numpy as np
 import pytest
 
-from fire_engine.core.math3d import Vec3, Quat
-
+from fire_engine.core.math3d import Quat, Vec3
 
 # ---------------------------------------------------------------------------
 # Vec3 — normalized() boundary

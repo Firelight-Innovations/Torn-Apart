@@ -14,22 +14,18 @@ Packages covered:
 from __future__ import annotations
 
 import inspect
-import types
 
 import pytest
 
 # ---------------------------------------------------------------------------
 # Imports
 # ---------------------------------------------------------------------------
-
 import fire_engine.simulation.ai as _ai_pkg
 import fire_engine.simulation.economy as _econ_pkg
 import fire_engine.simulation.politics as _pol_pkg
-
 from fire_engine.simulation.ai import NPCArchetype
 from fire_engine.simulation.economy import GoodDef
 from fire_engine.simulation.politics import FactionDef
-
 
 # ---------------------------------------------------------------------------
 # Helpers

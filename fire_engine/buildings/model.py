@@ -70,17 +70,17 @@ from fire_engine.core.config import Config
 from fire_engine.core.math3d import Quat, Vec3
 
 __all__ = [
-    "WallKind",
-    "OpeningKind",
+    "Building",
     "BuildingDefaults",
+    "Foundation",
     "Opening",
-    "Wall",
+    "OpeningKind",
+    "RoofSlab",
     "Room",
     "StairsStub",
-    "Foundation",
-    "RoofSlab",
     "Storey",
-    "Building",
+    "Wall",
+    "WallKind",
 ]
 
 # Plan-space point: (x, y) meters in building-local space.
@@ -126,7 +126,7 @@ class BuildingDefaults:
     foundation_depth_m: float
 
     @classmethod
-    def from_config(cls, cfg: Config) -> "BuildingDefaults":
+    def from_config(cls, cfg: Config) -> BuildingDefaults:
         """
         Build defaults from the engine :class:`~fire_engine.core.config.Config`.
 
@@ -152,7 +152,7 @@ class BuildingDefaults:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "BuildingDefaults":
+    def from_dict(cls, d: dict) -> BuildingDefaults:
         """Inverse of :meth:`to_dict`."""
         return cls(
             storey_height_m=float(d["storey_height_m"]),
@@ -203,7 +203,7 @@ class Opening:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "Opening":
+    def from_dict(cls, d: dict) -> Opening:
         """Inverse of :meth:`to_dict`."""
         return cls(
             id=int(d["id"]),
@@ -359,7 +359,7 @@ class Wall:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "Wall":
+    def from_dict(cls, d: dict) -> Wall:
         """Inverse of :meth:`to_dict`."""
         h = d.get("height_m")
         return cls(
@@ -430,7 +430,7 @@ class Room:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "Room":
+    def from_dict(cls, d: dict) -> Room:
         """Inverse of :meth:`to_dict`."""
         return cls(
             id=int(d["id"]),
@@ -479,7 +479,7 @@ class StairsStub:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "StairsStub":
+    def from_dict(cls, d: dict) -> StairsStub:
         """Inverse of :meth:`to_dict`."""
         return cls(
             id=int(d["id"]),
@@ -511,7 +511,7 @@ class Foundation:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "Foundation":
+    def from_dict(cls, d: dict) -> Foundation:
         """Inverse of :meth:`to_dict`."""
         return cls(polygon=np.array(d["polygon"], dtype=np.float64), depth_m=float(d["depth_m"]))
 
@@ -536,7 +536,7 @@ class RoofSlab:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "RoofSlab":
+    def from_dict(cls, d: dict) -> RoofSlab:
         """Inverse of :meth:`to_dict`."""
         return cls(
             polygon=np.array(d["polygon"], dtype=np.float64), thickness_m=float(d["thickness_m"])
@@ -570,7 +570,7 @@ class Storey:
     """
 
     def __init__(
-        self, building: "Building", eid: int, index: int, height_m: float, slab_m: float
+        self, building: Building, eid: int, index: int, height_m: float, slab_m: float
     ) -> None:
         self._building = building
         self.id = eid
@@ -789,7 +789,7 @@ class Storey:
         }
 
     @classmethod
-    def from_dict(cls, building: "Building", d: dict) -> "Storey":
+    def from_dict(cls, building: Building, d: dict) -> Storey:
         """Inverse of :meth:`to_dict` (re-wires the building back-ref)."""
         storey = cls(
             building,
@@ -1031,7 +1031,7 @@ class Building:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "Building":
+    def from_dict(cls, d: dict) -> Building:
         """Inverse of :meth:`to_dict`."""
         pos = d["position"]
         rot = d["rotation"]

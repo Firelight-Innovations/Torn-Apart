@@ -49,8 +49,7 @@ from __future__ import annotations
 
 import tomllib
 import warnings
-from dataclasses import dataclass, field
-
+from dataclasses import dataclass
 
 # ----------------------------------------------------------------------------
 # Graphics-quality presets.  Each maps the heavy/quality-dependent ``gfx_*``

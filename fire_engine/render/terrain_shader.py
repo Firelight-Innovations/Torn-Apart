@@ -39,13 +39,13 @@ from __future__ import annotations
 from panda3d.core import NodePath, Shader  # type: ignore[import]
 
 from fire_engine.core.shader_source import load_glsl
-from fire_engine.procedural.textures.ground_lut import build_ground_lut
-from fire_engine.procedural.textures.grass_ground import GRASS_PALETTE, GRASS_THRESHOLDS
 from fire_engine.procedural.textures.dirt_ground import DIRT_PALETTE, DIRT_THRESHOLDS
-from fire_engine.world.terrain.generation import MATERIAL_DIRT, MATERIAL_GRASS
+from fire_engine.procedural.textures.grass_ground import GRASS_PALETTE, GRASS_THRESHOLDS
+from fire_engine.procedural.textures.ground_lut import build_ground_lut
 from fire_engine.render.texture_bridge import to_field_texture
+from fire_engine.world.terrain.generation import MATERIAL_DIRT, MATERIAL_GRASS
 
-__all__ = ["apply_terrain_shader", "TERRAIN_VERTEX", "TERRAIN_FRAGMENT"]
+__all__ = ["TERRAIN_FRAGMENT", "TERRAIN_VERTEX", "apply_terrain_shader"]
 
 
 TERRAIN_VERTEX = load_glsl(__file__, "terrain.vert")

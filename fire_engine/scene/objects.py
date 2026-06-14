@@ -102,7 +102,7 @@ class SceneObject:
         }
 
     @staticmethod
-    def from_dict(d: dict) -> "SceneObject":
+    def from_dict(d: dict) -> SceneObject:
         kind = str(d["kind"])
         # Migration seam (the ONLY one): pre-component saves lack "components",
         # so synthesise the kind's defaults. New saves carry them verbatim.

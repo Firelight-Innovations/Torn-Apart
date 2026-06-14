@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 
 from fire_engine.core.config import Config
-from fire_engine.world.wind import VenturiJob, VenturiResult, solve_venturi
+from fire_engine.world.wind import VenturiJob, solve_venturi
 from fire_engine.world.wind.venturi import column_solid_fraction
 
 # ---------------------------------------------------------------------------

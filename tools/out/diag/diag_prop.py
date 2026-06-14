@@ -1,7 +1,9 @@
 """Simulate inject+propagate magnitudes for open flat ground vs a colored wall,
 to see whether GI 'radiance' is a visible fraction of direct sun at the surface."""
 
-import numpy as np, math
+import math
+
+import numpy as np
 
 # --- params from config / shaders ---
 sun = np.array([3.2, 3.1, 2.8])  # sun radiance noon-ish

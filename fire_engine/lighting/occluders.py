@@ -66,12 +66,12 @@ from dataclasses import dataclass
 import numpy as np
 
 __all__ = [
-    "TreeOccluderSet",
-    "splat_tree_occluders",
-    "TRUNK_TOP_FRAC",
-    "TRUNK_SIDE_M",
     "CANOPY_CENTER_FRAC",
     "CANOPY_HALF_HEIGHT_FRAC",
+    "TRUNK_SIDE_M",
+    "TRUNK_TOP_FRAC",
+    "TreeOccluderSet",
+    "splat_tree_occluders",
 ]
 
 # Trunk column reaches this fraction of the tree height (the rest is canopy).
@@ -151,7 +151,7 @@ class TreeOccluderSet:
         canopy_sigma: float = 0.25,
         bark_rgb: tuple = _DEFAULT_BARK_RGB,
         leaf_rgb: tuple = _DEFAULT_LEAF_RGB,
-    ) -> "TreeOccluderSet":
+    ) -> TreeOccluderSet:
         """One-instance set (tests / tools)."""
         f = np.float32
         return cls(
@@ -166,7 +166,7 @@ class TreeOccluderSet:
         )
 
     @classmethod
-    def merge(cls, sets: "list[TreeOccluderSet]") -> "TreeOccluderSet":
+    def merge(cls, sets: list[TreeOccluderSet]) -> TreeOccluderSet:
         """Concatenate several sets (one per zone volume) into one."""
         if not sets:
             return cls.empty()
@@ -182,7 +182,7 @@ class TreeOccluderSet:
         )
 
     @classmethod
-    def empty(cls) -> "TreeOccluderSet":
+    def empty(cls) -> TreeOccluderSet:
         """Zero-instance set."""
         f = np.empty(0, dtype=np.float32)
         c = np.empty((0, 3), dtype=np.float32)

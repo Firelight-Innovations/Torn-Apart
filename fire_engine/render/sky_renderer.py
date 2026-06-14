@@ -78,8 +78,8 @@ from panda3d.core import (  # type: ignore[import]
 
 from fire_engine.core import get_logger
 from fire_engine.core.rng import for_domain
-from fire_engine.render.component import Component
 from fire_engine.render import sky_shaders
+from fire_engine.render.component import Component
 
 __all__ = ["SkyRendererComponent"]
 
@@ -185,7 +185,8 @@ def _load_or_bake_cloud_noise(seed: int, shape_size: int, detail_size: int):
     Returns ``(shape_arr, detail_arr)`` — both ``(N,N,N,4) uint8``.
     """
     from pathlib import Path
-    from fire_engine.world.sky.cloud_noise import bake_shape_noise, bake_detail_noise
+
+    from fire_engine.world.sky.cloud_noise import bake_detail_noise, bake_shape_noise
 
     cache_dir = Path("saves") / "cloud_cache"
     version = 1
@@ -195,13 +196,13 @@ def _load_or_bake_cloud_noise(seed: int, shape_size: int, detail_size: int):
         try:
             if path.exists():
                 return np.load(path)
-        except Exception as exc:  # noqa: BLE001 — corrupt cache → rebake
+        except Exception as exc:
             _log.warning("cloud noise cache read failed (%s); rebaking", exc)
         arr = baker(size)
         try:
             cache_dir.mkdir(parents=True, exist_ok=True)
             np.save(path, arr)
-        except Exception as exc:  # noqa: BLE001 — cache is an optimisation
+        except Exception as exc:
             _log.debug("cloud noise cache write failed: %s", exc)
         return arr
 
@@ -319,7 +320,7 @@ def _sky_texture(name: str, fallback: np.ndarray | None = None) -> Texture:
         from fire_engine.procedural import get as get_procedural
 
         rgba = get_procedural(name)
-    except Exception as exc:  # noqa: BLE001 — registry may predate the sky defs
+    except Exception as exc:
         _log.warning("procedural texture %r unavailable (%s) — using fallback", name, exc)
     if rgba is None:
         if fallback is None:
@@ -528,7 +529,7 @@ class SkyRendererComponent(Component):
             from fire_engine.procedural import get as get_procedural
 
             star_cube = get_procedural("night_sky_cube", star_count=star_count)
-        except Exception as exc:  # noqa: BLE001 — def may predate this build
+        except Exception as exc:
             _log.warning("night_sky_cube unavailable (%s) — using fallback", exc)
         if star_cube is None:
             star_cube = _fallback_star_cube(star_count)

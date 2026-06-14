@@ -13,9 +13,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import main as demo  # noqa: E402
-from fire_engine.core.math3d import Vec3, Quat  # noqa: E402
-from fire_engine.world.terrain import SphereBrush, BrushMode, apply_brush  # noqa: E402
+import main as demo
+from fire_engine.core.math3d import Quat, Vec3
+from fire_engine.world.terrain import BrushMode, SphereBrush, apply_brush
 
 app = demo.build_demo()
 app.input_state.mouse_captured = False

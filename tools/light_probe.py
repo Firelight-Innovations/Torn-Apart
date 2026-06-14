@@ -65,7 +65,7 @@ def main() -> None:
     args = ap.parse_args()
 
     import main as demo
-    from fire_engine.core.math3d import Vec3, Quat
+    from fire_engine.core.math3d import Quat, Vec3
     from fire_engine.world.terrain import raycast_voxel
 
     sys.path.insert(0, str(_REPO_ROOT / "tools"))

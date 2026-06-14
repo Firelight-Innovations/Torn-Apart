@@ -107,7 +107,7 @@ def _box_blur3(a: np.ndarray) -> np.ndarray:
     return acc * (1.0 / 9.0)
 
 
-def column_solid_fraction(job: "VenturiJob") -> np.ndarray:
+def column_solid_fraction(job: VenturiJob) -> np.ndarray:
     """
     Fold the job's chunk terrain into a per-wind-cell solid column fraction.
 
@@ -227,7 +227,7 @@ def column_solid_fraction(job: "VenturiJob") -> np.ndarray:
     return frac
 
 
-def solve_venturi(job: "VenturiJob") -> "VenturiResult":
+def solve_venturi(job: VenturiJob) -> VenturiResult:
     """
     Solve the terrain-venturi correction for ``job`` — a pure function.
 

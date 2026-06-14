@@ -23,7 +23,7 @@ import pathlib
 import numpy as np
 
 from fire_engine.core import Config
-from fire_engine.core.rng import set_world_seed, for_domain
+from fire_engine.core.rng import for_domain, set_world_seed
 from fire_engine.zones import (
     FLORA_KINDS,
     ZoneVolume,
@@ -98,7 +98,7 @@ class TestFloraSpriteTextures:
 
     def test_registered_via_get(self):
         set_world_seed(1337)
-        from fire_engine.procedural import get, clear_cache
+        from fire_engine.procedural import clear_cache, get
 
         clear_cache()
         for name, shape, _, _ in _SPRITES:

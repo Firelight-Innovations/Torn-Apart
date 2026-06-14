@@ -6,12 +6,9 @@ documented T-junction limitation.
 Headless (numpy only — fire_engine/buildings/ never imports panda3d).
 """
 
-import math
-
 import numpy as np
-import pytest
 
-from fire_engine.buildings import Building, BuildingDefaults, WallKind
+from fire_engine.buildings import Building, BuildingDefaults
 from fire_engine.buildings.rooms import detect_room_polygons
 from fire_engine.core.config import Config
 from fire_engine.core.math3d import Quat, Vec3

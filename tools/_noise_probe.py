@@ -95,7 +95,7 @@ def main() -> None:
     args = ap.parse_args()
 
     import main as demo
-    from fire_engine.core.math3d import Vec3, Quat
+    from fire_engine.core.math3d import Quat, Vec3
 
     sys.path.insert(0, str(_REPO_ROOT / "tools"))
     from screenshot import _apply_sky_settings
@@ -149,25 +149,25 @@ def main() -> None:
     # (a) Open ground far from the room: thin air band just above ground,
     # at least 10 m from the room centre (outer wall is at 5.5 m).  The
     # terrain there is flat grass — variance is ray-fan noise.
-    ground = air & (cheby > 10.0) & (WZ > z0 - 0.5) & (WZ < z0 + 1.0)
+    ground = air & (cheby > 10.0) & (z0 - 0.5 < WZ) & (z0 + 1.0 > WZ)
     _report("open ground band   ", lum, ground, hf)
 
     # (b) Air hugging the room's EXTERIOR walls: within 1 m (2 cells) of a
     # solid cell, just outside the outer wall plane (5.5 m), wall-height z.
     near_solid = _dilate(solid, 2)
-    wall_band = air & near_solid & (cheby > 5.4) & (cheby < 7.0) & (WZ > z0 + 0.2) & (WZ < z0 + 5.0)
+    wall_band = air & near_solid & (cheby > 5.4) & (cheby < 7.0) & (z0 + 0.2 < WZ) & (z0 + 5.0 > WZ)
     _report("exterior wall band ", lum, wall_band, hf)
 
     # (c) Air above the roof (the blotchy roof in the night shot).
-    roof_band = air & near_solid & (cheby < 5.4) & (WZ > z0 + 5.4) & (WZ < z0 + 7.0)
+    roof_band = air & near_solid & (cheby < 5.4) & (z0 + 5.4 < WZ) & (z0 + 7.0 > WZ)
     _report("roof band          ", lum, roof_band, hf)
 
     # Regression guards: interior mean must hold (±15 %), and the doorway
     # spill region (rainbow confetti in the night shot) gets its own line.
-    interior = air & (cheby < 3.4) & (WZ > z0 + 0.3) & (WZ < z0 + 4.2)
+    interior = air & (cheby < 3.4) & (z0 + 0.3 < WZ) & (z0 + 4.2 > WZ)
     _report("interior air (all) ", lum, interior, hf)
 
-    door = air & (cheby > 5.4) & (cheby < 9.0) & (WZ > z0 - 0.5) & (WZ < z0 + 1.5) & ~ground
+    door = air & (cheby > 5.4) & (cheby < 9.0) & (z0 - 0.5 < WZ) & (z0 + 1.5 > WZ) & ~ground
     _report("doorway apron band ", lum, door, hf)
 
 

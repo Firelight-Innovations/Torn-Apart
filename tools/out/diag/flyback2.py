@@ -1,13 +1,14 @@
-import sys, math
+import math
+import sys
 from pathlib import Path
 
 _R = Path(__file__).resolve().parents[3]
 if str(_R) not in sys.path:
     sys.path.insert(0, str(_R))
-import numpy as np
+from panda3d.core import Filename, PNMImage
+
 import main as demo
-from fire_engine.core.math3d import Vec3, Quat
-from panda3d.core import PNMImage, Filename
+from fire_engine.core.math3d import Quat, Vec3
 
 app = demo.build_demo()
 app.input_state.mouse_captured = False
@@ -47,7 +48,8 @@ for casc in pipe.cascades:
     om = casc.window.world_origin_m
     sz = casc.window.size_m
     print(f"c{casc.index} box_y=[{om[1]:.0f}..{om[1] + sz:.0f}]")
-import os, sys
+import os
+import sys
 
 sys.stdout.flush()
 os._exit(0)

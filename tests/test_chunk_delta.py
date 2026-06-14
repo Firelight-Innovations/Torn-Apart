@@ -22,12 +22,11 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from fire_engine.core import load_config, EventBus
+from fire_engine.core import EventBus, load_config
 from fire_engine.core.rng import set_world_seed
 from fire_engine.world.terrain.chunk import Chunk
-from fire_engine.world.terrain.generation import generate_chunk, MATERIAL_DIRT, MATERIAL_GRASS
 from fire_engine.world.terrain.chunk_manager import ChunkManager
-
+from fire_engine.world.terrain.generation import MATERIAL_DIRT, MATERIAL_GRASS, generate_chunk
 
 # ---------------------------------------------------------------------------
 # Fixtures

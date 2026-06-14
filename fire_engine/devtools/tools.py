@@ -22,10 +22,11 @@ counts) arrive as plain callables supplied by the renderer in ``world/``.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
-from fire_engine.devtools.fields import Field, FieldKind, Section, Button, Panel
-from fire_engine.devtools.introspect import describe_object, describe_chunk, is_chunk
+from fire_engine.devtools.fields import Button, Field, FieldKind, Panel, Section
+from fire_engine.devtools.introspect import describe_chunk, describe_object, is_chunk
 
 if TYPE_CHECKING:
     from fire_engine.devtools.selection import Selection
@@ -126,7 +127,7 @@ class InspectorTool(DevTool):
     tool_id = "inspector"
     title = "Inspector"
 
-    def __init__(self, selection: "Selection") -> None:
+    def __init__(self, selection: Selection) -> None:
         self._selection = selection
 
     @property
@@ -187,7 +188,7 @@ class ActionsTool(DevTool):
     def __init__(
         self,
         title: str = "Actions",
-        actions: "dict[str, Callable[[], None]] | None" = None,
+        actions: dict[str, Callable[[], None]] | None = None,
     ) -> None:
         self.title = title
         self._actions: list[tuple[str, Callable[[], None]]] = list((actions or {}).items())
@@ -242,8 +243,8 @@ class CallbackTool(DevTool):
         self,
         tool_id: str,
         title: str,
-        build_fn: "Callable[[], tuple[list[Section], list[Button]]]",
-        revision_fn: "Callable[[], int] | None" = None,
+        build_fn: Callable[[], tuple[list[Section], list[Button]]],
+        revision_fn: Callable[[], int] | None = None,
     ) -> None:
         self.tool_id = tool_id
         self.title = title

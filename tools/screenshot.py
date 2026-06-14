@@ -232,8 +232,8 @@ def capture(
         The written PNG path.
     """
     import main as demo
-    from fire_engine.core.math3d import Vec3, Quat
-    from fire_engine.world.terrain import SphereBrush, BrushMode, apply_brush
+    from fire_engine.core.math3d import Quat, Vec3
+    from fire_engine.world.terrain import BrushMode, SphereBrush, apply_brush
 
     app = demo.build_demo()
 
@@ -417,7 +417,7 @@ def capture(
 
     # Capture the framebuffer into a PNMImage and write it (more reliable than
     # win.save_screenshot, which can no-op if called between flips).
-    from panda3d.core import PNMImage, Filename
+    from panda3d.core import Filename, PNMImage
 
     img = PNMImage()
     ok = app.win.get_screenshot(img)

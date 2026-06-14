@@ -66,12 +66,12 @@ from fire_engine.core.config import Config
 from fire_engine.world.weather.cells import Regime
 
 __all__ = [
-    "CloudGenus",
-    "CloudBand",
-    "CloudLayers",
     "BAND_HIGH",
-    "BAND_MID",
     "BAND_LOW",
+    "BAND_MID",
+    "CloudBand",
+    "CloudGenus",
+    "CloudLayers",
     "classify_genus",
     "cloud_layers",
 ]

@@ -63,7 +63,7 @@ def main() -> None:
     args = ap.parse_args()
 
     import main as demo
-    from fire_engine.core.math3d import Vec3, Quat
+    from fire_engine.core.math3d import Quat, Vec3
 
     sys.path.insert(0, str(_REPO_ROOT / "tools"))
     from screenshot import _apply_sky_settings
@@ -101,7 +101,7 @@ def main() -> None:
     occ = geom[..., 3]
     air = occ < 0.5
     interior = (
-        air & (np.abs(WX - cx) < 3.4) & (np.abs(WY - cy) < 3.4) & (WZ > z0 + 0.3) & (WZ < z0 + 4.2)
+        air & (np.abs(WX - cx) < 3.4) & (np.abs(WY - cy) < 3.4) & (z0 + 0.3 < WZ) & (z0 + 4.2 > WZ)
     )
     _report("interior air (all)", rad, interior)
 
@@ -139,8 +139,8 @@ def main() -> None:
     outside = (
         air
         & ((np.abs(WX - cx) > 8.0) | (np.abs(WY - cy) > 8.0))
-        & (WZ > z0 - 0.5)
-        & (WZ < z0 + 1.0)
+        & (z0 - 0.5 < WZ)
+        & (z0 + 1.0 > WZ)
     )
     _report("outdoor ground air ", rad, outside)
 

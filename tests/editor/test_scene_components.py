@@ -11,18 +11,16 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+from fire_editor import Daemon, EditorSession
 
+from fire_engine.core import load_config
 from fire_engine.scene.components import (
     COMPONENT_CATALOG,
     catalog_payload,
     coerce_params,
     default_components_for_kind,
-    make_component,
 )
 from fire_engine.scene.objects import SceneError, SceneObject, SceneObjectStore
-
-from fire_editor import Daemon, EditorSession
-from fire_engine.core import load_config
 
 
 def _run(coro):
@@ -265,8 +263,8 @@ class _RecordingFactory:
 
 class TestRuntimeComponents:
     def test_light_params_reach_factory(self):
-        from fire_engine.scene import SceneRuntime
         from fire_engine.render.registry import ComponentRegistry
+        from fire_engine.scene import SceneRuntime
 
         ComponentRegistry.clear()
         store = SceneObjectStore()
@@ -283,8 +281,8 @@ class TestRuntimeComponents:
         assert light_comp["params"]["color"] == [1.0, 0.0, 0.0]
 
     def test_runtime_migrates_old_delta(self):
-        from fire_engine.scene import SceneRuntime
         from fire_engine.render.registry import ComponentRegistry
+        from fire_engine.scene import SceneRuntime
 
         ComponentRegistry.clear()
         old_delta = {

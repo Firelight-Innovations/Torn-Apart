@@ -58,7 +58,7 @@ from fire_engine.world.sky.celestial import (
 )
 from fire_engine.world.weather import LocalWeather, WeatherSystem
 
-__all__ = ["SkyState", "SkySystem", "MOON_CYCLE_DAYS"]
+__all__ = ["MOON_CYCLE_DAYS", "SkyState", "SkySystem"]
 
 
 # ---------------------------------------------------------------------------

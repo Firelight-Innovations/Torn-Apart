@@ -15,7 +15,7 @@ class FactionDef:
     Implement in a later session per ARCHITECTURE.md §5.10.
     """
 
-    def generate(self, rng, **params):  # noqa: ANN001, ANN003
+    def generate(self, rng, **params):
         raise NotImplementedError(
             "FactionDef.generate is future scope — see ARCHITECTURE.md §5.10 "
             "(Politics API). Not part of Session 1."

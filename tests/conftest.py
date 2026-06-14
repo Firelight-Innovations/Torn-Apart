@@ -5,8 +5,8 @@ Ensures the repo root is on sys.path so ``import fire_engine`` works when
 pytest is run from the project root directory.
 """
 
-import sys
 import os
+import sys
 
 # Add the project root to sys.path so imports like
 # ``from fire_engine.core import Vec3`` resolve correctly.

@@ -16,13 +16,11 @@ from dataclasses import dataclass
 import pytest
 
 from fire_engine.core.event_bus import (
-    EventBus,
     ChunkLoadedEvent,
-    ChunkUnloadedEvent,
-    TerrainEditedEvent,
+    EventBus,
     GameDayTickEvent,
+    TerrainEditedEvent,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helper event type for testing

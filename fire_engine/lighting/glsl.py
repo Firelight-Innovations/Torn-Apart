@@ -59,13 +59,13 @@ from __future__ import annotations
 from fire_engine.core.shader_source import load_glsl
 
 __all__ = [
-    "INJECT_COMPUTE",
-    "GATHER_COMPUTE",
-    "SMOOTH_COMPUTE",
-    "SHIFT_COMPUTE",
-    "FOG_SCATTER_COMPUTE",
     "FOG_INTEGRATE_COMPUTE",
+    "FOG_SCATTER_COMPUTE",
+    "GATHER_COMPUTE",
+    "INJECT_COMPUTE",
     "MAX_LIGHTS",
+    "SHIFT_COMPUTE",
+    "SMOOTH_COMPUTE",
 ]
 
 # Must match Config.light_max_point_lights' upper bound and LightSet.pack.

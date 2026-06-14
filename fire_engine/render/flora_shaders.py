@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from fire_engine.core.shader_source import load_glsl
 
-__all__ = ["FLORA_VERTEX", "FLORA_FRAGMENT"]
+__all__ = ["FLORA_FRAGMENT", "FLORA_VERTEX"]
 
 
 FLORA_VERTEX = load_glsl(__file__, "flora.vert")

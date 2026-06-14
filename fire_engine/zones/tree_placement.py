@@ -46,8 +46,8 @@ Example
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Mapping
 
 import numpy as np
 
@@ -60,12 +60,12 @@ from fire_engine.zones.grass_placement import (
 from fire_engine.zones.volume import ZoneVolume
 
 __all__ = [
-    "TREE_KINDS",
     "SCALE_JITTER",
+    "TREE_KINDS",
     "TreeInstances",
-    "species_mix_from_params",
     "bake_tree_instances",
     "instances_data_block",
+    "species_mix_from_params",
 ]
 
 # The zone tags the tree renderer consumes.  A "trees" volume ALSO feeds the

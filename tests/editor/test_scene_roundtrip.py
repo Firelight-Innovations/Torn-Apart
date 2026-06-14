@@ -11,18 +11,16 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
+from fire_editor import Daemon, EditorSession
 
 from fire_engine.core import Clock, EventBus, load_config
 from fire_engine.core.math3d import Quat, Vec3
 from fire_engine.core.rng import set_world_seed
+from fire_engine.render.registry import ComponentRegistry
 from fire_engine.save import SaveManager
 from fire_engine.scene import SceneRuntime
 from fire_engine.scene.objects import SceneObjectStore
 from fire_engine.world.terrain import ChunkManager
-from fire_engine.render.registry import ComponentRegistry
-
-from fire_editor import Daemon, EditorSession
 
 _EPS = 1e-6
 

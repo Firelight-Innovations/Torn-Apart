@@ -16,20 +16,18 @@ from __future__ import annotations
 
 import pytest
 
-from fire_engine.render.component import Component
-from fire_engine.render.gameobject import GameObject
-from fire_engine.render.registry import (
-    ComponentRegistry,
-    instantiate,
-    destroy,
-    find_with_tag,
-    find_objects_with_tag,
-    _STATE,
-)
 from fire_engine.core.clock import Clock
 from fire_engine.core.event_bus import EventBus
-from fire_engine.core.math3d import Vec3, Quat
-
+from fire_engine.core.math3d import Quat, Vec3
+from fire_engine.render.component import Component
+from fire_engine.render.registry import (
+    _STATE,
+    ComponentRegistry,
+    destroy,
+    find_objects_with_tag,
+    find_with_tag,
+    instantiate,
+)
 
 # ---------------------------------------------------------------------------
 # Pytest fixture — reset registry between every test

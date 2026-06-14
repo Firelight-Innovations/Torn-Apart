@@ -19,20 +19,18 @@ Test coverage
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
-from fire_engine.core import EventBus, TerrainEditedEvent, ChunkLoadedEvent, load_config
+from fire_engine.core import ChunkLoadedEvent, EventBus, TerrainEditedEvent, load_config
 from fire_engine.core.rng import set_world_seed
-from fire_engine.world.terrain.chunk import Chunk
 from fire_engine.lighting import (
+    LIGHT_AMBIENT,
+    LIGHT_FULL,
     LightGrid,
-    occupancy_from_materials,
     SunlightComputer,
     make_light_sampler,
-    LIGHT_FULL,
-    LIGHT_AMBIENT,
+    occupancy_from_materials,
 )
-
+from fire_engine.world.terrain.chunk import Chunk
 
 # ---------------------------------------------------------------------------
 # Helpers

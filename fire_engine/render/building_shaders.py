@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from fire_engine.core.shader_source import load_glsl
 
-__all__ = ["BUILDING_VERTEX", "BUILDING_FRAGMENT"]
+__all__ = ["BUILDING_FRAGMENT", "BUILDING_VERTEX"]
 
 
 BUILDING_VERTEX = load_glsl(__file__, "building.vert")

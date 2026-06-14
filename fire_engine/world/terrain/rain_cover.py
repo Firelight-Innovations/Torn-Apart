@@ -52,14 +52,14 @@ Example
 
 from __future__ import annotations
 
-from typing import Iterable, Mapping
+from collections.abc import Iterable, Mapping
 
 import numpy as np
 
 from fire_engine.core.config import Config
 from fire_engine.world.terrain.chunk import Chunk
 
-__all__ = ["RainCoverField", "OPEN_SKY_Z"]
+__all__ = ["OPEN_SKY_Z", "RainCoverField"]
 
 #: World Z (meters) reported for a column with no known solid voxel — far below
 #: any terrain, so an open-to-sky column never clips falling rain.  Rain streaks

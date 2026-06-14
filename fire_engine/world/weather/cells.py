@@ -42,8 +42,8 @@ __all__ = [
     "Regime",
     "StormCell",
     "day_regime",
-    "regime_ambient",
     "natural_cells",
+    "regime_ambient",
 ]
 
 #: Game seconds per game day (matches ``sky.celestial.GAME_SECONDS_PER_DAY``;

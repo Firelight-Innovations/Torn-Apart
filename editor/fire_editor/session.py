@@ -103,14 +103,14 @@ class EditorSession:
     # Construction
     # ------------------------------------------------------------------ #
     @classmethod
-    def from_seed(cls, seed: int, base_config: Config | None = None) -> "EditorSession":
+    def from_seed(cls, seed: int, base_config: Config | None = None) -> EditorSession:
         """Generate a fresh world from ``seed`` (overrides ``config.world_seed``)."""
         base = base_config or load_config()
         cfg = dataclasses.replace(base, world_seed=int(seed))
         return cls(cfg)
 
     @classmethod
-    def from_save(cls, path: str, base_config: Config | None = None) -> "EditorSession":
+    def from_save(cls, path: str, base_config: Config | None = None) -> EditorSession:
         """Open a ``.ta`` save: regen baseline from seed, then apply terrain deltas.
 
         The save's header seed must match ``base_config.world_seed`` (game saves

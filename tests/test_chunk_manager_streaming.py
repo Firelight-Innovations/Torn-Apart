@@ -27,14 +27,13 @@ from fire_engine.core import EventBus, load_config
 from fire_engine.core.math3d import Vec3
 from fire_engine.core.rng import set_world_seed
 from fire_engine.save import Saveable
-from fire_engine.world.terrain import ChunkManager, apply_brush, SphereBrush, BrushMode
+from fire_engine.world.terrain import BrushMode, ChunkManager, SphereBrush, apply_brush
 from fire_engine.world.terrain.chunk import Chunk
 from fire_engine.world.terrain.chunk_manager import (
     _MAX_LOADS_PER_FRAME,
-    _Z_MIN,
     _Z_MAX,
+    _Z_MIN,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers

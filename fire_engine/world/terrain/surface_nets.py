@@ -52,19 +52,19 @@ over the 12 cube edges, 26 neighbour offsets, and 6 face directions.
 from __future__ import annotations
 
 import itertools
-from typing import Callable
+from collections.abc import Callable
 
 import numpy as np
 
 from fire_engine.world.terrain.generation import MATERIAL_DIRT
 from fire_engine.world.terrain.meshing import (
-    MeshArrays,
-    WORLD_FLOOR_SOLID,
     _FACE_DIRS,
     _UV_TILE_M,
+    WORLD_FLOOR_SOLID,
+    MeshArrays,
 )
 
-__all__ = ["build_mesh_faceted", "NEIGHBOR_OFFSETS_26"]
+__all__ = ["NEIGHBOR_OFFSETS_26", "build_mesh_faceted"]
 
 # All 26 neighbour chunk offsets (face + edge + corner).  Dual cells on a
 # chunk border straddle voxels from up to 8 chunks, so faceted meshing needs

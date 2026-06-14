@@ -9,15 +9,12 @@ Headless (numpy only — fire_engine/buildings/ never imports panda3d).
 
 from __future__ import annotations
 
-import math
-
 import numpy as np
 import pytest
 
 from fire_engine.buildings import (
     Building,
     BuildingDef,
-    BuildingDefaults,
     DemoHouseDef,
     OpeningKind,
     WallKind,
@@ -25,7 +22,6 @@ from fire_engine.buildings import (
 from fire_engine.core.config import Config
 from fire_engine.core.rng import set_world_seed
 from fire_engine.procedural import clear_cache, get
-from fire_engine.procedural.registry import reset_registry
 
 # ---------------------------------------------------------------------------
 # Helpers

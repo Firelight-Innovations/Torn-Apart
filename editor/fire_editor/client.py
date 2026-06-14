@@ -35,7 +35,7 @@ import contextlib
 import json
 import os
 import sys
-from typing import Awaitable, Callable
+from collections.abc import Awaitable, Callable
 
 import websockets
 from websockets.asyncio.client import ClientConnection
@@ -57,7 +57,7 @@ class RpcRemoteError(RuntimeError):
 class BinaryFrame:
     """A decoded binary frame the daemon pushed (mesh / texture payload)."""
 
-    __slots__ = ("schema_id", "payload_id", "payload")
+    __slots__ = ("payload", "payload_id", "schema_id")
 
     def __init__(self, schema_id: int, payload_id: int, payload: bytes) -> None:
         self.schema_id = schema_id

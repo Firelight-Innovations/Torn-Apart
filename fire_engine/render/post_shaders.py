@@ -25,13 +25,13 @@ from __future__ import annotations
 from fire_engine.core.shader_source import load_glsl
 
 __all__ = [
-    "POST_FULLSCREEN_VERTEX",
     "BLOOM_DOWN_FRAGMENT",
     "BLOOM_UP_FRAGMENT",
-    "LENS_FLARE_FRAGMENT",
-    "GOD_RAYS_FRAGMENT",
-    "FXAA_FRAGMENT",
     "COMPOSITE_FRAGMENT",
+    "FXAA_FRAGMENT",
+    "GOD_RAYS_FRAGMENT",
+    "LENS_FLARE_FRAGMENT",
+    "POST_FULLSCREEN_VERTEX",
 ]
 
 

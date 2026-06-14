@@ -20,14 +20,13 @@ from fire_engine.world.terrain.generation import (
     MATERIAL_GRASS,
     generate_chunk,
 )
-from fire_engine.world.terrain.meshing import MeshArrays, WORLD_FLOOR_SOLID
+from fire_engine.world.terrain.meshing import WORLD_FLOOR_SOLID
 from fire_engine.world.terrain.surface_nets import (
     NEIGHBOR_OFFSETS_26,
     _build_padded_materials,
     _cell_vertices,
     build_mesh_faceted,
 )
-
 
 # ---------------------------------------------------------------------------
 # Shared fixtures

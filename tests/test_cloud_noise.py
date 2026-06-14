@@ -12,10 +12,9 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 from fire_engine.core.rng import set_world_seed
-from fire_engine.world.sky.cloud_noise import bake_shape_noise, bake_detail_noise
+from fire_engine.world.sky.cloud_noise import bake_detail_noise, bake_shape_noise
 
 _ROOT = Path(__file__).resolve().parents[1]
 

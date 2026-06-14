@@ -28,12 +28,12 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from fire_engine.core.math3d import Vec3, Quat
+from fire_engine.core.math3d import Quat, Vec3
 from fire_engine.devtools.fields import Field, FieldKind, Section
 
 if TYPE_CHECKING:
-    from fire_engine.render.gameobject import GameObject
     from fire_engine.render.component import Component
+    from fire_engine.render.gameobject import GameObject
     from fire_engine.world.terrain.chunk import Chunk
 
 
@@ -50,7 +50,7 @@ _DEG2RAD = math.pi / 180.0
 # ---------------------------------------------------------------------------
 
 
-def describe_object(go: "GameObject") -> list[Section]:
+def describe_object(go: GameObject) -> list[Section]:
     """
     Build the inspector sections for a GameObject.
 
@@ -93,7 +93,7 @@ def is_chunk(obj: Any) -> bool:
     return hasattr(obj, "materials") and hasattr(obj, "coord") and hasattr(obj, "chunk_meters")
 
 
-def describe_chunk(chunk: "Chunk") -> list[Section]:
+def describe_chunk(chunk: Chunk) -> list[Section]:
     """
     Build read-only inspector sections for a terrain chunk.
 
@@ -165,7 +165,7 @@ def describe_chunk(chunk: "Chunk") -> list[Section]:
 # ---------------------------------------------------------------------------
 
 
-def _identity_section(go: "GameObject") -> Section:
+def _identity_section(go: GameObject) -> Section:
     """Name / tag / layer / active flag for the GameObject itself."""
 
     def set_name(v: str) -> None:
@@ -192,7 +192,7 @@ def _identity_section(go: "GameObject") -> Section:
     )
 
 
-def _transform_section(go: "GameObject") -> Section:
+def _transform_section(go: GameObject) -> Section:
     """
     Position (local), rotation (euler degrees view of the quaternion), and scale.
 
@@ -242,7 +242,7 @@ def _transform_section(go: "GameObject") -> Section:
 # ---------------------------------------------------------------------------
 
 
-def _component_section(comp: "Component") -> Section:
+def _component_section(comp: Component) -> Section:
     """
     One section per component, with a row per public tunable attribute.
 
@@ -282,7 +282,7 @@ def _public_slots(obj: Any) -> list[str]:
     return out
 
 
-def _field_for_attr(obj: Any, name: str) -> "Field | None":
+def _field_for_attr(obj: Any, name: str) -> Field | None:
     """
     Build an editable Field for ``obj.<name>`` by inspecting its runtime value.
 

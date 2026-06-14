@@ -38,16 +38,16 @@ Quick-start example
     ComponentRegistry.run_frame(clock)  # awake + start + update
 """
 
-from fire_engine.render.transform import Transform, Space
 from fire_engine.render.component import Component
 from fire_engine.render.gameobject import GameObject
 from fire_engine.render.registry import (
     ComponentRegistry,
-    instantiate,
     destroy,
-    find_with_tag,
     find_objects_with_tag,
+    find_with_tag,
+    instantiate,
 )
+from fire_engine.render.transform import Space, Transform
 
 # App is exported but has panda3d as a hard dependency — only import if
 # panda3d is installed (headless tests skip app.py via the import rule).

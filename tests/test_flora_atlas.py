@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from fire_engine.core.rng import set_world_seed, for_domain
+from fire_engine.core.rng import for_domain, set_world_seed
 from fire_engine.procedural.flora.atlas import (
     AtlasLayout,
     bark_texture,

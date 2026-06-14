@@ -59,7 +59,7 @@ from fire_engine.world.weather.humidity import (
 )
 from fire_engine.world.weather.synoptic import Synoptic
 
-__all__ = ["LocalWeather", "WeatherSystem", "BLEND_SECONDS", "HYSTERESIS_SECONDS"]
+__all__ = ["BLEND_SECONDS", "HYSTERESIS_SECONDS", "LocalWeather", "WeatherSystem"]
 
 #: Game seconds per game day (see ``cells._DAY_S`` — kept local, no sky import).
 _DAY_S: float = 24.0 * 3600.0

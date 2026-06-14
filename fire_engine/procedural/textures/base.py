@@ -43,7 +43,7 @@ import numpy as np
 
 from fire_engine.procedural.defs import ProceduralDef
 
-__all__ = ["ProceduralTextureDef", "value_noise", "pixel_noise"]
+__all__ = ["ProceduralTextureDef", "pixel_noise", "value_noise"]
 
 
 # ---------------------------------------------------------------------------

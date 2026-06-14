@@ -67,7 +67,7 @@ class Chunk:
     np.True_
     """
 
-    __slots__ = ("coord", "materials", "dirty", "edited", "_chunk_size", "_voxel_size")
+    __slots__ = ("_chunk_size", "_voxel_size", "coord", "dirty", "edited", "materials")
 
     def __init__(
         self,

@@ -76,8 +76,8 @@ from fire_engine.core import (
     get_logger,
 )
 from fire_engine.lighting import TreeOccluderSet
-from fire_engine.render.component import Component
 from fire_engine.render import flora_shaders, tree_shaders
+from fire_engine.render.component import Component
 from fire_engine.render.flora_renderer import _build_cross_geom
 
 # Weather → sway mapping shared with grass/flora so the scalar fallback
@@ -540,8 +540,8 @@ class TreeRendererComponent(Component):
         """
         sigma = self._species_sigma.get(name)
         if sigma is None:
-            from fire_engine.procedural.flora import mesh_leaf_area_m2
             from fire_engine.lighting.occluders import CANOPY_HALF_HEIGHT_FRAC
+            from fire_engine.procedural.flora import mesh_leaf_area_m2
 
             leaf_area = float(np.mean([mesh_leaf_area_m2(m) for m in vs.meshes]))
             cv = CANOPY_HALF_HEIGHT_FRAC * float(vs.max_height_m)

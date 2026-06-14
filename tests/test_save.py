@@ -6,26 +6,23 @@ no-pickle enforcement, and numpy/tuple-key encoding.  Headless: no panda3d.
 from __future__ import annotations
 
 import re
-import sys
-import tempfile
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from fire_engine.core import load_config, Clock, EventBus
+from fire_engine.core import Clock, EventBus, load_config
 from fire_engine.core.math3d import Vec3
 from fire_engine.core.rng import set_world_seed
-from fire_engine.world.terrain import ChunkManager
-from fire_engine.world.terrain.brush import SphereBrush, BrushMode, apply_brush
-from fire_engine.save import SaveManager, Saveable, SaveIncompatibleError
+from fire_engine.save import Saveable, SaveIncompatibleError, SaveManager
 from fire_engine.save.save_manager import (
-    _encode_delta,
     _decode_delta,
-    _encode_value,
     _decode_value,
+    _encode_delta,
+    _encode_value,
 )
-
+from fire_engine.world.terrain import ChunkManager
+from fire_engine.world.terrain.brush import BrushMode, SphereBrush, apply_brush
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -174,7 +171,6 @@ class TestUneditedWorldIsTiny:
         We check the total file size as well — it should be well under 1 KB
         plus a small header overhead.
         """
-        import zlib as _zlib
         import msgpack as _msgpack
 
         save_file = tmp_path / "tiny.ta"

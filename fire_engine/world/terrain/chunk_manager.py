@@ -46,8 +46,8 @@ from fire_engine.core.math3d import Vec3
 from fire_engine.world.terrain.chunk import Chunk
 from fire_engine.world.terrain.generation import generate_chunk
 from fire_engine.world.terrain.meshing import (
-    MeshArrays,
     WORLD_FLOOR_SOLID,
+    MeshArrays,
     build_mesh,
 )
 from fire_engine.world.terrain.surface_nets import (

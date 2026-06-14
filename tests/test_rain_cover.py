@@ -21,7 +21,7 @@ import pytest
 
 from fire_engine.core import load_config
 from fire_engine.world.terrain.chunk import Chunk
-from fire_engine.world.terrain.rain_cover import RainCoverField, OPEN_SKY_Z
+from fire_engine.world.terrain.rain_cover import OPEN_SKY_Z, RainCoverField
 
 
 @pytest.fixture

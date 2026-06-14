@@ -20,18 +20,18 @@ from __future__ import annotations
 import numpy as np
 from panda3d.core import (  # type: ignore[import]
     Geom,
+    GeomEnums,
     GeomNode,
     GeomTriangles,
     GeomVertexArrayFormat,
     GeomVertexData,
     GeomVertexFormat,
-    GeomEnums,
     RenderState,
     TextureAttrib,
     TextureStage,
 )
 
-__all__ = ["to_geom", "to_geom_node", "make_vertex_format", "make_material_state"]
+__all__ = ["make_material_state", "make_vertex_format", "to_geom", "to_geom_node"]
 
 # Texture stages for the GPU-lighting terrain shader: sort order maps to
 # p3d_Texture0 (albedo), p3d_Texture1 (normal map), p3d_Texture2 (emission).

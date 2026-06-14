@@ -1,13 +1,13 @@
-import sys, math
+import sys
 from pathlib import Path
 
 _R = Path(__file__).resolve().parents[3]
 if str(_R) not in sys.path:
     sys.path.insert(0, str(_R))
 import numpy as np
-import main as demo
-from fire_engine.core.math3d import Vec3, Quat
 from panda3d.core import Texture
+
+import main as demo
 
 app = demo.build_demo()
 app.input_state.mouse_captured = False
@@ -77,7 +77,8 @@ for casc in pipe.cascades:
             )
 
 print("\nsun_dir/radiance/ambient:", pipe._last_sun)
-import os, sys
+import os
+import sys
 
 sys.stdout.flush()
 os._exit(0)

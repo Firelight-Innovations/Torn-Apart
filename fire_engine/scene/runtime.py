@@ -32,7 +32,8 @@ Example::
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from fire_engine.core.math3d import Quat, Vec3
 from fire_engine.scene.objects import SceneObjectStore
@@ -75,7 +76,7 @@ class SceneRuntime:
         self, visual_factory: Any | None = None, on_rebuilt: Callable[[], None] | None = None
     ) -> None:
         self.store = SceneObjectStore()
-        self.objects: "dict[int, GameObject]" = {}
+        self.objects: dict[int, GameObject] = {}
         self.visual_factory = visual_factory
         self.on_rebuilt = on_rebuilt
 

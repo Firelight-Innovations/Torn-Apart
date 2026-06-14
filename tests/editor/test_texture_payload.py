@@ -10,13 +10,12 @@ from __future__ import annotations
 import asyncio
 
 import numpy as np
-
-from fire_engine.core import load_config
-
 from fire_editor import Daemon, EditorSession
 from fire_editor._generated import SchemaId
 from fire_editor.binary import decode_frame
 from fire_editor.texturecodec import decode_texture_payload, encode_texture_payload
+
+from fire_engine.core import load_config
 
 
 def _run(coro):

@@ -17,12 +17,12 @@ No panda3d imports — headless-testable.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from fire_engine.core.math3d import Vec3
-from fire_engine.devtools.selection import Selection
-from fire_engine.devtools.picking import Selectable, pick
 from fire_engine.devtools.fields import Panel
+from fire_engine.devtools.picking import Selectable, pick
+from fire_engine.devtools.selection import Selection
 from fire_engine.devtools.tools import DevTool
 
 if TYPE_CHECKING:
@@ -53,7 +53,7 @@ class DevToolsManager:
         mgr.add_selectable(cube_go, Vec3(0.5, 0.5, 0.5))
     """
 
-    __slots__ = ("selection", "tools", "selectables", "enabled")
+    __slots__ = ("enabled", "selectables", "selection", "tools")
 
     def __init__(self) -> None:
         self.selection: Selection = Selection()
@@ -84,7 +84,7 @@ class DevToolsManager:
     # Pickable objects
     # ------------------------------------------------------------------
 
-    def add_selectable(self, go: "GameObject", half_extents: Vec3) -> Selectable:
+    def add_selectable(self, go: GameObject, half_extents: Vec3) -> Selectable:
         """
         Register ``go`` as click-pickable with the given local AABB half-extents.
 
@@ -101,7 +101,7 @@ class DevToolsManager:
         self.selectables.append(sel)
         return sel
 
-    def remove_selectable(self, go: "GameObject") -> None:
+    def remove_selectable(self, go: GameObject) -> None:
         """
         Drop ``go`` from the pickable set (e.g. when it is destroyed); clears the
         selection if it was the selected object.
@@ -114,14 +114,14 @@ class DevToolsManager:
         if self.selection.current is go:
             self.selection.clear()
 
-    def find_selectable(self, go: "GameObject") -> Optional[Selectable]:
+    def find_selectable(self, go: GameObject) -> Selectable | None:
         """Return the :class:`Selectable` for ``go``, or ``None``."""
         for s in self.selectables:
             if s.game_object is go:
                 return s
         return None
 
-    def pick(self, origin: Vec3, direction: Vec3) -> "Optional[GameObject]":
+    def pick(self, origin: Vec3, direction: Vec3) -> GameObject | None:
         """
         Ray-pick the nearest selectable along ``origin``/``direction``.
 
@@ -136,7 +136,7 @@ class DevToolsManager:
         """
         return pick(origin, direction, self.selectables)
 
-    def pick_and_select(self, origin: Vec3, direction: Vec3) -> "Optional[GameObject]":
+    def pick_and_select(self, origin: Vec3, direction: Vec3) -> GameObject | None:
         """
         Convenience: :meth:`pick` then write the result into :attr:`selection`.
 

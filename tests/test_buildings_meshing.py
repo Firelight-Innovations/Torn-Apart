@@ -7,11 +7,10 @@ Headless (numpy only — fire_engine/buildings/ never imports panda3d).
 """
 
 import numpy as np
-import pytest
 
 from fire_engine.buildings import Building, BuildingDefaults, OpeningKind
-from fire_engine.buildings.model import Opening, Wall
 from fire_engine.buildings.meshing import mesh_building, mesh_slab, mesh_wall
+from fire_engine.buildings.model import Opening, Wall
 from fire_engine.core.config import Config
 from fire_engine.core.math3d import Quat, Vec3
 

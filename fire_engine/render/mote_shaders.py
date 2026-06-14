@@ -38,10 +38,10 @@ from __future__ import annotations
 from fire_engine.core.shader_source import load_glsl
 
 __all__ = [
-    "DUST_VERTEX",
     "DUST_FRAGMENT",
-    "LEAF_VERTEX",
+    "DUST_VERTEX",
     "LEAF_FRAGMENT",
+    "LEAF_VERTEX",
 ]
 
 

@@ -9,23 +9,20 @@ Complements tests/test_save.py without duplicating its exact cases.
 from __future__ import annotations
 
 import dataclasses
-import os
-from pathlib import Path
 
 import numpy as np
 import pytest
 
-from fire_engine.core import load_config, Clock, EventBus
+from fire_engine.core import Clock, EventBus, load_config
 from fire_engine.core.rng import set_world_seed
-from fire_engine.save import SaveManager, Saveable, SaveIncompatibleError
+from fire_engine.save import Saveable, SaveIncompatibleError, SaveManager
 from fire_engine.save.save_manager import (
     _compute_config_digest,
-    _encode_delta,
     _decode_delta,
-    _encode_value,
     _decode_value,
+    _encode_delta,
+    _encode_value,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers (mirror _make_world pattern from test_save.py)
@@ -415,8 +412,8 @@ class TestConfigDigestMismatch:
         A save file with format_version > _FORMAT_VERSION raises
         SaveIncompatibleError (engine too old).
         """
+
         import msgpack
-        import zlib
 
         save_file = tmp_path / "future.ta"
 

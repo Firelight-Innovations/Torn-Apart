@@ -40,8 +40,6 @@ import queue
 import threading
 from dataclasses import dataclass
 
-import numpy as np
-
 from fire_engine.core import get_logger
 from fire_engine.lighting.occluders import TreeOccluderSet
 from fire_engine.lighting.palette import MaterialPalette
@@ -105,7 +103,7 @@ class AssemblyJob:
     materials: dict
     palette: MaterialPalette
     seq: int
-    occluders: "TreeOccluderSet | None" = None
+    occluders: TreeOccluderSet | None = None
     trunk_occ: float = 0.0
     canopy_gain: float = 0.0
 
@@ -135,7 +133,7 @@ class AssemblyResult:
 
 def assemble_packed(
     job: AssemblyJob,
-    cache: "ChunkBlockCache | None" = None,
+    cache: ChunkBlockCache | None = None,
 ) -> AssemblyResult:
     """
     Run one job: ``assemble_geometry`` on the snapshot, then ``pack_volume``.
@@ -200,8 +198,8 @@ class CascadeAssemblyWorker:
     """
 
     def __init__(self, *, cache_max_entries: int = 4096) -> None:
-        self._in: "queue.Queue[AssemblyJob | None]" = queue.Queue()
-        self._out: "queue.Queue[AssemblyResult]" = queue.Queue()
+        self._in: queue.Queue[AssemblyJob | None] = queue.Queue()
+        self._out: queue.Queue[AssemblyResult] = queue.Queue()
         self._thread: threading.Thread | None = None
         self._pending = 0
         self.block_cache = ChunkBlockCache(max_entries=cache_max_entries)
@@ -265,7 +263,7 @@ class CascadeAssemblyWorker:
                 break
             try:
                 self._out.put(assemble_packed(job, cache=self.block_cache))
-            except Exception:  # noqa: BLE001 — never let the worker die silently
+            except Exception:
                 _log.exception(
                     "Cascade assembly failed (cascade %d, seq %d)", job.cascade_index, job.seq
                 )

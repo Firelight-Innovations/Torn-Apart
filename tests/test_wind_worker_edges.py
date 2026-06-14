@@ -14,11 +14,9 @@ suspicions in comments.
 
 from __future__ import annotations
 
-import threading
 import time
 
 import numpy as np
-import pytest
 
 from fire_engine.core.config import Config
 from fire_engine.world.wind import (

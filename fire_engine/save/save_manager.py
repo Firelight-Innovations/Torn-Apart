@@ -112,8 +112,8 @@ from typing import Any
 import msgpack
 import numpy as np
 
-from fire_engine.core.config import Config
 from fire_engine.core.clock import Clock
+from fire_engine.core.config import Config
 from fire_engine.core.log import get_logger
 from fire_engine.save.saveable import Saveable, SaveIncompatibleError
 

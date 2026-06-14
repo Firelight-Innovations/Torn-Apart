@@ -50,7 +50,8 @@ LIGHT_AMBIENT = 40   (from light_grid)
 
 from __future__ import annotations
 
-from typing import Callable, Protocol
+from collections.abc import Callable
+from typing import Protocol
 
 import numpy as np
 

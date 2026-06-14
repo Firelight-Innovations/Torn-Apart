@@ -85,9 +85,9 @@ from fire_engine.core import (
     get_logger,
 )
 from fire_engine.core.rng import for_domain
-from fire_engine.world.terrain import RainCoverField
-from fire_engine.render.component import Component
 from fire_engine.render import rain_shaders
+from fire_engine.render.component import Component
+from fire_engine.world.terrain import RainCoverField
 
 __all__ = ["RainRendererComponent"]
 

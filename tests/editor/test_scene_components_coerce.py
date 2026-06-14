@@ -9,14 +9,10 @@ Headless only: no panda3d, no fire_engine.world.
 
 from __future__ import annotations
 
-import copy
-
 import pytest
 
 from fire_engine.scene.components import (
     COMPONENT_CATALOG,
-    ComponentSpec,
-    FieldSpec,
     coerce_params,
     default_components_for_kind,
     default_params,

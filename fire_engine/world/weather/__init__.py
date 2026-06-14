@@ -9,6 +9,7 @@ render bridges live in ``fire_engine/render/``.
 See ``docs/systems/weather.md`` for the system contract.
 """
 
+from fire_engine.world.weather.bolt import BoltGeometry, generate_bolt
 from fire_engine.world.weather.cells import (
     CellKind,
     Regime,
@@ -17,7 +18,6 @@ from fire_engine.world.weather.cells import (
     natural_cells,
     regime_ambient,
 )
-from fire_engine.world.weather.bolt import BoltGeometry, generate_bolt
 from fire_engine.world.weather.classify import WeatherType, classify
 from fire_engine.world.weather.clouds import (
     BAND_HIGH,
@@ -29,11 +29,6 @@ from fire_engine.world.weather.clouds import (
     classify_genus,
     cloud_layers,
 )
-from fire_engine.world.weather.lightning import (
-    StrikeParams,
-    cell_id_int,
-    scheduled_strikes,
-)
 from fire_engine.world.weather.humidity import (
     condense_fraction,
     emergent_fog,
@@ -42,41 +37,46 @@ from fire_engine.world.weather.humidity import (
     saturation_humidity,
     wind_gate,
 )
+from fire_engine.world.weather.lightning import (
+    StrikeParams,
+    cell_id_int,
+    scheduled_strikes,
+)
 from fire_engine.world.weather.synoptic import Synoptic
 from fire_engine.world.weather.system import LocalWeather, WeatherSystem
 from fire_engine.world.weather.weather_map import MAP_CHANNELS, WeatherMap
 
 __all__ = [
-    "Synoptic",
-    "CellKind",
-    "Regime",
-    "StormCell",
-    "day_regime",
-    "natural_cells",
-    "regime_ambient",
-    "WeatherType",
-    "classify",
-    "CloudGenus",
-    "CloudBand",
-    "CloudLayers",
-    "classify_genus",
-    "cloud_layers",
     "BAND_HIGH",
-    "BAND_MID",
     "BAND_LOW",
-    "humidity_base",
-    "relative_humidity",
-    "saturation_humidity",
-    "condense_fraction",
-    "wind_gate",
-    "emergent_fog",
-    "LocalWeather",
-    "WeatherSystem",
-    "WeatherMap",
+    "BAND_MID",
     "MAP_CHANNELS",
     "BoltGeometry",
-    "generate_bolt",
+    "CellKind",
+    "CloudBand",
+    "CloudGenus",
+    "CloudLayers",
+    "LocalWeather",
+    "Regime",
+    "StormCell",
     "StrikeParams",
-    "scheduled_strikes",
+    "Synoptic",
+    "WeatherMap",
+    "WeatherSystem",
+    "WeatherType",
     "cell_id_int",
+    "classify",
+    "classify_genus",
+    "cloud_layers",
+    "condense_fraction",
+    "day_regime",
+    "emergent_fog",
+    "generate_bolt",
+    "humidity_base",
+    "natural_cells",
+    "regime_ambient",
+    "relative_humidity",
+    "saturation_humidity",
+    "scheduled_strikes",
+    "wind_gate",
 ]

@@ -12,14 +12,12 @@ from __future__ import annotations
 import math
 
 import numpy as np
-import pytest
 
 from fire_engine.core.math3d import Vec3
 from fire_engine.world.sky.celestial import (
     DAYLIGHT_Z_HI,
     DAYLIGHT_Z_LO,
     GAME_SECONDS_PER_DAY,
-    MOON_PHASE_OFFSET_RAD,
     color_ramp,
     daylight_factor,
     lerp_color,

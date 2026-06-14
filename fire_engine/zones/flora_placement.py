@@ -49,14 +49,14 @@ import numpy as np
 
 from fire_engine.core import Config
 from fire_engine.core.rng import for_domain
-from fire_engine.zones.grass_placement import hash_lowbias32, _K1, _K2, _K3, _K4
+from fire_engine.zones.grass_placement import _K1, _K2, _K3, _K4, hash_lowbias32
 from fire_engine.zones.volume import ZoneVolume
 
 __all__ = [
     "FLORA_KINDS",
     "flora_hash_seed",
-    "flora_instance_count",
     "flora_instance_attribs",
+    "flora_instance_count",
 ]
 
 # The zone tags the flora renderer consumes, in render order.  "bushes" and

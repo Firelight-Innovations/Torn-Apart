@@ -59,27 +59,24 @@ Example
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 # Panda3D imports allowed in world/ per ARCHITECTURE §3
 from direct.showbase.ShowBase import ShowBase  # type: ignore[import]
 from panda3d.core import (  # type: ignore[import]
-    WindowProperties,
-    LPoint3f,
-    LQuaternionf,
     AntialiasAttrib,
     NodePath,
-    loadPrcFileData,
+    WindowProperties,
 )
 
 from fire_engine.core.profiler import init_profiler
-from fire_engine.render.registry import ComponentRegistry, instantiate
 from fire_engine.render.camera import CameraComponent
+from fire_engine.render.registry import ComponentRegistry, instantiate
 
 if TYPE_CHECKING:
-    from fire_engine.core.config import Config
     from fire_engine.core.clock import Clock
+    from fire_engine.core.config import Config
     from fire_engine.core.event_bus import EventBus
 
 
@@ -160,9 +157,9 @@ class App(ShowBase):
 
     def __init__(
         self,
-        config: "Config",
-        clock: "Clock",
-        event_bus: "EventBus",
+        config: Config,
+        clock: Clock,
+        event_bus: EventBus,
     ) -> None:
         # The HDR post-processing buffers are full-window render targets.
         # Panda3D's default ``textures-power-2 down`` would round them to a
@@ -352,7 +349,7 @@ class App(ShowBase):
                 from fire_engine.render.profiler_bridge import PStatsBridge
 
                 self._profiler_bridge = PStatsBridge(self._profiler, connect=True)
-            except Exception as exc:  # noqa: BLE001  (diagnostics; never fatal)
+            except Exception as exc:
                 from fire_engine.core.log import get_logger
 
                 get_logger("profiler").warning("PStats bridge unavailable: %s", exc)
@@ -364,7 +361,7 @@ class App(ShowBase):
 
                 self._profiler_overlay = ProfilerOverlay(self, self._profiler, cfg)
                 self.accept("f3", self._profiler_overlay.toggle)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 from fire_engine.core.log import get_logger
 
                 get_logger("profiler").warning("Profiler overlay unavailable: %s", exc)

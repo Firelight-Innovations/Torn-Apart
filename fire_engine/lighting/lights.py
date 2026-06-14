@@ -45,20 +45,20 @@ Example
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 
 __all__ = [
-    "PointLight",
-    "AreaLight",
-    "SpotLight",
-    "LightSet",
-    "OccluderSet",
-    "LIGHT_TYPE_POINT",
     "LIGHT_TYPE_AREA",
+    "LIGHT_TYPE_POINT",
     "LIGHT_TYPE_SPOT",
     "MAX_OCCLUDERS",
+    "AreaLight",
+    "LightSet",
+    "OccluderSet",
+    "PointLight",
+    "SpotLight",
 ]
 
 LIGHT_TYPE_POINT: float = 0.0

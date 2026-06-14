@@ -9,23 +9,19 @@ basic subscribe/publish/drain correctness.
 
 from __future__ import annotations
 
-import dataclasses
-from dataclasses import dataclass, FrozenInstanceError
+from dataclasses import FrozenInstanceError, dataclass
 
 import pytest
 
 from fire_engine.core.event_bus import (
-    EventBus,
     BuildingChangedEvent,
-    ChunkLoadedEvent,
     ChunkUnloadedEvent,
+    EventBus,
     GameDayTickEvent,
     LightningStrikeEvent,
-    TerrainEditedEvent,
     ThunderEvent,
     WeatherChangedEvent,
 )
-
 
 # ---------------------------------------------------------------------------
 # Private test event types (not shared with test_event_bus.py)

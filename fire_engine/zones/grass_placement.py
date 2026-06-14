@@ -36,7 +36,7 @@ Example
 from __future__ import annotations
 
 import math
-from typing import Mapping
+from collections.abc import Mapping
 
 import numpy as np
 
@@ -45,14 +45,14 @@ from fire_engine.core.rng import for_domain
 from fire_engine.zones.volume import ZoneVolume
 
 __all__ = [
-    "hash_lowbias32",
-    "instance_attribs",
+    "HEIGHT_SENTINEL",
+    "bake_grass_height_field",
     "grass_hash_seed",
     "grass_instance_count",
+    "hash_lowbias32",
+    "instance_attribs",
     "leaf_hash_seed",
     "leaf_instance_count",
-    "bake_grass_height_field",
-    "HEIGHT_SENTINEL",
 ]
 
 # R-channel byte meaning "no terrain surface in the volume's Z window here" —

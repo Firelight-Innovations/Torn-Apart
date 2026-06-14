@@ -50,9 +50,9 @@ from panda3d.core import (  # type: ignore[import]
 )
 
 from fire_engine.core import get_logger
-from fire_engine.world.wind import BallParams, debug_ball_step
 from fire_engine.render.component import Component
 from fire_engine.render.primitives import build_sphere_geom as _build_sphere_geom
+from fire_engine.world.wind import BallParams, debug_ball_step
 
 __all__ = ["WindBallDebugComponent"]
 

@@ -22,10 +22,17 @@ Renderer: ``world/tree_renderer.py`` (instanced; placement from
 ``zones/tree_placement.py``).
 """
 
-from fire_engine.procedural.flora.skeleton import (
-    SkeletonBuilder,
-    TreeSkeleton,
-    validate_skeleton,
+# Importing the species sub-package registers all built-in species defs.
+import fire_engine.procedural.flora.species  # noqa: F401
+from fire_engine.procedural.flora.atlas import (
+    AtlasLayout,
+    bark_texture,
+    compose_atlas,
+    leaf_texture,
+)
+from fire_engine.procedural.flora.impostor import (
+    impostor_atlas,
+    rasterize_impostor,
 )
 from fire_engine.procedural.flora.leaves import (
     Leaves,
@@ -38,41 +45,33 @@ from fire_engine.procedural.flora.mesher import (
     mesh_leaf_area_m2,
     mesh_leaves,
 )
-from fire_engine.procedural.flora.atlas import (
-    AtlasLayout,
-    bark_texture,
-    compose_atlas,
-    leaf_texture,
-)
-from fire_engine.procedural.flora.impostor import (
-    impostor_atlas,
-    rasterize_impostor,
+from fire_engine.procedural.flora.skeleton import (
+    SkeletonBuilder,
+    TreeSkeleton,
+    validate_skeleton,
 )
 from fire_engine.procedural.flora.species_def import (
     TreeSpeciesDef,
     TreeVariantSet,
 )
 
-# Importing the species sub-package registers all built-in species defs.
-import fire_engine.procedural.flora.species  # noqa: F401
-
 __all__ = [
-    "SkeletonBuilder",
-    "TreeSkeleton",
-    "validate_skeleton",
-    "Leaves",
-    "leaves_at_tips",
-    "TreeMesh",
-    "mesh_branches",
-    "mesh_leaves",
-    "mesh_leaf_area_m2",
-    "merge_parts",
     "AtlasLayout",
-    "bark_texture",
-    "leaf_texture",
-    "compose_atlas",
-    "rasterize_impostor",
-    "impostor_atlas",
+    "Leaves",
+    "SkeletonBuilder",
+    "TreeMesh",
+    "TreeSkeleton",
     "TreeSpeciesDef",
     "TreeVariantSet",
+    "bark_texture",
+    "compose_atlas",
+    "impostor_atlas",
+    "leaf_texture",
+    "leaves_at_tips",
+    "merge_parts",
+    "mesh_branches",
+    "mesh_leaf_area_m2",
+    "mesh_leaves",
+    "rasterize_impostor",
+    "validate_skeleton",
 ]

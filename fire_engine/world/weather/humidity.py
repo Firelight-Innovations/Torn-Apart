@@ -38,12 +38,12 @@ from fire_engine.core.config import Config
 from fire_engine.core.rng import for_domain
 
 __all__ = [
+    "condense_fraction",
+    "emergent_fog",
     "humidity_base",
     "relative_humidity",
     "saturation_humidity",
-    "condense_fraction",
     "wind_gate",
-    "emergent_fog",
 ]
 
 

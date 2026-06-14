@@ -17,7 +17,6 @@ import pytest
 from fire_engine.core.config import Config, load_config
 from fire_engine.core.rng import set_world_seed
 from fire_engine.zones import (
-    HEIGHT_SENTINEL,
     ZoneVolume,
     bake_tree_instances,
     instances_data_block,

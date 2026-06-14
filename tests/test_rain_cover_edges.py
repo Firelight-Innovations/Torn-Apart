@@ -30,6 +30,7 @@ from fire_engine.world.terrain.rain_cover import RainCoverField, OPEN_SKY_Z
 # Shared fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def cfg():
     """Small grid so tests are cheap and cell boundaries are easy to reason about."""
@@ -37,9 +38,9 @@ def cfg():
     return replace(base, rain_cover_cells=64, rain_cover_cell_m=1.0)
 
 
-VS = 0.5           # voxel size (m) — matches engine default
-N = 32             # chunk edge (voxels)
-CHUNK_M = N * VS   # 16 m
+VS = 0.5  # voxel size (m) — matches engine default
+N = 32  # chunk edge (voxels)
+CHUNK_M = N * VS  # 16 m
 
 
 def _voxel_top_z(cz: int, z_idx: int) -> float:
@@ -59,6 +60,7 @@ def _world_texel(field: RainCoverField, wx: float, wy: float) -> tuple[int, int]
 # OPEN_SKY_Z sentinel value
 # ---------------------------------------------------------------------------
 
+
 class TestOpenSkySentinel:
     """Pin the constant value and the empty-column contract."""
 
@@ -69,9 +71,7 @@ class TestOpenSkySentinel:
     def test_fresh_field_all_open_sky(self, cfg):
         # A newly created field with no rebuild should be entirely OPEN_SKY_Z.
         field = RainCoverField(cfg)
-        expected = np.full(
-            (field.cells, field.cells), OPEN_SKY_Z, dtype=np.float32
-        )
+        expected = np.full((field.cells, field.cells), OPEN_SKY_Z, dtype=np.float32)
         assert np.array_equal(field.height, expected)
 
     def test_rebuild_all_empty_chunks_stays_open_sky(self, cfg):
@@ -114,6 +114,7 @@ class TestOpenSkySentinel:
 # Roof-overhang rule: highest solid in column wins (air gap underneath)
 # ---------------------------------------------------------------------------
 
+
 class TestRoofOverhang:
     """Pin the 'highest-solid-in-column' rule with an explicit air gap under a roof."""
 
@@ -124,10 +125,10 @@ class TestRoofOverhang:
         Voxels z=2..19 in both chunks are AIR → a 9+ m gap between floor and roof.
         """
         floor_mats = np.zeros((N, N, N), dtype=np.uint8)
-        floor_mats[:, :, 0:2] = 1   # floor slab, top face at 1.0 m
+        floor_mats[:, :, 0:2] = 1  # floor slab, top face at 1.0 m
 
         roof_mats = np.zeros((N, N, N), dtype=np.uint8)
-        roof_mats[:, :, 20] = 1      # single-voxel roof slab
+        roof_mats[:, :, 20] = 1  # single-voxel roof slab
 
         return {
             (0, 0, 0): Chunk((0, 0, 0), floor_mats),
@@ -144,7 +145,7 @@ class TestRoofOverhang:
         field.recenter((CHUNK_M * 0.5, CHUNK_M * 0.5))
         field.rebuild_all(chunks)
 
-        expected_roof_z = _voxel_top_z(1, 20)   # chunk-Z 1, voxel index 20
+        expected_roof_z = _voxel_top_z(1, 20)  # chunk-Z 1, voxel index 20
         r, c = _world_texel(field, 8.0, 8.0)
         # Pin current behaviour: the roof top must win.
         assert field.height[r, c] == pytest.approx(expected_roof_z)
@@ -156,7 +157,7 @@ class TestRoofOverhang:
         field.recenter((CHUNK_M * 0.5, CHUNK_M * 0.5))
         field.rebuild_all(chunks)
 
-        floor_z = _voxel_top_z(0, 1)   # top of z=1 voxel in chunk-Z 0
+        floor_z = _voxel_top_z(0, 1)  # top of z=1 voxel in chunk-Z 0
         r, c = _world_texel(field, 8.0, 8.0)
         assert field.height[r, c] != pytest.approx(floor_z)
 
@@ -166,14 +167,14 @@ class TestRoofOverhang:
         the correct top-face Z with no confusion from the reversed-argmax trick.
         """
         mats = np.zeros((N, N, N), dtype=np.uint8)
-        mats[:, :, 31] = 1   # only z=31 is solid
+        mats[:, :, 31] = 1  # only z=31 is solid
         chunks = {(0, 0, 0): Chunk((0, 0, 0), mats)}
 
         field = RainCoverField(cfg)
         field.recenter((CHUNK_M * 0.5, CHUNK_M * 0.5))
         field.rebuild_all(chunks)
 
-        expected_z = _voxel_top_z(0, 31)   # = 16.0 m
+        expected_z = _voxel_top_z(0, 31)  # = 16.0 m
         r, c = _world_texel(field, 8.0, 8.0)
         assert field.height[r, c] == pytest.approx(expected_z)
 
@@ -189,7 +190,7 @@ class TestRoofOverhang:
         field.recenter((CHUNK_M * 0.5, CHUNK_M * 0.5))
         field.rebuild_all(chunks)
 
-        expected_z = _voxel_top_z(0, 0)   # = 0.5 m
+        expected_z = _voxel_top_z(0, 0)  # = 0.5 m
         r, c = _world_texel(field, 8.0, 8.0)
         assert field.height[r, c] == pytest.approx(expected_z)
 
@@ -197,6 +198,7 @@ class TestRoofOverhang:
 # ---------------------------------------------------------------------------
 # mark_dirty (rebuild_columns) vs rebuild_all parity
 # ---------------------------------------------------------------------------
+
 
 class TestMarkDirtyParity:
     """
@@ -217,8 +219,10 @@ class TestMarkDirtyParity:
           chunk (1,0,0) — adjacent X, solid z=0..3
         Both provide ground height at the same Z so the texel values should agree.
         """
-        mats_a = np.zeros((N, N, N), dtype=np.uint8); mats_a[:, :, 0:4] = 1
-        mats_b = np.zeros((N, N, N), dtype=np.uint8); mats_b[:, :, 0:4] = 1
+        mats_a = np.zeros((N, N, N), dtype=np.uint8)
+        mats_a[:, :, 0:4] = 1
+        mats_b = np.zeros((N, N, N), dtype=np.uint8)
+        mats_b[:, :, 0:4] = 1
         return {
             (0, 0, 0): Chunk((0, 0, 0), mats_a),
             (1, 0, 0): Chunk((1, 0, 0), mats_b),
@@ -291,7 +295,8 @@ class TestMarkDirtyParity:
         After removing all solids from a column's Z stack, rebuild_columns should
         reset those texels to OPEN_SKY_Z (the 'removing roof lowers height' contract).
         """
-        mats = np.zeros((N, N, N), dtype=np.uint8); mats[:, :, 0:4] = 1
+        mats = np.zeros((N, N, N), dtype=np.uint8)
+        mats[:, :, 0:4] = 1
         chunks = {(0, 0, 0): Chunk((0, 0, 0), mats)}
 
         field = RainCoverField(cfg)
@@ -312,6 +317,7 @@ class TestMarkDirtyParity:
 # ---------------------------------------------------------------------------
 # recenter hysteresis and snap behaviour
 # ---------------------------------------------------------------------------
+
 
 class TestRecenterBehaviour:
     """
@@ -379,7 +385,8 @@ class TestRecenterBehaviour:
         Pin this so future refactors don't accidentally clear or shift data on
         a plain recenter call.
         """
-        mats = np.zeros((N, N, N), dtype=np.uint8); mats[:, :, 0:4] = 1
+        mats = np.zeros((N, N, N), dtype=np.uint8)
+        mats[:, :, 0:4] = 1
         chunks = {(0, 0, 0): Chunk((0, 0, 0), mats)}
         field = RainCoverField(cfg)
         field.recenter((CHUNK_M * 0.5, CHUNK_M * 0.5))
@@ -394,6 +401,7 @@ class TestRecenterBehaviour:
 # ---------------------------------------------------------------------------
 # Determinism
 # ---------------------------------------------------------------------------
+
 
 class TestDeterminism:
     """Same chunks → byte-identical heightmap from two independent instances."""
@@ -419,7 +427,8 @@ class TestDeterminism:
 
     def test_rebuild_all_twice_same_result(self, cfg):
         """Calling rebuild_all twice on the same field and chunks must be idempotent."""
-        mats = np.zeros((N, N, N), dtype=np.uint8); mats[:, :, 5:10] = 1
+        mats = np.zeros((N, N, N), dtype=np.uint8)
+        mats[:, :, 5:10] = 1
         chunks = {(0, 0, 0): Chunk((0, 0, 0), mats)}
 
         field = RainCoverField(cfg)
@@ -435,6 +444,7 @@ class TestDeterminism:
 # Shape and dtype guarantees
 # ---------------------------------------------------------------------------
 
+
 class TestShapeAndDtype:
     """Pin height shape, dtype, and origin_m type contract."""
 
@@ -449,7 +459,8 @@ class TestShapeAndDtype:
 
     def test_height_dtype_after_rebuild(self, cfg):
         """rebuild_all must preserve float32 dtype (no upcasting to float64)."""
-        mats = np.zeros((N, N, N), dtype=np.uint8); mats[:, :, 0] = 1
+        mats = np.zeros((N, N, N), dtype=np.uint8)
+        mats[:, :, 0] = 1
         chunks = {(0, 0, 0): Chunk((0, 0, 0), mats)}
         field = RainCoverField(cfg)
         field.recenter((CHUNK_M * 0.5, CHUNK_M * 0.5))
@@ -486,6 +497,7 @@ class TestShapeAndDtype:
 # ---------------------------------------------------------------------------
 # chunk_column_of static helper
 # ---------------------------------------------------------------------------
+
 
 class TestChunkColumnOf:
     """Pin the static helper that drops cz."""

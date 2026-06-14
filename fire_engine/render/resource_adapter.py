@@ -50,6 +50,7 @@ if TYPE_CHECKING:
 # Internal helpers: one loader function per format family
 # ---------------------------------------------------------------------------
 
+
 def _get_global_loader() -> P3DLoader:
     """
     Retrieve the global Panda3D ``Loader`` instance.
@@ -73,6 +74,7 @@ def _get_global_loader() -> P3DLoader:
     """
     # Panda3D places a ``loader`` in the builtins namespace when ShowBase starts.
     import builtins
+
     global_loader = getattr(builtins, "loader", None)
     if global_loader is None:
         raise RuntimeError(
@@ -107,6 +109,7 @@ def _load_model(path: str) -> Any:
         If the file does not exist or Panda3D cannot parse it.
     """
     from panda3d.core import Filename  # type: ignore[import]
+
     p3d_loader = _get_global_loader()
     # Use fromOsSpecific so absolute Windows paths (C:\...) are interpreted
     # correctly rather than being routed through Panda3D's model-path search.
@@ -137,6 +140,7 @@ def _load_audio(path: str) -> Any:
         If the file does not exist or cannot be decoded.
     """
     import builtins
+
     base = getattr(builtins, "base", None)
     if base is None:
         raise RuntimeError(
@@ -185,18 +189,20 @@ def _load_texture_image(path: str) -> Any:
         If the file cannot be opened.
     """
     from PIL import Image  # type: ignore[import]
+
     img = Image.open(path).convert("RGBA")
     return {
-        "width":  img.width,
+        "width": img.width,
         "height": img.height,
-        "mode":   img.mode,
-        "data":   img.tobytes(),
+        "mode": img.mode,
+        "data": img.tobytes(),
     }
 
 
 # ---------------------------------------------------------------------------
 # Public registration function
 # ---------------------------------------------------------------------------
+
 
 def register_panda_loaders(resource_manager: "ResourceManager") -> None:
     """
@@ -230,10 +236,10 @@ def register_panda_loaders(resource_manager: "ResourceManager") -> None:
     import fire_engine.resources.loaders as _loaders
 
     # --- 3D models ---
-    _loaders.register_loader(".egg",  _load_model)
-    _loaders.register_loader(".bam",  _load_model)
+    _loaders.register_loader(".egg", _load_model)
+    _loaders.register_loader(".bam", _load_model)
     _loaders.register_loader(".gltf", _load_model)
-    _loaders.register_loader(".glb",  _load_model)
+    _loaders.register_loader(".glb", _load_model)
 
     # --- Audio ---
     _loaders.register_loader(".ogg", _load_audio)

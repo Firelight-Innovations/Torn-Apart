@@ -20,6 +20,7 @@ MESH payload layout (little-endian; this is the *payload* that follows the
 Positions are absolute world meters (DECISIONS: "Mesher emits world-space
 vertices"), so the viewport attaches every chunk at the origin with no offset.
 """
+
 from __future__ import annotations
 
 import struct

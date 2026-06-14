@@ -20,8 +20,8 @@ from fire_engine.world.wind.gusts import GustModes, build_modes, eval_gusts
 # Shared fixtures / helpers
 # ---------------------------------------------------------------------------
 
-SEED_A = 1337   # canonical seed used throughout test_wind.py
-SEED_B = 9999   # a second distinct seed
+SEED_A = 1337  # canonical seed used throughout test_wind.py
+SEED_B = 9999  # a second distinct seed
 
 
 def _modes(seed: int = SEED_A, cfg: Config | None = None) -> GustModes:
@@ -39,6 +39,7 @@ def _grid(cells: int = 16, cell_m: float = 4.0) -> tuple[np.ndarray, np.ndarray]
 # ---------------------------------------------------------------------------
 # build_modes — GustModes dataclass structure
 # ---------------------------------------------------------------------------
+
 
 class TestBuildModesStructure:
     """Pin the shape and dtype of every array in GustModes."""
@@ -85,6 +86,7 @@ class TestBuildModesStructure:
 # build_modes — determinism
 # ---------------------------------------------------------------------------
 
+
 class TestBuildModesDeterminism:
     """Same seed → identical GustModes; different seed → different modes."""
 
@@ -92,15 +94,18 @@ class TestBuildModesDeterminism:
         a = _modes(SEED_A)
         b = _modes(SEED_A)
         for attr in ("kx", "ky", "omega", "phase0", "pux", "puy", "amp"):
-            assert np.array_equal(getattr(a, attr), getattr(b, attr)), \
+            assert np.array_equal(getattr(a, attr), getattr(b, attr)), (
                 f"{attr} differs between two calls with the same seed"
+            )
 
     def test_different_seed_different_arrays(self):
         a = _modes(SEED_A)
         b = _modes(SEED_B)
         # At least one field should differ; almost certainly all do.
-        diffs = [not np.array_equal(getattr(a, attr), getattr(b, attr))
-                 for attr in ("kx", "ky", "omega", "phase0")]
+        diffs = [
+            not np.array_equal(getattr(a, attr), getattr(b, attr))
+            for attr in ("kx", "ky", "omega", "phase0")
+        ]
         assert any(diffs), "Different seeds produced identical GustModes — suspect RNG"
 
     def test_default_config_world_seed_is_canonical(self):
@@ -111,6 +116,7 @@ class TestBuildModesDeterminism:
 # ---------------------------------------------------------------------------
 # eval_gusts — output shape
 # ---------------------------------------------------------------------------
+
 
 class TestEvalGustsShape:
     """Output arrays have the same shape as the input X, Y grids."""
@@ -124,9 +130,9 @@ class TestEvalGustsShape:
 
     def test_rectangular_grid_shape(self):
         modes = _modes()
-        xs = np.arange(0.0, 32.0, 4.0)   # 8 points
-        ys = np.arange(0.0, 64.0, 4.0)   # 16 points
-        X, Y = np.meshgrid(xs, ys, indexing="ij")   # (8, 16)
+        xs = np.arange(0.0, 32.0, 4.0)  # 8 points
+        ys = np.arange(0.0, 64.0, 4.0)  # 16 points
+        X, Y = np.meshgrid(xs, ys, indexing="ij")  # (8, 16)
         gx, gy = eval_gusts(modes, X, Y, t_eff=1.0, mean=(0.0, 0.0))
         assert gx.shape == (8, 16)
         assert gy.shape == (8, 16)
@@ -150,14 +156,14 @@ class TestEvalGustsShape:
     def test_scalar_positions(self):
         """Single position (0-d-broadcastable) must not crash and return scalar."""
         modes = _modes()
-        gx, gy = eval_gusts(modes, np.float32(0.0), np.float32(0.0),
-                             t_eff=0.0, mean=(0.0, 0.0))
+        gx, gy = eval_gusts(modes, np.float32(0.0), np.float32(0.0), t_eff=0.0, mean=(0.0, 0.0))
         assert np.ndim(gx) == 0 or gx.shape == ()
 
 
 # ---------------------------------------------------------------------------
 # eval_gusts — finite / magnitude sanity
 # ---------------------------------------------------------------------------
+
 
 class TestEvalGustsFinite:
     """Pin that eval_gusts never produces NaN/Inf and stays in a sane range."""
@@ -193,6 +199,7 @@ class TestEvalGustsFinite:
 # eval_gusts — determinism (same inputs → identical outputs)
 # ---------------------------------------------------------------------------
 
+
 class TestEvalGustsDeterminism:
     """eval_gusts is a pure function: same modes + time + positions → bit-equal."""
 
@@ -212,13 +219,15 @@ class TestEvalGustsDeterminism:
         # Now set a different world seed — modes object is already frozen.
         set_world_seed(SEED_B)
         gx2, _ = eval_gusts(modes, X, Y, t_eff=10.0, mean=(2.0, 0.0))
-        assert np.array_equal(gx1, gx2), \
+        assert np.array_equal(gx1, gx2), (
             "eval_gusts result changed after re-seeding — modes not truly frozen"
+        )
 
 
 # ---------------------------------------------------------------------------
 # eval_gusts — time evolution
 # ---------------------------------------------------------------------------
+
 
 class TestEvalGustsTimeEvolution:
     """Field must animate: different times → different values; small dt → small change."""
@@ -243,8 +252,9 @@ class TestEvalGustsTimeEvolution:
         max_delta = float(np.abs(gx1 - gx0).max())
         # Pin current behaviour: frame-to-frame delta stays well below 0.2
         # (dimensionless gust shape).  Fails if omega or amp becomes absurd.
-        assert max_delta < 0.2, \
+        assert max_delta < 0.2, (
             f"frame-to-frame gust delta {max_delta:.4f} too large — continuity suspect"
+        )
 
     def test_large_dt_differs_meaningfully(self):
         """Over a long time (10 s), the field should change appreciably."""
@@ -252,13 +262,15 @@ class TestEvalGustsTimeEvolution:
         X, Y = _grid(32, 4.0)
         gx0, _ = eval_gusts(modes, X, Y, t_eff=0.0, mean=(3.0, 0.0))
         gx1, _ = eval_gusts(modes, X, Y, t_eff=10.0, mean=(3.0, 0.0))
-        assert not np.allclose(gx0, gx1, atol=1e-3), \
+        assert not np.allclose(gx0, gx1, atol=1e-3), (
             "gust field barely changed over 10 s — omega or advection suspect"
+        )
 
 
 # ---------------------------------------------------------------------------
 # eval_gusts — spatial determinism (same position same time → same value)
 # ---------------------------------------------------------------------------
+
 
 class TestEvalGustsSpatial:
     """Evaluating at the same position twice must give bit-identical results."""
@@ -279,13 +291,15 @@ class TestEvalGustsSpatial:
         gx, _ = eval_gusts(modes, X, Y, t_eff=0.0, mean=(3.0, 1.0))
         diffs = np.abs(np.diff(gx, axis=0))
         max_jump = float(diffs.max())
-        assert max_jump < 0.5, \
+        assert max_jump < 0.5, (
             f"spatial jump {max_jump:.4f} between adjacent cells — aliasing suspect"
+        )
 
 
 # ---------------------------------------------------------------------------
 # eval_gusts — advection
 # ---------------------------------------------------------------------------
+
 
 class TestEvalGustsAdvection:
     """The advection term must visibly shift the pattern downwind over time."""
@@ -298,7 +312,7 @@ class TestEvalGustsAdvection:
         single = GustModes(
             kx=np.array([k], np.float32),
             ky=np.array([0.0], np.float32),
-            omega=np.array([0.0], np.float32),   # no intrinsic pulsing
+            omega=np.array([0.0], np.float32),  # no intrinsic pulsing
             phase0=np.array([0.0], np.float32),
             pux=np.array([1.0], np.float32),
             puy=np.array([0.0], np.float32),
@@ -319,9 +333,10 @@ class TestEvalGustsAdvection:
         lags = np.arange(-len(g0) + 1, len(g0))
         win = np.abs(lags * spacing) <= wavelength * 0.5
         peak_m = lags[win][np.argmax(corr[win])] * spacing
-        expected_m = mean[0] * dt   # 18 m
-        assert peak_m == pytest.approx(expected_m, abs=1.5), \
+        expected_m = mean[0] * dt  # 18 m
+        assert peak_m == pytest.approx(expected_m, abs=1.5), (
             f"advection peak at {peak_m:.1f} m, expected {expected_m:.1f} m"
+        )
 
     def test_zero_mean_no_advection_shift(self):
         """With mean=(0,0) the only time variation comes from omega (intrinsic
@@ -339,6 +354,7 @@ class TestEvalGustsAdvection:
         modes = _modes()
         X, Y = _grid(16, 4.0)
         gx_calm, _ = eval_gusts(modes, X, Y, t_eff=20.0, mean=(0.0, 0.0))
-        gx_wind,  _ = eval_gusts(modes, X, Y, t_eff=20.0, mean=(8.0, 0.0))
-        assert not np.array_equal(gx_calm, gx_wind), \
+        gx_wind, _ = eval_gusts(modes, X, Y, t_eff=20.0, mean=(8.0, 0.0))
+        assert not np.array_equal(gx_calm, gx_wind), (
             "mean wind had no effect on gust field — advection term may be broken"
+        )

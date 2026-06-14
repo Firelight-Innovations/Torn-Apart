@@ -86,10 +86,10 @@ _log = get_logger("world.lightning")
 _SPEED_OF_SOUND_MS: float = 343.0
 
 #: Bolt envelope phase durations (seconds, real time).
-_LEADER_S: float = 0.16          # flickering leader reveals the channel top-down
-_RETURN_S: float = 0.10          # bright return stroke
-_AFTERGLOW_S: float = 0.45       # fading afterglow after the return stroke
-_RESTRIKE_GAP_S: float = 0.09    # spacing of seeded restrike pulses
+_LEADER_S: float = 0.16  # flickering leader reveals the channel top-down
+_RETURN_S: float = 0.10  # bright return stroke
+_AFTERGLOW_S: float = 0.45  # fading afterglow after the return stroke
+_RESTRIKE_GAP_S: float = 0.09  # spacing of seeded restrike pulses
 
 #: HDR brightness of each phase (multiplies the per-segment brightness).
 _LEADER_FLASH: float = 1.2
@@ -100,13 +100,13 @@ _RESTRIKE_FLASH: float = 3.0
 _SKY_FLASH_PEAK: float = 0.9
 
 #: Transient scene-light tuning.
-_LIGHT_COLOR: tuple[float, float, float] = (0.80, 0.86, 1.0)   # cool white-blue
+_LIGHT_COLOR: tuple[float, float, float] = (0.80, 0.86, 1.0)  # cool white-blue
 _LIGHT_INTENSITY: float = 40.0
 _LIGHT_RADIUS_M: float = 260.0
 _LIGHT_TTL_S: float = 0.30
 
 #: Ribbon look.
-_WIDTH_SCALE_M: float = 0.35     # base ribbon half-width (m) before per-seg width
+_WIDTH_SCALE_M: float = 0.35  # base ribbon half-width (m) before per-seg width
 _CORE_COLOR: tuple[float, float, float] = (0.92, 0.95, 1.0)
 _GLOW_COLOR: tuple[float, float, float] = (0.45, 0.60, 1.0)
 
@@ -142,8 +142,8 @@ class _Bolt:
         self.age_s: float = 0.0
         self.life_s: float = 0.0
         self.intensity: float = 0.0
-        self.channel_len: float = 1.0       # max alongT span (for reveal speed)
-        self.restrikes: list[float] = []    # seeded restrike pulse times (s)
+        self.channel_len: float = 1.0  # max alongT span (for reveal speed)
+        self.restrikes: list[float] = []  # seeded restrike pulse times (s)
 
 
 class LightningRendererComponent(Component):
@@ -173,9 +173,14 @@ class LightningRendererComponent(Component):
     Units: meters, seconds.  World-space Z-up.
     """
 
-    def __init__(self, base: Any = None, sky_system: Any = None,
-                 chunk_provider: Any = None, lighting_pipeline: Any = None,
-                 bus: Any = None) -> None:
+    def __init__(
+        self,
+        base: Any = None,
+        sky_system: Any = None,
+        chunk_provider: Any = None,
+        lighting_pipeline: Any = None,
+        bus: Any = None,
+    ) -> None:
         super().__init__()
         self.base = base
         self.sky_system = sky_system
@@ -209,21 +214,27 @@ class LightningRendererComponent(Component):
             return
         cfg = self.base._config
         if not bool(getattr(cfg, "gfx_lightning_bolts", False)):
-            _log.info("Lightning bolts disabled (gfx_lightning_bolts=false) — "
-                      "the strike schedule + thunder still run headless")
+            _log.info(
+                "Lightning bolts disabled (gfx_lightning_bolts=false) — "
+                "the strike schedule + thunder still run headless"
+            )
             self.enabled = False
             return
         if self.lighting_pipeline is None:
-            _log.warning("LightningRendererComponent: GPU lighting pipeline "
-                         "required (lighting_backend=\"gpu\") — disabled")
+            _log.warning(
+                "LightningRendererComponent: GPU lighting pipeline "
+                'required (lighting_backend="gpu") — disabled'
+            )
             self.enabled = False
             return
 
         # Bolt nodes parent under terrain_root so u_cam_pos is inherited.
         self._root = self.base.terrain_root.attach_new_node("lightning_root")
-        self._shader = Shader.make(Shader.SL_GLSL,
-                                   vertex=lightning_shaders.LIGHTNING_VERTEX,
-                                   fragment=lightning_shaders.LIGHTNING_FRAGMENT)
+        self._shader = Shader.make(
+            Shader.SL_GLSL,
+            vertex=lightning_shaders.LIGHTNING_VERTEX,
+            fragment=lightning_shaders.LIGHTNING_FRAGMENT,
+        )
         self._fmt = _bolt_vertex_format()
 
         for i in range(_POOL_SIZE):
@@ -237,16 +248,18 @@ class LightningRendererComponent(Component):
             node.set_shader_input("u_glow_color", LVecBase3f(*_GLOW_COLOR))
             # Additive HDR emissive, depth-test on / write off (order-independent).
             node.set_transparency(TransparencyAttrib.M_none)
-            node.set_attrib(ColorBlendAttrib.make(
-                ColorBlendAttrib.M_add,
-                ColorBlendAttrib.O_incoming_alpha,
-                ColorBlendAttrib.O_one))
+            node.set_attrib(
+                ColorBlendAttrib.make(
+                    ColorBlendAttrib.M_add,
+                    ColorBlendAttrib.O_incoming_alpha,
+                    ColorBlendAttrib.O_one,
+                )
+            )
             node.set_depth_write(False)
             node.set_bin("fixed", 0)
             node.set_two_sided(True)
             big = 1.0e9
-            geom_node.set_bounds(BoundingBox(LPoint3(-big, -big, -big),
-                                             LPoint3(big, big, big)))
+            geom_node.set_bounds(BoundingBox(LPoint3(-big, -big, -big), LPoint3(big, big, big)))
             geom_node.set_final(True)
             self._pool.append(_Bolt(node))
 
@@ -262,9 +275,13 @@ class LightningRendererComponent(Component):
             self.bus.subscribe(ChunkLoadedEvent, self._on_chunk_loaded)
             self.bus.subscribe(TerrainEditedEvent, self._on_terrain_edited)
 
-        _log.info("Lightning online: %d-bolt pool, cover %dx%d @ %.1f m cells",
-                  _POOL_SIZE, self._cover.cells, self._cover.cells,
-                  self._cover.cell_m)
+        _log.info(
+            "Lightning online: %d-bolt pool, cover %dx%d @ %.1f m cells",
+            _POOL_SIZE,
+            self._cover.cells,
+            self._cover.cells,
+            self._cover.cell_m,
+        )
 
     def late_update(self, dt: float) -> None:
         """Advance every active bolt's envelope and the sky flash pulse."""
@@ -327,16 +344,17 @@ class LightningRendererComponent(Component):
         if self.bus is not None:
             cam = self._camera_pos()
             dist = math.dist(cam, (gx, gy, ground_z))
-            self.bus.publish_deferred(ThunderEvent(
-                pos=(float(event.pos[0]), float(event.pos[1]), float(event.pos[2])),
-                distance_m=float(dist),
-                delay_s=float(dist) / _SPEED_OF_SOUND_MS,
-                time_abs=float(event.time_abs),
-                intensity=float(event.intensity),
-            ))
+            self.bus.publish_deferred(
+                ThunderEvent(
+                    pos=(float(event.pos[0]), float(event.pos[1]), float(event.pos[2])),
+                    distance_m=float(dist),
+                    delay_s=float(dist) / _SPEED_OF_SOUND_MS,
+                    time_abs=float(event.time_abs),
+                    intensity=float(event.intensity),
+                )
+            )
 
-    def _upload_bolt(self, bolt: _Bolt, geom: Any, intensity: float,
-                     seed: int) -> None:
+    def _upload_bolt(self, bolt: _Bolt, geom: Any, intensity: float, seed: int) -> None:
         """Build the ribbon quad soup for a bolt geometry and ignite the node."""
         n = len(geom)
         vdata = GeomVertexData("bolt", self._fmt, Geom.UH_dynamic)
@@ -356,7 +374,7 @@ class LightningRendererComponent(Component):
         z_top = float(max(a[:, 2].max(), b[:, 2].max()))
         z_bot = float(min(a[:, 2].min(), b[:, 2].min()))
         z_span = max(z_top - z_bot, 1e-3)
-        along = (z_top - a[:, 2]) / z_span      # (N,) 0 at top → 1 at bottom
+        along = (z_top - a[:, 2]) / z_span  # (N,) 0 at top → 1 at bottom
 
         tris = GeomTriangles(Geom.UH_dynamic)
         for i in range(n):
@@ -369,7 +387,7 @@ class LightningRendererComponent(Component):
             # smoothly along its length.
             t1 = float((z_top - b[i, 2]) / z_span)
             # 4 verts: (a,side-1)(a,side+1)(b,side+1)(b,side-1).
-            for (px, py, pz, ox, oy, oz, side, t) in (
+            for px, py, pz, ox, oy, oz, side, t in (
                 (ax, ay, az, bx, by, bz, -1.0, t0),
                 (ax, ay, az, bx, by, bz, +1.0, t0),
                 (bx, by, bz, ax, ay, az, +1.0, t1),
@@ -388,8 +406,7 @@ class LightningRendererComponent(Component):
         gn.remove_all_geoms()
         gn.add_geom(geom_obj)
         big = 1.0e9
-        gn.set_bounds(BoundingBox(LPoint3(-big, -big, -big),
-                                  LPoint3(big, big, big)))
+        gn.set_bounds(BoundingBox(LPoint3(-big, -big, -big), LPoint3(big, big, big)))
         gn.set_final(True)
 
         bolt.active = True
@@ -399,8 +416,9 @@ class LightningRendererComponent(Component):
         bolt.channel_len = 1.0
         # One or two seeded restrikes during the afterglow.
         from fire_engine.core.rng import for_domain
+
         rng = for_domain("weather", "bolt", int(seed), "restrike")
-        n_re = int(rng.integers(1, 3))          # 1 or 2
+        n_re = int(rng.integers(1, 3))  # 1 or 2
         t_re = _LEADER_S + _RETURN_S
         bolt.restrikes = []
         for _ in range(n_re):
@@ -408,8 +426,7 @@ class LightningRendererComponent(Component):
             if t_re < bolt.life_s:
                 bolt.restrikes.append(t_re)
         bolt.node.show()
-        bolt.node.set_shader_input("u_width_scale",
-                                   _WIDTH_SCALE_M * (0.7 + 0.6 * intensity))
+        bolt.node.set_shader_input("u_width_scale", _WIDTH_SCALE_M * (0.7 + 0.6 * intensity))
 
     # ------------------------------------------------------------------
     # Envelope animation
@@ -455,29 +472,32 @@ class LightningRendererComponent(Component):
         _, flash = self._envelope(bolt)
         # Normalise the bolt flash (peak ~_RETURN_FLASH) to the sky pulse range,
         # scaled by the strike intensity.
-        return min(_SKY_FLASH_PEAK,
-                   _SKY_FLASH_PEAK * (flash / _RETURN_FLASH) * (0.5 + bolt.intensity))
+        return min(
+            _SKY_FLASH_PEAK, _SKY_FLASH_PEAK * (flash / _RETURN_FLASH) * (0.5 + bolt.intensity)
+        )
 
     # ------------------------------------------------------------------
     # Scene flash light
     # ------------------------------------------------------------------
 
-    def _add_flash_light(self, pos: tuple[float, float, float],
-                         intensity: float) -> None:
+    def _add_flash_light(self, pos: tuple[float, float, float], intensity: float) -> None:
         """Register a short-lived PointLight at the strike (fades via ttl_s)."""
         lights = getattr(self.lighting_pipeline, "lights", None)
         if lights is None:
             return
         from fire_engine.lighting.lights import PointLight
+
         # Lift the light a little above the strike point so it isn't buried.
         lit_pos = (float(pos[0]), float(pos[1]), float(pos[2]) + 6.0)
-        lights.add(PointLight(
-            position=lit_pos,
-            color=_LIGHT_COLOR,
-            intensity=_LIGHT_INTENSITY * (0.6 + 0.6 * intensity),
-            radius=_LIGHT_RADIUS_M,
-            ttl_s=_LIGHT_TTL_S,
-        ))
+        lights.add(
+            PointLight(
+                position=lit_pos,
+                color=_LIGHT_COLOR,
+                intensity=_LIGHT_INTENSITY * (0.6 + 0.6 * intensity),
+                radius=_LIGHT_RADIUS_M,
+                ttl_s=_LIGHT_TTL_S,
+            )
+        )
 
     # ------------------------------------------------------------------
     # Cover heightmap (roof-aware strike Z)
@@ -492,11 +512,16 @@ class LightningRendererComponent(Component):
         ox, oy = cover.origin_m
         cx_center = ox + 0.5 * cover.span_m
         cy_center = oy + 0.5 * cover.span_m
-        if (not self._cover_committed
-                or abs(cam[0] - cx_center) > self._recenter_threshold_m
-                or abs(cam[1] - cy_center) > self._recenter_threshold_m):
-            chunks = getattr(self.chunk_provider, "chunks", {}) \
-                if self.chunk_provider is not None else {}
+        if (
+            not self._cover_committed
+            or abs(cam[0] - cx_center) > self._recenter_threshold_m
+            or abs(cam[1] - cy_center) > self._recenter_threshold_m
+        ):
+            chunks = (
+                getattr(self.chunk_provider, "chunks", {})
+                if self.chunk_provider is not None
+                else {}
+            )
             cover.recenter((cam[0], cam[1]))
             cover.rebuild_all(chunks)
             self._cover_committed = True
@@ -504,6 +529,7 @@ class LightningRendererComponent(Component):
     def _cover_z(self, x: float, y: float) -> float | None:
         """World Z (m) of the cover at world XY, or None if outside / unknown."""
         from fire_engine.world.terrain.rain_cover import OPEN_SKY_Z
+
         cover = self._cover
         if cover is None or not self._cover_committed:
             return None
@@ -512,7 +538,7 @@ class LightningRendererComponent(Component):
         row = int(math.floor((y - oy) / cover.cell_m))
         if 0 <= col < cover.cells and 0 <= row < cover.cells:
             z = float(cover.height[row, col])
-            if z > OPEN_SKY_Z * 0.5:        # a real solid voxel (not the sentinel)
+            if z > OPEN_SKY_Z * 0.5:  # a real solid voxel (not the sentinel)
                 return z
         return None
 

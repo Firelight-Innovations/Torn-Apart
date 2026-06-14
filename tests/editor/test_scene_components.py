@@ -5,6 +5,7 @@ graph: ``kind`` seeds default components, the inspector edits them via
 add/remove/set, old (pre-component) saves migrate forward, and a Light
 component's authored params reach the game's visual factory.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -134,25 +135,45 @@ class TestStoreComponents:
 class TestMigration:
     def test_from_dict_synthesises_components_when_absent(self):
         # A pre-component object dict (no "components" key).
-        old = {"id": 7, "name": "Old Light", "kind": "light",
-               "parent": None, "position": [1, 2, 3],
-               "rotation": [1, 0, 0, 0], "scale": [1, 1, 1]}
+        old = {
+            "id": 7,
+            "name": "Old Light",
+            "kind": "light",
+            "parent": None,
+            "position": [1, 2, 3],
+            "rotation": [1, 0, 0, 0],
+            "scale": [1, 1, 1],
+        }
         obj = SceneObject.from_dict(old)
         assert [c["type"] for c in obj.components] == ["Light"]
 
     def test_from_dict_keeps_explicit_empty_components(self):
         # An explicit empty list is NOT the same as "absent" — keep it empty.
-        d = {"id": 1, "name": "Bare", "kind": "cube", "parent": None,
-             "position": [0, 0, 0], "rotation": [1, 0, 0, 0], "scale": [1, 1, 1],
-             "components": []}
+        d = {
+            "id": 1,
+            "name": "Bare",
+            "kind": "cube",
+            "parent": None,
+            "position": [0, 0, 0],
+            "rotation": [1, 0, 0, 0],
+            "scale": [1, 1, 1],
+            "components": [],
+        }
         assert SceneObject.from_dict(d).components == []
 
     def test_apply_delta_migrates_old_save(self):
         old_delta = {
-            "objects": [{
-                "id": 1, "name": "Crate", "kind": "cube", "parent": None,
-                "position": [0, 0, 0], "rotation": [1, 0, 0, 0], "scale": [1, 1, 1],
-            }],
+            "objects": [
+                {
+                    "id": 1,
+                    "name": "Crate",
+                    "kind": "cube",
+                    "parent": None,
+                    "position": [0, 0, 0],
+                    "rotation": [1, 0, 0, 0],
+                    "scale": [1, 1, 1],
+                }
+            ],
             "next_id": 2,
         }
         s = SceneObjectStore()
@@ -202,7 +223,8 @@ class TestComponentService:
             lt = (await d.scene.create({"kind": "light"}))["object"]
             for v in (4.0, 8.0, 12.0):
                 await d.scene.set_component(
-                    {"id": lt["id"], "index": 0, "params": {"intensity": v}})
+                    {"id": lt["id"], "index": 0, "params": {"intensity": v}}
+                )
             assert _obj(store, lt["id"])["components"][0]["params"]["intensity"] == 12.0
 
             # One undo reverts the whole slider drag to the create default.
@@ -266,10 +288,17 @@ class TestRuntimeComponents:
 
         ComponentRegistry.clear()
         old_delta = {
-            "objects": [{
-                "id": 1, "name": "Crate", "kind": "cube", "parent": None,
-                "position": [0, 0, 0], "rotation": [1, 0, 0, 0], "scale": [1, 1, 1],
-            }],
+            "objects": [
+                {
+                    "id": 1,
+                    "name": "Crate",
+                    "kind": "cube",
+                    "parent": None,
+                    "position": [0, 0, 0],
+                    "rotation": [1, 0, 0, 0],
+                    "scale": [1, 1, 1],
+                }
+            ],
             "next_id": 2,
         }
         factory = _RecordingFactory()

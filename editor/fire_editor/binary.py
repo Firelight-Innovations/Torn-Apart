@@ -18,6 +18,7 @@ Example::
     schema_id, payload_id, payload = decode_frame(frame)
     assert schema_id == SchemaId.TEXTURE and payload_id == 7
 """
+
 from __future__ import annotations
 
 import struct
@@ -60,9 +61,7 @@ def decode_frame(data: bytes) -> tuple[int, int, bytes]:
         BinaryFrameError: If shorter than the header or the magic is wrong.
     """
     if len(data) < BINARY_HEADER_SIZE:
-        raise BinaryFrameError(
-            f"frame too short: {len(data)} < header {BINARY_HEADER_SIZE}"
-        )
+        raise BinaryFrameError(f"frame too short: {len(data)} < header {BINARY_HEADER_SIZE}")
     magic, schema_id, payload_id = _HEADER.unpack_from(data, 0)
     if magic != BINARY_MAGIC:
         raise BinaryFrameError(f"bad magic 0x{magic:08X}, expected 0x{BINARY_MAGIC:08X}")

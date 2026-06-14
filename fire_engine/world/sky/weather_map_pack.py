@@ -108,14 +108,13 @@ def pack_weather_map(raster: np.ndarray) -> bytes:
     """
     arr = np.asarray(raster)
     if arr.ndim != 3 or arr.shape[2] != 4 or arr.shape[0] != arr.shape[1]:
-        raise ValueError(
-            f"raster must be (N, N, 4); got {arr.shape}")
+        raise ValueError(f"raster must be (N, N, 4); got {arr.shape}")
 
     # Logical RGBA per texel: R=coverage, G=density, B=precip, A=fog.  Swap to
     # BGRA (the F_rgba16 data-texture quirk) — the raster is already row-major
     # (row=Y, col=X), so NO transpose (cf. pack_wind_field, which transposes its
     # [x, y] field).  Panda3D un-swizzles BGRA→RGBA on sample, so the shader
     # reads texture(...).rgba == (coverage, density, precip, fog).
-    bgra = arr[..., [2, 1, 0, 3]]                          # B, G, R, A
-    data = np.ascontiguousarray(bgra.astype(np.float16))   # (Y, X, 4) fp16
+    bgra = arr[..., [2, 1, 0, 3]]  # B, G, R, A
+    data = np.ascontiguousarray(bgra.astype(np.float16))  # (Y, X, 4) fp16
     return data.tobytes()

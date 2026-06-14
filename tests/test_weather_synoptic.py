@@ -36,6 +36,7 @@ def _make_syn(seed: int = 1337, **overrides) -> Synoptic:
 # Determinism
 # ---------------------------------------------------------------------------
 
+
 class TestDeterminism:
     def test_same_seed_identical_flow(self):
         t = np.linspace(0.0, 10.0 * DAY, 5000)
@@ -64,11 +65,12 @@ class TestDeterminism:
 # Speed band + smooth drift
 # ---------------------------------------------------------------------------
 
+
 class TestBandAndSmoothness:
     def test_speed_within_configured_band(self):
         syn = _make_syn()
         cfg = Config()
-        t = np.linspace(0.0, 30.0 * DAY, 30 * 24 * 60)      # 1 game-min steps
+        t = np.linspace(0.0, 30.0 * DAY, 30 * 24 * 60)  # 1 game-min steps
         speed = np.linalg.norm(syn.wind_vec(t), axis=1)
         assert speed.min() >= cfg.weather_synoptic_speed_min_ms - 1e-9
         assert speed.max() <= cfg.weather_synoptic_speed_max_ms + 1e-9
@@ -76,7 +78,7 @@ class TestBandAndSmoothness:
     def test_direction_actually_drifts(self):
         # The whole point: direction must move over hours (not a constant).
         syn = _make_syn()
-        t = np.linspace(0.0, 3.0 * DAY, 3 * 24 * 12)        # 5-min steps
+        t = np.linspace(0.0, 3.0 * DAY, 3 * 24 * 12)  # 5-min steps
         w = syn.wind_vec(t)
         ang = np.arctan2(w[:, 1], w[:, 0])
         swing = np.ptp(np.unwrap(ang))
@@ -97,12 +99,13 @@ class TestBandAndSmoothness:
         syn = _make_syn()
         t = np.linspace(0.0, 10.0 * DAY, 10 * 24 * 60)
         speed = np.linalg.norm(syn.wind_vec(t), axis=1)
-        assert np.abs(np.diff(speed)).max() < 0.5            # m/s per game min
+        assert np.abs(np.diff(speed)).max() < 0.5  # m/s per game min
 
 
 # ---------------------------------------------------------------------------
 # D(t) is the exact integral of W(t)
 # ---------------------------------------------------------------------------
+
 
 class TestDisplacementConsistency:
     def test_displacement_zero_at_origin(self):
@@ -111,7 +114,7 @@ class TestDisplacementConsistency:
 
     def test_dDdt_equals_wind(self):
         syn = _make_syn()
-        h = 1.0                                              # game seconds
+        h = 1.0  # game seconds
         for t in [0.0, 3600.0, DAY * 2 + 4321.0, DAY * 9.7]:
             fd = (syn.displacement(t + h) - syn.displacement(t - h)) / (2.0 * h)
             np.testing.assert_allclose(fd, syn.wind_vec(t), atol=1e-4)
@@ -128,6 +131,7 @@ class TestDisplacementConsistency:
 # ---------------------------------------------------------------------------
 # WeatherSystem integration
 # ---------------------------------------------------------------------------
+
 
 class TestSkyIntegration:
     def _make_ws(self, seed: int = 1337) -> WeatherSystem:
@@ -159,8 +163,7 @@ class TestSkyIntegration:
         p1 = ws.update(1, DAY - 30.0)
         p2 = ws.update(2, 30.0)
         d_ang = abs(
-            math.atan2(p1.wind_dir[1], p1.wind_dir[0])
-            - math.atan2(p2.wind_dir[1], p2.wind_dir[0])
+            math.atan2(p1.wind_dir[1], p1.wind_dir[0]) - math.atan2(p2.wind_dir[1], p2.wind_dir[0])
         )
         d_ang = min(d_ang, 2.0 * math.pi - d_ang)
         assert d_ang < math.radians(2.0)
@@ -177,11 +180,14 @@ class TestSkyIntegration:
 # Config validation
 # ---------------------------------------------------------------------------
 
+
 class TestConfig:
     def test_invalid_band_raises(self):
         set_world_seed(0)
         with pytest.raises(ValueError):
-            Synoptic(Config(
-                weather_synoptic_speed_min_ms=5.0,
-                weather_synoptic_speed_max_ms=3.0,
-            ))
+            Synoptic(
+                Config(
+                    weather_synoptic_speed_min_ms=5.0,
+                    weather_synoptic_speed_max_ms=3.0,
+                )
+            )

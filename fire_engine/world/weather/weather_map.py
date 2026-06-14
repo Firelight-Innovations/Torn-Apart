@@ -68,9 +68,8 @@ class WeatherMap:
         self.span_m: float = self.cells * self.cell_m
         # Precomputed per-axis texel-center offsets from the region's min corner.
         self._offsets: np.ndarray = (
-            (np.arange(self.cells, dtype=np.float64) + 0.5) * self.cell_m
-            - 0.5 * self.span_m
-        )                                                          # (N,)
+            np.arange(self.cells, dtype=np.float64) + 0.5
+        ) * self.cell_m - 0.5 * self.span_m  # (N,)
 
     def texel_centers(self, center_xy: tuple[float, float]) -> np.ndarray:
         """
@@ -82,10 +81,10 @@ class WeatherMap:
         order, so reshaping a result back to ``(cells, cells)`` matches
         :meth:`rasterize`'s layout.
         """
-        xs = center_xy[0] + self._offsets                          # (N,) along X
-        ys = center_xy[1] + self._offsets                          # (N,) along Y
-        gx, gy = np.meshgrid(xs, ys)                # (N, N): gx[row,col]=xs[col]
-        return np.stack([gx.ravel(), gy.ravel()], axis=1)          # (N*N, 2)
+        xs = center_xy[0] + self._offsets  # (N,) along X
+        ys = center_xy[1] + self._offsets  # (N,) along Y
+        gx, gy = np.meshgrid(xs, ys)  # (N, N): gx[row,col]=xs[col]
+        return np.stack([gx.ravel(), gy.ravel()], axis=1)  # (N*N, 2)
 
     def rasterize(
         self,
@@ -110,5 +109,5 @@ class WeatherMap:
         """
         pts = self.texel_centers(center_xy)
         cov, den, rain, fog, _ = system.sample_fields(pts, t_abs)
-        out = np.stack([cov, den, rain, fog], axis=1)              # (N*N, 4)
+        out = np.stack([cov, den, rain, fog], axis=1)  # (N*N, 4)
         return out.reshape(self.cells, self.cells, 4).astype(np.float32)

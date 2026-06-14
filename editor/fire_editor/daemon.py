@@ -8,6 +8,7 @@ the VS Code / Cursor extension.
 Phase E0 wires the transport and handshake. Later phases register service
 methods (chunks, scene, edit, texture, model) onto the same dispatcher.
 """
+
 from __future__ import annotations
 
 import logging
@@ -73,6 +74,9 @@ class Daemon:
         bound = await self.server.start(port)
         # Machine-readable readiness line on stdout (the extension parses this).
         print(f'{{"event":"listening","port":{bound}}}', flush=True)
-        log.info("fire_editor daemon ready (engine=%s, protocol=%d)",
-                 fire_engine.__version__, PROTOCOL_VERSION)
+        log.info(
+            "fire_editor daemon ready (engine=%s, protocol=%d)",
+            fire_engine.__version__,
+            PROTOCOL_VERSION,
+        )
         await self.server._server.wait_closed()  # type: ignore[union-attr]

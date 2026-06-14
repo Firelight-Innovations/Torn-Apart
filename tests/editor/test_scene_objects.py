@@ -1,4 +1,5 @@
 """SceneObjectStore — hierarchy ops, determinism, and save round-trip."""
+
 from __future__ import annotations
 
 import pytest
@@ -45,9 +46,9 @@ def test_tree_is_depth_first_roots_first():
 def test_reparent_rejects_self_and_cycles():
     s, root, cube, child = _build()
     with pytest.raises(SceneError):
-        s.reparent(root["id"], root["id"])           # self-parent
+        s.reparent(root["id"], root["id"])  # self-parent
     with pytest.raises(SceneError):
-        s.reparent(root["id"], child["id"])          # parent under own descendant
+        s.reparent(root["id"], child["id"])  # parent under own descendant
     # Promoting to a root is allowed.
     assert s.reparent(child["id"], None)["parent"] is None
 

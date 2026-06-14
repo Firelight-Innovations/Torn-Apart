@@ -333,8 +333,7 @@ class Wall:
         if self.kind is WallKind.SEGMENT:
             return np.array([self.a, self.b], dtype=np.float64)
         (cx, cy), radius, start, sweep = self.arc_params()
-        n = max(1, math.ceil(abs(sweep) / (math.pi / 2.0))
-                * int(arc_segments_per_quarter))
+        n = max(1, math.ceil(abs(sweep) / (math.pi / 2.0)) * int(arc_segments_per_quarter))
         theta = np.linspace(start, start + sweep, n + 1)
         pts = np.empty((n + 1, 2), dtype=np.float64)
         pts[:, 0] = cx + radius * np.cos(theta)
@@ -514,8 +513,7 @@ class Foundation:
     @classmethod
     def from_dict(cls, d: dict) -> "Foundation":
         """Inverse of :meth:`to_dict`."""
-        return cls(polygon=np.array(d["polygon"], dtype=np.float64),
-                   depth_m=float(d["depth_m"]))
+        return cls(polygon=np.array(d["polygon"], dtype=np.float64), depth_m=float(d["depth_m"]))
 
 
 @dataclass
@@ -540,8 +538,9 @@ class RoofSlab:
     @classmethod
     def from_dict(cls, d: dict) -> "RoofSlab":
         """Inverse of :meth:`to_dict`."""
-        return cls(polygon=np.array(d["polygon"], dtype=np.float64),
-                   thickness_m=float(d["thickness_m"]))
+        return cls(
+            polygon=np.array(d["polygon"], dtype=np.float64), thickness_m=float(d["thickness_m"])
+        )
 
 
 class Storey:
@@ -570,8 +569,9 @@ class Storey:
     Opening(...)
     """
 
-    def __init__(self, building: "Building", eid: int, index: int,
-                 height_m: float, slab_m: float) -> None:
+    def __init__(
+        self, building: "Building", eid: int, index: int, height_m: float, slab_m: float
+    ) -> None:
         self._building = building
         self.id = eid
         self.index = index
@@ -619,8 +619,11 @@ class Storey:
             a=(float(a[0]), float(a[1])),
             b=(float(b[0]), float(b[1])),
             bulge=float(bulge),
-            thickness_m=(self._building.defaults.wall_thickness_m
-                         if thickness_m is None else float(thickness_m)),
+            thickness_m=(
+                self._building.defaults.wall_thickness_m
+                if thickness_m is None
+                else float(thickness_m)
+            ),
             height_m=None if height_m is None else float(height_m),
         )
         self.walls.append(wall)
@@ -670,13 +673,11 @@ class Storey:
         length = wall.length_m()
         if offset_m < 0.0 or offset_m + width_m > length + 1e-9:
             raise ValueError(
-                f"opening [{offset_m}, {offset_m + width_m}] m exceeds wall "
-                f"length {length:.3f} m")
-        band = (wall.height_m if wall.height_m is not None
-                else self.height_m - self.slab_m)
+                f"opening [{offset_m}, {offset_m + width_m}] m exceeds wall length {length:.3f} m"
+            )
+        band = wall.height_m if wall.height_m is not None else self.height_m - self.slab_m
         if head_m > band + 1e-9:
-            raise ValueError(
-                f"head_m={head_m} exceeds wall band height {band:.3f} m")
+            raise ValueError(f"head_m={head_m} exceeds wall band height {band:.3f} m")
         opening = Opening(
             id=self._building.allocate_eid(),
             kind=kind,
@@ -688,8 +689,7 @@ class Storey:
         wall.openings.append(opening)
         return opening
 
-    def add_room(self, polygon: Any, tag: str = "",
-                 meta: dict[str, Any] | None = None) -> Room:
+    def add_room(self, polygon: Any, tag: str = "", meta: dict[str, Any] | None = None) -> Room:
         """
         Explicitly declare a room region (independent of wall topology).
 
@@ -710,13 +710,19 @@ class Storey:
         x, y = poly[:, 0], poly[:, 1]
         if float(np.sum(x * np.roll(y, -1) - np.roll(x, -1) * y)) < 0.0:
             poly = poly[::-1].copy()
-        room = Room(id=self._building.allocate_eid(), polygon=poly,
-                    tag=tag, meta=dict(meta or {}), auto=False)
+        room = Room(
+            id=self._building.allocate_eid(),
+            polygon=poly,
+            tag=tag,
+            meta=dict(meta or {}),
+            auto=False,
+        )
         self.rooms.append(room)
         return room
 
-    def add_stairs(self, storey_to: int, anchor: PlanPoint,
-                   direction_rad: float, width_m: float) -> StairsStub:
+    def add_stairs(
+        self, storey_to: int, anchor: PlanPoint, direction_rad: float, width_m: float
+    ) -> StairsStub:
         """
         Reserve a stair run from this storey upward — data only in v1
         (no geometry; see :class:`StairsStub`).
@@ -732,8 +738,7 @@ class Storey:
         self.stairs.append(stub)
         return stub
 
-    def detect_rooms(self, *, snap_eps_m: float,
-                     arc_segments_per_quarter: int) -> list[Room]:
+    def detect_rooms(self, *, snap_eps_m: float, arc_segments_per_quarter: int) -> list[Room]:
         """
         Auto-detect enclosed rooms from this storey's wall topology.
 
@@ -757,13 +762,12 @@ class Storey:
         from fire_engine.buildings.rooms import detect_room_polygons
 
         polygons = detect_room_polygons(
-            self.walls, snap_eps_m=snap_eps_m,
-            arc_segments_per_quarter=arc_segments_per_quarter)
+            self.walls, snap_eps_m=snap_eps_m, arc_segments_per_quarter=arc_segments_per_quarter
+        )
         self.rooms = [r for r in self.rooms if not r.auto]
         detected: list[Room] = []
         for poly in polygons:
-            room = Room(id=self._building.allocate_eid(), polygon=poly,
-                        auto=True)
+            room = Room(id=self._building.allocate_eid(), polygon=poly, auto=True)
             self.rooms.append(room)
             detected.append(room)
         return detected
@@ -787,8 +791,13 @@ class Storey:
     @classmethod
     def from_dict(cls, building: "Building", d: dict) -> "Storey":
         """Inverse of :meth:`to_dict` (re-wires the building back-ref)."""
-        storey = cls(building, eid=int(d["id"]), index=int(d["index"]),
-                     height_m=float(d["height_m"]), slab_m=float(d["slab_m"]))
+        storey = cls(
+            building,
+            eid=int(d["id"]),
+            index=int(d["index"]),
+            height_m=float(d["height_m"]),
+            slab_m=float(d["slab_m"]),
+        )
         storey.walls = [Wall.from_dict(w) for w in d.get("walls", ())]
         storey.rooms = [Room.from_dict(r) for r in d.get("rooms", ())]
         storey.stairs = [StairsStub.from_dict(s) for s in d.get("stairs", ())]
@@ -822,9 +831,14 @@ class Building:
     See the module docstring.
     """
 
-    def __init__(self, name: str, position: Vec3, rotation: Quat,
-                 defaults: BuildingDefaults,
-                 tags: list[str] | None = None) -> None:
+    def __init__(
+        self,
+        name: str,
+        position: Vec3,
+        rotation: Quat,
+        defaults: BuildingDefaults,
+        tags: list[str] | None = None,
+    ) -> None:
         self.id: int = 0
         self.name = name
         self.position = position
@@ -855,8 +869,7 @@ class Building:
     # Authoring API
     # ------------------------------------------------------------------
 
-    def add_storey(self, height_m: float | None = None,
-                   slab_m: float | None = None) -> Storey:
+    def add_storey(self, height_m: float | None = None, slab_m: float | None = None) -> Storey:
         """
         Append a storey on top of the existing stack and return it.
 
@@ -871,16 +884,15 @@ class Building:
             self,
             eid=self.allocate_eid(),
             index=len(self.storeys),
-            height_m=(self.defaults.storey_height_m if height_m is None
-                      else float(height_m)),
-            slab_m=(self.defaults.slab_thickness_m if slab_m is None
-                    else float(slab_m)),
+            height_m=(self.defaults.storey_height_m if height_m is None else float(height_m)),
+            slab_m=(self.defaults.slab_thickness_m if slab_m is None else float(slab_m)),
         )
         self.storeys.append(storey)
         return storey
 
-    def set_foundation(self, polygon: Any | None = None,
-                       depth_m: float | None = None) -> Foundation:
+    def set_foundation(
+        self, polygon: Any | None = None, depth_m: float | None = None
+    ) -> Foundation:
         """
         Define the foundation slab (local z ``[-depth_m, 0]``).
 
@@ -894,17 +906,14 @@ class Building:
         depth_m : float | None
             Slab depth; ``None`` → ``defaults.foundation_depth_m``.
         """
-        poly = (self._auto_footprint() if polygon is None
-                else np.array(polygon, dtype=np.float64))
+        poly = self._auto_footprint() if polygon is None else np.array(polygon, dtype=np.float64)
         self.foundation = Foundation(
             polygon=poly,
-            depth_m=(self.defaults.foundation_depth_m if depth_m is None
-                     else float(depth_m)),
+            depth_m=(self.defaults.foundation_depth_m if depth_m is None else float(depth_m)),
         )
         return self.foundation
 
-    def set_roof(self, polygon: Any | None = None,
-                 thickness_m: float | None = None) -> RoofSlab:
+    def set_roof(self, polygon: Any | None = None, thickness_m: float | None = None) -> RoofSlab:
         """
         Define the flat roof slab capping the top storey.
 
@@ -916,12 +925,12 @@ class Building:
         thickness_m : float | None
             Slab thickness; ``None`` → ``defaults.slab_thickness_m``.
         """
-        poly = (self._auto_footprint() if polygon is None
-                else np.array(polygon, dtype=np.float64))
+        poly = self._auto_footprint() if polygon is None else np.array(polygon, dtype=np.float64)
         self.roof = RoofSlab(
             polygon=poly,
-            thickness_m=(self.defaults.slab_thickness_m if thickness_m is None
-                         else float(thickness_m)),
+            thickness_m=(
+                self.defaults.slab_thickness_m if thickness_m is None else float(thickness_m)
+            ),
         )
         return self.roof
 
@@ -943,8 +952,7 @@ class Building:
         """Local z of the top of the highest storey (roof slab excluded)."""
         return float(sum(s.height_m for s in self.storeys))
 
-    def world_aabb(self) -> tuple[tuple[float, float, float],
-                                  tuple[float, float, float]]:
+    def world_aabb(self) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
         """
         Conservative world-space AABB of the whole building in meters.
 
@@ -984,21 +992,19 @@ class Building:
         else:
             lo_x = lo_y = hi_x = hi_y = 0.0
         lo_z = -(self.foundation.depth_m if self.foundation else 0.0)
-        hi_z = self.total_height_m + (self.roof.thickness_m if self.roof
-                                      else 0.0)
+        hi_z = self.total_height_m + (self.roof.thickness_m if self.roof else 0.0)
         # Transform the 8 local box corners (a fixed-size loop, not per-vertex).
-        corners = [
-            (x, y, z)
-            for x in (lo_x, hi_x) for y in (lo_y, hi_y) for z in (lo_z, hi_z)
-        ]
+        corners = [(x, y, z) for x in (lo_x, hi_x) for y in (lo_y, hi_y) for z in (lo_z, hi_z)]
         world = np.array(
-            [tuple(self.position + self.rotation.rotate(Vec3(*c)))
-             for c in corners],
-            dtype=np.float64)
+            [tuple(self.position + self.rotation.rotate(Vec3(*c))) for c in corners],
+            dtype=np.float64,
+        )
         mn = world.min(axis=0)
         mx = world.max(axis=0)
-        return ((float(mn[0]), float(mn[1]), float(mn[2])),
-                (float(mx[0]), float(mx[1]), float(mx[2])))
+        return (
+            (float(mn[0]), float(mn[1]), float(mn[2])),
+            (float(mx[0]), float(mx[1]), float(mx[2])),
+        )
 
     # ------------------------------------------------------------------
     # Serialisation
@@ -1015,14 +1021,12 @@ class Building:
             "id": int(self.id),
             "name": str(self.name),
             "position": [self.position.x, self.position.y, self.position.z],
-            "rotation": [self.rotation.w, self.rotation.x,
-                         self.rotation.y, self.rotation.z],
+            "rotation": [self.rotation.w, self.rotation.x, self.rotation.y, self.rotation.z],
             "tags": list(self.tags),
             "defaults": self.defaults.to_dict(),
             "next_eid": int(self._next_eid),
             "storeys": [s.to_dict() for s in self.storeys],
-            "foundation": (None if self.foundation is None
-                           else self.foundation.to_dict()),
+            "foundation": (None if self.foundation is None else self.foundation.to_dict()),
             "roof": None if self.roof is None else self.roof.to_dict(),
         }
 
@@ -1034,14 +1038,12 @@ class Building:
         building = cls(
             name=str(d["name"]),
             position=Vec3(float(pos[0]), float(pos[1]), float(pos[2])),
-            rotation=Quat(float(rot[0]), float(rot[1]),
-                          float(rot[2]), float(rot[3])),
+            rotation=Quat(float(rot[0]), float(rot[1]), float(rot[2]), float(rot[3])),
             defaults=BuildingDefaults.from_dict(d["defaults"]),
             tags=list(d.get("tags", ())),
         )
         building.id = int(d.get("id", 0))
-        building.storeys = [Storey.from_dict(building, s)
-                            for s in d.get("storeys", ())]
+        building.storeys = [Storey.from_dict(building, s) for s in d.get("storeys", ())]
         f = d.get("foundation")
         building.foundation = None if f is None else Foundation.from_dict(f)
         r = d.get("roof")
@@ -1062,11 +1064,9 @@ class Building:
         :meth:`set_foundation` / :meth:`set_roof` instead.
         """
         if not self.storeys or not self.storeys[0].walls:
-            raise ValueError("auto footprint needs at least one wall on "
-                             "storey 0")
+            raise ValueError("auto footprint needs at least one wall on storey 0")
         walls = self.storeys[0].walls
-        xy = np.concatenate(
-            [w.tessellate(arc_segments_per_quarter=8) for w in walls], axis=0)
+        xy = np.concatenate([w.tessellate(arc_segments_per_quarter=8) for w in walls], axis=0)
         pad = max(w.thickness_m for w in walls) / 2.0
         hull = _convex_hull(xy)
         # Pad outward along each hull vertex's angle bisector (vectorized).
@@ -1085,8 +1085,7 @@ class Building:
         norm[norm < 1e-12] = 1.0
         bis /= norm
         # Scale so the *edge* offset is pad (1/cos(half-angle) factor).
-        cos_half = np.clip(np.sum(bis * n_out, axis=1, keepdims=True),
-                           0.2, 1.0)
+        cos_half = np.clip(np.sum(bis * n_out, axis=1, keepdims=True), 0.2, 1.0)
         return hull + bis * (pad / cos_half)
 
 
@@ -1102,8 +1101,7 @@ def _convex_hull(points: np.ndarray) -> np.ndarray:
         return pts.copy()
 
     def cross(o: np.ndarray, a: np.ndarray, b: np.ndarray) -> float:
-        return float((a[0] - o[0]) * (b[1] - o[1])
-                     - (a[1] - o[1]) * (b[0] - o[0]))
+        return float((a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]))
 
     lower: list[np.ndarray] = []
     for p in pts:

@@ -35,13 +35,15 @@ from fire_engine.simulation.politics import FactionDef
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 class _FakeRng:
     """Minimal stand-in for a numpy Generator so we can pass various objects."""
+
     pass
 
 
 _RNG_A = _FakeRng()
-_RNG_B = None          # also valid per current stub signature (no type check)
+_RNG_B = None  # also valid per current stub signature (no type check)
 _RNG_C = object()
 
 
@@ -49,19 +51,18 @@ _RNG_C = object()
 # 1. Package-level __all__ membership
 # ---------------------------------------------------------------------------
 
+
 class TestPackageExports:
     """Pin that each package's __all__ contains exactly the documented symbol."""
 
     def test_ai_all_contains_npcarchetype(self):
         assert "NPCArchetype" in _ai_pkg.__all__, (
-            f"fire_engine.simulation.ai.__all__ = {_ai_pkg.__all__!r} — "
-            "'NPCArchetype' is missing"
+            f"fire_engine.simulation.ai.__all__ = {_ai_pkg.__all__!r} — 'NPCArchetype' is missing"
         )
 
     def test_economy_all_contains_gooddef(self):
         assert "GoodDef" in _econ_pkg.__all__, (
-            f"fire_engine.simulation.economy.__all__ = {_econ_pkg.__all__!r} — "
-            "'GoodDef' is missing"
+            f"fire_engine.simulation.economy.__all__ = {_econ_pkg.__all__!r} — 'GoodDef' is missing"
         )
 
     def test_politics_all_contains_factiondef(self):
@@ -85,6 +86,7 @@ class TestPackageExports:
 # 2. Class instantiability — pin that all three are concrete (not abstract)
 # ---------------------------------------------------------------------------
 
+
 class TestInstantiability:
     """Pin that the stub classes can be constructed with no arguments."""
 
@@ -105,6 +107,7 @@ class TestInstantiability:
 # 3. generate() is an instance method (not classmethod / staticmethod)
 # ---------------------------------------------------------------------------
 
+
 class TestGenerateIsInstanceMethod:
     """Pin that generate is an ordinary instance method on all three classes."""
 
@@ -118,15 +121,13 @@ class TestGenerateIsInstanceMethod:
     def test_gooddef_generate_is_instance_method(self):
         raw = inspect.getattr_static(GoodDef, "generate")
         assert not isinstance(raw, (classmethod, staticmethod)), (
-            f"GoodDef.generate is currently a plain instance method; "
-            f"found {type(raw)!r} instead"
+            f"GoodDef.generate is currently a plain instance method; found {type(raw)!r} instead"
         )
 
     def test_factiondef_generate_is_instance_method(self):
         raw = inspect.getattr_static(FactionDef, "generate")
         assert not isinstance(raw, (classmethod, staticmethod)), (
-            f"FactionDef.generate is currently a plain instance method; "
-            f"found {type(raw)!r} instead"
+            f"FactionDef.generate is currently a plain instance method; found {type(raw)!r} instead"
         )
 
 
@@ -237,6 +238,7 @@ class TestGenerateRaisesNotImplementedError:
 # 5. NotImplementedError is a subclass of RuntimeError (stdlib invariant)
 # ---------------------------------------------------------------------------
 
+
 class TestNotImplementedErrorIsRuntimeError:
     """
     NotImplementedError is a subclass of RuntimeError in CPython.
@@ -267,6 +269,7 @@ class TestNotImplementedErrorIsRuntimeError:
 # 6. No extra public attributes on stub instances (pin the surface area)
 # ---------------------------------------------------------------------------
 
+
 class TestStubPublicSurface:
     """
     Pin that the only non-dunder callable on each stub instance is `generate`.
@@ -278,9 +281,7 @@ class TestStubPublicSurface:
 
     def _public_methods(self, obj) -> list[str]:
         return sorted(
-            name
-            for name in dir(obj)
-            if not name.startswith("_") and callable(getattr(obj, name))
+            name for name in dir(obj) if not name.startswith("_") and callable(getattr(obj, name))
         )
 
     def test_npcarchetype_public_methods(self):

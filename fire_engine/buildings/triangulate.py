@@ -24,8 +24,7 @@ def _signed_area(poly: np.ndarray) -> float:
     return 0.5 * float(np.sum(x * np.roll(y, -1) - np.roll(x, -1) * y))
 
 
-def _points_in_triangle(pts: np.ndarray, a: np.ndarray, b: np.ndarray,
-                        c: np.ndarray) -> np.ndarray:
+def _points_in_triangle(pts: np.ndarray, a: np.ndarray, b: np.ndarray, c: np.ndarray) -> np.ndarray:
     """Boolean mask of which ``pts`` lie strictly inside CCW triangle a,b,c."""
     if pts.shape[0] == 0:
         return np.zeros(0, dtype=bool)
@@ -64,7 +63,7 @@ def triangulate_polygon(polygon: np.ndarray) -> np.ndarray:
         order = list(range(n))
 
     tris: list[tuple[int, int, int]] = []
-    idx = order[:]                       # remaining vertex indices (CCW)
+    idx = order[:]  # remaining vertex indices (CCW)
     # Bounded outer loop: each pass clips at least one ear (or breaks).
     guard = 0
     while len(idx) > 3 and guard < n * n:
@@ -76,16 +75,16 @@ def triangulate_polygon(polygon: np.ndarray) -> np.ndarray:
             a, b, c = poly[i0], poly[i1], poly[i2]
             cross = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
             if cross <= 1e-12:
-                continue                 # reflex or collinear — not an ear tip
+                continue  # reflex or collinear — not an ear tip
             others = [j for j in idx if j not in (i0, i1, i2)]
             if np.any(_points_in_triangle(poly[others], a, b, c)):
-                continue                 # another vertex inside — not an ear
+                continue  # another vertex inside — not an ear
             tris.append((i0, i1, i2))
             del idx[i]
             clipped = True
             break
         if not clipped:
-            break                        # numerically stuck — fan the rest
+            break  # numerically stuck — fan the rest
     if len(idx) == 3:
         tris.append((idx[0], idx[1], idx[2]))
     elif len(idx) > 3:

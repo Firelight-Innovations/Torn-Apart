@@ -127,7 +127,7 @@ def _build_padded_materials(
     (fill air).  Missing entries pad AIR, so the world edge is open.
     """
     pad = np.zeros((n + 2,) * 3, dtype=np.uint8)
-    pad[1:n + 1, 1:n + 1, 1:n + 1] = materials
+    pad[1 : n + 1, 1 : n + 1, 1 : n + 1] = materials
     ns = neighbor_materials or {}
     for off in NEIGHBOR_OFFSETS_26:
         nb = ns.get(off)
@@ -167,7 +167,7 @@ def _cell_vertices(solid_pad: np.ndarray, n: int) -> np.ndarray:
     """
     m = n + 1  # cells per axis
     corner = {
-        c: solid_pad[c[0]:c[0] + m, c[1]:c[1] + m, c[2]:c[2] + m]
+        c: solid_pad[c[0] : c[0] + m, c[1] : c[1] + m, c[2] : c[2] + m]
         for c in itertools.product((0, 1), repeat=3)
     }
     pos_sum = np.zeros((m, m, m, 3), dtype=np.float32)
@@ -245,7 +245,7 @@ def build_mesh_faceted(
 
     pad = _build_padded_materials(chunk.materials, neighbor_materials, n)
     solid_pad = pad > 0
-    interior = solid_pad[1:n + 1, 1:n + 1, 1:n + 1]
+    interior = solid_pad[1 : n + 1, 1 : n + 1, 1 : n + 1]
 
     vert_local = _cell_vertices(solid_pad, n)  # (n+1, n+1, n+1, 3)
 
@@ -259,13 +259,13 @@ def build_mesh_faceted(
     ).astype(np.float32)
     verts_world = origin + (grid - 0.5 + vert_local) * vs  # (m,m,m,3)
 
-    quad_blocks: list[np.ndarray] = []      # (f,4,3) world-space quad corners
-    dir_blocks: list[np.ndarray] = []       # (f,3) face direction (fallback normal)
-    mat_blocks: list[np.ndarray] = []       # (f,) uint8 face material
+    quad_blocks: list[np.ndarray] = []  # (f,4,3) world-space quad corners
+    dir_blocks: list[np.ndarray] = []  # (f,3) face direction (fallback normal)
+    mat_blocks: list[np.ndarray] = []  # (f,) uint8 face material
 
     for d in _FACE_DIRS:
         dx, dy, dz = d
-        nb = solid_pad[1 + dx:1 + dx + n, 1 + dy:1 + dy + n, 1 + dz:1 + dz + n]
+        nb = solid_pad[1 + dx : 1 + dx + n, 1 + dy : 1 + dy + n, 1 + dz : 1 + dz + n]
         face_mask = interior & ~nb
         if not face_mask.any():
             continue
@@ -284,9 +284,7 @@ def build_mesh_faceted(
             cells[:, k, others[1]] += db
 
         quad_blocks.append(verts_world[cells[..., 0], cells[..., 1], cells[..., 2]])
-        dir_blocks.append(
-            np.broadcast_to(np.asarray(d, np.float32), (f, 3)).copy()
-        )
+        dir_blocks.append(np.broadcast_to(np.asarray(d, np.float32), (f, 3)).copy())
         mat_blocks.append(chunk.materials[vx, vy, vz])
 
     if not quad_blocks:
@@ -300,30 +298,30 @@ def build_mesh_faceted(
             verts_per_face=6,
         )
 
-    quads = np.concatenate(quad_blocks, axis=0)          # (F,4,3)
-    face_dirs = np.concatenate(dir_blocks, axis=0)       # (F,3)
+    quads = np.concatenate(quad_blocks, axis=0)  # (F,4,3)
+    face_dirs = np.concatenate(dir_blocks, axis=0)  # (F,3)
     face_mats = np.concatenate(mat_blocks, axis=0).astype(np.uint8)  # (F,)
     F = quads.shape[0]
 
     # --- Triangles: (0,1,2) and (0,2,3), 6 independent vertices per face ---
-    tris = quads[:, [[0, 1, 2], [0, 2, 3]], :]           # (F,2,3,3)
+    tris = quads[:, [[0, 1, 2], [0, 2, 3]], :]  # (F,2,3,3)
     tris = tris.reshape(F * 2, 3, 3)
     positions = tris.reshape(F * 6, 3).astype(np.float32)
 
     # --- Flat per-triangle normals (degenerate tris fall back to face dir) --
     e1 = tris[:, 1] - tris[:, 0]
     e2 = tris[:, 2] - tris[:, 0]
-    tri_n = np.cross(e1, e2)                              # (2F,3)
+    tri_n = np.cross(e1, e2)  # (2F,3)
     nlen = np.linalg.norm(tri_n, axis=1, keepdims=True)
-    fallback = np.repeat(face_dirs, 2, axis=0)            # (2F,3)
+    fallback = np.repeat(face_dirs, 2, axis=0)  # (2F,3)
     tri_n = np.where(nlen > 1e-12, tri_n / np.maximum(nlen, 1e-12), fallback)
     normals = np.repeat(tri_n, 3, axis=0).astype(np.float32)  # (6F,3)
 
     # --- Planar UVs by dominant quad-normal axis (world meters / tile) ------
     quad_n = np.cross(quads[:, 2] - quads[:, 0], quads[:, 3] - quads[:, 1])
-    dom = np.argmax(np.abs(quad_n), axis=1)               # (F,)
-    u_axis = np.where(dom == 0, 1, 0)                     # X-dom -> (y,z)
-    v_axis = np.where(dom == 2, 1, 2)                     # Z-dom -> (x,y)
+    dom = np.argmax(np.abs(quad_n), axis=1)  # (F,)
+    u_axis = np.where(dom == 0, 1, 0)  # X-dom -> (y,z)
+    v_axis = np.where(dom == 2, 1, 2)  # Z-dom -> (x,y)
     u_axis_v = np.repeat(u_axis, 6)
     v_axis_v = np.repeat(v_axis, 6)
     rows = np.arange(positions.shape[0])
@@ -340,9 +338,9 @@ def build_mesh_faceted(
     else:
         light = np.ones((F,), dtype=np.float32)
     s = float(np.clip(shade_strength, 0.0, 1.0))
-    ndl = np.clip(tri_n @ _FACET_ACCENT_DIR, 0.0, 1.0)    # (2F,)
+    ndl = np.clip(tri_n @ _FACET_ACCENT_DIR, 0.0, 1.0)  # (2F,)
     shade = (1.0 - s) + s * ndl
-    grey = np.repeat(light, 6) * np.repeat(shade, 3)      # (6F,)
+    grey = np.repeat(light, 6) * np.repeat(shade, 3)  # (6F,)
     colors = np.empty((positions.shape[0], 4), np.float32)
     colors[:, 0] = grey
     colors[:, 1] = grey

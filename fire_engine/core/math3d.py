@@ -30,6 +30,7 @@ import numpy as np
 # Vec3
 # ---------------------------------------------------------------------------
 
+
 class Vec3:
     """
     Immutable (by convention) 3-component float32 vector backed by a numpy array.
@@ -249,16 +250,17 @@ class Vec3:
 
 
 # Class constants (defined after class body so Vec3 is in scope)
-Vec3.ZERO    = Vec3(0.0, 0.0, 0.0)
-Vec3.ONE     = Vec3(1.0, 1.0, 1.0)
-Vec3.UP      = Vec3(0.0, 0.0, 1.0)   # +Z
-Vec3.FORWARD = Vec3(0.0, 1.0, 0.0)   # +Y
-Vec3.RIGHT   = Vec3(1.0, 0.0, 0.0)   # +X
+Vec3.ZERO = Vec3(0.0, 0.0, 0.0)
+Vec3.ONE = Vec3(1.0, 1.0, 1.0)
+Vec3.UP = Vec3(0.0, 0.0, 1.0)  # +Z
+Vec3.FORWARD = Vec3(0.0, 1.0, 0.0)  # +Y
+Vec3.RIGHT = Vec3(1.0, 0.0, 0.0)  # +X
 
 
 # ---------------------------------------------------------------------------
 # Quat
 # ---------------------------------------------------------------------------
+
 
 class Quat:
     """
@@ -305,8 +307,7 @@ class Quat:
     # Construction
     # ------------------------------------------------------------------
 
-    def __init__(self, w: float = 1.0, x: float = 0.0,
-                 y: float = 0.0, z: float = 0.0) -> None:
+    def __init__(self, w: float = 1.0, x: float = 0.0, y: float = 0.0, z: float = 0.0) -> None:
         """
         Construct from scalar-first components (w, x, y, z).
 
@@ -393,9 +394,9 @@ class Quat:
         >>> q.rotate(Vec3.FORWARD).approx_eq(Vec3(-1, 0, 0), eps=1e-5)
         True
         """
-        q_h = cls.from_axis_angle(Vec3.UP, h)       # yaw  about +Z
-        q_p = cls.from_axis_angle(Vec3.RIGHT, p)    # pitch about +X
-        q_r = cls.from_axis_angle(Vec3(0, 1, 0), r) # roll  about +Y
+        q_h = cls.from_axis_angle(Vec3.UP, h)  # yaw  about +Z
+        q_p = cls.from_axis_angle(Vec3.RIGHT, p)  # pitch about +X
+        q_r = cls.from_axis_angle(Vec3(0, 1, 0), r)  # roll  about +Y
         return q_h * q_p * q_r
 
     # ------------------------------------------------------------------
@@ -439,12 +440,15 @@ class Quat:
         w1, x1, y1, z1 = self._data
         w2, x2, y2, z2 = other._data
         q = Quat.__new__(Quat)
-        q._data = np.array([
-            w1*w2 - x1*x2 - y1*y2 - z1*z2,
-            w1*x2 + x1*w2 + y1*z2 - z1*y2,
-            w1*y2 - x1*z2 + y1*w2 + z1*x2,
-            w1*z2 + x1*y2 - y1*x2 + z1*w2,
-        ], dtype=np.float32)
+        q._data = np.array(
+            [
+                w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+                w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+                w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+                w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+            ],
+            dtype=np.float32,
+        )
         return q
 
     def rotate(self, v: Vec3) -> Vec3:
@@ -470,8 +474,8 @@ class Quat:
         # v' = v + 2w(q × v) + 2(q × (q × v))
         # where q = (x, y, z) part of the quaternion
         w = float(self._data[0])
-        qv = self._data[1:]          # (x, y, z) as float32 array
-        vv = v._data                 # float32 array
+        qv = self._data[1:]  # (x, y, z) as float32 array
+        vv = v._data  # float32 array
         t = 2.0 * np.cross(qv, vv)
         result = vv + w * t + np.cross(qv, t)
         return Vec3.from_numpy(result.astype(np.float32))
@@ -564,20 +568,11 @@ class Quat:
         if abs(cos_p) > 1e-6:
             # h = atan2(-R[0,1], R[1,1]) = atan2(-(2(xy-wz)), 1-2(x²+z²))
             # r = atan2(-R[2,0], R[2,2]) = atan2(-(2(xz-wy)), 1-2(x²+y²))
-            h_angle = math.atan2(
-                -2.0 * (x * y - w * z),
-                1.0 - 2.0 * (x * x + z * z)
-            )
-            r_angle = math.atan2(
-                -2.0 * (x * z - w * y),
-                1.0 - 2.0 * (x * x + y * y)
-            )
+            h_angle = math.atan2(-2.0 * (x * y - w * z), 1.0 - 2.0 * (x * x + z * z))
+            r_angle = math.atan2(-2.0 * (x * z - w * y), 1.0 - 2.0 * (x * x + y * y))
         else:
             # Gimbal lock: pitch ≈ ±90°, distribute between h and r
-            h_angle = math.atan2(
-                2.0 * (x * y + w * z),
-                1.0 - 2.0 * (y * y + z * z)
-            )
+            h_angle = math.atan2(2.0 * (x * y + w * z), 1.0 - 2.0 * (y * y + z * z))
             r_angle = 0.0
 
         return (h_angle, p_angle, r_angle)
@@ -632,7 +627,7 @@ class Quat:
 
         theta_0 = math.acos(dot)
         theta = theta_0 * float(t)
-        sin_theta   = math.sin(theta)
+        sin_theta = math.sin(theta)
         sin_theta_0 = math.sin(theta_0)
 
         s0 = math.cos(theta) - dot * sin_theta / sin_theta_0

@@ -94,18 +94,18 @@ __all__ = ["RainRendererComponent"]
 _log = get_logger("world.rain")
 
 # Streak geometry tuning (visual, not world config).
-_RAIN_BOX_M:      float = 36.0    # camera-anchored lattice box edge (m)
-_RAIN_SIZE_M:     float = 0.035   # streak half-width (m)
-_RAIN_LENGTH_M:   float = 0.7     # streak half-length (m)
-_RAIN_FALL_MPS:   float = 18.0    # base fall speed (m/s)
-_RAIN_TINT:       tuple[float, float, float] = (0.62, 0.70, 0.85)  # cool gray-blue
+_RAIN_BOX_M: float = 36.0  # camera-anchored lattice box edge (m)
+_RAIN_SIZE_M: float = 0.035  # streak half-width (m)
+_RAIN_LENGTH_M: float = 0.7  # streak half-length (m)
+_RAIN_FALL_MPS: float = 18.0  # base fall speed (m/s)
+_RAIN_TINT: tuple[float, float, float] = (0.62, 0.70, 0.85)  # cool gray-blue
 
 # Cylinder mode geometry (mirrors the old sky_renderer values).
 _CYL_LAYERS: tuple[tuple[float, float], ...] = ((4.0, 1.6), (7.0, 1.15), (11.0, 0.85))
-_CYL_HEIGHT_M:    float = 14.0
-_CYL_SEGMENTS:    int   = 32
-_CYL_TEX_U_M:     float = 3.0
-_CYL_TEX_V_M:     float = 12.0
+_CYL_HEIGHT_M: float = 14.0
+_CYL_SEGMENTS: int = 32
+_CYL_TEX_U_M: float = 3.0
+_CYL_TEX_V_M: float = 12.0
 _CYL_BASE_SCROLL: float = 1.4
 _CYL_MAX_TILT_DEG: float = 14.0
 _RAIN_HIDE_THRESHOLD: float = 0.05
@@ -119,6 +119,7 @@ def _clamp01(x: float) -> float:
 # Geometry builders
 # ---------------------------------------------------------------------------
 
+
 def _build_streak_quad() -> Geom:
     """Shared unit streak quad (xy ∈ {-1,+1}, z=0, UV 0–1) drawn N times."""
     fmt = GeomVertexFormat.get_v3t2()
@@ -126,8 +127,12 @@ def _build_streak_quad() -> Geom:
     vdata.set_num_rows(4)
     vw = GeomVertexWriter(vdata, "vertex")
     tw = GeomVertexWriter(vdata, "texcoord")
-    corners = ((-1.0, -1.0, 0.0, 0.0), (1.0, -1.0, 1.0, 0.0),
-               (1.0, 1.0, 1.0, 1.0), (-1.0, 1.0, 0.0, 1.0))
+    corners = (
+        (-1.0, -1.0, 0.0, 0.0),
+        (1.0, -1.0, 1.0, 0.0),
+        (1.0, 1.0, 1.0, 1.0),
+        (-1.0, 1.0, 0.0, 1.0),
+    )
     for x, y, u, v in corners:
         vw.add_data3(x, y, 0.0)
         tw.add_data2(u, v)
@@ -182,6 +187,7 @@ def _rain_streak_texture():
     """The ``rain_streak`` procedural texture, repeat-wrapped + linear-filtered."""
     from fire_engine.procedural import get as get_procedural
     from fire_engine.render.texture_bridge import to_panda_texture
+
     rgba = get_procedural("rain_streak")
     tex = to_panda_texture(rgba)
     tex.set_wrap_u(Texture.WM_repeat)
@@ -215,9 +221,14 @@ class RainRendererComponent(Component):
     Units: meters, seconds.  World-space Z-up.
     """
 
-    def __init__(self, base: Any = None, sky_system: Any = None,
-                 chunk_provider: Any = None, lighting_pipeline: Any = None,
-                 bus: Any = None) -> None:
+    def __init__(
+        self,
+        base: Any = None,
+        sky_system: Any = None,
+        chunk_provider: Any = None,
+        lighting_pipeline: Any = None,
+        bus: Any = None,
+    ) -> None:
         super().__init__()
         self.base = base
         self.sky_system = sky_system
@@ -233,13 +244,13 @@ class RainRendererComponent(Component):
         self._cover: RainCoverField | None = None
         self._cover_tex: Texture | None = None
         self._dirty_columns: set[tuple[int, int]] = set()
-        self._cover_committed: bool = False     # has a recenter committed once?
+        self._cover_committed: bool = False  # has a recenter committed once?
         self._recenter_threshold_m: float = 0.0
 
         # Render nodes.
         self._particle_node: NodePath | None = None
         self._cyl_root: NodePath | None = None
-        self._cyl_layers: list = []             # (NodePath, scroll_mult)
+        self._cyl_layers: list = []  # (NodePath, scroll_mult)
         self._cyl_scroll: list[float] = []
         self._cyl_visible: bool = False
 
@@ -258,12 +269,14 @@ class RainRendererComponent(Component):
         self._occlusion = bool(getattr(cfg, "gfx_rain_occlusion", True))
 
         if self._mode == "off":
-            _log.info("Rain disabled (gfx_rain_mode = \"off\")")
+            _log.info('Rain disabled (gfx_rain_mode = "off")')
             self.enabled = False
             return
         if self.lighting_pipeline is None:
-            _log.warning("RainRendererComponent: GPU lighting pipeline required "
-                         "(lighting_backend = \"gpu\") — disabled")
+            _log.warning(
+                "RainRendererComponent: GPU lighting pipeline required "
+                '(lighting_backend = "gpu") — disabled'
+            )
             self.enabled = False
             return
 
@@ -275,8 +288,7 @@ class RainRendererComponent(Component):
         tex = Texture("rain_cover")
         # Single-channel float32 heightmap (world Z meters).  Nearest-filtered:
         # the cull wants the exact column height, not a blend across the roof edge.
-        tex.setup_2d_texture(self._cover.cells, self._cover.cells,
-                             Texture.T_float, Texture.F_r32)
+        tex.setup_2d_texture(self._cover.cells, self._cover.cells, Texture.T_float, Texture.F_r32)
         tex.set_minfilter(SamplerState.FT_nearest)
         tex.set_magfilter(SamplerState.FT_nearest)
         tex.set_wrap_u(SamplerState.WM_clamp)
@@ -289,12 +301,11 @@ class RainRendererComponent(Component):
         elif self._mode == "cylinders":
             self._build_cylinders(cfg)
         else:
-            _log.warning("RainRendererComponent: unknown gfx_rain_mode %r — "
-                         "disabled", self._mode)
+            _log.warning("RainRendererComponent: unknown gfx_rain_mode %r — disabled", self._mode)
             self.enabled = False
             return
 
-        if not self.enabled:           # a build path may have disabled us
+        if not self.enabled:  # a build path may have disabled us
             return
 
         # Bind every shader input the rain node reads ONCE here so the very first
@@ -303,7 +314,8 @@ class RainRendererComponent(Component):
         # texels stay at their clear value until the first late_update upload —
         # an all-OPEN_SKY_Z map culls nothing, so rain shows immediately.
         self._cover_tex.set_ram_image(
-            np.ascontiguousarray(self._cover.height, dtype=np.float32).tobytes())
+            np.ascontiguousarray(self._cover.height, dtype=np.float32).tobytes()
+        )
         self._bind_cover_uniforms()
         self._push_intensity()
 
@@ -311,9 +323,14 @@ class RainRendererComponent(Component):
             self.bus.subscribe(ChunkLoadedEvent, self._on_chunk_loaded)
             self.bus.subscribe(TerrainEditedEvent, self._on_terrain_edited)
 
-        _log.info("Rain online: mode=%s, occlusion=%s, cover %dx%d @ %.1f m cells",
-                  self._mode, "on" if self._occlusion else "off",
-                  self._cover.cells, self._cover.cells, self._cover.cell_m)
+        _log.info(
+            "Rain online: mode=%s, occlusion=%s, cover %dx%d @ %.1f m cells",
+            self._mode,
+            "on" if self._occlusion else "off",
+            self._cover.cells,
+            self._cover.cells,
+            self._cover.cell_m,
+        )
 
     def late_update(self, dt: float) -> None:
         """Advance the clock, refresh the cover heightmap, push per-frame state."""
@@ -351,15 +368,18 @@ class RainRendererComponent(Component):
     def _refresh_cover(self, cam: tuple[float, float, float]) -> None:
         """Recenter on a threshold crossing, else refold a budget of columns."""
         cover = self._cover
-        chunks = getattr(self.chunk_provider, "chunks", {}) \
-            if self.chunk_provider is not None else {}
+        chunks = (
+            getattr(self.chunk_provider, "chunks", {}) if self.chunk_provider is not None else {}
+        )
 
         ox, oy = cover.origin_m
         cx_center = ox + 0.5 * cover.span_m
         cy_center = oy + 0.5 * cover.span_m
-        recenter = (not self._cover_committed
-                    or abs(cam[0] - cx_center) > self._recenter_threshold_m
-                    or abs(cam[1] - cy_center) > self._recenter_threshold_m)
+        recenter = (
+            not self._cover_committed
+            or abs(cam[0] - cx_center) > self._recenter_threshold_m
+            or abs(cam[1] - cy_center) > self._recenter_threshold_m
+        )
 
         changed = False
         if recenter:
@@ -370,15 +390,15 @@ class RainRendererComponent(Component):
             changed = True
         elif self._dirty_columns:
             budget = int(getattr(self.base._config, "rain_cover_budget_columns", 4))
-            take = [self._dirty_columns.pop()
-                    for _ in range(min(budget, len(self._dirty_columns)))]
+            take = [self._dirty_columns.pop() for _ in range(min(budget, len(self._dirty_columns)))]
             cover.rebuild_columns(chunks, take)
             changed = True
 
         if changed:
             # Committed-origin: upload texels + refresh origin in the SAME frame.
             self._cover_tex.set_ram_image(
-                np.ascontiguousarray(cover.height, dtype=np.float32).tobytes())
+                np.ascontiguousarray(cover.height, dtype=np.float32).tobytes()
+            )
             self._bind_cover_uniforms()
 
     def _bind_cover_uniforms(self) -> None:
@@ -386,8 +406,7 @@ class RainRendererComponent(Component):
         ox, oy = self._cover.origin_m
         for node in self._rain_nodes():
             node.set_shader_input("u_rain_height_tex", self._cover_tex)
-            node.set_shader_input("u_rain_height_origin",
-                                  LVecBase2f(float(ox), float(oy)))
+            node.set_shader_input("u_rain_height_origin", LVecBase2f(float(ox), float(oy)))
             node.set_shader_input("u_rain_height_cell_m", float(self._cover.cell_m))
             node.set_shader_input("u_rain_height_cells", float(self._cover.cells))
 
@@ -410,19 +429,20 @@ class RainRendererComponent(Component):
     def _build_particles(self, cfg: Any) -> None:
         count = int(getattr(cfg, "gfx_rain_particles", 0))
         if count <= 0:
-            _log.info("RainRendererComponent: gfx_rain_particles <= 0 — nothing "
-                      "to draw")
+            _log.info("RainRendererComponent: gfx_rain_particles <= 0 — nothing to draw")
             self.enabled = False
             return
-        shader = Shader.make(Shader.SL_GLSL,
-                             vertex=rain_shaders.RAIN_PARTICLE_VERTEX,
-                             fragment=rain_shaders.RAIN_PARTICLE_FRAGMENT)
+        shader = Shader.make(
+            Shader.SL_GLSL,
+            vertex=rain_shaders.RAIN_PARTICLE_VERTEX,
+            fragment=rain_shaders.RAIN_PARTICLE_FRAGMENT,
+        )
         geom_node = GeomNode("rain_particles")
         geom_node.add_geom(_build_streak_quad())
         # Parent under terrain_root so wind/fog/camera + the weather-map contract
         # (bound on render, inherited by terrain_root) all arrive automatically.
         node = self.base.terrain_root.attach_new_node(geom_node)
-        node.set_shader(shader)            # node-level shader + instance count
+        node.set_shader(shader)  # node-level shader + instance count
         node.set_instance_count(count)
         node.set_shader_input("u_hash_seed", _rain_hash_seed())
         node.set_shader_input("u_rain_box_m", _RAIN_BOX_M)
@@ -439,17 +459,17 @@ class RainRendererComponent(Component):
         node.set_shader_input("u_time_s", 0.0)
 
         node.set_transparency(TransparencyAttrib.M_none)
-        node.set_attrib(ColorBlendAttrib.make(
-            ColorBlendAttrib.M_add,
-            ColorBlendAttrib.O_incoming_alpha,
-            ColorBlendAttrib.O_one))
+        node.set_attrib(
+            ColorBlendAttrib.make(
+                ColorBlendAttrib.M_add, ColorBlendAttrib.O_incoming_alpha, ColorBlendAttrib.O_one
+            )
+        )
         node.set_depth_write(False)
         node.set_bin("fixed", 0)
         node.set_two_sided(True)
 
         big = 1.0e9
-        geom_node.set_bounds(BoundingBox(LPoint3(-big, -big, -big),
-                                         LPoint3(big, big, big)))
+        geom_node.set_bounds(BoundingBox(LPoint3(-big, -big, -big), LPoint3(big, big, big)))
         geom_node.set_final(True)
         self._particle_node = node
 
@@ -459,9 +479,11 @@ class RainRendererComponent(Component):
 
     def _build_cylinders(self, cfg: Any) -> None:
         rain_tex = _rain_streak_texture()
-        shader = Shader.make(Shader.SL_GLSL,
-                             vertex=rain_shaders.RAIN_CYLINDER_VERTEX,
-                             fragment=rain_shaders.RAIN_CYLINDER_FRAGMENT)
+        shader = Shader.make(
+            Shader.SL_GLSL,
+            vertex=rain_shaders.RAIN_CYLINDER_VERTEX,
+            fragment=rain_shaders.RAIN_CYLINDER_FRAGMENT,
+        )
         # Parent under terrain_root for the inherited weather-map contract.
         root = self.base.terrain_root.attach_new_node("rain_cyl_root")
         for radius_m, scroll_mult in _CYL_LAYERS:
@@ -471,17 +493,17 @@ class RainRendererComponent(Component):
             layer.set_shader_input("u_rain_tex", rain_tex)
             layer.set_shader_input("u_rain_alpha", 0.0)
             layer.set_shader_input("u_rain_intensity", 0.0)
-            layer.set_shader_input("u_rain_occlusion",
-                                   1.0 if self._occlusion else 0.0)
+            layer.set_shader_input("u_rain_occlusion", 1.0 if self._occlusion else 0.0)
             layer.set_shader_input("u_uv_scroll", LVecBase2f(0.0, 0.0))
             layer.set_two_sided(True)
             layer.set_light_off()
             layer.set_depth_write(False)
             layer.set_transparency(TransparencyAttrib.M_none)
-            layer.set_attrib(ColorBlendAttrib.make(
-                ColorBlendAttrib.M_add,
-                ColorBlendAttrib.O_one,
-                ColorBlendAttrib.O_one))
+            layer.set_attrib(
+                ColorBlendAttrib.make(
+                    ColorBlendAttrib.M_add, ColorBlendAttrib.O_one, ColorBlendAttrib.O_one
+                )
+            )
             self._cyl_layers.append((layer, scroll_mult))
             self._cyl_scroll.append(0.0)
         root.hide()
@@ -511,8 +533,7 @@ class RainRendererComponent(Component):
         alpha = _clamp01(0.12 + 0.38 * ri)
         for i, (layer, mult) in enumerate(self._cyl_layers):
             self._cyl_scroll[i] = (self._cyl_scroll[i] - rate * mult * dt) % 1.0
-            layer.set_shader_input("u_uv_scroll",
-                                   LVecBase2f(0.0, self._cyl_scroll[i]))
+            layer.set_shader_input("u_uv_scroll", LVecBase2f(0.0, self._cyl_scroll[i]))
             layer.set_shader_input("u_rain_alpha", alpha)
 
     # ------------------------------------------------------------------
@@ -534,8 +555,11 @@ class RainRendererComponent(Component):
     def _on_terrain_edited(self, event: TerrainEditedEvent) -> None:
         """A brush edit → refold every touched chunk column's cover."""
         coords = event.chunk_coords
-        if isinstance(coords, tuple) and len(coords) == 3 and \
-                all(isinstance(c, int) for c in coords):
+        if (
+            isinstance(coords, tuple)
+            and len(coords) == 3
+            and all(isinstance(c, int) for c in coords)
+        ):
             coords = (coords,)
         for c in coords:
             self._dirty_columns.add((int(c[0]), int(c[1])))
@@ -545,8 +569,9 @@ class RainRendererComponent(Component):
 # Hash seed (Hard Rule 2 — all randomness via for_domain)
 # ---------------------------------------------------------------------------
 
+
 def _rain_hash_seed() -> int:
     """Deterministic rain-streak instance-chain seed via
     ``for_domain("rain", "particles")``.  Bounded to ``[0, 2**31)`` (Panda3D
     passes shader-input ints as signed)."""
-    return int(for_domain("rain", "particles").integers(0, 2 ** 31))
+    return int(for_domain("rain", "particles").integers(0, 2**31))

@@ -139,6 +139,7 @@ _R_TOP: float = PLANET_RADIUS_M + ATMOSPHERE_TOP_M
 # Internal helpers (vectorized)
 # ---------------------------------------------------------------------------
 
+
 def _smoothstep(x: np.ndarray, lo: float, hi: float) -> np.ndarray:
     """Vectorized Hermite smoothstep of *x* between *lo* and *hi* (→ [0, 1])."""
     t = np.clip((np.asarray(x, dtype=np.float64) - lo) / (hi - lo), 0.0, 1.0)
@@ -173,6 +174,7 @@ def _exit_distance(radius: np.ndarray, cos_b: np.ndarray) -> np.ndarray:
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def transmittance(view_dirs: np.ndarray, samples: int = 64) -> np.ndarray:
     """
     Atmospheric transmittance from the ground observer toward each direction.
@@ -206,23 +208,24 @@ def transmittance(view_dirs: np.ndarray, samples: int = 64) -> np.ndarray:
     d = _unit_rows(view_dirs)
     n = d.shape[0]
     radius = np.full(n, _R0, dtype=np.float64)
-    cos_b = _R0 * d[:, 2]                       # dot((0,0,r0), d)
+    cos_b = _R0 * d[:, 2]  # dot((0,0,r0), d)
 
     t_max = _exit_distance(radius, cos_b)
     # Planet hit: both quadratic roots positive ⇔ cos_b < 0 and disc > 0.
     disc_p = cos_b * cos_b - (_R0 * _R0 - PLANET_RADIUS_M * PLANET_RADIUS_M)
     hit = (cos_b < 0.0) & (disc_p > 0.0)
 
-    u = (np.arange(samples, dtype=np.float64) + 0.5) / samples   # (S,)
-    t = t_max[:, None] * (u * u)[None, :]                        # (N, S)
-    w = t_max[:, None] * (2.0 * u / samples)[None, :]            # dt weights
-    r = np.sqrt(_R0 * _R0 + t * t + 2.0 * t * cos_b[:, None])    # (N, S)
+    u = (np.arange(samples, dtype=np.float64) + 0.5) / samples  # (S,)
+    t = t_max[:, None] * (u * u)[None, :]  # (N, S)
+    w = t_max[:, None] * (2.0 * u / samples)[None, :]  # dt weights
+    r = np.sqrt(_R0 * _R0 + t * t + 2.0 * t * cos_b[:, None])  # (N, S)
     h = np.maximum(r - PLANET_RADIUS_M, 0.0)
-    od_r = np.sum(np.exp(-h / RAYLEIGH_SCALE_HEIGHT_M) * w, axis=1)   # (N,)
+    od_r = np.sum(np.exp(-h / RAYLEIGH_SCALE_HEIGHT_M) * w, axis=1)  # (N,)
     od_m = np.sum(np.exp(-h / MIE_SCALE_HEIGHT_M) * w, axis=1)
 
-    tau = (BETA_RAYLEIGH[None, :] * od_r[:, None]
-           + (BETA_MIE * _MIE_EXTINCTION_FACTOR) * od_m[:, None])
+    tau = (
+        BETA_RAYLEIGH[None, :] * od_r[:, None] + (BETA_MIE * _MIE_EXTINCTION_FACTOR) * od_m[:, None]
+    )
     out = np.exp(-tau)
     out[hit] = 0.0
     return out
@@ -266,8 +269,8 @@ def sun_radiance(sun_z: float | np.ndarray, samples: int = 64) -> np.ndarray:
         [np.sqrt(np.maximum(1.0 - zc * zc, 0.0)), np.zeros_like(zc), zc],
         axis=1,
     )
-    t = transmittance(dirs, samples=samples)                 # (N, 3)
-    fade = _smoothstep(z1, SUN_FADE_LO_Z, 0.0)               # (N,)
+    t = transmittance(dirs, samples=samples)  # (N, 3)
+    fade = _smoothstep(z1, SUN_FADE_LO_Z, 0.0)  # (N,)
     out = SUN_GROUND_SCALE * t * fade[:, None]
     return out[0] if scalar else out
 
@@ -323,27 +326,31 @@ def sky_radiance(
     disc_p = cos_b * cos_b - (_R0 * _R0 - PLANET_RADIUS_M * PLANET_RADIUS_M)
     hit = (cos_b < 0.0) & (disc_p > 0.0)
     t_ground = np.where(hit, -cos_b - np.sqrt(np.maximum(disc_p, 0.0)), np.inf)
-    t_max = np.minimum(t_exit, t_ground)                      # (N,)
+    t_max = np.minimum(t_exit, t_ground)  # (N,)
 
-    mu = d @ s                                                # (N,)
+    mu = d @ s  # (N,)
     phase_r = (3.0 / (16.0 * math.pi)) * (1.0 + mu * mu)
     g, g2 = MIE_G, MIE_G * MIE_G
-    phase_m = ((3.0 / (8.0 * math.pi)) * (1.0 - g2) * (1.0 + mu * mu)
-               / ((2.0 + g2) * np.power(1.0 + g2 - 2.0 * g * mu, 1.5)))
+    phase_m = (
+        (3.0 / (8.0 * math.pi))
+        * (1.0 - g2)
+        * (1.0 + mu * mu)
+        / ((2.0 + g2) * np.power(1.0 + g2 - 2.0 * g * mu, 1.5))
+    )
 
     od_r_view = np.zeros(n)
     od_m_view = np.zeros(n)
     radiance = np.zeros((n, 3))
 
-    for i in range(steps):                       # fixed-count raymarch loop
+    for i in range(steps):  # fixed-count raymarch loop
         # Quadratic step spacing (t = t_max·u², weight dt = 2·t_max·u/steps):
         # near-horizon rays exit ~600 km away while all the density sits in
         # the first few km — linear steps would skip it entirely and render
         # the day horizon black.  Mirrored in the GLSL dome shader.
         u = (i + 0.5) / steps
-        t = t_max * (u * u)                                      # (N,)
-        dt = t_max * (2.0 * u / steps)                           # (N,)
-        r = np.sqrt(_R0 * _R0 + t * t + 2.0 * t * cos_b)         # sample radius
+        t = t_max * (u * u)  # (N,)
+        dt = t_max * (2.0 * u / steps)  # (N,)
+        r = np.sqrt(_R0 * _R0 + t * t + 2.0 * t * cos_b)  # sample radius
         h = np.maximum(r - PLANET_RADIUS_M, 0.0)
         dens_r = np.exp(-h / RAYLEIGH_SCALE_HEIGHT_M)
         dens_m = np.exp(-h / MIE_SCALE_HEIGHT_M)
@@ -352,28 +359,31 @@ def sky_radiance(
 
         # Sun-ray geometry from the sample point P = (0,0,_R0) + t·d:
         # dot(P, s) = _R0·s.z + t·(d·s).
-        cos_bl = _R0 * s[2] + t * mu                             # (N,)
+        cos_bl = _R0 * s[2] + t * mu  # (N,)
         disc_l = cos_bl * cos_bl - (r * r - PLANET_RADIUS_M * PLANET_RADIUS_M)
-        blocked = (cos_bl < 0.0) & (disc_l > 0.0)                # planet shadow
+        blocked = (cos_bl < 0.0) & (disc_l > 0.0)  # planet shadow
 
         tl_exit = _exit_distance(r, cos_bl)
         dl = tl_exit / light_steps
         od_r_l = np.zeros(n)
         od_m_l = np.zeros(n)
-        for j in range(light_steps):             # fixed-count nested march
+        for j in range(light_steps):  # fixed-count nested march
             tl = (j + 0.5) * dl
             rl = np.sqrt(r * r + tl * tl + 2.0 * tl * cos_bl)
             hl = np.maximum(rl - PLANET_RADIUS_M, 0.0)
             od_r_l += np.exp(-hl / RAYLEIGH_SCALE_HEIGHT_M) * dl
             od_m_l += np.exp(-hl / MIE_SCALE_HEIGHT_M) * dl
 
-        tau = (BETA_RAYLEIGH[None, :] * (od_r_view + od_r_l)[:, None]
-               + (BETA_MIE * _MIE_EXTINCTION_FACTOR)
-               * (od_m_view + od_m_l)[:, None])
+        tau = (
+            BETA_RAYLEIGH[None, :] * (od_r_view + od_r_l)[:, None]
+            + (BETA_MIE * _MIE_EXTINCTION_FACTOR) * (od_m_view + od_m_l)[:, None]
+        )
         trans = np.exp(-tau)
         trans[blocked] = 0.0
-        scatter = (BETA_RAYLEIGH[None, :] * (dens_r * phase_r)[:, None]
-                   + BETA_MIE * (dens_m * phase_m)[:, None])
+        scatter = (
+            BETA_RAYLEIGH[None, :] * (dens_r * phase_r)[:, None]
+            + BETA_MIE * (dens_m * phase_m)[:, None]
+        )
         radiance += trans * scatter * dt[:, None]
 
     return SUN_TOA_RADIANCE * radiance
@@ -384,8 +394,8 @@ def sky_radiance(
 def _hemisphere_dirs(samples: int) -> np.ndarray:
     """Fixed Fibonacci-spiral unit directions on the upper hemisphere (N, 3)."""
     i = np.arange(samples, dtype=np.float64)
-    z = (i + 0.5) / samples                          # uniform in cos(theta)
-    phi = i * (math.pi * (3.0 - math.sqrt(5.0)))     # golden angle
+    z = (i + 0.5) / samples  # uniform in cos(theta)
+    phi = i * (math.pi * (3.0 - math.sqrt(5.0)))  # golden angle
     rho = np.sqrt(np.maximum(1.0 - z * z, 0.0))
     return np.stack([rho * np.cos(phi), rho * np.sin(phi), z], axis=1)
 

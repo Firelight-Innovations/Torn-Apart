@@ -69,6 +69,7 @@ class DevTool:
 # Performance
 # ---------------------------------------------------------------------------
 
+
 class PerformanceTool(DevTool):
     """
     Live engine performance / state read-out.
@@ -107,6 +108,7 @@ class PerformanceTool(DevTool):
 # Inspector
 # ---------------------------------------------------------------------------
 
+
 class InspectorTool(DevTool):
     """
     Editable inspector for the currently-selected GameObject.
@@ -138,7 +140,12 @@ class InspectorTool(DevTool):
             return Panel(
                 self.tool_id,
                 self.title,
-                [Section("", [Field("(nothing selected)", FieldKind.LABEL, lambda: "click an object")])],
+                [
+                    Section(
+                        "",
+                        [Field("(nothing selected)", FieldKind.LABEL, lambda: "click an object")],
+                    )
+                ],
                 revision=self.revision,
             )
         # A picked terrain chunk is not a GameObject — route it to the chunk
@@ -153,6 +160,7 @@ class InspectorTool(DevTool):
 # ---------------------------------------------------------------------------
 # Actions (spawn things / fire events)
 # ---------------------------------------------------------------------------
+
 
 class ActionsTool(DevTool):
     """
@@ -203,6 +211,7 @@ class ActionsTool(DevTool):
 # CallbackTool — ad-hoc panel from a build function (no subclass needed)
 # ---------------------------------------------------------------------------
 
+
 class CallbackTool(DevTool):
     """
     A panel whose contents come from a supplied ``build_fn`` each frame.
@@ -247,13 +256,13 @@ class CallbackTool(DevTool):
 
     def build(self) -> Panel:
         sections, buttons = self._build_fn()
-        return Panel(self.tool_id, self.title, sections, buttons=buttons,
-                     revision=self.revision)
+        return Panel(self.tool_id, self.title, sections, buttons=buttons, revision=self.revision)
 
 
 # ---------------------------------------------------------------------------
 # Clock (game calendar read-out; future day/night editor lives here)
 # ---------------------------------------------------------------------------
+
 
 class ClockTool(DevTool):
     """
@@ -286,9 +295,17 @@ class ClockTool(DevTool):
         return Panel(
             self.tool_id,
             self.title,
-            [Section("Calendar", [
-                Field("day", FieldKind.LABEL, lambda: c.game_day),
-                Field("time of day", FieldKind.LABEL,
-                      lambda: self._fmt_tod(c.game_time_of_day)),
-            ])],
+            [
+                Section(
+                    "Calendar",
+                    [
+                        Field("day", FieldKind.LABEL, lambda: c.game_day),
+                        Field(
+                            "time of day",
+                            FieldKind.LABEL,
+                            lambda: self._fmt_tod(c.game_time_of_day),
+                        ),
+                    ],
+                )
+            ],
         )

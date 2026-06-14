@@ -24,19 +24,29 @@ from fire_engine.procedural.flora.leaves import Leaves
 # tests so we have a tree with tip segments at multiple heights).
 # ---------------------------------------------------------------------------
 
+
 def _build_oak(rng: np.random.Generator):
     """Grow a reference oak skeleton; return (sk, trunk_ids, limb_ids, twig_ids)."""
     sb = SkeletonBuilder(rng)
     trunk = sb.trunk(height_m=5.5, base_radius_m=0.28, segments=4, wobble_m=0.35)
     limbs = sb.branches(
-        trunk, count=(3, 5), t_range=(0.35, 0.95),
+        trunk,
+        count=(3, 5),
+        t_range=(0.35, 0.95),
         pitch_set=(math.radians(80), math.radians(95)),
-        length_ratio=(0.5, 0.8), length_scale_by_height=(1.0, 0.45),
-        radius_ratio=0.5, upturn_rad=math.radians(18), segments=2,
+        length_ratio=(0.5, 0.8),
+        length_scale_by_height=(1.0, 0.45),
+        radius_ratio=0.5,
+        upturn_rad=math.radians(18),
+        segments=2,
     )
     twigs = sb.branches(
-        limbs, count=(1, 3), pitch_set=(math.radians(85),),
-        length_ratio=(0.4, 0.6), radius_ratio=0.5, upturn_rad=math.radians(25),
+        limbs,
+        count=(1, 3),
+        pitch_set=(math.radians(85),),
+        length_ratio=(0.4, 0.6),
+        radius_ratio=0.5,
+        upturn_rad=math.radians(25),
     )
     return sb.skeleton(), trunk, limbs, twigs
 
@@ -52,6 +62,7 @@ def _fresh_oak(seed: int = 42):
 # ---------------------------------------------------------------------------
 # 1. Leaves.empty() — shape, dtype, zero count
 # ---------------------------------------------------------------------------
+
 
 class TestLeavesEmpty:
     def test_n_leaves_is_zero(self):
@@ -82,6 +93,7 @@ class TestLeavesEmpty:
 # 2. n_leaves property consistency (non-empty Leaves)
 # ---------------------------------------------------------------------------
 
+
 class TestNLeavesProperty:
     def test_n_leaves_matches_center_length(self):
         sk, limbs, twigs, rng = _fresh_oak(7)
@@ -105,6 +117,7 @@ class TestNLeavesProperty:
 # ---------------------------------------------------------------------------
 # 3. Output shapes and dtypes
 # ---------------------------------------------------------------------------
+
 
 class TestOutputShapes:
     def setup_method(self):
@@ -134,6 +147,7 @@ class TestOutputShapes:
 # ---------------------------------------------------------------------------
 # 4. Determinism — same skeleton + same rng state → identical arrays
 # ---------------------------------------------------------------------------
+
 
 class TestDeterminism:
     def _call_twice(self, seed: int):
@@ -175,6 +189,7 @@ class TestDeterminism:
 # 5. Sway range — documented as ~0.85–1.0 (sway_min default 0.85)
 # ---------------------------------------------------------------------------
 
+
 class TestSwayRange:
     def setup_method(self):
         sk, limbs, twigs, rng = _fresh_oak(13)
@@ -195,8 +210,7 @@ class TestSwayRange:
     def test_sway_respects_custom_sway_min(self):
         sk, limbs, twigs, rng = _fresh_oak(13)
         ids = np.concatenate([limbs, twigs])
-        leaves = leaves_at_tips(sk, ids, rng, rounds=3, density=0.8,
-                                sway_min=0.5)
+        leaves = leaves_at_tips(sk, ids, rng, rounds=3, density=0.8, sway_min=0.5)
         # With a lower floor, some leaves may dip below 0.85 (tip sway might
         # be < 0.85 on some segments) — but nothing below 0.5 should survive.
         assert (leaves.sway >= 0.5).all()
@@ -206,6 +220,7 @@ class TestSwayRange:
 # ---------------------------------------------------------------------------
 # 6. Leaf centers are finite and within plausible skeleton bounds
 # ---------------------------------------------------------------------------
+
 
 class TestLeafCenters:
     def test_centers_finite(self):
@@ -220,12 +235,11 @@ class TestLeafCenters:
         ROUNDS = 3
         sk, limbs, twigs, rng = _fresh_oak(17)
         ids = np.concatenate([limbs, twigs])
-        leaves = leaves_at_tips(sk, ids, rng, cell_m=CELL, rounds=ROUNDS,
-                                density=0.7)
+        leaves = leaves_at_tips(sk, ids, rng, cell_m=CELL, rounds=ROUNDS, density=0.7)
         tips = sk.tip_ids(ids)
         # dist from each leaf center to the nearest tip end
         diff = leaves.center[:, None, :] - sk.end[tips][None, :, :]  # (L, T, 3)
-        dist = np.linalg.norm(diff, axis=2).min(axis=1)              # (L,)
+        dist = np.linalg.norm(diff, axis=2).min(axis=1)  # (L,)
         reach = (ROUNDS + 1.0) * CELL * math.sqrt(3.0)
         assert (dist <= reach + 1e-4).all()
 
@@ -243,8 +257,7 @@ class TestLeafCenters:
         ROUNDS = 3
         sk, limbs, twigs, rng = _fresh_oak(17)
         ids = np.concatenate([limbs, twigs])
-        leaves = leaves_at_tips(sk, ids, rng, cell_m=CELL, rounds=ROUNDS,
-                                density=0.7)
+        leaves = leaves_at_tips(sk, ids, rng, cell_m=CELL, rounds=ROUNDS, density=0.7)
         tips = sk.tip_ids(ids)
         min_tip_z = float(sk.end[tips, 2].min())
         # Pin: no leaf should be more than one full growth-reach below the
@@ -257,13 +270,13 @@ class TestLeafCenters:
 # 7. Radius range
 # ---------------------------------------------------------------------------
 
+
 class TestRadius:
     def test_radius_in_default_range(self):
         """Default leaf_size_m=(0.09, 0.14) — all radii should be in range."""
         sk, limbs, twigs, rng = _fresh_oak(19)
         ids = np.concatenate([limbs, twigs])
-        leaves = leaves_at_tips(sk, ids, rng, rounds=3, density=0.7,
-                                leaf_size_m=(0.09, 0.14))
+        leaves = leaves_at_tips(sk, ids, rng, rounds=3, density=0.7, leaf_size_m=(0.09, 0.14))
         assert (leaves.radius >= 0.09 - 1e-6).all()
         assert (leaves.radius <= 0.14 + 1e-6).all()
 
@@ -278,6 +291,7 @@ class TestRadius:
 # ---------------------------------------------------------------------------
 # 8. rounds=0 and density=0.0 → Leaves.empty()
 # ---------------------------------------------------------------------------
+
 
 class TestEarlyExitConditions:
     def test_rounds_zero_returns_empty(self):
@@ -294,8 +308,7 @@ class TestEarlyExitConditions:
 
     def test_empty_ids_returns_empty(self):
         sk, limbs, twigs, rng = _fresh_oak(23)
-        result = leaves_at_tips(sk, np.empty(0, dtype=np.int32), rng,
-                                rounds=3, density=0.7)
+        result = leaves_at_tips(sk, np.empty(0, dtype=np.int32), rng, rounds=3, density=0.7)
         assert result.n_leaves == 0
 
     def test_empty_ids_center_shape(self):
@@ -320,6 +333,7 @@ class TestEarlyExitConditions:
 # 9. rounds / density monotonicity — more → more leaves
 # ---------------------------------------------------------------------------
 
+
 class TestMonotonicity:
     def test_higher_density_more_or_equal_leaves(self):
         """Double density should not produce fewer leaves (statistical — large cap)."""
@@ -331,15 +345,13 @@ class TestMonotonicity:
         rng_lo = for_domain("test", "mono_lo")
         sk_lo, _, limbs_lo, twigs_lo = _build_oak(rng_lo)
         ids_lo = np.concatenate([limbs_lo, twigs_lo])
-        leaves_lo = leaves_at_tips(sk_lo, ids_lo, rng_lo, rounds=3,
-                                   density=0.3, max_leaves=10_000)
+        leaves_lo = leaves_at_tips(sk_lo, ids_lo, rng_lo, rounds=3, density=0.3, max_leaves=10_000)
 
         set_world_seed(29)
         rng_hi = for_domain("test", "mono_hi")
         sk_hi, _, limbs_hi, twigs_hi = _build_oak(rng_hi)
         ids_hi = np.concatenate([limbs_hi, twigs_hi])
-        leaves_hi = leaves_at_tips(sk_hi, ids_hi, rng_hi, rounds=3,
-                                   density=0.9, max_leaves=10_000)
+        leaves_hi = leaves_at_tips(sk_hi, ids_hi, rng_hi, rounds=3, density=0.9, max_leaves=10_000)
 
         # NOTE: strictly monotone is stochastic — pin the directional trend
         # with a generous margin (more likely true than not for density 0.3→0.9)
@@ -351,15 +363,13 @@ class TestMonotonicity:
         rng1 = for_domain("test", "rounds_1")
         sk1, _, limbs1, twigs1 = _build_oak(rng1)
         ids1 = np.concatenate([limbs1, twigs1])
-        leaves1 = leaves_at_tips(sk1, ids1, rng1, rounds=1, density=0.8,
-                                 max_leaves=10_000)
+        leaves1 = leaves_at_tips(sk1, ids1, rng1, rounds=1, density=0.8, max_leaves=10_000)
 
         set_world_seed(31)
         rng4 = for_domain("test", "rounds_4")
         sk4, _, limbs4, twigs4 = _build_oak(rng4)
         ids4 = np.concatenate([limbs4, twigs4])
-        leaves4 = leaves_at_tips(sk4, ids4, rng4, rounds=4, density=0.8,
-                                 max_leaves=10_000)
+        leaves4 = leaves_at_tips(sk4, ids4, rng4, rounds=4, density=0.8, max_leaves=10_000)
 
         # Pin direction: 4 rounds must produce at least as many leaves as 1
         assert leaves4.n_leaves >= leaves1.n_leaves
@@ -369,13 +379,13 @@ class TestMonotonicity:
 # 10. max_leaves cap — deterministic thinning
 # ---------------------------------------------------------------------------
 
+
 class TestMaxLeavesCap:
     def test_exactly_at_cap(self):
         """When uncapped output > max_leaves, result must equal max_leaves."""
         sk, limbs, twigs, rng = _fresh_oak(37)
         ids = np.concatenate([limbs, twigs])
-        leaves = leaves_at_tips(sk, ids, rng, rounds=3, density=1.0,
-                                per_cell=(2, 2), max_leaves=50)
+        leaves = leaves_at_tips(sk, ids, rng, rounds=3, density=1.0, per_cell=(2, 2), max_leaves=50)
         assert leaves.n_leaves == 50
 
     def test_cap_not_exceeded(self):
@@ -386,8 +396,7 @@ class TestMaxLeavesCap:
             rng2 = for_domain("test", "cap_test")
             sk2, _, limbs2, twigs2 = _build_oak(rng2)
             ids2 = np.concatenate([limbs2, twigs2])
-            leaves = leaves_at_tips(sk2, ids2, rng2, rounds=3, density=1.0,
-                                    max_leaves=cap)
+            leaves = leaves_at_tips(sk2, ids2, rng2, rounds=3, density=1.0, max_leaves=cap)
             assert leaves.n_leaves <= cap
 
     def test_below_cap_not_thinned(self):
@@ -395,8 +404,7 @@ class TestMaxLeavesCap:
         sk, limbs, twigs, rng = _fresh_oak(41)
         ids = np.concatenate([limbs, twigs])
         # rounds=1 density=0.1 → very few leaves; cap=10000 should not bite
-        leaves = leaves_at_tips(sk, ids, rng, rounds=1, density=0.1,
-                                max_leaves=10_000)
+        leaves = leaves_at_tips(sk, ids, rng, rounds=1, density=0.1, max_leaves=10_000)
         # We cannot know the exact count, but it must be <= 10_000
         assert leaves.n_leaves <= 10_000
         # And it must be > 0 (some leaves should form with at least 1 round)
@@ -407,6 +415,7 @@ class TestMaxLeavesCap:
 # 11. Ids that are not tips — only actual tips seed hydration
 # ---------------------------------------------------------------------------
 
+
 class TestTipFiltering:
     def test_passing_only_limbs_gives_fewer_leaves_than_all(self):
         """Tips in limbs only < tips in limbs+twigs → fewer or equal leaves."""
@@ -414,16 +423,18 @@ class TestTipFiltering:
         rng_all = for_domain("test", "tip_all")
         sk_all, _, limbs_all, twigs_all = _build_oak(rng_all)
         ids_all = np.concatenate([limbs_all, twigs_all])
-        leaves_all = leaves_at_tips(sk_all, ids_all, rng_all, rounds=3,
-                                    density=0.8, max_leaves=10_000)
+        leaves_all = leaves_at_tips(
+            sk_all, ids_all, rng_all, rounds=3, density=0.8, max_leaves=10_000
+        )
 
         set_world_seed(43)
         rng_limb = for_domain("test", "tip_limb")
         sk_limb, _, limbs_limb, _twigs_limb = _build_oak(rng_limb)
         # Only pass limbs — twigs grow from limbs, so limbs are parents (not tips)
         # → many fewer tip seeds
-        leaves_limb = leaves_at_tips(sk_limb, limbs_limb, rng_limb, rounds=3,
-                                     density=0.8, max_leaves=10_000)
+        leaves_limb = leaves_at_tips(
+            sk_limb, limbs_limb, rng_limb, rounds=3, density=0.8, max_leaves=10_000
+        )
 
         # NOTE: If ALL limbs happen to be tips (no twigs off them in this variant)
         # then limbs_limb tips == ids_all tips. In practice the oak recipe always
@@ -435,6 +446,7 @@ class TestTipFiltering:
 # 12. per_cell tuple controls leaves-per-cell range
 # ---------------------------------------------------------------------------
 
+
 class TestPerCell:
     def test_per_cell_1_1_gives_fewer_than_2_2(self):
         """per_cell=(1,1) gives at most as many leaves as per_cell=(2,2)."""
@@ -442,15 +454,17 @@ class TestPerCell:
         rng1 = for_domain("test", "pc1")
         sk1, _, limbs1, twigs1 = _build_oak(rng1)
         ids1 = np.concatenate([limbs1, twigs1])
-        leaves1 = leaves_at_tips(sk1, ids1, rng1, rounds=3, density=0.8,
-                                 per_cell=(1, 1), max_leaves=10_000)
+        leaves1 = leaves_at_tips(
+            sk1, ids1, rng1, rounds=3, density=0.8, per_cell=(1, 1), max_leaves=10_000
+        )
 
         set_world_seed(47)
         rng2 = for_domain("test", "pc2")
         sk2, _, limbs2, twigs2 = _build_oak(rng2)
         ids2 = np.concatenate([limbs2, twigs2])
-        leaves2 = leaves_at_tips(sk2, ids2, rng2, rounds=3, density=0.8,
-                                 per_cell=(2, 2), max_leaves=10_000)
+        leaves2 = leaves_at_tips(
+            sk2, ids2, rng2, rounds=3, density=0.8, per_cell=(2, 2), max_leaves=10_000
+        )
 
         # per_cell=(2,2) always emits exactly 2 leaves/cell;
         # per_cell=(1,1) always emits 1 — so double.
@@ -461,14 +475,20 @@ class TestPerCell:
 # 13. custom cell_m — larger cells → fewer, farther-spread leaves
 # ---------------------------------------------------------------------------
 
+
 class TestCellSize:
     def _tiny_skeleton(self, rng):
         """A minimal single-tip skeleton to avoid the _MAX_GRID_CELLS guard at small cell_m."""
         sb = SkeletonBuilder(rng)
         trunk = sb.trunk(height_m=2.0, base_radius_m=0.1, segments=1, wobble_m=0.0)
-        twigs = sb.branches(trunk, count=(1, 1),
-                            pitch_set=(math.radians(85),),
-                            length_ratio=(0.5, 0.5), radius_ratio=0.5, segments=1)
+        twigs = sb.branches(
+            trunk,
+            count=(1, 1),
+            pitch_set=(math.radians(85),),
+            length_ratio=(0.5, 0.5),
+            radius_ratio=0.5,
+            segments=1,
+        )
         return sb.skeleton(), twigs
 
     def test_larger_cell_larger_canopy_spread(self):
@@ -482,14 +502,16 @@ class TestCellSize:
         set_world_seed(53)
         rng_sm = for_domain("test", "cell_sm")
         sk_sm, twigs_sm = self._tiny_skeleton(rng_sm)
-        leaves_sm = leaves_at_tips(sk_sm, twigs_sm, rng_sm, rounds=3,
-                                   density=0.8, cell_m=0.1, max_leaves=10_000)
+        leaves_sm = leaves_at_tips(
+            sk_sm, twigs_sm, rng_sm, rounds=3, density=0.8, cell_m=0.1, max_leaves=10_000
+        )
 
         set_world_seed(53)
         rng_lg = for_domain("test", "cell_lg")
         sk_lg, twigs_lg = self._tiny_skeleton(rng_lg)
-        leaves_lg = leaves_at_tips(sk_lg, twigs_lg, rng_lg, rounds=3,
-                                   density=0.8, cell_m=0.5, max_leaves=10_000)
+        leaves_lg = leaves_at_tips(
+            sk_lg, twigs_lg, rng_lg, rounds=3, density=0.8, cell_m=0.5, max_leaves=10_000
+        )
 
         # Larger cell → each round spreads 0.5 m vs 0.1 m: larger bounding box.
         # Pin this as: max extent of large-cell leaves >= small-cell leaves
@@ -520,12 +542,13 @@ class TestCellSize:
 # 14. Leaves dataclass attribute access by name (not just index)
 # ---------------------------------------------------------------------------
 
+
 class TestDataclassContract:
     def test_center_attribute_name(self):
         sk, limbs, twigs, rng = _fresh_oak(59)
         ids = np.concatenate([limbs, twigs])
         leaves = leaves_at_tips(sk, ids, rng)
-        _ = leaves.center   # must not raise AttributeError
+        _ = leaves.center  # must not raise AttributeError
 
     def test_radius_attribute_name(self):
         sk, limbs, twigs, rng = _fresh_oak(59)

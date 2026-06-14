@@ -120,22 +120,22 @@ _REGIME_P: tuple[float, ...] = (0.40, 0.40, 0.20)
 #: threshold boundary — it collapses distinct regimes to the same label.
 _REGIME_AMBIENT: dict[Regime, tuple[float, float]] = {
     Regime.HIGH_PRESSURE: (0.08, 0.30),
-    Regime.MIXED:         (0.40, 0.52),
-    Regime.FRONTAL:       (0.75, 0.72),
+    Regime.MIXED: (0.40, 0.52),
+    Regime.FRONTAL: (0.75, 0.72),
 }
 
 #: Regime → probability that any one spawn slot actually produces a cell.
 _REGIME_SPAWN_PROB: dict[Regime, float] = {
     Regime.HIGH_PRESSURE: 0.12,
-    Regime.MIXED:         0.45,
-    Regime.FRONTAL:       0.75,
+    Regime.MIXED: 0.45,
+    Regime.FRONTAL: 0.75,
 }
 
 #: Regime → cell-kind distribution in ``_KIND_ORDER`` order (each sums to 1).
 _REGIME_KIND_P: dict[Regime, tuple[float, ...]] = {
     Regime.HIGH_PRESSURE: (0.70, 0.30, 0.00, 0.00),
-    Regime.MIXED:         (0.35, 0.45, 0.15, 0.05),
-    Regime.FRONTAL:       (0.20, 0.45, 0.35, 0.00),
+    Regime.MIXED: (0.35, 0.45, 0.15, 0.05),
+    Regime.FRONTAL: (0.20, 0.45, 0.35, 0.00),
 }
 
 
@@ -222,10 +222,13 @@ class StormCell:
         """
         dt = t - self.spawn_time
         shift = synoptic.displacement(t) - synoptic.displacement(self.spawn_time)
-        return np.array([
-            self.spawn_pos[0] + shift[0] + self.drift_bias[0] * dt,
-            self.spawn_pos[1] + shift[1] + self.drift_bias[1] * dt,
-        ], dtype=np.float64)
+        return np.array(
+            [
+                self.spawn_pos[0] + shift[0] + self.drift_bias[0] * dt,
+                self.spawn_pos[1] + shift[1] + self.drift_bias[1] * dt,
+            ],
+            dtype=np.float64,
+        )
 
     def contribution(self, points_xy: np.ndarray, t: float, synoptic) -> np.ndarray:
         """
@@ -255,6 +258,7 @@ class StormCell:
 # ---------------------------------------------------------------------------
 # Natural daily spawn schedule — pure function of (world_seed, day)
 # ---------------------------------------------------------------------------
+
 
 def day_regime(day: int) -> Regime:
     """
@@ -329,16 +333,17 @@ def natural_cells(day: int, config: Config) -> list[StormCell]:
         peak = float(rng.uniform(0.6, 1.0))
         drift_ang = float(rng.uniform(0.0, 2.0 * math.pi))
         drift_mag = float(rng.uniform(0.0, 0.6))
-        drift_bias = (drift_mag * math.cos(drift_ang),
-                      drift_mag * math.sin(drift_ang))
-        cells.append(StormCell(
-            id=f"n:{day}:{slot}",
-            kind=kind,
-            spawn_time=spawn_time,
-            spawn_pos=spawn_pos,
-            duration_s=duration,
-            radius_m=radius,
-            peak_intensity=peak,
-            drift_bias=drift_bias,
-        ))
+        drift_bias = (drift_mag * math.cos(drift_ang), drift_mag * math.sin(drift_ang))
+        cells.append(
+            StormCell(
+                id=f"n:{day}:{slot}",
+                kind=kind,
+                spawn_time=spawn_time,
+                spawn_pos=spawn_pos,
+                duration_s=duration,
+                radius_m=radius,
+                peak_intensity=peak,
+                drift_bias=drift_bias,
+            )
+        )
     return cells

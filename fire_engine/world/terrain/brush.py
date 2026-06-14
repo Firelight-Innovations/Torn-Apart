@@ -39,6 +39,7 @@ class BrushMode(Enum):
 # shape, and ``aabb(center)`` returning (min_corner, max_corner) world meters.
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class SphereBrush:
     """
@@ -65,7 +66,7 @@ class SphereBrush:
     def mask(self, X: np.ndarray, Y: np.ndarray, Z: np.ndarray, center: np.ndarray) -> np.ndarray:
         """Boolean mask: voxel centres within ``radius_m`` of ``center``."""
         cx, cy, cz = center
-        return (X - cx) ** 2 + (Y - cy) ** 2 + (Z - cz) ** 2 <= self.radius_m ** 2
+        return (X - cx) ** 2 + (Y - cy) ** 2 + (Z - cz) ** 2 <= self.radius_m**2
 
 
 @dataclass(frozen=True)
@@ -96,11 +97,7 @@ class BoxBrush:
         """Boolean mask: voxel centres inside the axis-aligned box."""
         cx, cy, cz = center
         hx, hy, hz = self.half_extents_m.to_numpy()
-        return (
-            (np.abs(X - cx) <= hx)
-            & (np.abs(Y - cy) <= hy)
-            & (np.abs(Z - cz) <= hz)
-        )
+        return (np.abs(X - cx) <= hx) & (np.abs(Y - cy) <= hy) & (np.abs(Z - cz) <= hz)
 
 
 @dataclass(frozen=True)
@@ -133,7 +130,7 @@ class CylinderBrush:
         """Boolean mask: voxel centres inside the vertical cylinder."""
         cx, cy, cz = center
         half_h = self.height_m / 2.0
-        radial = (X - cx) ** 2 + (Y - cy) ** 2 <= self.radius_m ** 2
+        radial = (X - cx) ** 2 + (Y - cy) ** 2 <= self.radius_m**2
         vertical = np.abs(Z - cz) <= half_h
         return radial & vertical
 
@@ -145,9 +142,8 @@ Brush = SphereBrush | BoxBrush | CylinderBrush
 # apply_brush — the mutation entry point.
 # ---------------------------------------------------------------------------
 
-def _chunks_in_aabb(
-    mn: np.ndarray, mx: np.ndarray, chunk_m: float
-) -> list[tuple[int, int, int]]:
+
+def _chunks_in_aabb(mn: np.ndarray, mx: np.ndarray, chunk_m: float) -> list[tuple[int, int, int]]:
     """
     All chunk coords whose 16 m cube intersects the world-space AABB [mn, mx].
 

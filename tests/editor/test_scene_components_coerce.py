@@ -6,6 +6,7 @@ contracts.  Do NOT fix bugs — pin current behaviour and note suspicions.
 
 Headless only: no panda3d, no fire_engine.world.
 """
+
 from __future__ import annotations
 
 import copy
@@ -114,9 +115,9 @@ class TestDefaultParams:
     def test_no_aliasing_between_calls(self):
         """Mutating one call's result must not affect the next call."""
         p1 = default_params("Light")
-        p1["color"].append(99)          # mutate the list in place
+        p1["color"].append(99)  # mutate the list in place
         p2 = default_params("Light")
-        assert len(p2["color"]) == 3    # fresh deep copy — unaffected
+        assert len(p2["color"]) == 3  # fresh deep copy — unaffected
 
     def test_no_aliasing_between_two_returns(self):
         """Two successive calls return equal but distinct objects."""

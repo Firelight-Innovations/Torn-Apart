@@ -116,8 +116,11 @@ def relative_humidity(
     """
     rain_gain = float(config.weather_humidity_rain_gain)
     wet_gain = float(config.weather_humidity_wetness_gain)
-    h = float(h_base) + rain_gain * np.asarray(rain_recent, dtype=np.float64) \
+    h = (
+        float(h_base)
+        + rain_gain * np.asarray(rain_recent, dtype=np.float64)
         + wet_gain * np.asarray(wetness, dtype=np.float64)
+    )
     return np.clip(h, 0.0, 1.0)
 
 
@@ -153,9 +156,7 @@ def saturation_humidity(temperature_c: np.ndarray, config: Config) -> np.ndarray
     return np.clip(base + slope * (t - ref), 0.5, 1.0)
 
 
-def condense_fraction(
-    humidity: np.ndarray, h_sat: np.ndarray, config: Config
-) -> np.ndarray:
+def condense_fraction(humidity: np.ndarray, h_sat: np.ndarray, config: Config) -> np.ndarray:
     """
     Condensation fraction 0–1: how far humidity has pushed past saturation.
 

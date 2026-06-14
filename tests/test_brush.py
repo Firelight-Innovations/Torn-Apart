@@ -51,7 +51,7 @@ class TestSphereCount:
         apply_brush(SphereBrush(r), center, BrushMode.ADD, chunk_provider=provider)
         total_solid = sum(int((ch.materials > 0).sum()) for ch in store.values())
         vs = cfg.voxel_size
-        analytic = (4.0 / 3.0) * math.pi * r ** 3 / (vs ** 3)
+        analytic = (4.0 / 3.0) * math.pi * r**3 / (vs**3)
         # Discretisation tolerance: ±12%
         assert abs(total_solid - analytic) / analytic < 0.12
 
@@ -77,9 +77,7 @@ class TestMultiChunk:
         # Center on the boundary between chunks along X at world x=16 (border of
         # chunk 0 and 1), radius spanning into both. chunk_meters = 16.
         center = Vec3(16.0, 8.0, 8.0)
-        touched = apply_brush(
-            SphereBrush(3.0), center, BrushMode.ADD, chunk_provider=provider
-        )
+        touched = apply_brush(SphereBrush(3.0), center, BrushMode.ADD, chunk_provider=provider)
         # Sphere at x=16±3 spans chunk 0 (x∈[0,16)) and chunk 1 (x∈[16,32)).
         assert (0, 0, 0) in touched
         assert (1, 0, 0) in touched
@@ -92,15 +90,8 @@ class TestMultiChunk:
         provider, store = make_provider(cfg)
         # Centre exactly on the 8-chunk corner at (16,16,16).
         center = Vec3(16.0, 16.0, 16.0)
-        touched = apply_brush(
-            SphereBrush(2.0), center, BrushMode.ADD, chunk_provider=provider
-        )
-        expected = {
-            (cx, cy, cz)
-            for cx in (0, 1)
-            for cy in (0, 1)
-            for cz in (0, 1)
-        }
+        touched = apply_brush(SphereBrush(2.0), center, BrushMode.ADD, chunk_provider=provider)
+        expected = {(cx, cy, cz) for cx in (0, 1) for cy in (0, 1) for cz in (0, 1)}
         assert expected.issubset(touched)
 
 
@@ -119,8 +110,11 @@ class TestEvents:
         bus.subscribe(TerrainEditedEvent, lambda e: events.append(e))
 
         touched = apply_brush(
-            SphereBrush(2.0), Vec3(8, 8, 8), BrushMode.REMOVE,
-            chunk_provider=provider, bus=bus,
+            SphereBrush(2.0),
+            Vec3(8, 8, 8),
+            BrushMode.REMOVE,
+            chunk_provider=provider,
+            bus=bus,
         )
         assert (0, 0, 0) in touched
         assert ch.edited is True
@@ -138,8 +132,11 @@ class TestEvents:
         events = []
         bus.subscribe(TerrainEditedEvent, lambda e: events.append(e))
         touched = apply_brush(
-            SphereBrush(2.0), Vec3(8, 8, 8), BrushMode.REMOVE,
-            chunk_provider=provider, bus=bus,
+            SphereBrush(2.0),
+            Vec3(8, 8, 8),
+            BrushMode.REMOVE,
+            chunk_provider=provider,
+            bus=bus,
         )
         assert touched == set()
         assert events == []
@@ -151,8 +148,10 @@ class TestOtherShapes:
         set_world_seed(1)
         provider, store = make_provider(cfg)
         apply_brush(
-            BoxBrush(Vec3(2.0, 2.0, 2.0)), Vec3(8, 8, 8),
-            BrushMode.ADD, chunk_provider=provider,
+            BoxBrush(Vec3(2.0, 2.0, 2.0)),
+            Vec3(8, 8, 8),
+            BrushMode.ADD,
+            chunk_provider=provider,
         )
         ch = provider((0, 0, 0))
         count = int((ch.materials > 0).sum())
@@ -165,12 +164,14 @@ class TestOtherShapes:
         set_world_seed(1)
         provider, store = make_provider(cfg)
         touched = apply_brush(
-            CylinderBrush(radius_m=2.0, height_m=4.0), Vec3(8, 8, 8),
-            BrushMode.ADD, chunk_provider=provider,
+            CylinderBrush(radius_m=2.0, height_m=4.0),
+            Vec3(8, 8, 8),
+            BrushMode.ADD,
+            chunk_provider=provider,
         )
         ch = provider((0, 0, 0))
         count = int((ch.materials > 0).sum())
         # Cylinder volume π r² h / vs³ ≈ π*4*4 / 0.125 ≈ 402 voxels.
-        analytic = math.pi * 2.0 ** 2 * 4.0 / (cfg.voxel_size ** 3)
+        analytic = math.pi * 2.0**2 * 4.0 / (cfg.voxel_size**3)
         assert abs(count - analytic) / analytic < 0.2
         assert (0, 0, 0) in touched

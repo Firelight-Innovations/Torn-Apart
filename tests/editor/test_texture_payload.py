@@ -4,6 +4,7 @@ Covers the codec round-trip, deterministic per-seed ``ground_seed`` (so the
 editor viewport matches the game), and that ``world.ground_lut`` ships exactly
 one TEXTURE frame whose bytes decode back to ``EditorSession.ground_lut()``.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -76,8 +77,6 @@ class TestGroundLutFrame:
             schema_id, payload_id, payload = decode_frame(sent[0])
             assert schema_id == SchemaId.TEXTURE and payload_id == res["payload_id"]
             decoded = decode_texture_payload(payload)
-            np.testing.assert_array_equal(
-                decoded["rgba"], daemon.session.ground_lut()
-            )
+            np.testing.assert_array_equal(decoded["rgba"], daemon.session.ground_lut())
 
         _run(scenario())

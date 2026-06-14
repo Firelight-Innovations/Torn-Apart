@@ -40,8 +40,8 @@ _log = get_logger("lighting.palette")
 # Material id → procedural texture def name used to derive its albedo.
 # Mirrors the material → texture mapping in terrain/generation.py.
 _MATERIAL_TEXTURE_DEFS: dict[int, str] = {
-    1: "dirt_ground",    # MATERIAL_DIRT
-    2: "grass_ground",   # MATERIAL_GRASS
+    1: "dirt_ground",  # MATERIAL_DIRT
+    2: "grass_ground",  # MATERIAL_GRASS
 }
 
 # Fallback albedo for any solid material with no registered texture def —
@@ -68,13 +68,10 @@ class MaterialPalette:
     ``palette.albedo[materials]`` → ``float32 (..., 3)``.
     """
 
-    albedo: np.ndarray = field(
-        default_factory=lambda: np.zeros((256, 3), dtype=np.float32))
-    emission: np.ndarray = field(
-        default_factory=lambda: np.zeros((256, 3), dtype=np.float32))
+    albedo: np.ndarray = field(default_factory=lambda: np.zeros((256, 3), dtype=np.float32))
+    emission: np.ndarray = field(default_factory=lambda: np.zeros((256, 3), dtype=np.float32))
 
-    def with_emission(self, material: int,
-                      rgb: tuple[float, float, float]) -> "MaterialPalette":
+    def with_emission(self, material: int, rgb: tuple[float, float, float]) -> "MaterialPalette":
         """
         Return a copy of this palette with ``material``'s emission set.
 
@@ -105,12 +102,13 @@ def _mean_texture_rgb(def_name: str) -> tuple[float, float, float] | None:
     """
     try:
         from fire_engine.procedural import get as get_procedural
-        rgba = get_procedural(def_name)             # (H, W, 4) uint8
+
+        rgba = get_procedural(def_name)  # (H, W, 4) uint8
     except Exception as exc:  # noqa: BLE001  (missing def is non-fatal)
         _log.warning("Palette: no texture def %r (%s)", def_name, exc)
         return None
     srgb = rgba[..., :3].astype(np.float32) / 255.0
-    linear = srgb ** 2.2
+    linear = srgb**2.2
     mean = linear.reshape(-1, 3).mean(axis=0)
     return (float(mean[0]), float(mean[1]), float(mean[2]))
 
@@ -138,7 +136,7 @@ def build_default_palette() -> MaterialPalette:
     """
     albedo = np.empty((256, 3), dtype=np.float32)
     albedo[:] = np.asarray(_FALLBACK_ALBEDO, dtype=np.float32)
-    albedo[0] = 0.0                                  # air
+    albedo[0] = 0.0  # air
     for material, def_name in _MATERIAL_TEXTURE_DEFS.items():
         rgb = _mean_texture_rgb(def_name)
         if rgb is not None:

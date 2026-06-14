@@ -107,6 +107,7 @@ def _install_probes(app) -> None:
             _wrap(pipe.exposure_meter, "update", "exposure_meter")
         # Module-level helpers used inside lighting_update.
         import fire_engine.lighting.gpu as gpu_mod
+
         if hasattr(gpu_mod, "assemble_geometry"):
             _wrap(gpu_mod, "assemble_geometry", "assemble_geometry")
         if hasattr(gpu_mod, "_upload_volume"):
@@ -120,6 +121,7 @@ def _flight_path(i: int, n: int) -> Vec3:
     fresh chunks and recenter every cascade window repeatedly.
     """
     import math
+
     # ~50 m/s feel: advance ~0.8 m per frame, with gentle XY turning + climb.
     t = i * 0.8
     x = math.sin(i * 0.01) * t * 0.5
@@ -132,9 +134,9 @@ def main() -> None:
     n = int(sys.argv[1]) if len(sys.argv) > 1 else 600
     warmup = 60
 
-    print(f"[profile_stream] booting demo, will fly {n} frames "
-          f"(after {warmup} warmup)...")
+    print(f"[profile_stream] booting demo, will fly {n} frames (after {warmup} warmup)...")
     import main as demo
+
     app = demo.build_demo()
     _install_probes(app)
 
@@ -163,24 +165,34 @@ def main() -> None:
     avg_frame = ft.mean()
     fps = 1000.0 / avg_frame if avg_frame > 0 else 0.0
 
-    print(f"\n[profile_stream] {n} frames in {wall:.2f}s — "
-          f"avg {avg_frame:.1f} ms/frame (~{fps:.0f} fps)\n")
-    hdr = f"{'substep':<22}{'calls':>7}{'p50 ms':>10}{'p95 ms':>10}" \
-          f"{'p99 ms':>10}{'total ms':>11}{'% frame':>9}"
+    print(
+        f"\n[profile_stream] {n} frames in {wall:.2f}s — "
+        f"avg {avg_frame:.1f} ms/frame (~{fps:.0f} fps)\n"
+    )
+    hdr = (
+        f"{'substep':<22}{'calls':>7}{'p50 ms':>10}{'p95 ms':>10}"
+        f"{'p99 ms':>10}{'total ms':>11}{'% frame':>9}"
+    )
     print(hdr)
     print("-" * len(hdr))
 
     frame_total_ms = ft.total()
 
-    def row(label: str, total_ms: float, calls: int,
-            p50: float, p95: float, p99: float) -> None:
+    def row(label: str, total_ms: float, calls: int, p50: float, p95: float, p99: float) -> None:
         pct = (total_ms / frame_total_ms * 100.0) if frame_total_ms else 0.0
-        print(f"{label:<22}{calls:>7}{p50:>10.2f}{p95:>10.2f}"
-              f"{p99:>10.2f}{total_ms:>11.1f}{pct:>8.1f}%")
+        print(
+            f"{label:<22}{calls:>7}{p50:>10.2f}{p95:>10.2f}"
+            f"{p99:>10.2f}{total_ms:>11.1f}{pct:>8.1f}%"
+        )
 
     order = [
-        "stream_frame", "lighting_update", "assemble_geometry",
-        "volume_upload", "exposure_meter", "surface_inputs", "frame_total",
+        "stream_frame",
+        "lighting_update",
+        "assemble_geometry",
+        "volume_upload",
+        "exposure_meter",
+        "surface_inputs",
+        "frame_total",
     ]
     for label in order:
         s = _STATS.get(label)
@@ -192,9 +204,11 @@ def main() -> None:
     if su_stat is not None:
         row("terrain_upload(der.)", upload_total, su_stat.count, 0.0, 0.0, 0.0)
 
-    print("\n[profile_stream] Note: 'lighting_update' is the umbrella; "
-          "'assemble_geometry' + 'volume_upload' + 'exposure_meter' are its "
-          "CPU sub-costs.  A substep dominating '% frame' is the real bottleneck.")
+    print(
+        "\n[profile_stream] Note: 'lighting_update' is the umbrella; "
+        "'assemble_geometry' + 'volume_upload' + 'exposure_meter' are its "
+        "CPU sub-costs.  A substep dominating '% frame' is the real bottleneck."
+    )
 
     # Clean exit without entering the blocking main loop.
     try:

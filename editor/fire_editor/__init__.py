@@ -11,6 +11,7 @@ Public surface (Phase E0):
 - :class:`~fire_editor.rpc.Dispatcher`, :class:`~fire_editor.rpc.RpcError`.
 - Constants in :mod:`fire_editor._generated` (codegen from ``protocol/schema.json``).
 """
+
 from __future__ import annotations
 
 from ._generated import DAEMON_VERSION, PROTOCOL_VERSION

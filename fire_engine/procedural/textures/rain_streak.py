@@ -118,19 +118,19 @@ class RainStreakDef(ProceduralTextureDef):
         K = int(params.get("streak_count", self.DEFAULT_STREAK_COUNT))
 
         # --- Streak attributes (coarse column domain) ---
-        cols = rng.integers(0, W, K)                       # (K,)
-        heads = rng.integers(0, H, K)                      # (K,) head row
-        lengths = rng.integers(H // 12, H // 3, K)         # (K,) ~43..170 px
-        tiers = _TIERS[rng.choice(len(_TIERS), K, p=_TIER_PROBS)]   # (K,)
+        cols = rng.integers(0, W, K)  # (K,)
+        heads = rng.integers(0, H, K)  # (K,) head row
+        lengths = rng.integers(H // 12, H // 3, K)  # (K,) ~43..170 px
+        tiers = _TIERS[rng.choice(len(_TIERS), K, p=_TIER_PROBS)]  # (K,)
 
         # --- Intensity profile per (row, streak) — wraps in V via modulo ---
-        rows = np.arange(H, dtype=np.int64)[:, None]       # (H, 1)
-        rel = (rows - heads[None, :]) % H                  # (H, K) px below head
-        inside = rel < lengths[None, :]                    # (H, K) bool
+        rows = np.arange(H, dtype=np.int64)[:, None]  # (H, 1)
+        rel = (rows - heads[None, :]) % H  # (H, K) px below head
+        inside = rel < lengths[None, :]  # (H, K) bool
         frac = np.clip(rel / np.maximum(lengths[None, :], 1), 0.0, 1.0)  # (H, K)
-        profile = np.where(
-            inside, (1.0 - frac) ** 1.6 * tiers[None, :], 0.0
-        ).astype(np.float32)                               # (H, K)
+        profile = np.where(inside, (1.0 - frac) ** 1.6 * tiers[None, :], 0.0).astype(
+            np.float32
+        )  # (H, K)
 
         # --- Scatter into the canvas (max keeps overlaps crisp) ---
         canvas = np.zeros((H, W), dtype=np.float32)
@@ -145,15 +145,14 @@ class RainStreakDef(ProceduralTextureDef):
             row2 = np.broadcast_to(rows, (H, int(heavy.sum()))).ravel()
             col2_idx = np.broadcast_to(col2[None, :], (H, int(heavy.sum()))).ravel()
             np.maximum.at(
-                canvas, (row2, col2_idx),
+                canvas,
+                (row2, col2_idx),
                 (profile[:, heavy] * 0.35).ravel(),
             )
 
         # --- Assemble RGBA: rgb = color · intensity, alpha = intensity ---
         np.clip(canvas, 0.0, 1.0, out=canvas)
         rgba = np.empty((H, W, 4), dtype=np.uint8)
-        rgba[..., :3] = (
-            canvas[..., None] * _STREAK_RGB[None, None, :] * 255.0
-        ).astype(np.uint8)
+        rgba[..., :3] = (canvas[..., None] * _STREAK_RGB[None, None, :] * 255.0).astype(np.uint8)
         rgba[..., 3] = (canvas * 255.0).astype(np.uint8)
         return rgba

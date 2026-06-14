@@ -78,9 +78,7 @@ class ZoneVolume:
         if len(lo) != 3 or len(hi) != 3:
             raise ValueError("ZoneVolume corners must be 3-tuples (x, y, z)")
         if not all(a < b for a, b in zip(lo, hi)):
-            raise ValueError(
-                f"ZoneVolume min_corner {lo} must be < max_corner {hi} "
-                "on every axis")
+            raise ValueError(f"ZoneVolume min_corner {lo} must be < max_corner {hi} on every axis")
         # Normalise to float tuples (frozen dataclass → object.__setattr__).
         object.__setattr__(self, "min_corner", lo)
         object.__setattr__(self, "max_corner", hi)
@@ -92,9 +90,11 @@ class ZoneVolume:
     @property
     def size_m(self) -> tuple[float, float, float]:
         """Edge lengths (x, y, z) in meters."""
-        return (self.max_corner[0] - self.min_corner[0],
-                self.max_corner[1] - self.min_corner[1],
-                self.max_corner[2] - self.min_corner[2])
+        return (
+            self.max_corner[0] - self.min_corner[0],
+            self.max_corner[1] - self.min_corner[1],
+            self.max_corner[2] - self.min_corner[2],
+        )
 
     @property
     def area_xy_m2(self) -> float:
@@ -102,8 +102,7 @@ class ZoneVolume:
         sx, sy, _ = self.size_m
         return sx * sy
 
-    def contains_xy(self, world_x: np.ndarray,
-                    world_y: np.ndarray) -> np.ndarray:
+    def contains_xy(self, world_x: np.ndarray, world_y: np.ndarray) -> np.ndarray:
         """
         Vectorized XY containment test (Z ignored).
 
@@ -119,11 +118,14 @@ class ZoneVolume:
         """
         wx = np.asarray(world_x)
         wy = np.asarray(world_y)
-        return ((wx >= self.min_corner[0]) & (wx < self.max_corner[0]) &
-                (wy >= self.min_corner[1]) & (wy < self.max_corner[1]))
+        return (
+            (wx >= self.min_corner[0])
+            & (wx < self.max_corner[0])
+            & (wy >= self.min_corner[1])
+            & (wy < self.max_corner[1])
+        )
 
-    def intersects_chunk(self, coord: tuple[int, int, int],
-                         chunk_meters: float) -> bool:
+    def intersects_chunk(self, coord: tuple[int, int, int], chunk_meters: float) -> bool:
         """
         True when this volume's AABB overlaps chunk ``coord``'s world box.
 
@@ -137,7 +139,8 @@ class ZoneVolume:
         return all(
             coord[i] * chunk_meters < self.max_corner[i]
             and (coord[i] + 1) * chunk_meters > self.min_corner[i]
-            for i in range(3))
+            for i in range(3)
+        )
 
     # ------------------------------------------------------------------
     # Serialisation (save-safe primitives only)

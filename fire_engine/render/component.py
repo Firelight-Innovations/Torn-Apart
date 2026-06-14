@@ -89,7 +89,7 @@ class Component:
 
     def __init__(self) -> None:
         self.game_object: "GameObject | None" = None
-        self.transform:   "Transform | None"  = None
+        self.transform: "Transform | None" = None
         self.enabled: bool = True
         self._started: bool = False  # tracks whether start() has run
 

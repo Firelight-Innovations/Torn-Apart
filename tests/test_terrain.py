@@ -28,6 +28,7 @@ def cfg():
 # Generation: flat baseline terrain (determinism, flatness, bounds, seed-free)
 # ===========================================================================
 
+
 class TestFlatGeneration:
     def test_same_coord_byte_identical(self, cfg):
         a = generate_chunk((2, -3, 1), cfg)
@@ -54,11 +55,11 @@ class TestFlatGeneration:
         Every (x,y) column must be a single solid→air run (no holes/overhangs):
         once air begins going up it never returns to solid.
         """
-        m = generate_chunk((0, 0, 0), cfg)            # world z ∈ [0, 16)
+        m = generate_chunk((0, 0, 0), cfg)  # world z ∈ [0, 16)
         vs = cfg.voxel_size
         ground = cfg.ground_height_m
-        zc = (np.arange(32) + 0.5) * vs               # voxel-centre world Z
-        expected_col = (zc < ground)                  # (32,) bool over z
+        zc = (np.arange(32) + 0.5) * vs  # voxel-centre world Z
+        expected_col = zc < ground  # (32,) bool over z
         solid = m > 0
         # Within this chunk's footprint (near origin) every column equals the
         # same flat profile.
@@ -68,12 +69,12 @@ class TestFlatGeneration:
 
     def test_below_ground_fully_solid(self, cfg):
         """A chunk entirely below the ground surface is fully solid (in bounds)."""
-        m = generate_chunk((0, 0, -1), cfg)           # world z ∈ [-16, 0), all < 8
+        m = generate_chunk((0, 0, -1), cfg)  # world z ∈ [-16, 0), all < 8
         assert np.all(m > 0)
 
     def test_above_ground_fully_air(self, cfg):
         """A chunk entirely above the ground surface is empty air."""
-        m = generate_chunk((0, 0, 2), cfg)            # world z ∈ [32, 48), all > 8
+        m = generate_chunk((0, 0, 2), cfg)  # world z ∈ [32, 48), all > 8
         assert np.all(m == 0)
 
     def test_outside_world_footprint_is_air(self, cfg):
@@ -84,12 +85,13 @@ class TestFlatGeneration:
 
     def test_footprint_is_centred_on_origin(self, cfg):
         """Both sides of the origin are ground; symmetry confirms centring."""
-        east = generate_chunk((0, 0, -1), cfg)        # x ∈ [0, 16)
-        west = generate_chunk((-1, 0, -1), cfg)       # x ∈ [-16, 0)
+        east = generate_chunk((0, 0, -1), cfg)  # x ∈ [0, 16)
+        west = generate_chunk((-1, 0, -1), cfg)  # x ∈ [-16, 0)
         assert np.all(east > 0) and np.all(west > 0)
 
     def test_surface_height_is_flat_constant(self, cfg):
         from fire_engine.world.terrain.generation import surface_height
+
         wx = np.array([0.0, 8.0, -300.0])[:, None]
         wy = np.array([0.0, -50.0])[None, :]
         surf = surface_height(wx, wy, cfg)
@@ -100,6 +102,7 @@ class TestFlatGeneration:
 # ===========================================================================
 # Mesher fixtures
 # ===========================================================================
+
 
 class TestMesherFixtures:
     def test_single_voxel_six_faces(self):
@@ -116,7 +119,7 @@ class TestMesherFixtures:
     def test_two_adjacent_ten_faces(self):
         c = Chunk((0, 0, 0))
         c.materials[5, 5, 5] = 1
-        c.materials[6, 5, 5] = 1   # adjacent along +X
+        c.materials[6, 5, 5] = 1  # adjacent along +X
         mesh = build_mesh(c, neighbor_solids=None)
         # 12 total faces minus 2 shared (one each side) = 10
         assert mesh.face_count == 10
@@ -157,7 +160,7 @@ class TestMesherFixtures:
         """A solid voxel on +X face of A with solid neighbor in B → shared
         interior face culled when neighbor_solids supplies B (no leak)."""
         a = Chunk((0, 0, 0))
-        a.materials[31, 5, 5] = 1   # on the +X boundary of A
+        a.materials[31, 5, 5] = 1  # on the +X boundary of A
         # Neighbor B (chunk +X) has a solid voxel at its x=0 facing A's x=31.
         b_solid = np.zeros((32, 32, 32), dtype=bool)
         b_solid[0, 5, 5] = True
@@ -172,7 +175,7 @@ class TestMesherFixtures:
         """A voxel on the -Z boundary: with WORLD_FLOOR_SOLID the bottom face
         is culled (no see-through floor)."""
         a = Chunk((0, 0, -2))
-        a.materials[5, 5, 0] = 1   # on the -Z boundary
+        a.materials[5, 5, 0] = 1  # on the -Z boundary
         open_mesh = build_mesh(a, neighbor_solids=None)
         assert open_mesh.face_count == 6
         floored = build_mesh(a, neighbor_solids={(0, 0, -1): WORLD_FLOOR_SOLID})
@@ -205,7 +208,7 @@ class TestMesherFixtures:
             return np.full((face_centers.shape[0],), 0.25, dtype=np.float32)
 
         mesh = build_mesh(c, neighbor_solids=None, light_sampler=sampler)
-        assert captured["shape"] == (6, 3)   # 6 faces, world xyz
+        assert captured["shape"] == (6, 3)  # 6 faces, world xyz
         assert np.allclose(mesh.colors[:, :3], 0.25)
         assert np.allclose(mesh.colors[:, 3], 1.0)
 
@@ -213,6 +216,7 @@ class TestMesherFixtures:
 # ===========================================================================
 # desired_set pure-function tests
 # ===========================================================================
+
 
 class TestDesiredSet:
     def test_membership_and_count(self):
@@ -245,6 +249,7 @@ class TestDesiredSet:
 # ===========================================================================
 # ChunkManager streaming + Saveable round-trip
 # ===========================================================================
+
 
 class TestChunkManagerStreaming:
     def test_stream_budget_two_per_frame(self):
@@ -301,9 +306,13 @@ class TestRemeshEdited:
     def _crater(self, cm):
         """Carve a corner-spanning crater; return apply_brush's touched set."""
         from fire_engine.world.terrain.brush import apply_brush, SphereBrush, BrushMode
+
         return apply_brush(
-            SphereBrush(2.5), Vec3(16.0, 16.0, 8.0), BrushMode.REMOVE,
-            chunk_provider=cm.get_or_create)
+            SphereBrush(2.5),
+            Vec3(16.0, 16.0, 8.0),
+            BrushMode.REMOVE,
+            chunk_provider=cm.get_or_create,
+        )
 
     def test_remeshes_all_touched_and_dirty_neighbors_now(self):
         set_world_seed(1337)
@@ -326,12 +335,12 @@ class TestRemeshEdited:
         cfg = load_config()
         cm = ChunkManager(cfg, EventBus())
         touched = self._crater(cm)
-        far = cm.get_or_create((40, 40, 0))   # far outside the crater
+        far = cm.get_or_create((40, 40, 0))  # far outside the crater
         far.dirty = True
 
         cm.remesh_edited(touched)
 
-        assert far.dirty is True              # left to stream_frame's budget
+        assert far.dirty is True  # left to stream_frame's budget
         assert (40, 40, 0) not in cm.pending_meshes
 
     def test_idempotent_on_clean_chunks(self):

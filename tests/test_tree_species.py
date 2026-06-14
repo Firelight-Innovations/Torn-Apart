@@ -18,8 +18,7 @@ from fire_engine.procedural import clear_cache, get
 from fire_engine.procedural.flora import TreeVariantSet
 
 SPECIES = ("tree_gnarled_oak", "tree_dead", "bush_scrub", "bush_berry")
-POOL_SIZES = {"tree_gnarled_oak": 8, "tree_dead": 6,
-              "bush_scrub": 6, "bush_berry": 6}
+POOL_SIZES = {"tree_gnarled_oak": 8, "tree_dead": 6, "bush_scrub": 6, "bush_berry": 6}
 
 
 @pytest.fixture(autouse=True)
@@ -36,6 +35,7 @@ def _ensure_species_registered() -> None:
     (test_procedural's _fresh_registry re-registers only its own subset —
     the same workaround test_sky_atmosphere uses for moon_surface)."""
     from fire_engine.procedural import registry
+
     if "tree_gnarled_oak" in registry._registry:
         return
     from fire_engine.procedural.flora.species import (
@@ -44,6 +44,7 @@ def _ensure_species_registered() -> None:
         GnarledOakDef,
         ScrubBushDef,
     )
+
     for cls in (GnarledOakDef, DeadTreeDef, ScrubBushDef, BerryBushDef):
         registry.register(cls())
 
@@ -54,7 +55,7 @@ class TestRegistry:
         vs1 = get(name)
         vs2 = get(name)
         assert isinstance(vs1, TreeVariantSet)
-        assert vs1 is vs2                      # registry cache identity
+        assert vs1 is vs2  # registry cache identity
         assert vs1.name == name
 
     @pytest.mark.parametrize("name", SPECIES)
@@ -84,15 +85,15 @@ class TestDeterminism:
         set_world_seed(31337)
         clear_cache()
         vs2 = get("tree_gnarled_oak")
-        assert not np.array_equal(vs1.meshes[0].positions,
-                                  vs2.meshes[0].positions)
+        assert not np.array_equal(vs1.meshes[0].positions, vs2.meshes[0].positions)
 
     def test_variants_mutually_distinct(self):
         vs = get("tree_gnarled_oak")
         m0 = vs.meshes[0]
-        assert any(m.n_vertices != m0.n_vertices
-                   or not np.array_equal(m.positions, m0.positions)
-                   for m in vs.meshes[1:])
+        assert any(
+            m.n_vertices != m0.n_vertices or not np.array_equal(m.positions, m0.positions)
+            for m in vs.meshes[1:]
+        )
 
 
 class TestVariantSetInvariants:
@@ -104,10 +105,8 @@ class TestVariantSetInvariants:
             assert m.positions.dtype == np.float32
             assert m.indices.dtype == np.uint32
             assert int(m.indices.max()) < m.n_vertices
-            assert np.allclose(np.linalg.norm(m.normals, axis=1), 1.0,
-                               atol=1e-4)
-            assert (m.colors[:, 3] >= 0.0).all() \
-                and (m.colors[:, 3] <= 1.0).all()
+            assert np.allclose(np.linalg.norm(m.normals, axis=1), 1.0, atol=1e-4)
+            assert (m.colors[:, 3] >= 0.0).all() and (m.colors[:, 3] <= 1.0).all()
             assert m.height_m <= vs.max_height_m + 1e-6
             assert m.radius_m <= vs.max_radius_m + 1e-6
 
@@ -116,10 +115,10 @@ class TestVariantSetInvariants:
         atlas = get(name).atlas
         assert atlas.dtype == np.uint8 and atlas.shape == (64, 64, 4)
         hw = atlas.shape[1] // 2
-        assert (atlas[:, :hw, 3] == 255).all()           # bark opaque
+        assert (atlas[:, :hw, 3] == 255).all()  # bark opaque
         leaf_a = atlas[:, hw:, 3]
-        assert ((leaf_a == 0) | (leaf_a == 255)).all()   # leaf binary
-        assert leaf_a.any()                              # some foliage texels
+        assert ((leaf_a == 0) | (leaf_a == 255)).all()  # leaf binary
+        assert leaf_a.any()  # some foliage texels
 
     @pytest.mark.parametrize("name", SPECIES)
     def test_impostor_contract(self, name):
@@ -129,11 +128,11 @@ class TestVariantSetInvariants:
         cell_w = imp.shape[1] // vs.n_variants
         assert imp.shape[1] == cell_w * vs.n_variants
         a = imp[..., 3]
-        assert ((a == 0) | (a == 255)).all()             # binary alpha
-        assert imp[-1, :, 3].any()                       # base on bottom row
+        assert ((a == 0) | (a == 255)).all()  # binary alpha
+        assert imp[-1, :, 3].any()  # base on bottom row
         # Every cell has content (no blank variant sprite).
         for k in range(vs.n_variants):
-            assert imp[:, k * cell_w:(k + 1) * cell_w, 3].any()
+            assert imp[:, k * cell_w : (k + 1) * cell_w, 3].any()
 
     def test_dead_tree_nearly_leafless(self):
         """The leafless species path: snags carry almost no foliage."""
@@ -148,8 +147,7 @@ class TestVariantSetInvariants:
         # Hard cap from the species script (max_leaves=36 per tuft bake)...
         assert all(leaf_count(m) <= 36 for m in dead.meshes)
         # ...and an order of magnitude under the living oak's canopy.
-        assert max(leaf_count(m) for m in dead.meshes) \
-            < min(leaf_count(m) for m in oak.meshes) / 3
+        assert max(leaf_count(m) for m in dead.meshes) < min(leaf_count(m) for m in oak.meshes) / 3
 
     def test_berry_bush_has_berries(self):
         """Berry speckle pass: the leaf half contains the berry hue."""

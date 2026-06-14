@@ -32,6 +32,7 @@ DAY = 86400.0
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_syn(seed: int = 42, **cfg_overrides) -> Synoptic:
     """Build a Synoptic with a fixed world seed and optional Config overrides."""
     set_world_seed(seed)
@@ -47,6 +48,7 @@ def _cfg(seed: int = 42) -> Config:
 # Displacement integral consistency
 # ---------------------------------------------------------------------------
 
+
 class TestDisplacementIntegral:
     """
     Central finite difference: (D(t+h) - D(t-h)) / (2h)  should equal wind_vec(t).
@@ -56,7 +58,7 @@ class TestDisplacementIntegral:
     """
 
     # Fine step – tight tolerance (analytic integral, not numerical)
-    _H_FINE = 0.5          # game seconds
+    _H_FINE = 0.5  # game seconds
     _ATOL_FINE = 1e-6
 
     def _fd(self, syn: Synoptic, t: float, h: float = _H_FINE) -> np.ndarray:
@@ -99,8 +101,10 @@ class TestDisplacementIntegral:
         fd = (syn.displacement(t + h) - syn.displacement(t - h)) / (2.0 * h)
         wv = syn.wind_vec(t)
         np.testing.assert_allclose(
-            fd, wv, atol=self._ATOL_FINE,
-            err_msg="dD/dt != wind_vec — displacement and wind are NOT consistent"
+            fd,
+            wv,
+            atol=self._ATOL_FINE,
+            err_msg="dD/dt != wind_vec — displacement and wind are NOT consistent",
         )
 
     def test_fd_midpoints_of_each_day_for_7_days(self):
@@ -142,6 +146,7 @@ class TestDisplacementIntegral:
 # Scalar vs vector equivalence
 # ---------------------------------------------------------------------------
 
+
 class TestScalarVectorEquivalence:
     """
     wind(t) scalar form, wind_vec(scalar t), wind_vec([t]) row, and
@@ -155,7 +160,7 @@ class TestScalarVectorEquivalence:
         syn = _make_syn(seed=11)
         for t in self._PROBE_TIMES:
             (ux, uy), spd = syn.wind(t)
-            wv = syn.wind_vec(float(t))          # scalar → (2,)
+            wv = syn.wind_vec(float(t))  # scalar → (2,)
             assert wv.shape == (2,)
             np.testing.assert_allclose(spd, math.hypot(wv[0], wv[1]), atol=1e-12)
             np.testing.assert_allclose([ux, uy], wv / spd, atol=1e-9)
@@ -164,8 +169,8 @@ class TestScalarVectorEquivalence:
         """wind_vec(np.array([t]))[0] must equal wind_vec(t) for each probe t."""
         syn = _make_syn(seed=22)
         for t in self._PROBE_TIMES:
-            row = syn.wind_vec(np.array([float(t)]))[0]   # shape (2,)
-            scalar = syn.wind_vec(float(t))               # shape (2,)
+            row = syn.wind_vec(np.array([float(t)]))[0]  # shape (2,)
+            scalar = syn.wind_vec(float(t))  # shape (2,)
             np.testing.assert_allclose(row, scalar, atol=0.0, rtol=0.0)
 
     def test_displacement_scalar_matches_vec_array_row(self):
@@ -180,7 +185,7 @@ class TestScalarVectorEquivalence:
         """wind_vec(t_array) equals stacking individual wind_vec(t) results."""
         syn = _make_syn(seed=44)
         ts = np.array(self._PROBE_TIMES)
-        batch = syn.wind_vec(ts)                          # (M, 2)
+        batch = syn.wind_vec(ts)  # (M, 2)
         stacked = np.stack([syn.wind_vec(float(t)) for t in ts])
         np.testing.assert_allclose(batch, stacked, atol=0.0, rtol=0.0)
 
@@ -220,6 +225,7 @@ class TestScalarVectorEquivalence:
 # Speed band
 # ---------------------------------------------------------------------------
 
+
 class TestSpeedBand:
     """
     wind() speed must stay in [v_min, v_max] for ALL sampled times.
@@ -244,9 +250,7 @@ class TestSpeedBand:
         assert speeds.min() >= v_min - 1e-9, (
             f"speed fell below v_min={v_min}: min was {speeds.min()}"
         )
-        assert speeds.max() <= v_max + 1e-9, (
-            f"speed exceeded v_max={v_max}: max was {speeds.max()}"
-        )
+        assert speeds.max() <= v_max + 1e-9, f"speed exceeded v_max={v_max}: max was {speeds.max()}"
 
     def test_speed_within_band_large_t(self):
         """Speed band still holds at 100-day mark."""
@@ -280,6 +284,7 @@ class TestSpeedBand:
 # ---------------------------------------------------------------------------
 # Determinism
 # ---------------------------------------------------------------------------
+
 
 class TestDeterminism:
     """Same seed → identical; different seed → different (non-trivially)."""
@@ -319,6 +324,7 @@ class TestDeterminism:
 # ---------------------------------------------------------------------------
 # Boundary / edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestEdgeCases:
     """

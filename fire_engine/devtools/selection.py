@@ -79,9 +79,7 @@ class Selection:
         """Deselect (equivalent to ``set(None)``)."""
         self.set(None)
 
-    def on_change(
-        self, callback: "Callable[[Optional[GameObject]], None]"
-    ) -> None:
+    def on_change(self, callback: "Callable[[Optional[GameObject]], None]") -> None:
         """
         Register a callback fired with the new selection whenever it changes.
 

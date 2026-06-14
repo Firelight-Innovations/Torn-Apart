@@ -50,6 +50,7 @@ LoaderCallable = Callable[[str], Any]
 # Error
 # ---------------------------------------------------------------------------
 
+
 class UnknownResourceFormatError(Exception):
     """
     Raised when ``dispatch()`` is called with a file suffix that has no
@@ -75,7 +76,7 @@ class UnknownResourceFormatError(Exception):
     """
 
     def __init__(self, path: str, suffix: str) -> None:
-        self.path   = path
+        self.path = path
         self.suffix = suffix
         super().__init__(
             f"No loader registered for suffix {suffix!r} "
@@ -94,16 +95,16 @@ class UnknownResourceFormatError(Exception):
 # "recognised but not yet registered" from "completely unknown".
 _LOADERS: dict[str, Optional[LoaderCallable]] = {
     # --- 3D models (Panda3D loader registered by world/resource_adapter.py) ---
-    ".egg":  None,
-    ".bam":  None,
+    ".egg": None,
+    ".bam": None,
     ".gltf": None,
-    ".glb":  None,
+    ".glb": None,
     # --- Audio (Panda3D loader registered by world/resource_adapter.py) ---
-    ".ogg":  None,
-    ".wav":  None,
+    ".ogg": None,
+    ".wav": None,
     # --- Static hand-crafted textures (Pillow/Panda3D registered at boot) ---
-    ".png":  None,
-    ".jpg":  None,
+    ".png": None,
+    ".jpg": None,
 }
 
 

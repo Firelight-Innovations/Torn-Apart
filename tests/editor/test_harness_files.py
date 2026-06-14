@@ -4,6 +4,7 @@ Cheap structural checks that the browser viewport harness references the bundles
 it actually needs, and that the CLI exposes the agent-facing subcommands. These
 don't boot a browser — they just keep the static wiring from rotting.
 """
+
 from __future__ import annotations
 
 import os
@@ -34,8 +35,10 @@ class TestHarnessHtml:
         needed = ["harnessBoot.js", "sceneView.js"]
         missing = [b for b in needed if not os.path.exists(os.path.join(media, b))]
         if missing:
-            pytest.skip(f"extension not built (missing {missing}); run "
-                        f"`npm run compile` in editor/extension")
+            pytest.skip(
+                f"extension not built (missing {missing}); run "
+                f"`npm run compile` in editor/extension"
+            )
         for b in needed:
             assert os.path.getsize(os.path.join(media, b)) > 0
 
@@ -51,9 +54,23 @@ class TestCli:
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         # Every RPC-mapped subcommand the agent harness doc advertises.
-        for cmd in ("open", "save", "set-center", "tree", "create", "rename",
-                    "reparent", "set-transform", "delete", "raycast", "brush",
-                    "undo", "redo", "rpc", "watch"):
+        for cmd in (
+            "open",
+            "save",
+            "set-center",
+            "tree",
+            "create",
+            "rename",
+            "reparent",
+            "set-transform",
+            "delete",
+            "raycast",
+            "brush",
+            "undo",
+            "redo",
+            "rpc",
+            "watch",
+        ):
             assert cmd in mod._HANDLERS, f"CLI missing subcommand: {cmd}"
 
     def test_cli_parser_builds(self):

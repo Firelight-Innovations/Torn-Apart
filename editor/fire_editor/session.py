@@ -7,6 +7,7 @@ the engine split lands). Determinism is preserved: the session sets the world
 seed via ``core.rng`` and adds no unseeded randomness (EDITOR_PRD hard rule 4),
 so editor preview of seed N matches the game world of seed N.
 """
+
 from __future__ import annotations
 
 import dataclasses
@@ -85,17 +86,17 @@ class EditorSession:
         numpy — never import ``world.terrain_shader`` here (it pulls panda3d).
         """
         if self._ground_lut is None:
-            from fire_engine.procedural.textures.dirt_ground import (
-                DIRT_PALETTE, DIRT_THRESHOLDS)
-            from fire_engine.procedural.textures.grass_ground import (
-                GRASS_PALETTE, GRASS_THRESHOLDS)
+            from fire_engine.procedural.textures.dirt_ground import DIRT_PALETTE, DIRT_THRESHOLDS
+            from fire_engine.procedural.textures.grass_ground import GRASS_PALETTE, GRASS_THRESHOLDS
             from fire_engine.procedural.textures.ground_lut import build_ground_lut
             from fire_engine.world.terrain import MATERIAL_DIRT, MATERIAL_GRASS
 
-            self._ground_lut = build_ground_lut({
-                MATERIAL_DIRT: (DIRT_PALETTE, DIRT_THRESHOLDS),
-                MATERIAL_GRASS: (GRASS_PALETTE, GRASS_THRESHOLDS),
-            })
+            self._ground_lut = build_ground_lut(
+                {
+                    MATERIAL_DIRT: (DIRT_PALETTE, DIRT_THRESHOLDS),
+                    MATERIAL_GRASS: (GRASS_PALETTE, GRASS_THRESHOLDS),
+                }
+            )
         return self._ground_lut
 
     # ------------------------------------------------------------------ #
@@ -174,8 +175,16 @@ class EditorSession:
     # ------------------------------------------------------------------ #
     # Brush editing (Phase E3)
     # ------------------------------------------------------------------ #
-    def make_brush(self, shape: str, *, radius: float = 2.0, hx: float = 1.0,
-                   hy: float = 1.0, hz: float = 1.0, height: float = 2.0):
+    def make_brush(
+        self,
+        shape: str,
+        *,
+        radius: float = 2.0,
+        hx: float = 1.0,
+        hy: float = 1.0,
+        hz: float = 1.0,
+        height: float = 2.0,
+    ):
         """Build a brush instance from a shape name and parameters."""
         s = shape.lower()
         if s == "sphere":

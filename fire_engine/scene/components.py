@@ -30,6 +30,7 @@ Example::
     c = make_component("Mesh")                   # -> a Mesh with default params
     c["params"]["primitive"] = "sphere"
 """
+
 from __future__ import annotations
 
 import copy
@@ -88,20 +89,21 @@ class ComponentSpec:
 
 COMPONENT_CATALOG: dict[str, ComponentSpec] = {
     "Mesh": ComponentSpec(
-        "Mesh", "Mesh", multiple=False,
+        "Mesh",
+        "Mesh",
+        multiple=False,
         fields=(
-            FieldSpec("primitive", "enum", "cube",
-                      choices=("cube", "sphere"), label="Primitive"),
+            FieldSpec("primitive", "enum", "cube", choices=("cube", "sphere"), label="Primitive"),
         ),
     ),
     "Light": ComponentSpec(
-        "Light", "Light", multiple=False,
+        "Light",
+        "Light",
+        multiple=False,
         fields=(
             FieldSpec("color", "color", list(_LIGHT_COLOR), label="Color"),
-            FieldSpec("intensity", "float", _LIGHT_INTENSITY,
-                      min=0.0, max=64.0, label="Intensity"),
-            FieldSpec("radius", "float", _LIGHT_RADIUS_M,
-                      min=0.0, max=128.0, label="Radius (m)"),
+            FieldSpec("intensity", "float", _LIGHT_INTENSITY, min=0.0, max=64.0, label="Intensity"),
+            FieldSpec("radius", "float", _LIGHT_RADIUS_M, min=0.0, max=128.0, label="Radius (m)"),
         ),
     ),
     "SpawnPoint": ComponentSpec("SpawnPoint", "Spawn Point", multiple=False),
@@ -129,8 +131,7 @@ def make_component(type_name: str, *, enabled: bool = True) -> dict:
     Raises:
         KeyError: if ``type_name`` is not a registered component type.
     """
-    return {"type": type_name, "enabled": bool(enabled),
-            "params": default_params(type_name)}
+    return {"type": type_name, "enabled": bool(enabled), "params": default_params(type_name)}
 
 
 def default_components_for_kind(kind: str) -> list[dict]:

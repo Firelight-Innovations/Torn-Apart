@@ -211,7 +211,7 @@ class WindField:
 
     def __init__(self, config: Config, worker: "VenturiWorker | None" = None) -> None:
         self._cfg = config
-        self._worker = worker          # VenturiWorker | None (terrain funneling)
+        self._worker = worker  # VenturiWorker | None (terrain funneling)
         self._region = WindRegion(
             cells=int(config.wind_cells),
             cell_m=float(config.wind_cell_m),
@@ -363,9 +363,8 @@ class WindField:
             den = float(sky_state.cloud_density)
 
         storminess = float(np.clip(rain * 0.6 + cov * den * 0.4, 0.0, 1.0))
-        gust_gain = (
-            (cfg.wind_gust_base + cfg.wind_gust_storm_gain * storminess)
-            * (0.4 + 0.6 * wind_speed / max(cfg.wind_speed_ref, 1e-6))
+        gust_gain = (cfg.wind_gust_base + cfg.wind_gust_storm_gain * storminess) * (
+            0.4 + 0.6 * wind_speed / max(cfg.wind_speed_ref, 1e-6)
         )
         turb_amt = cfg.wind_turb_base + cfg.wind_turb_storm_gain * storminess
         t_eff = float(wind_time) * (1.0 + cfg.wind_storm_freq_gain * storminess)
@@ -374,15 +373,11 @@ class WindField:
         mean_y = wind_dir[1] * wind_speed
 
         # --- 3. Compose mean + gusts + turbulence ---------------------------
-        gust_x, gust_y = eval_gusts(
-            self._modes, X, Y, t_eff, (mean_x, mean_y)
-        )
+        gust_x, gust_y = eval_gusts(self._modes, X, Y, t_eff, (mean_x, mean_y))
         vx = (mean_x + gust_gain * gust_x).astype(np.float32)
         vy = (mean_y + gust_gain * gust_y).astype(np.float32)
         # Turbulence rises where gusting is strong (hypot of the gust shape).
-        turb = (
-            turb_amt * (0.5 + 0.5 * np.hypot(gust_x, gust_y))
-        ).astype(np.float32)
+        turb = (turb_amt * (0.5 + 0.5 * np.hypot(gust_x, gust_y))).astype(np.float32)
 
         # --- 4. Venturi terrain-funneling correction ------------------------
         # Orchestrate the off-thread solver: (a) re-submit on recenter, (b)
@@ -394,21 +389,22 @@ class WindField:
         self._venturi_step(recentered, chunks, (mean_x, mean_y))
         if self._venturi_origin == self._region.origin_cell:
             mean_mag = float(np.hypot(mean_x, mean_y))
-            vx = (vx * self._venturi_speedup
-                  + self._venturi_deflect[..., 0] * mean_mag).astype(np.float32)
-            vy = (vy * self._venturi_speedup
-                  + self._venturi_deflect[..., 1] * mean_mag).astype(np.float32)
+            vx = (vx * self._venturi_speedup + self._venturi_deflect[..., 0] * mean_mag).astype(
+                np.float32
+            )
+            vy = (vy * self._venturi_speedup + self._venturi_deflect[..., 1] * mean_mag).astype(
+                np.float32
+            )
 
         # --- Modifiers (volumetric-weather seam), then atomic publish -------
         for mod in self._modifiers:
             mod.apply(X, Y, float(wind_time), vx, vy, turb)
 
-        field = np.empty((self._region.cells, self._region.cells, 4),
-                         dtype=np.float32)
+        field = np.empty((self._region.cells, self._region.cells, 4), dtype=np.float32)
         field[..., 0] = vx
         field[..., 1] = vy
         field[..., 2] = turb
-        field[..., 3] = 0.0       # reserved
+        field[..., 3] = 0.0  # reserved
 
         self._front = WindSnapshot(
             field=field,
@@ -526,8 +522,7 @@ class WindField:
         self._venturi_deflect = res.deflect
         self._venturi_origin = res.origin_cell
         self._updraft_gain_grid = (
-            float(self._cfg.wind_updraft_gain)
-            * np.clip(res.speedup - 1.0, 0.0, None)
+            float(self._cfg.wind_updraft_gain) * np.clip(res.speedup - 1.0, 0.0, None)
         ).astype(np.float32)
 
     # ------------------------------------------------------------------
@@ -578,8 +573,7 @@ class WindField:
         snap = self.snapshot
         P = np.asarray(positions, dtype=np.float32)
         if P.ndim != 2 or P.shape[1] != 3:
-            raise ValueError(
-                f"positions must be (N, 3); got {P.shape}")
+            raise ValueError(f"positions must be (N, 3); got {P.shape}")
         n = P.shape[0]
         out = np.zeros((n, 3), dtype=np.float32)
         if n == 0:
@@ -615,7 +609,7 @@ class WindField:
         ty_ = ty[:, None]
         top = v00 * (1.0 - tx_) + v10 * tx_
         bot = v01 * (1.0 - tx_) + v11 * tx_
-        horiz = top * (1.0 - ty_) + bot * ty_       # (N, 2) m/s
+        horiz = top * (1.0 - ty_) + bot * ty_  # (N, 2) m/s
 
         # Vertical boundary-layer profile scales the horizontal speed.
         prof = vertical_profile(P[:, 2], self._z_ground, self._cfg)  # (N,)
@@ -631,8 +625,7 @@ class WindField:
         # windward constriction, not be physically exact.  Gated on origin
         # agreement so a snapshot from a just-recentered frame never reads a
         # stale (other-origin) updraft grid.
-        if self._venturi_origin is not None and \
-                self._venturi_origin == self._region.origin_cell:
+        if self._venturi_origin is not None and self._venturi_origin == self._region.origin_cell:
             g = self._updraft_gain_grid
             u00 = g[i0c, j0c]
             u10 = g[i1c, j0c]
@@ -640,12 +633,11 @@ class WindField:
             u11 = g[i1c, j1c]
             utop = u00 * (1.0 - tx) + u10 * tx
             ubot = u01 * (1.0 - tx) + u11 * tx
-            updraft_gain = utop * (1.0 - ty) + ubot * ty       # (N,)
-            horiz_speed = np.hypot(horiz[:, 0], horiz[:, 1])    # (N,) m/s
+            updraft_gain = utop * (1.0 - ty) + ubot * ty  # (N,)
+            horiz_speed = np.hypot(horiz[:, 0], horiz[:, 1])  # (N,) m/s
             # Rise is strongest near the ground and tapers with the same shear
             # profile that boosts horizontal wind aloft (1/prof falls with z).
-            out[:, 2] = (updraft_gain * horiz_speed / np.maximum(prof, 1e-3)) \
-                .astype(np.float32)
+            out[:, 2] = (updraft_gain * horiz_speed / np.maximum(prof, 1e-3)).astype(np.float32)
         else:
             out[:, 2] = 0.0
         return out
@@ -684,7 +676,7 @@ def pack_wind_field(snap: WindSnapshot) -> bytes:
     >>> len(data) == field.snapshot.cells ** 2 * 4 * 2
     True
     """
-    f = snap.field        # (cells, cells, 4) [x, y]: vx, vy, turb, reserved
+    f = snap.field  # (cells, cells, 4) [x, y]: vx, vy, turb, reserved
     vx = f[..., 0]
     vy = f[..., 1]
     turb = f[..., 2]
@@ -693,8 +685,7 @@ def pack_wind_field(snap: WindSnapshot) -> bytes:
     # Build the RGBA-in-shader buffer in the texel's channel order, then
     # transpose [x, y] -> [y, x] (Panda3D 2-D RAM is row-major y outer) and
     # swap RGBA -> BGRA.  Mirrors pack_volume's transpose+swap discipline.
-    rgba = np.stack([vx, vy, turb, speed], axis=-1)        # R, G, B, A
-    bgra = rgba[..., [2, 1, 0, 3]]                          # B, G, R, A
-    data = np.ascontiguousarray(
-        np.transpose(bgra, (1, 0, 2)).astype(np.float16))   # (y, x, 4) fp16
+    rgba = np.stack([vx, vy, turb, speed], axis=-1)  # R, G, B, A
+    bgra = rgba[..., [2, 1, 0, 3]]  # B, G, R, A
+    data = np.ascontiguousarray(np.transpose(bgra, (1, 0, 2)).astype(np.float16))  # (y, x, 4) fp16
     return data.tobytes()

@@ -137,17 +137,13 @@ def build_modes(cfg: Config) -> GustModes:
     m = int(cfg.wind_gust_modes)
     rng = for_domain("wind", "gusts")
 
-    wavelength = rng.uniform(
-        float(cfg.wind_gust_wavelen_min), float(cfg.wind_gust_wavelen_max), m
-    )
+    wavelength = rng.uniform(float(cfg.wind_gust_wavelen_min), float(cfg.wind_gust_wavelen_max), m)
     angle = rng.uniform(0.0, 2.0 * np.pi, m)
     phase0 = rng.uniform(0.0, 2.0 * np.pi, m)
-    omega = rng.uniform(
-        float(cfg.wind_gust_omega_min), float(cfg.wind_gust_omega_max), m
-    )
+    omega = rng.uniform(float(cfg.wind_gust_omega_min), float(cfg.wind_gust_omega_max), m)
     push_angle = rng.uniform(0.0, 2.0 * np.pi, m)
 
-    k_mag = (2.0 * np.pi) / wavelength            # rad/m
+    k_mag = (2.0 * np.pi) / wavelength  # rad/m
     kx = k_mag * np.cos(angle)
     ky = k_mag * np.sin(angle)
     pux = np.cos(push_angle)

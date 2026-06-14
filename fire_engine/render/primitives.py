@@ -25,8 +25,7 @@ from panda3d.core import (  # type: ignore[import]
     NodePath,
 )
 
-__all__ = ["build_sphere_geom", "make_sphere_node", "load_cube_model",
-           "CUBE_MODEL_SCALE"]
+__all__ = ["build_sphere_geom", "make_sphere_node", "load_cube_model", "CUBE_MODEL_SCALE"]
 
 # Panda3D's stock "models/misc/rgbCube" spans -1..1 per axis; scaling it by 0.5
 # yields a 1 m cube at unit GameObject scale. Multiply this into any per-axis
@@ -34,8 +33,7 @@ __all__ = ["build_sphere_geom", "make_sphere_node", "load_cube_model",
 CUBE_MODEL_SCALE: float = 0.5
 
 
-def build_sphere_geom(radius_m: float, segments: int = 16,
-                      rings: int = 8) -> Geom:
+def build_sphere_geom(radius_m: float, segments: int = 16, rings: int = 8) -> Geom:
     """
     Build a small UV-sphere Geom centred at the origin — no asset, in-code.
 
@@ -62,7 +60,7 @@ def build_sphere_geom(radius_m: float, segments: int = 16,
         node = GeomNode("ball")
         node.add_geom(build_sphere_geom(0.5))   # a 1 m diameter sphere
     """
-    fmt = GeomVertexFormat.get_v3n3()       # position + normal
+    fmt = GeomVertexFormat.get_v3n3()  # position + normal
     vdata = GeomVertexData("sphere", fmt, Geom.UH_static)
     vdata.set_num_rows((rings + 1) * (segments + 1))
     vw = GeomVertexWriter(vdata, "vertex")
@@ -70,7 +68,7 @@ def build_sphere_geom(radius_m: float, segments: int = 16,
     tris = GeomTriangles(Geom.UH_static)
 
     for r in range(rings + 1):
-        theta = math.pi * r / rings          # 0..pi (north → south pole)
+        theta = math.pi * r / rings  # 0..pi (north → south pole)
         st, ct = math.sin(theta), math.cos(theta)
         for s in range(segments + 1):
             phi = 2.0 * math.pi * s / segments

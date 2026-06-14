@@ -27,14 +27,12 @@ def _build(seed: int = 21):
     set_world_seed(seed)
     rng = for_domain("test", "mesh")
     sb = SkeletonBuilder(rng)
-    trunk = sb.trunk(height_m=5.0, base_radius_m=0.25, segments=3,
-                     wobble_m=0.2)
-    limbs = sb.branches(trunk, count=(3, 4),
-                        pitch_set=(math.radians(85),),
-                        length_ratio=(0.4, 0.6), segments=2)
+    trunk = sb.trunk(height_m=5.0, base_radius_m=0.25, segments=3, wobble_m=0.2)
+    limbs = sb.branches(
+        trunk, count=(3, 4), pitch_set=(math.radians(85),), length_ratio=(0.4, 0.6), segments=2
+    )
     sk = sb.skeleton()
-    leaves = leaves_at_tips(sk, limbs, rng, cell_m=0.25, rounds=3,
-                            density=0.8)
+    leaves = leaves_at_tips(sk, limbs, rng, cell_m=0.25, rounds=3, density=0.8)
     wood = mesh_branches(sk)
     foliage = mesh_leaves(leaves, rng)
     return sk, leaves, wood, foliage, merge_parts(wood, foliage)
@@ -42,8 +40,7 @@ def _build(seed: int = 21):
 
 class TestContract:
     def setup_method(self):
-        (self.sk, self.leaves, self.wood, self.foliage,
-         self.mesh) = _build()
+        (self.sk, self.leaves, self.wood, self.foliage, self.mesh) = _build()
 
     def test_dtypes_and_shapes(self):
         m = self.mesh
@@ -53,8 +50,7 @@ class TestContract:
         assert m.colors.dtype == np.float32 and m.colors.shape[1] == 4
         assert m.indices.dtype == np.uint32
         n = m.n_vertices
-        assert (m.normals.shape[0] == n and m.uvs.shape[0] == n
-                and m.colors.shape[0] == n)
+        assert m.normals.shape[0] == n and m.uvs.shape[0] == n and m.colors.shape[0] == n
 
     def test_index_bounds_and_triangles(self):
         m = self.mesh
@@ -100,10 +96,9 @@ class TestMergeAndEmpty:
     def test_merge_offsets_indices(self):
         *_, wood, foliage, merged = _build()
         assert merged.n_vertices == wood.n_vertices + foliage.n_vertices
-        assert merged.indices.shape[0] == (wood.indices.shape[0]
-                                           + foliage.indices.shape[0])
+        assert merged.indices.shape[0] == (wood.indices.shape[0] + foliage.indices.shape[0])
         # Second part's indices reference its own vertex block.
-        second = merged.indices[wood.indices.shape[0]:]
+        second = merged.indices[wood.indices.shape[0] :]
         assert int(second.min()) >= wood.n_vertices
 
     def test_empty_leaves_mesh_ok(self):
@@ -114,6 +109,7 @@ class TestMergeAndEmpty:
         sk = sb.skeleton()
         wood = mesh_branches(sk)
         from fire_engine.procedural.flora import Leaves
+
         foliage = mesh_leaves(Leaves.empty(), rng)
         merged = merge_parts(wood, foliage)
         assert foliage.n_vertices == 0

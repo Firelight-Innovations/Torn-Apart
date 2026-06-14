@@ -6,6 +6,7 @@ removes the object, rapid gizmo-style transforms coalesce into a single undo
 step, and terrain + scene edits interleave and undo in reverse chronological
 order.
 """
+
 from __future__ import annotations
 
 import asyncio

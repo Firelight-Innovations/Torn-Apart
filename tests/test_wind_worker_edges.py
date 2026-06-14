@@ -33,7 +33,7 @@ from fire_engine.world.wind import (
 # ─────────────────────────────────────────────────────────────────────────────
 VOXEL = 0.5
 CHUNK = 32
-_DRAIN_TIMEOUT = 5.0     # seconds — short enough to fail fast in CI
+_DRAIN_TIMEOUT = 5.0  # seconds — short enough to fail fast in CI
 
 
 def _cfg() -> Config:
@@ -81,8 +81,7 @@ def _solid_job(cfg: Config, *, seq: int = 1, cells: int = 8) -> VenturiJob:
             for ccz in range(vz_lo // CHUNK, (vz_hi - 1) // CHUNK + 1):
                 key = (ccx, ccy, ccz)
                 if key not in materials:
-                    materials[key] = np.zeros(
-                        (CHUNK, CHUNK, CHUNK), dtype=np.uint8)
+                    materials[key] = np.zeros((CHUNK, CHUNK, CHUNK), dtype=np.uint8)
                 az = max(ccz * CHUNK, vz_lo) - ccz * CHUNK
                 bz = min(ccz * CHUNK + CHUNK, vz_hi) - ccz * CHUNK
                 materials[key][
@@ -114,6 +113,7 @@ class _BoomArray(np.ndarray):
     that call raise, exercising the worker's exception-recovery path without
     having to patch internal iteration.
     """
+
     def __gt__(self, other):
         raise RuntimeError("boom — intentional comparison fault")
 
@@ -156,8 +156,9 @@ def _raising_job(cfg: Config, *, seq: int = 99) -> VenturiJob:
     )
 
 
-def _drain_until(worker: VenturiWorker, want: int,
-                 timeout_s: float = _DRAIN_TIMEOUT) -> list[VenturiResult]:
+def _drain_until(
+    worker: VenturiWorker, want: int, timeout_s: float = _DRAIN_TIMEOUT
+) -> list[VenturiResult]:
     """Poll drain_results() until at least *want* results arrive or timeout."""
     out: list[VenturiResult] = []
     deadline = time.monotonic() + timeout_s
@@ -172,15 +173,15 @@ def _drain_until(worker: VenturiWorker, want: int,
 # Lifecycle idempotency
 # ─────────────────────────────────────────────────────────────────────────────
 
-class TestLifecycleIdempotency:
 
+class TestLifecycleIdempotency:
     def test_start_twice_no_crash(self):
         """start() called twice must not raise and must not spawn two threads."""
         worker = VenturiWorker()
         try:
             worker.start()
             t1 = worker._thread
-            worker.start()           # second call must be a no-op
+            worker.start()  # second call must be a no-op
             t2 = worker._thread
             assert t1 is t2, "second start() spawned a new thread"
         finally:
@@ -191,7 +192,7 @@ class TestLifecycleIdempotency:
         worker = VenturiWorker()
         worker.start()
         worker.stop()
-        worker.stop()                # idempotent — must not raise
+        worker.stop()  # idempotent — must not raise
 
     def test_is_running_transitions(self):
         """
@@ -215,7 +216,7 @@ class TestLifecycleIdempotency:
     def test_stop_before_start_no_crash(self):
         """stop() on a never-started worker must not raise."""
         worker = VenturiWorker()
-        worker.stop()                # must be benign
+        worker.stop()  # must be benign
 
     def test_stop_joins_within_timeout(self):
         """Thread is no longer alive within stop()'s join timeout."""
@@ -230,8 +231,8 @@ class TestLifecycleIdempotency:
 # Error resilience
 # ─────────────────────────────────────────────────────────────────────────────
 
-class TestErrorResilience:
 
+class TestErrorResilience:
     def test_raising_job_posts_identity_result(self):
         """A solve that raises must post a VenturiResult, not swallow it."""
         cfg = _cfg()
@@ -241,8 +242,7 @@ class TestErrorResilience:
             bad = _raising_job(cfg, seq=99)
             worker.submit(bad)
             results = _drain_until(worker, 1)
-            assert len(results) == 1, \
-                "worker silently dropped the errored job (no result posted)"
+            assert len(results) == 1, "worker silently dropped the errored job (no result posted)"
             r = results[0]
             assert isinstance(r, VenturiResult)
         finally:
@@ -258,12 +258,12 @@ class TestErrorResilience:
             worker.submit(bad)
             results = _drain_until(worker, 1)
             r = results[0]
-            assert np.array_equal(r.speedup,
-                                   np.ones((8, 8), dtype=np.float32)), \
+            assert np.array_equal(r.speedup, np.ones((8, 8), dtype=np.float32)), (
                 f"identity speedup not ones: {r.speedup}"
-            assert np.array_equal(r.deflect,
-                                   np.zeros((8, 8, 2), dtype=np.float32)), \
+            )
+            assert np.array_equal(r.deflect, np.zeros((8, 8, 2), dtype=np.float32)), (
                 f"identity deflect not zeros: {r.deflect}"
+            )
         finally:
             worker.stop()
 
@@ -276,8 +276,7 @@ class TestErrorResilience:
             bad = _raising_job(cfg, seq=77)
             worker.submit(bad)
             results = _drain_until(worker, 1)
-            assert results[0].seq == 77, \
-                f"seq not echoed on error: got {results[0].seq}"
+            assert results[0].seq == 77, f"seq not echoed on error: got {results[0].seq}"
         finally:
             worker.stop()
 
@@ -291,8 +290,9 @@ class TestErrorResilience:
             assert bad.origin_cell == (1, 2)
             worker.submit(bad)
             results = _drain_until(worker, 1)
-            assert results[0].origin_cell == (1, 2), \
+            assert results[0].origin_cell == (1, 2), (
                 f"origin_cell not echoed on error: {results[0].origin_cell}"
+            )
         finally:
             worker.stop()
 
@@ -310,11 +310,12 @@ class TestErrorResilience:
         try:
             bad = _raising_job(cfg, seq=1)
             worker.submit(bad)
-            _drain_until(worker, 1)    # consume the identity result
+            _drain_until(worker, 1)  # consume the identity result
 
             # Verify thread survived.
-            assert worker._thread is not None and worker._thread.is_alive(), \
+            assert worker._thread is not None and worker._thread.is_alive(), (
                 "thread died after a solve exception"
+            )
 
             # Submit a valid job and verify it produces a real (non-identity) result.
             good = _empty_job(cfg, seq=2, cells=8)
@@ -345,8 +346,9 @@ class TestErrorResilience:
             worker.submit(_empty_job(cfg, seq=11, cells=8))
             results = _drain_until(worker, 2)
             assert len(results) == 2
-            assert worker.pending() == 0, \
+            assert worker.pending() == 0, (
                 f"pending not 0 after draining 2 results: {worker.pending()}"
+            )
         finally:
             worker.stop()
 
@@ -355,8 +357,8 @@ class TestErrorResilience:
 # submit / drain ordering
 # ─────────────────────────────────────────────────────────────────────────────
 
-class TestOrdering:
 
+class TestOrdering:
     def test_all_submitted_jobs_eventually_drain(self):
         """
         Every submitted valid job produces exactly one result, no matter the
@@ -374,11 +376,9 @@ class TestOrdering:
             for s in seqs:
                 worker.submit(_empty_job(cfg, seq=s, cells=8))
             results = _drain_until(worker, len(seqs))
-            assert len(results) == len(seqs), \
-                f"only {len(results)} of {len(seqs)} results drained"
+            assert len(results) == len(seqs), f"only {len(results)} of {len(seqs)} results drained"
             drained_seqs = {r.seq for r in results}
-            assert drained_seqs == set(seqs), \
-                f"seq set mismatch: {drained_seqs} vs {set(seqs)}"
+            assert drained_seqs == set(seqs), f"seq set mismatch: {drained_seqs} vs {set(seqs)}"
         finally:
             worker.stop()
 
@@ -401,8 +401,9 @@ class TestOrdering:
             results = _drain_until(worker, n)
             assert len(results) == n
             drained_seqs = [r.seq for r in results]
-            assert drained_seqs == list(range(n)), \
+            assert drained_seqs == list(range(n)), (
                 f"results not in submission order: {drained_seqs}"
+            )
         finally:
             worker.stop()
 
@@ -422,10 +423,8 @@ class TestOrdering:
             worker.submit(good)
             results = _drain_until(worker, 2)
             assert len(results) == 2
-            assert results[0].seq == 20, \
-                f"error result not first: seq={results[0].seq}"
-            assert results[1].seq == 21, \
-                f"valid result not second: seq={results[1].seq}"
+            assert results[0].seq == 20, f"error result not first: seq={results[0].seq}"
+            assert results[1].seq == 21, f"valid result not second: seq={results[1].seq}"
             assert np.array_equal(results[1].speedup, inline.speedup)
         finally:
             worker.stop()
@@ -435,8 +434,8 @@ class TestOrdering:
 # On-thread equivalence (different job from test_wind_venturi.py)
 # ─────────────────────────────────────────────────────────────────────────────
 
-class TestOnThreadEquivalence:
 
+class TestOnThreadEquivalence:
     def test_fully_solid_job_matches_inline(self):
         """
         A fully-solid terrain job solved by the worker must be byte-identical
@@ -457,10 +456,12 @@ class TestOnThreadEquivalence:
             assert len(results) == 1
             r = results[0]
             assert r.seq == 33
-            assert np.array_equal(r.speedup, inline.speedup), \
+            assert np.array_equal(r.speedup, inline.speedup), (
                 "speedup differs between worker and inline solve"
-            assert np.array_equal(r.deflect, inline.deflect), \
+            )
+            assert np.array_equal(r.deflect, inline.deflect), (
                 "deflect differs between worker and inline solve"
+            )
         finally:
             worker.stop()
 
@@ -490,8 +491,8 @@ class TestOnThreadEquivalence:
 # stop() with a pending queue
 # ─────────────────────────────────────────────────────────────────────────────
 
-class TestStopWithPendingQueue:
 
+class TestStopWithPendingQueue:
     def test_stop_does_not_hang_with_pending_jobs(self):
         """
         stop(join=True, timeout=2.0) must return within the timeout even when
@@ -512,8 +513,7 @@ class TestStopWithPendingQueue:
         t0 = time.monotonic()
         worker.stop(join=True, timeout=3.0)
         elapsed = time.monotonic() - t0
-        assert elapsed < 3.5, \
-            f"stop() hung for {elapsed:.1f}s with pending jobs in queue"
+        assert elapsed < 3.5, f"stop() hung for {elapsed:.1f}s with pending jobs in queue"
 
     def test_stop_without_join_does_not_raise(self):
         """stop(join=False) is a fire-and-forget — must not raise."""
@@ -521,7 +521,7 @@ class TestStopWithPendingQueue:
         worker = VenturiWorker()
         worker.start()
         worker.submit(_empty_job(cfg, seq=1, cells=4))
-        worker.stop(join=False)       # should not raise
+        worker.stop(join=False)  # should not raise
 
     def test_thread_is_set_to_none_after_stop_join(self):
         """
@@ -541,8 +541,8 @@ class TestStopWithPendingQueue:
 # submit() when not started / after stop
 # ─────────────────────────────────────────────────────────────────────────────
 
-class TestSubmitEdgeCases:
 
+class TestSubmitEdgeCases:
     def test_submit_before_start_does_not_raise(self):
         """
         submit() before start() must not raise (the job is enqueued in the

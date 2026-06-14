@@ -61,16 +61,19 @@ __all__ = ["GrassGroundDef", "GRASS_PALETTE", "GRASS_THRESHOLDS"]
 # Index 0 = darkest shadow patch (near black-green)
 # Index 7 = lightest blade tip / dried highlight
 
-_GRASS_PALETTE = np.array([
-    ( 30,  45,  22),   # 0 — dark shadow / deep root shade
-    ( 48,  65,  32),   # 1 — dark grass patch
-    ( 62,  82,  40),   # 2 — mid-dark weathered green
-    ( 78,  98,  48),   # 3 — base mid-green (dominant colour)
-    ( 94, 112,  55),   # 4 — lighter mid-green
-    (115, 128,  62),   # 5 — light grass, slight desaturation
-    (140, 148,  78),   # 6 — pale highlight / dried blade tip
-    (162, 155,  90),   # 7 — lightest dried/yellowed blade tip
-], dtype=np.uint8)
+_GRASS_PALETTE = np.array(
+    [
+        (30, 45, 22),  # 0 — dark shadow / deep root shade
+        (48, 65, 32),  # 1 — dark grass patch
+        (62, 82, 40),  # 2 — mid-dark weathered green
+        (78, 98, 48),  # 3 — base mid-green (dominant colour)
+        (94, 112, 55),  # 4 — lighter mid-green
+        (115, 128, 62),  # 5 — light grass, slight desaturation
+        (140, 148, 78),  # 6 — pale highlight / dried blade tip
+        (162, 155, 90),  # 7 — lightest dried/yellowed blade tip
+    ],
+    dtype=np.uint8,
+)
 
 # Threshold boundaries that divide [0, 1] into 8 buckets.
 # Values are upper bounds; the last bucket catches the remainder.
@@ -154,7 +157,7 @@ class GrassGroundDef(ProceduralTextureDef):
 
     name = "grass_ground"
 
-    DEFAULT_WIDTH  = 64
+    DEFAULT_WIDTH = 64
     DEFAULT_HEIGHT = 64
 
     def generate(self, rng: np.random.Generator, **params) -> np.ndarray:
@@ -175,7 +178,7 @@ class GrassGroundDef(ProceduralTextureDef):
         numpy.ndarray
             Shape ``(H, W, 4)``, dtype ``uint8``.
         """
-        W = int(params.get("width",  self.DEFAULT_WIDTH))
+        W = int(params.get("width", self.DEFAULT_WIDTH))
         H = int(params.get("height", self.DEFAULT_HEIGHT))
         shape = (H, W)
 

@@ -104,12 +104,12 @@ _FOG_BANK_GAIN: float = 0.027
 #: (cloud_coverage, cloud_density, fog_density 1/m, rain 0–1, synoptic-speed
 #: multiplier).  Wind direction/base speed come from the synoptic flow.
 _STATE_TARGETS: dict[WeatherType, tuple[float, float, float, float, float]] = {
-    WeatherType.CLEAR:    (0.12, 0.35, 0.0008, 0.0, 0.70),
-    WeatherType.CLOUDY:   (0.45, 0.55, 0.0012, 0.0, 0.90),
+    WeatherType.CLEAR: (0.12, 0.35, 0.0008, 0.0, 0.70),
+    WeatherType.CLOUDY: (0.45, 0.55, 0.0012, 0.0, 0.90),
     WeatherType.OVERCAST: (0.85, 0.80, 0.0030, 0.0, 1.00),
-    WeatherType.FOG:      (0.55, 0.50, 0.0250, 0.0, 0.30),
-    WeatherType.RAIN:     (0.90, 0.85, 0.0060, 0.7, 1.25),
-    WeatherType.STORM:    (0.98, 0.95, 0.0080, 1.0, 1.90),
+    WeatherType.FOG: (0.55, 0.50, 0.0250, 0.0, 0.30),
+    WeatherType.RAIN: (0.90, 0.85, 0.0060, 0.7, 1.25),
+    WeatherType.STORM: (0.98, 0.95, 0.0080, 1.0, 1.90),
 }
 
 
@@ -129,6 +129,7 @@ def _clamp01(x: float) -> float:
 # ---------------------------------------------------------------------------
 # LocalWeather
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class LocalWeather:
@@ -242,6 +243,7 @@ def _local_from_dict(d: dict) -> LocalWeather:
 # track + footprint, so a round-trip reproduces the IDENTICAL future (positions
 # *and* the would-be strike schedule M7 derives from them).
 
+
 def _cell_to_dict(c: StormCell) -> dict:
     """Serialise a summoned :class:`StormCell` to plain primitives (Saveable)."""
     return {
@@ -274,6 +276,7 @@ def _cell_from_dict(d: dict) -> StormCell:
 # ---------------------------------------------------------------------------
 # WeatherSystem
 # ---------------------------------------------------------------------------
+
 
 class WeatherSystem:
     """
@@ -433,10 +436,7 @@ class WeatherSystem:
         """
         day = int(t // _DAY_S)
         pool = self._cells_for_day(day - 1) + self._cells_for_day(day)
-        out = [
-            c for c in pool
-            if c.active(t) and c.id not in self._suppressed
-        ]
+        out = [c for c in pool if c.active(t) and c.id not in self._suppressed]
         out.extend(c for c in self._summoned if c.active(t))
         return out
 
@@ -445,9 +445,7 @@ class WeatherSystem:
         """Active cells as of the last :meth:`update`, nearest player first."""
         return self._cells
 
-    def cell_eta_s(
-        self, cell: StormCell, t: float, player_pos: tuple[float, float]
-    ) -> float:
+    def cell_eta_s(self, cell: StormCell, t: float, player_pos: tuple[float, float]) -> float:
         """
         Approximate game seconds until *cell*'s leading edge reaches the player.
 
@@ -474,7 +472,7 @@ class WeatherSystem:
         vel = self.synoptic.wind_vec(t) + np.array(cell.drift_bias)
         if dist < 1e-6:
             return 0.0
-        closing = float(np.dot(vel, to_player / dist))   # m/s toward player
+        closing = float(np.dot(vel, to_player / dist))  # m/s toward player
         if closing <= 1e-6:
             return float("inf")
         return edge / closing
@@ -548,41 +546,33 @@ class WeatherSystem:
 
         cell_id = f"s:{self._summon_seq}"
         self._summon_seq += 1
-        self._summoned.append(StormCell(
-            id=cell_id,
-            kind=kind,
-            spawn_time=float(time_abs),
-            spawn_pos=spawn_pos,
-            duration_s=duration,
-            radius_m=radius,
-            peak_intensity=peak,
-            drift_bias=(0.0, 0.0),
-        ))
+        self._summoned.append(
+            StormCell(
+                id=cell_id,
+                kind=kind,
+                spawn_time=float(time_abs),
+                spawn_pos=spawn_pos,
+                duration_s=duration,
+                radius_m=radius,
+                peak_intensity=peak,
+                drift_bias=(0.0, 0.0),
+            )
+        )
         return cell_id
 
-    def summon_rainstorm(
-        self, *, time_abs: float, player_pos: tuple[float, float], **kw
-    ) -> str:
+    def summon_rainstorm(self, *, time_abs: float, player_pos: tuple[float, float], **kw) -> str:
         """Convenience: summon a SHOWER (rainstorm) drifting toward the player."""
-        return self.summon_cell(
-            CellKind.SHOWER, time_abs=time_abs, player_pos=player_pos, **kw
-        )
+        return self.summon_cell(CellKind.SHOWER, time_abs=time_abs, player_pos=player_pos, **kw)
 
-    def summon_thunderstorm(
-        self, *, time_abs: float, player_pos: tuple[float, float], **kw
-    ) -> str:
+    def summon_thunderstorm(self, *, time_abs: float, player_pos: tuple[float, float], **kw) -> str:
         """Convenience: summon a THUNDERSTORM (rain + lightning + gust)."""
         return self.summon_cell(
             CellKind.THUNDERSTORM, time_abs=time_abs, player_pos=player_pos, **kw
         )
 
-    def summon_fog_bank(
-        self, *, time_abs: float, player_pos: tuple[float, float], **kw
-    ) -> str:
+    def summon_fog_bank(self, *, time_abs: float, player_pos: tuple[float, float], **kw) -> str:
         """Convenience: summon a FOG_BANK drifting toward the player."""
-        return self.summon_cell(
-            CellKind.FOG_BANK, time_abs=time_abs, player_pos=player_pos, **kw
-        )
+        return self.summon_cell(CellKind.FOG_BANK, time_abs=time_abs, player_pos=player_pos, **kw)
 
     def suppress(self, cell_id: str) -> None:
         """
@@ -693,9 +683,7 @@ class WeatherSystem:
 
     def _temperature(self, tod_h: float) -> float:
         """Local air temperature (°C): daily cosine peaking at 15:00."""
-        return self._temp_mean + self._temp_amp * math.cos(
-            2.0 * math.pi * (tod_h - 15.0) / 24.0
-        )
+        return self._temp_mean + self._temp_amp * math.cos(2.0 * math.pi * (tod_h - 15.0) / 24.0)
 
     def _sample_core(
         self, pts: np.ndarray, t: float
@@ -730,7 +718,7 @@ class WeatherSystem:
         storm_gust = np.zeros(n)
 
         for cell in self._active_cells(t):
-            c = cell.contribution(pts, t, self.synoptic)          # (N,)
+            c = cell.contribution(pts, t, self.synoptic)  # (N,)
             coverage += c * _KIND_COV[cell.kind]
             density += c * _KIND_DEN[cell.kind]
             rain += c * _KIND_RAIN[cell.kind]
@@ -857,7 +845,7 @@ class WeatherSystem:
         acc = np.zeros(pts.shape[0])
         for k in range(1, self._wet_samples + 1):
             tk = t - k * self._wet_step
-            if tk < 0.0:                       # before world start: no history
+            if tk < 0.0:  # before world start: no history
                 break
             weight = (self._wet_step / self._wet_tau) * math.exp(
                 -k * self._wet_step / self._wet_tau
@@ -893,7 +881,7 @@ class WeatherSystem:
         acc = np.zeros(pts.shape[0])
         for k in range(1, self._recent_samples + 1):
             tk = t - k * self._recent_step
-            if tk < 0.0:                       # before world start: no history
+            if tk < 0.0:  # before world start: no history
                 break
             weight = (self._recent_step / self._recent_tau) * math.exp(
                 -k * self._recent_step / self._recent_tau
@@ -903,9 +891,7 @@ class WeatherSystem:
         np.clip(acc, 0.0, 1.0, out=acc)
         return acc
 
-    def sample_local(
-        self, pos_xy: tuple[float, float], t_abs: float | None = None
-    ) -> LocalWeather:
+    def sample_local(self, pos_xy: tuple[float, float], t_abs: float | None = None) -> LocalWeather:
         """
         Sample the full natural weather at world position *pos_xy* and *t_abs*.
 
@@ -923,8 +909,10 @@ class WeatherSystem:
         -------
         LocalWeather
         """
-        t = float(t_abs) if t_abs is not None else (
-            self._last_abs_t if self._last_abs_t is not None else 0.0
+        t = (
+            float(t_abs)
+            if t_abs is not None
+            else (self._last_abs_t if self._last_abs_t is not None else 0.0)
         )
         pt = np.array([[float(pos_xy[0]), float(pos_xy[1])]], dtype=np.float64)
         cov, den, rain, fog_bank, gust = self._sample_core(pt, t)
@@ -974,9 +962,9 @@ class WeatherSystem:
         from fire_engine.world.weather.lightning import cell_id_int, scheduled_strikes
 
         last = self._last_strike_time
-        if last is None:                 # first update: no back-window to emit
+        if last is None:  # first update: no back-window to emit
             return
-        if abs_t <= last:                # clock didn't advance (paused / rewind)
+        if abs_t <= last:  # clock didn't advance (paused / rewind)
             return
 
         cloud_base = float(self._config.weather_lightning_cloud_base_m)
@@ -990,17 +978,19 @@ class WeatherSystem:
                 continue
             cid = cell_id_int(cell.id)
             for s in strikes:
-                center = cell.center(s.time_abs, self.synoptic)    # (2,) world XY
+                center = cell.center(s.time_abs, self.synoptic)  # (2,) world XY
                 wx = float(center[0] + s.pos_xy[0])
                 wy = float(center[1] + s.pos_xy[1])
-                self._bus.publish_deferred(LightningStrikeEvent(
-                    pos=(wx, wy, ground_z + cloud_base),
-                    ground_pos=(wx, wy, ground_z),
-                    seed=int(s.seed),
-                    time_abs=float(s.time_abs),
-                    cell_id=int(cid),
-                    intensity=float(s.intensity),
-                ))
+                self._bus.publish_deferred(
+                    LightningStrikeEvent(
+                        pos=(wx, wy, ground_z + cloud_base),
+                        ground_pos=(wx, wy, ground_z),
+                        seed=int(s.seed),
+                        time_abs=float(s.time_abs),
+                        cell_id=int(cid),
+                        intensity=float(s.intensity),
+                    )
+                )
 
     # ------------------------------------------------------------------
     # Classification (hysteresis)
@@ -1073,10 +1063,7 @@ class WeatherSystem:
         day = int(game_day)
         tod = float(game_time_of_day) % _DAY_S
         abs_t = day * _DAY_S + tod
-        pos = (
-            (float(player_pos[0]), float(player_pos[1]))
-            if player_pos is not None else (0.0, 0.0)
-        )
+        pos = (float(player_pos[0]), float(player_pos[1])) if player_pos is not None else (0.0, 0.0)
         self._last_player = pos
 
         natural = self.sample_local(pos, abs_t)
@@ -1084,9 +1071,7 @@ class WeatherSystem:
         # Active cells for the `.cells` readout, nearest player first.
         cells = self._active_cells(abs_t)
         origin = np.array(pos, dtype=np.float64)
-        cells.sort(key=lambda c: float(
-            np.hypot(*(c.center(abs_t, self.synoptic) - origin))
-        ))
+        cells.sort(key=lambda c: float(np.hypot(*(c.center(abs_t, self.synoptic) - origin))))
         self._cells = cells
 
         # --- M8 summon/save: keep gust-front wind modifiers in sync with the
@@ -1105,9 +1090,7 @@ class WeatherSystem:
         if self._override is not None:
             if self._override_start_abs_t is None:
                 self._override_start_abs_t = abs_t
-                self._override_from = (
-                    self._last_local if self._last_local is not None else natural
-                )
+                self._override_from = self._last_local if self._last_local is not None else natural
             target = self._target_local(self._override, abs_t)
             bt = _smoothstep(abs_t - self._override_start_abs_t, 0.0, BLEND_SECONDS)
             local = _lerp_local(self._override_from, target, bt)
@@ -1285,18 +1268,15 @@ class WeatherSystem:
         if "override" in delta:
             self._override = WeatherType(delta["override"])
             self._override_start_abs_t = (
-                float(delta["override_start_abs_t"])
-                if "override_start_abs_t" in delta else None
+                float(delta["override_start_abs_t"]) if "override_start_abs_t" in delta else None
             )
             self._override_from = (
-                _local_from_dict(delta["override_from"])
-                if "override_from" in delta else None
+                _local_from_dict(delta["override_from"]) if "override_from" in delta else None
             )
         elif "release_from" in delta:
             self._release_from = _local_from_dict(delta["release_from"])
             self._release_start_abs_t = (
-                float(delta["release_start_abs_t"])
-                if "release_start_abs_t" in delta else None
+                float(delta["release_start_abs_t"]) if "release_start_abs_t" in delta else None
             )
         if "last_state" in delta:
             self._last_state = WeatherType(delta["last_state"])

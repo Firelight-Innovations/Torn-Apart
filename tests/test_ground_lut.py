@@ -15,15 +15,17 @@ import pytest
 
 from fire_engine.procedural.textures.ground_lut import build_ground_lut
 from fire_engine.procedural.textures.grass_ground import (
-    GRASS_PALETTE, GRASS_THRESHOLDS, _posterise as _grass_posterise)
-from fire_engine.procedural.textures.dirt_ground import (
-    DIRT_PALETTE, DIRT_THRESHOLDS)
+    GRASS_PALETTE,
+    GRASS_THRESHOLDS,
+    _posterise as _grass_posterise,
+)
+from fire_engine.procedural.textures.dirt_ground import DIRT_PALETTE, DIRT_THRESHOLDS
 from fire_engine.world.terrain.generation import MATERIAL_DIRT, MATERIAL_GRASS
 
 
 def _entries():
     return {
-        MATERIAL_DIRT:  (DIRT_PALETTE,  DIRT_THRESHOLDS),
+        MATERIAL_DIRT: (DIRT_PALETTE, DIRT_THRESHOLDS),
         MATERIAL_GRASS: (GRASS_PALETTE, GRASS_THRESHOLDS),
     }
 
@@ -33,8 +35,8 @@ def test_shape_dtype_and_alpha():
     # rows = max material id + 1 (air row 0 unused), 256 buckets, RGBA.
     assert lut.shape == (MATERIAL_GRASS + 1, 256, 4)
     assert lut.dtype == np.uint8
-    assert np.all(lut[..., 3] == 255)          # fully opaque
-    assert np.all(lut[0, :, :3] == 0)          # unused air row left black
+    assert np.all(lut[..., 3] == 255)  # fully opaque
+    assert np.all(lut[0, :, :3] == 0)  # unused air row left black
 
 
 def test_custom_level_count():
@@ -71,7 +73,7 @@ def test_rejects_empty():
 
 def test_rejects_threshold_palette_mismatch():
     bad_palette = np.array([(0, 0, 0), (255, 255, 255)], dtype=np.uint8)  # 2 colours
-    bad_thresholds = np.array([0.3, 0.6], dtype=np.float32)               # needs 1
+    bad_thresholds = np.array([0.3, 0.6], dtype=np.float32)  # needs 1
     with pytest.raises(ValueError):
         build_ground_lut({1: (bad_palette, bad_thresholds)})
 

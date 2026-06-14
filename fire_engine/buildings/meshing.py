@@ -54,6 +54,7 @@ _EPS = 1e-9
 # Triangle-soup accumulator
 # ---------------------------------------------------------------------------
 
+
 class _Soup:
     """Accumulates outward-facing triangles, then bakes a MeshArrays."""
 
@@ -70,8 +71,7 @@ class _Soup:
         corners = corners.astype(np.float64, copy=True)
         n = _normalize(normals.astype(np.float64))
         # Flip winding where the geometric normal opposes the desired one.
-        geo = np.cross(corners[:, 1] - corners[:, 0],
-                       corners[:, 3] - corners[:, 0])
+        geo = np.cross(corners[:, 1] - corners[:, 0], corners[:, 3] - corners[:, 0])
         flip = np.sum(geo * n, axis=1) < 0.0
         corners[flip] = corners[flip][:, [0, 3, 2, 1], :]
         # Per-corner UVs in meters along the two quad edges.
@@ -100,15 +100,21 @@ class _Soup:
         flip = np.sum(geo * n, axis=1) < 0.0
         verts[flip] = verts[flip][:, [0, 2, 1], :]
         self._pos.append(verts.reshape(-1, 3))
-        self._uv.append(verts[:, :, :2].reshape(-1, 2))   # planar (x,y) UVs
+        self._uv.append(verts[:, :, :2].reshape(-1, 2))  # planar (x,y) UVs
         self._nrm.append(np.repeat(n, 3, axis=0))
 
     def build(self) -> MeshArrays:
         if not self._pos:
             z = np.zeros
-            return MeshArrays(z((0, 3), np.float32), z((0, 3), np.float32),
-                              z((0, 2), np.float32), z((0, 4), np.float32),
-                              z((0,), np.uint32), None, 3)
+            return MeshArrays(
+                z((0, 3), np.float32),
+                z((0, 3), np.float32),
+                z((0, 2), np.float32),
+                z((0, 4), np.float32),
+                z((0,), np.uint32),
+                None,
+                3,
+            )
         pos = np.concatenate(self._pos, axis=0).astype(np.float32)
         nrm = np.concatenate(self._nrm, axis=0).astype(np.float32)
         uv = np.concatenate(self._uv, axis=0).astype(np.float32)
@@ -127,14 +133,15 @@ def _normalize(v: np.ndarray) -> np.ndarray:
 # Slabs
 # ---------------------------------------------------------------------------
 
+
 def _add_slab(soup: _Soup, polygon: np.ndarray, z0: float, z1: float) -> None:
     """Top + bottom faces (ear-clipped) and perimeter side quads."""
     poly = np.asarray(polygon, dtype=np.float64)
     if poly.shape[0] < 3:
         return
-    tris = triangulate_polygon(poly)            # CCW (T,3) indices
+    tris = triangulate_polygon(poly)  # CCW (T,3) indices
     if tris.shape[0]:
-        flat = poly[tris]                       # (T,3,2)
+        flat = poly[tris]  # (T,3,2)
         top = np.dstack([flat, np.full(flat.shape[:2], z1)])
         soup.add_tris(top, np.tile([0.0, 0.0, 1.0], (tris.shape[0], 1)))
         bot = np.dstack([flat, np.full(flat.shape[:2], z0)])
@@ -169,8 +176,10 @@ def mesh_slab(polygon: np.ndarray, z0: float, z1: float) -> MeshArrays:
 # Walls
 # ---------------------------------------------------------------------------
 
-def _insert_arclengths(pts: np.ndarray, cum: np.ndarray,
-                       svals: list[float]) -> tuple[np.ndarray, np.ndarray]:
+
+def _insert_arclengths(
+    pts: np.ndarray, cum: np.ndarray, svals: list[float]
+) -> tuple[np.ndarray, np.ndarray]:
     """Insert points at the given arclengths into a centerline polyline."""
     out_pts = list(pts)
     out_cum = list(cum)
@@ -186,12 +195,12 @@ def _insert_arclengths(pts: np.ndarray, cum: np.ndarray,
         ins = int(np.searchsorted(out_cum, s))
         out_pts.insert(ins, p)
         out_cum.insert(ins, s)
-    return np.array(out_pts, dtype=np.float64), np.array(out_cum,
-                                                         dtype=np.float64)
+    return np.array(out_pts, dtype=np.float64), np.array(out_cum, dtype=np.float64)
 
 
-def mesh_wall(wall: Wall, z_bottom: float, z_top: float,
-              arc_segments_per_quarter: int) -> MeshArrays:
+def mesh_wall(
+    wall: Wall, z_bottom: float, z_top: float, arc_segments_per_quarter: int
+) -> MeshArrays:
     """
     Mesh one wall as a thick extruded prism with openings cut out.
 
@@ -207,14 +216,12 @@ def mesh_wall(wall: Wall, z_bottom: float, z_top: float,
         Arc tessellation density (``Config.building_arc_segments_per_quarter``).
     """
     soup = _Soup()
-    _add_wall(soup, wall, float(z_bottom), float(z_top),
-              int(arc_segments_per_quarter))
+    _add_wall(soup, wall, float(z_bottom), float(z_top), int(arc_segments_per_quarter))
     return soup.build()
 
 
-def _add_wall(soup: _Soup, wall: Wall, zb: float, zt: float,
-              qpq: int) -> None:
-    pts = wall.tessellate(qpq)                      # (P,2)
+def _add_wall(soup: _Soup, wall: Wall, zb: float, zt: float, qpq: int) -> None:
+    pts = wall.tessellate(qpq)  # (P,2)
     seg = np.diff(pts, axis=0)
     seglen = np.hypot(seg[:, 0], seg[:, 1])
     cum = np.concatenate([[0.0], np.cumsum(seglen)])
@@ -234,7 +241,7 @@ def _add_wall(soup: _Soup, wall: Wall, zb: float, zt: float,
     tlen = np.hypot(tseg[:, 0], tseg[:, 1])[:, None]
     tlen[tlen < _EPS] = 1.0
     that = tseg / tlen
-    segn = np.stack([-that[:, 1], that[:, 0]], axis=1)   # left normals (S-1,2)
+    segn = np.stack([-that[:, 1], that[:, 0]], axis=1)  # left normals (S-1,2)
     offv = np.empty((m, 2), dtype=np.float64)
     offv[0] = segn[0] * t_half
     offv[-1] = segn[-1] * t_half
@@ -243,8 +250,8 @@ def _add_wall(soup: _Soup, wall: Wall, zb: float, zt: float,
         denom = np.sum(s_sum * s_sum, axis=1, keepdims=True)
         denom[denom < _EPS] = 1.0
         offv[1:-1] = s_sum * wall.thickness_m / denom
-    front = cl + offv                                    # outward/left face
-    back = cl - offv                                     # inward/right face
+    front = cl + offv  # outward/left face
+    back = cl - offv  # inward/right face
 
     # Vertical break levels: wall band + each opening's sill/head.
     z_extra = [zb, zt]
@@ -256,14 +263,12 @@ def _add_wall(soup: _Soup, wall: Wall, zb: float, zt: float,
 
     # ---- front / back panel grid, minus opening cells --------------------
     # Hole mask over (s-cell, z-cell) by cell-centre membership in an opening.
-    s_mid = 0.5 * (cum[:-1] + cum[1:])                   # (m-1,)
-    z_mid = 0.5 * (zlev[:-1] + zlev[1:])                 # (nz-1,)
+    s_mid = 0.5 * (cum[:-1] + cum[1:])  # (m-1,)
+    z_mid = 0.5 * (zlev[:-1] + zlev[1:])  # (nz-1,)
     hole = np.zeros((m - 1, nz - 1), dtype=bool)
     for op in wall.openings:
-        in_s = (s_mid > op.offset_m + _EPS) & \
-               (s_mid < op.offset_m + op.width_m - _EPS)
-        in_z = (z_mid > zb + op.sill_m + _EPS) & \
-               (z_mid < zb + op.head_m - _EPS)
+        in_s = (s_mid > op.offset_m + _EPS) & (s_mid < op.offset_m + op.width_m - _EPS)
+        in_z = (z_mid > zb + op.sill_m + _EPS) & (z_mid < zb + op.head_m - _EPS)
         hole |= in_s[:, None] & in_z[None, :]
 
     soup.add_quads(*_panel_grid(front, offv, s_mid, zlev, hole, outward=True))
@@ -275,16 +280,14 @@ def _add_wall(soup: _Soup, wall: Wall, zb: float, zt: float,
         kb = int(np.argmin(np.abs(cum - (op.offset_m + op.width_m))))
         zs, zh = zb + op.sill_m, zb + op.head_m
         # Near + far jambs (outward normal = wall tangent away from opening).
-        soup.add_quads(*_vert_quad(front[ka], back[ka], zs, zh, -that[max(ka - 1, 0)]
-                                   if ka > 0 else -that[0]))
-        soup.add_quads(*_vert_quad(front[kb], back[kb], zs, zh,
-                                   that[min(kb, len(that) - 1)]))
+        soup.add_quads(
+            *_vert_quad(front[ka], back[ka], zs, zh, -that[max(ka - 1, 0)] if ka > 0 else -that[0])
+        )
+        soup.add_quads(*_vert_quad(front[kb], back[kb], zs, zh, that[min(kb, len(that) - 1)]))
         # Head (underside, faces down) and sill (top, faces up if present).
-        soup.add_quads(*_horiz_quad(front[ka], back[ka], front[kb], back[kb],
-                                    zh, up=False))
+        soup.add_quads(*_horiz_quad(front[ka], back[ka], front[kb], back[kb], zh, up=False))
         if op.sill_m > _EPS:
-            soup.add_quads(*_horiz_quad(front[ka], back[ka], front[kb],
-                                        back[kb], zs, up=True))
+            soup.add_quads(*_horiz_quad(front[ka], back[ka], front[kb], back[kb], zs, up=True))
 
     # ---- top cap + end caps ----------------------------------------------
     soup.add_quads(*_cap_strip(front, back, zt, up=True))
@@ -292,13 +295,18 @@ def _add_wall(soup: _Soup, wall: Wall, zb: float, zt: float,
     soup.add_quads(*_vert_quad(front[-1], back[-1], zb, zt, that[-1]))
 
 
-def _panel_grid(face: np.ndarray, offv: np.ndarray, s_mid: np.ndarray,
-                zlev: np.ndarray, hole: np.ndarray,
-                outward: bool) -> tuple[np.ndarray, np.ndarray]:
+def _panel_grid(
+    face: np.ndarray,
+    offv: np.ndarray,
+    s_mid: np.ndarray,
+    zlev: np.ndarray,
+    hole: np.ndarray,
+    outward: bool,
+) -> tuple[np.ndarray, np.ndarray]:
     """Build the solid panel quads of one wall face (front or back)."""
     m = face.shape[0]
     nz = zlev.shape[0]
-    keep = ~hole                                          # (m-1, nz-1)
+    keep = ~hole  # (m-1, nz-1)
     ki, ji = np.nonzero(keep)
     q = ki.shape[0]
     corners = np.empty((q, 4, 3), dtype=np.float64)
@@ -317,28 +325,40 @@ def _panel_grid(face: np.ndarray, offv: np.ndarray, s_mid: np.ndarray,
     return corners, normals
 
 
-def _vert_quad(p_front: np.ndarray, p_back: np.ndarray, z0: float, z1: float,
-               out_xy: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def _vert_quad(
+    p_front: np.ndarray, p_back: np.ndarray, z0: float, z1: float, out_xy: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
     """One vertical quad spanning thickness (front↔back) and [z0,z1]."""
-    c = np.array([[[p_front[0], p_front[1], z0],
-                   [p_back[0], p_back[1], z0],
-                   [p_back[0], p_back[1], z1],
-                   [p_front[0], p_front[1], z1]]], dtype=np.float64)
+    c = np.array(
+        [
+            [
+                [p_front[0], p_front[1], z0],
+                [p_back[0], p_back[1], z0],
+                [p_back[0], p_back[1], z1],
+                [p_front[0], p_front[1], z1],
+            ]
+        ],
+        dtype=np.float64,
+    )
     n = np.array([[out_xy[0], out_xy[1], 0.0]], dtype=np.float64)
     return c, n
 
 
-def _horiz_quad(fa: np.ndarray, ba: np.ndarray, fb: np.ndarray, bb: np.ndarray,
-                z: float, up: bool) -> tuple[np.ndarray, np.ndarray]:
+def _horiz_quad(
+    fa: np.ndarray, ba: np.ndarray, fb: np.ndarray, bb: np.ndarray, z: float, up: bool
+) -> tuple[np.ndarray, np.ndarray]:
     """Horizontal quad across the opening span at height ``z`` (reveal ledge)."""
-    c = np.array([[[fa[0], fa[1], z], [ba[0], ba[1], z],
-                   [bb[0], bb[1], z], [fb[0], fb[1], z]]], dtype=np.float64)
+    c = np.array(
+        [[[fa[0], fa[1], z], [ba[0], ba[1], z], [bb[0], bb[1], z], [fb[0], fb[1], z]]],
+        dtype=np.float64,
+    )
     n = np.array([[0.0, 0.0, 1.0 if up else -1.0]], dtype=np.float64)
     return c, n
 
 
-def _cap_strip(front: np.ndarray, back: np.ndarray, z: float,
-               up: bool) -> tuple[np.ndarray, np.ndarray]:
+def _cap_strip(
+    front: np.ndarray, back: np.ndarray, z: float, up: bool
+) -> tuple[np.ndarray, np.ndarray]:
     """Top (or bottom) cap: one quad per centerline segment at height ``z``."""
     m = front.shape[0]
     corners = np.empty((m - 1, 4, 3), dtype=np.float64)
@@ -354,6 +374,7 @@ def _cap_strip(front: np.ndarray, back: np.ndarray, z: float,
 # ---------------------------------------------------------------------------
 # Whole building
 # ---------------------------------------------------------------------------
+
 
 def _storey_footprint(building: Building, storey) -> np.ndarray:
     """Convex-hull footprint of a storey's walls for its floor slab."""
@@ -390,14 +411,11 @@ def mesh_building(building: Building, cfg) -> MeshArrays:
         z_floor1 = base + storey.slab_m
         _add_slab(soup, _storey_footprint(building, storey), z_floor0, z_floor1)
         for wall in storey.walls:
-            band = (wall.height_m if wall.height_m is not None
-                    else storey.height_m - storey.slab_m)
+            band = wall.height_m if wall.height_m is not None else storey.height_m - storey.slab_m
             _add_wall(soup, wall, z_floor1, z_floor1 + band, qpq)
     if building.foundation is not None:
-        _add_slab(soup, building.foundation.polygon,
-                  -building.foundation.depth_m, 0.0)
+        _add_slab(soup, building.foundation.polygon, -building.foundation.depth_m, 0.0)
     if building.roof is not None:
         top = building.total_height_m
-        _add_slab(soup, building.roof.polygon, top,
-                  top + building.roof.thickness_m)
+        _add_slab(soup, building.roof.polygon, top, top + building.roof.thickness_m)
     return soup.build()

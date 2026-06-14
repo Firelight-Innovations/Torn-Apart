@@ -50,14 +50,17 @@ __all__ = ["PlasterWallDef", "PLASTER_PALETTE", "PLASTER_THRESHOLDS"]
 
 # Weathered lime plaster — 6 colours, dark flake → bleached highlight.
 # Low chroma, slightly warm; no saturated tones (matches the muted world).
-_PLASTER_PALETTE = np.array([
-    (150, 142, 128),   # 0 — dark flaked patch / deep grime
-    (172, 164, 149),   # 1 — shaded hollow
-    (193, 185, 170),   # 2 — mid plaster (shadow side)
-    (210, 203, 189),   # 3 — base plaster (dominant)
-    (224, 218, 205),   # 4 — sun-touched plaster
-    (236, 231, 220),   # 5 — bleached highlight
-], dtype=np.uint8)
+_PLASTER_PALETTE = np.array(
+    [
+        (150, 142, 128),  # 0 — dark flaked patch / deep grime
+        (172, 164, 149),  # 1 — shaded hollow
+        (193, 185, 170),  # 2 — mid plaster (shadow side)
+        (210, 203, 189),  # 3 — base plaster (dominant)
+        (224, 218, 205),  # 4 — sun-touched plaster
+        (236, 231, 220),  # 5 — bleached highlight
+    ],
+    dtype=np.uint8,
+)
 
 # 5 thresholds → 6 buckets. Weighted toward the mid tones so the wall reads as
 # a calm field with only occasional dark flecks / bright catches.
@@ -67,8 +70,7 @@ PLASTER_PALETTE = _PLASTER_PALETTE
 PLASTER_THRESHOLDS = _THRESHOLDS
 
 
-def _posterise(field: np.ndarray, palette: np.ndarray,
-               thresholds: np.ndarray) -> np.ndarray:
+def _posterise(field: np.ndarray, palette: np.ndarray, thresholds: np.ndarray) -> np.ndarray:
     """Map a float32 ``(H, W)`` field in [0,1] to a fixed RGB palette."""
     h, w = field.shape
     idx = np.searchsorted(thresholds, field.ravel(), side="right").astype(np.int32)
@@ -125,10 +127,12 @@ class PlasterWallDef(ProceduralTextureDef):
         h = int(params.get("height", self.DEFAULT_HEIGHT))
         shape = (h, w)
 
-        base_noise = pixel_noise(rng, shape=shape, octaves=4, persistence=0.5,
-                                 lacunarity=2.0, base_freq=4)
-        grime_noise = pixel_noise(rng, shape=shape, octaves=2, persistence=0.5,
-                                  lacunarity=2.0, base_freq=12)
+        base_noise = pixel_noise(
+            rng, shape=shape, octaves=4, persistence=0.5, lacunarity=2.0, base_freq=4
+        )
+        grime_noise = pixel_noise(
+            rng, shape=shape, octaves=2, persistence=0.5, lacunarity=2.0, base_freq=12
+        )
         combined = base_noise * 0.7 + grime_noise * 0.3
 
         rgba = np.empty((h, w, 4), dtype=np.uint8)

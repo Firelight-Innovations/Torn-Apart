@@ -46,6 +46,7 @@ def _make_demo(seed: int = _SEED, **params) -> Building:
 # BuildingDef abstract base
 # ---------------------------------------------------------------------------
 
+
 class TestBuildingDefAbstractBase:
     def test_base_generate_raises_not_implemented(self):
         """Directly instantiating BuildingDef is impossible (ABC); calling
@@ -95,6 +96,7 @@ class TestBuildingDefAbstractBase:
 # DemoHouseDef: registration
 # ---------------------------------------------------------------------------
 
+
 class TestDemoHouseRegistration:
     def test_name_attribute_is_correct(self):
         defn = DemoHouseDef()
@@ -120,6 +122,7 @@ class TestDemoHouseRegistration:
 # ---------------------------------------------------------------------------
 # DemoHouseDef: determinism
 # ---------------------------------------------------------------------------
+
 
 class TestDemoHouseDeterminism:
     def test_same_seed_same_to_dict(self):
@@ -164,6 +167,7 @@ class TestDemoHouseDeterminism:
 # DemoHouseDef: storey count
 # ---------------------------------------------------------------------------
 
+
 class TestDemoHouseStoreys:
     def test_has_exactly_two_storeys(self):
         """The demo house is documented as 'two-storey'."""
@@ -188,6 +192,7 @@ class TestDemoHouseStoreys:
 # ---------------------------------------------------------------------------
 # DemoHouseDef: storey 0 wall structure
 # ---------------------------------------------------------------------------
+
 
 class TestDemoHouseStorey0Walls:
     def test_storey0_wall_count(self):
@@ -218,24 +223,23 @@ class TestDemoHouseStorey0Walls:
         Both thicknesses must appear in storey 0."""
         b = _make_demo()
         thicknesses = [w.thickness_m for w in b.storeys[0].walls]
-        assert any(abs(t - 0.4) < 1e-9 for t in thicknesses), \
-            "No 0.4 m exterior wall found"
-        assert any(abs(t - 0.15) < 1e-9 for t in thicknesses), \
-            "No 0.15 m interior wall found"
+        assert any(abs(t - 0.4) < 1e-9 for t in thicknesses), "No 0.4 m exterior wall found"
+        assert any(abs(t - 0.15) < 1e-9 for t in thicknesses), "No 0.15 m interior wall found"
 
     def test_storey0_east_half_wall_has_height_override(self):
         """The open-plan half-wall is 1.1 m tall (explicit height_m override).
         Pin that exactly one storey-0 wall has height_m == 1.1."""
         b = _make_demo()
-        half_walls = [w for w in b.storeys[0].walls
-                      if w.height_m is not None and
-                      abs(w.height_m - 1.1) < 1e-9]
+        half_walls = [
+            w for w in b.storeys[0].walls if w.height_m is not None and abs(w.height_m - 1.1) < 1e-9
+        ]
         assert len(half_walls) == 1
 
 
 # ---------------------------------------------------------------------------
 # DemoHouseDef: storey 0 openings
 # ---------------------------------------------------------------------------
+
 
 class TestDemoHouseStorey0Openings:
     def _all_openings(self, b: Building):
@@ -256,8 +260,7 @@ class TestDemoHouseStorey0Openings:
 
     def test_storey0_window_count(self):
         b = _make_demo()
-        windows = [o for o in self._all_openings(b)
-                   if o.kind is OpeningKind.WINDOW]
+        windows = [o for o in self._all_openings(b) if o.kind is OpeningKind.WINDOW]
         # se, bay0 (curved), nw, west, cham = 5 windows.
         assert len(windows) == 5
 
@@ -273,6 +276,7 @@ class TestDemoHouseStorey0Openings:
 # ---------------------------------------------------------------------------
 # DemoHouseDef: storey 0 rooms
 # ---------------------------------------------------------------------------
+
 
 class TestDemoHouseStorey0Rooms:
     def test_storey0_auto_detects_three_rooms(self):
@@ -298,6 +302,7 @@ class TestDemoHouseStorey0Rooms:
 # ---------------------------------------------------------------------------
 # DemoHouseDef: storey 1
 # ---------------------------------------------------------------------------
+
 
 class TestDemoHouseStorey1:
     def test_storey1_wall_count(self):
@@ -335,6 +340,7 @@ class TestDemoHouseStorey1:
 # DemoHouseDef: stairs
 # ---------------------------------------------------------------------------
 
+
 class TestDemoHouseStairs:
     def test_storey0_has_one_stairs_stub(self):
         b = _make_demo()
@@ -350,6 +356,7 @@ class TestDemoHouseStairs:
 # ---------------------------------------------------------------------------
 # DemoHouseDef: foundation and roof
 # ---------------------------------------------------------------------------
+
 
 class TestDemoHouseFoundationRoof:
     def test_has_foundation(self):
@@ -371,6 +378,7 @@ class TestDemoHouseFoundationRoof:
 # DemoHouseDef: dimensions from config
 # ---------------------------------------------------------------------------
 
+
 class TestDemoHouseDimensionsFromConfig:
     def test_storey_slab_thickness_matches_config(self):
         """Slabs use BuildingDefaults.from_config() — pin against the config
@@ -386,14 +394,14 @@ class TestDemoHouseDimensionsFromConfig:
         cfg = Config()
         assert cfg.building_default_wall_thickness_m == pytest.approx(0.3)
         b = _make_demo()
-        ext_walls = [w for w in b.storeys[0].walls
-                     if abs(w.thickness_m - 0.4) < 1e-9]
+        ext_walls = [w for w in b.storeys[0].walls if abs(w.thickness_m - 0.4) < 1e-9]
         assert len(ext_walls) > 0
 
 
 # ---------------------------------------------------------------------------
 # DemoHouseDef: rotation
 # ---------------------------------------------------------------------------
+
 
 class TestDemoHouseRotation:
     def test_building_has_nonzero_yaw(self):
@@ -408,6 +416,7 @@ class TestDemoHouseRotation:
 # ---------------------------------------------------------------------------
 # DemoHouseDef: to_dict / from_dict round-trip
 # ---------------------------------------------------------------------------
+
 
 class TestDemoHouseRoundTrip:
     def test_to_dict_from_dict_gives_identical_dict(self):
@@ -428,12 +437,10 @@ class TestDemoHouseRoundTrip:
         b = _make_demo()
         b2 = Building.from_dict(b.to_dict())
         for i, (s_orig, s_rt) in enumerate(zip(b.storeys, b2.storeys)):
-            assert len(s_rt.rooms) == len(s_orig.rooms), \
-                f"Room count mismatch on storey {i}"
+            assert len(s_rt.rooms) == len(s_orig.rooms), f"Room count mismatch on storey {i}"
 
     def test_to_dict_wall_count_survives_round_trip(self):
         b = _make_demo()
         b2 = Building.from_dict(b.to_dict())
         for i, (s_orig, s_rt) in enumerate(zip(b.storeys, b2.storeys)):
-            assert len(s_rt.walls) == len(s_orig.walls), \
-                f"Wall count mismatch on storey {i}"
+            assert len(s_rt.walls) == len(s_orig.walls), f"Wall count mismatch on storey {i}"

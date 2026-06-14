@@ -56,8 +56,8 @@ def _world() -> dict:
     chunks: dict = {}
     for cc in [(0, 0, 0), (1, 0, 0), (0, 1, 0), (-1, 0, 0), (0, 0, -1)]:
         ch = _Chunk()
-        ch.materials[:, :, :16] = 1   # bottom half solid dirt
-        ch.materials[:, :, 15] = 2    # grass skin layer
+        ch.materials[:, :, :16] = 1  # bottom half solid dirt
+        ch.materials[:, :, 15] = 2  # grass skin layer
         chunks[cc] = ch
     return chunks
 
@@ -81,14 +81,22 @@ def _drain_until(worker, want: int, timeout_s: float = 5.0):
 
 def _job(origin_cell, cells, cell_m, materials, palette, seq=1) -> AssemblyJob:
     return AssemblyJob(
-        cascade_index=0, origin_cell=tuple(origin_cell), cells=cells,
-        cell_m=cell_m, chunk_size=CHUNK, voxel_size=VOXEL,
-        materials=materials, palette=palette, seq=seq)
+        cascade_index=0,
+        origin_cell=tuple(origin_cell),
+        cells=cells,
+        cell_m=cell_m,
+        chunk_size=CHUNK,
+        voxel_size=VOXEL,
+        materials=materials,
+        palette=palette,
+        seq=seq,
+    )
 
 
 # ---------------------------------------------------------------------------
 # window_chunk_span
 # ---------------------------------------------------------------------------
+
 
 class TestWindowChunkSpan:
     def test_covers_every_intersecting_chunk(self):
@@ -113,10 +121,10 @@ class TestWindowChunkSpan:
 # pack_volume
 # ---------------------------------------------------------------------------
 
+
 class TestPackVolume:
     def test_pack_is_deterministic(self):
-        arr = np.random.default_rng(0).integers(
-            0, 256, size=(8, 8, 8, 4), dtype=np.uint8)
+        arr = np.random.default_rng(0).integers(0, 256, size=(8, 8, 8, 4), dtype=np.uint8)
         assert pack_volume(arr) == pack_volume(arr)
 
     def test_pack_length_matches_block(self):
@@ -128,6 +136,7 @@ class TestPackVolume:
 # assemble_packed equivalence (the core guarantee)
 # ---------------------------------------------------------------------------
 
+
 class TestAssemblePacked:
     def test_matches_synchronous_assemble(self):
         chunks = _world()
@@ -137,8 +146,7 @@ class TestAssemblePacked:
         materials = {c: ch.materials for c, ch in chunks.items()}
 
         # Synchronous reference: assemble_geometry on chunk objects + pack.
-        vol = assemble_geometry(win, chunks, palette,
-                                chunk_size=CHUNK, voxel_size=VOXEL)
+        vol = assemble_geometry(win, chunks, palette, chunk_size=CHUNK, voxel_size=VOXEL)
         ref_albedo = pack_volume(vol.albedo_occ)
         ref_emis = pack_volume(vol.emission)
 
@@ -155,10 +163,8 @@ class TestAssemblePacked:
         win = VolumeWindow(cells=96, cell_m=2.0)
         win.recenter((8.0, 8.0, 8.0))
         materials = {c: ch.materials for c, ch in chunks.items()}
-        vol = assemble_geometry(win, chunks, palette,
-                                chunk_size=CHUNK, voxel_size=VOXEL)
-        res = assemble_packed(
-            _job(win.origin_cell, 96, 2.0, materials, palette))
+        vol = assemble_geometry(win, chunks, palette, chunk_size=CHUNK, voxel_size=VOXEL)
+        res = assemble_packed(_job(win.origin_cell, 96, 2.0, materials, palette))
         assert res.albedo_bytes == pack_volume(vol.albedo_occ)
         assert res.emis_bytes == pack_volume(vol.emission)
 
@@ -166,6 +172,7 @@ class TestAssemblePacked:
 # ---------------------------------------------------------------------------
 # CascadeAssemblyWorker thread
 # ---------------------------------------------------------------------------
+
 
 class TestCascadeAssemblyWorker:
     def test_worker_result_matches_inline(self):
@@ -196,7 +203,7 @@ class TestCascadeAssemblyWorker:
         worker = CascadeAssemblyWorker()
         worker.start()
         worker.stop()
-        worker.stop()   # second stop is a no-op, must not raise
+        worker.stop()  # second stop is a no-op, must not raise
 
     def test_pending_count_tracks_inflight(self):
         chunks = _world()
@@ -208,8 +215,7 @@ class TestCascadeAssemblyWorker:
         worker.start()
         try:
             for i in range(3):
-                worker.submit(_job(win.origin_cell, 32, 0.5,
-                                   materials, palette, seq=i))
+                worker.submit(_job(win.origin_cell, 32, 0.5, materials, palette, seq=i))
             drained = _drain_until(worker, 3)
             assert len(drained) == 3
             assert worker.pending() == 0

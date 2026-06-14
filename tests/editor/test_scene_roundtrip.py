@@ -6,6 +6,7 @@ daemon (cube/light/spawn + a parented child) → save → the GAME's own load pa
 instantiates them with exact transforms. Headless throughout (visual_factory
 None or a recording stub — never panda3d).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -45,18 +46,30 @@ def _author_scene(daemon):
     """Create cube (TRS'd) + child empty + light + spawn via the RPC service."""
     daemon.server.broadcast_notification = _noop_broadcast  # no clients attached
     rot = Quat.from_axis_angle(Vec3(0.0, 0.0, 1.0), 0.7)
-    cube = _run(daemon.scene.create(
-        {"kind": "cube", "name": "Crate", "x": 4.0, "y": 2.0, "z": 8.0}))["object"]
-    _run(daemon.scene.set_transform(
-        {"id": cube["id"], "rw": rot.w, "rx": rot.x, "ry": rot.y, "rz": rot.z,
-         "sx": 2.0, "sy": 1.0, "sz": 1.0}))
-    child = _run(daemon.scene.create(
-        {"kind": "empty", "name": "Pivot", "parent": cube["id"],
-         "x": 1.0, "y": 0.0, "z": 0.0}))["object"]
-    light = _run(daemon.scene.create(
-        {"kind": "light", "x": -3.0, "y": 5.0, "z": 9.0}))["object"]
-    spawn = _run(daemon.scene.create(
-        {"kind": "spawn", "x": 1.0, "y": 2.0, "z": 3.0}))["object"]
+    cube = _run(
+        daemon.scene.create({"kind": "cube", "name": "Crate", "x": 4.0, "y": 2.0, "z": 8.0})
+    )["object"]
+    _run(
+        daemon.scene.set_transform(
+            {
+                "id": cube["id"],
+                "rw": rot.w,
+                "rx": rot.x,
+                "ry": rot.y,
+                "rz": rot.z,
+                "sx": 2.0,
+                "sy": 1.0,
+                "sz": 1.0,
+            }
+        )
+    )
+    child = _run(
+        daemon.scene.create(
+            {"kind": "empty", "name": "Pivot", "parent": cube["id"], "x": 1.0, "y": 0.0, "z": 0.0}
+        )
+    )["object"]
+    light = _run(daemon.scene.create({"kind": "light", "x": -3.0, "y": 5.0, "z": 9.0}))["object"]
+    spawn = _run(daemon.scene.create({"kind": "spawn", "x": 1.0, "y": 2.0, "z": 3.0}))["object"]
     return cube, child, light, spawn, rot
 
 
@@ -127,8 +140,7 @@ class TestSceneRoundTrip:
         factory = RecordingFactory()
         runtime = _game_load(cfg, save_path, factory=factory)
         # Every object reaches the factory exactly once (factory no-ops decide).
-        assert sorted(k for k, _ in factory.attached) == [
-            "cube", "empty", "light", "spawn"]
+        assert sorted(k for k, _ in factory.attached) == ["cube", "empty", "light", "spawn"]
         assert factory.teardowns == 1  # the rebuild that loaded the scene
 
         # Reload (F9): one more teardown, attachments doubled, objects stable.
@@ -161,4 +173,5 @@ class TestSceneRoundTrip:
 def test_editor_and_engine_share_one_store_class():
     """Schema-drift guard: the shim must re-export the engine class itself."""
     from fire_editor import scene_objects
+
     assert scene_objects.SceneObjectStore is SceneObjectStore

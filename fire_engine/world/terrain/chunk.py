@@ -100,9 +100,7 @@ class Chunk:
             self.materials = np.zeros((chunk_size, chunk_size, chunk_size), dtype=np.uint8)
         else:
             if materials.shape != (chunk_size, chunk_size, chunk_size):
-                raise ValueError(
-                    f"materials must be {(chunk_size,)*3}, got {materials.shape}"
-                )
+                raise ValueError(f"materials must be {(chunk_size,) * 3}, got {materials.shape}")
             self.materials = np.ascontiguousarray(materials, dtype=np.uint8)
         self.dirty: bool = True
         self.edited: bool = False

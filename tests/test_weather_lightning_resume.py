@@ -42,10 +42,11 @@ DAY = 24 * 3600.0
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _thunderstorm(
     id_: str = "n:0:0",
     spawn_time: float = 0.0,
-    duration: float = 10_800.0,   # 3 h
+    duration: float = 10_800.0,  # 3 h
     radius: float = 800.0,
     peak: float = 1.0,
 ) -> StormCell:
@@ -96,6 +97,7 @@ def cfg():
 # cell_id_int — golden-mirror and type guarantees
 # ---------------------------------------------------------------------------
 
+
 class TestCellIdInt:
     def test_returns_plain_int(self):
         result = cell_id_int("n:0:0")
@@ -110,33 +112,36 @@ class TestCellIdInt:
         """Result is < 2**31 — fits a signed shader/event int."""
         for s in ("n:0:0", "s:0", "n:9999:9999", "s:9999"):
             v = cell_id_int(s)
-            assert v < 2 ** 31, f"cell_id_int({s!r}) = {v} overflows 31-bit signed"
+            assert v < 2**31, f"cell_id_int({s!r}) = {v} overflows 31-bit signed"
 
     def test_same_string_same_int_twice_in_process(self):
         """Idempotent within one process — same string always gives same int."""
         for s in ("n:5:2", "s:3", "n:0:0"):
-            assert cell_id_int(s) == cell_id_int(s), \
-                f"cell_id_int not idempotent for {s!r}"
+            assert cell_id_int(s) == cell_id_int(s), f"cell_id_int not idempotent for {s!r}"
 
     def test_different_strings_different_ints(self):
         """Distinct ids should map to distinct ints (practical collision check)."""
         ids = ["n:5:2", "n:5:3", "n:6:2", "s:0", "s:1", "n:0:0", ""]
         values = [cell_id_int(s) for s in ids]
-        assert len(set(values)) == len(values), \
+        assert len(set(values)) == len(values), (
             f"Collision among cell_id_int values: {list(zip(ids, values))}"
+        )
 
     # Golden-mirror: hard-code blake2b digests of known strings.
     # If cell_id_int ever switches from blake2b these will fail, making the
     # cross-process stability regressions visible immediately.
-    @pytest.mark.parametrize("id_str,expected", [
-        # Computed once and pinned.  Derive with:
-        #   import hashlib
-        #   d = hashlib.blake2b(b"n:5:2", digest_size=8).digest()
-        #   int.from_bytes(d, "big") % (2**31)
-        ("n:5:2",  cell_id_int("n:5:2")),   # pinned at import time
-        ("s:0",    cell_id_int("s:0")),
-        ("n:0:0",  cell_id_int("n:0:0")),
-    ])
+    @pytest.mark.parametrize(
+        "id_str,expected",
+        [
+            # Computed once and pinned.  Derive with:
+            #   import hashlib
+            #   d = hashlib.blake2b(b"n:5:2", digest_size=8).digest()
+            #   int.from_bytes(d, "big") % (2**31)
+            ("n:5:2", cell_id_int("n:5:2")),  # pinned at import time
+            ("s:0", cell_id_int("s:0")),
+            ("n:0:0", cell_id_int("n:0:0")),
+        ],
+    )
     def test_golden_values_stable(self, id_str, expected):
         """Value must equal the value computed at import time (cross-run guard)."""
         assert cell_id_int(id_str) == expected
@@ -160,8 +165,7 @@ class TestCellIdInt:
             cwd=project_root,
             timeout=30,
         )
-        assert result.returncode == 0, \
-            f"Subprocess failed:\n{result.stderr}"
+        assert result.returncode == 0, f"Subprocess failed:\n{result.stderr}"
         subprocess_value = int(result.stdout.strip())
         assert subprocess_value == cell_id_int("n:5:2"), (
             f"cell_id_int diverged across processes! "
@@ -173,6 +177,7 @@ class TestCellIdInt:
 # ---------------------------------------------------------------------------
 # scheduled_strikes — LOAD-RESUME SAFETY (the headline invariant)
 # ---------------------------------------------------------------------------
+
 
 class TestLoadResumeSafety:
     """
@@ -189,21 +194,25 @@ class TestLoadResumeSafety:
         """Helper: for each tm in splits, check left+right == whole."""
         whole = scheduled_strikes(cell, t0, t2, cfg)
         for tm in splits:
-            left  = scheduled_strikes(cell, t0, tm, cfg)
+            left = scheduled_strikes(cell, t0, tm, cfg)
             right = scheduled_strikes(cell, tm, t2, cfg)
             concat = left + right
             assert len(concat) == len(whole), (
                 f"Split at tm={tm}: |left|+|right|={len(concat)} != |whole|={len(whole)}"
             )
             for i, (got, want) in enumerate(zip(concat, whole)):
-                assert got.time_abs == pytest.approx(want.time_abs, abs=1e-9), \
+                assert got.time_abs == pytest.approx(want.time_abs, abs=1e-9), (
                     f"Split at tm={tm}, strike {i}: time_abs mismatch {got.time_abs} vs {want.time_abs}"
-                assert np.allclose(got.pos_xy, want.pos_xy, atol=1e-9), \
+                )
+                assert np.allclose(got.pos_xy, want.pos_xy, atol=1e-9), (
                     f"Split at tm={tm}, strike {i}: pos_xy mismatch {got.pos_xy} vs {want.pos_xy}"
-                assert got.intensity == pytest.approx(want.intensity, abs=1e-9), \
+                )
+                assert got.intensity == pytest.approx(want.intensity, abs=1e-9), (
                     f"Split at tm={tm}, strike {i}: intensity mismatch"
-                assert got.seed == want.seed, \
+                )
+                assert got.seed == want.seed, (
                     f"Split at tm={tm}, strike {i}: seed mismatch {got.seed} vs {want.seed}"
+                )
 
     def test_resume_safe_plateau_window(self, cfg):
         """Window over the cell plateau (intensity ~1) — many strikes, easy to check."""
@@ -218,8 +227,8 @@ class TestLoadResumeSafety:
         """Window spanning the entire cell life (grow + plateau + decay)."""
         set_world_seed(42)
         cell = _thunderstorm(spawn_time=100.0, duration=7200.0)
-        t0 = 100.0                       # spawn start (no strikes yet — envelope=0)
-        t2 = 100.0 + 7200.0             # end of life
+        t0 = 100.0  # spawn start (no strikes yet — envelope=0)
+        t2 = 100.0 + 7200.0  # end of life
         splits = [1100.0, 3700.0, 5000.99, 6500.0]
         self._assert_resume_safe(cell, t0, t2, cfg, splits)
 
@@ -228,7 +237,7 @@ class TestLoadResumeSafety:
         set_world_seed(7)
         cell = _thunderstorm(duration=10_800.0)
         t0 = 0.0
-        t2 = 3000.0    # still inside the plateau (0-28% of lifetime)
+        t2 = 3000.0  # still inside the plateau (0-28% of lifetime)
         # Split points landing in the grow phase (0-2160 s)
         splits = [500.0, 1080.0, 1800.0, 2500.0]
         self._assert_resume_safe(cell, t0, t2, cfg, splits)
@@ -237,7 +246,7 @@ class TestLoadResumeSafety:
         """Split during the late decay phase (last 30% of duration)."""
         set_world_seed(99)
         cell = _thunderstorm(duration=9000.0)
-        decay_start = 0.70 * 9000.0     # = 6300 s
+        decay_start = 0.70 * 9000.0  # = 6300 s
         t0 = decay_start
         t2 = 9000.0
         splits = [7000.0, 7500.5, 8000.0, 8500.0]
@@ -291,12 +300,19 @@ class TestLoadResumeSafety:
 # Non-thunderstorm cells produce no strikes
 # ---------------------------------------------------------------------------
 
+
 class TestNonThunderstormYieldsNoStrikes:
     def test_shower_no_strikes(self, cfg):
         set_world_seed(1337)
         shower = StormCell(
-            "n:0:shower", CellKind.SHOWER,
-            0.0, (0.0, 0.0), 10_800.0, 800.0, 1.0, (0.0, 0.0),
+            "n:0:shower",
+            CellKind.SHOWER,
+            0.0,
+            (0.0, 0.0),
+            10_800.0,
+            800.0,
+            1.0,
+            (0.0, 0.0),
         )
         result = scheduled_strikes(shower, 0.0, 10_800.0, cfg)
         assert result == [], f"SHOWER should yield no strikes but got {len(result)}"
@@ -304,8 +320,14 @@ class TestNonThunderstormYieldsNoStrikes:
     def test_fog_bank_no_strikes(self, cfg):
         set_world_seed(1337)
         fog = StormCell(
-            "n:0:fog", CellKind.FOG_BANK,
-            0.0, (0.0, 0.0), 10_800.0, 800.0, 1.0, (0.0, 0.0),
+            "n:0:fog",
+            CellKind.FOG_BANK,
+            0.0,
+            (0.0, 0.0),
+            10_800.0,
+            800.0,
+            1.0,
+            (0.0, 0.0),
         )
         result = scheduled_strikes(fog, 0.0, 10_800.0, cfg)
         assert result == [], f"FOG_BANK should yield no strikes but got {len(result)}"
@@ -313,8 +335,14 @@ class TestNonThunderstormYieldsNoStrikes:
     def test_cloud_bank_no_strikes(self, cfg):
         set_world_seed(1337)
         cloud = StormCell(
-            "n:0:cloud", CellKind.CLOUD_BANK,
-            0.0, (0.0, 0.0), 10_800.0, 800.0, 1.0, (0.0, 0.0),
+            "n:0:cloud",
+            CellKind.CLOUD_BANK,
+            0.0,
+            (0.0, 0.0),
+            10_800.0,
+            800.0,
+            1.0,
+            (0.0, 0.0),
         )
         result = scheduled_strikes(cloud, 0.0, 10_800.0, cfg)
         assert result == [], f"CLOUD_BANK should yield no strikes but got {len(result)}"
@@ -324,6 +352,7 @@ class TestNonThunderstormYieldsNoStrikes:
 # Edge-case / boundary windows
 # ---------------------------------------------------------------------------
 
+
 class TestEdgeCaseWindows:
     def test_zero_width_window_no_strikes(self, cfg):
         """[t, t) is empty by definition."""
@@ -331,8 +360,7 @@ class TestEdgeCaseWindows:
         cell = _thunderstorm(duration=10_800.0)
         for t in (0.0, 1800.0, 5400.0, 10_800.0):
             result = scheduled_strikes(cell, t, t, cfg)
-            assert result == [], \
-                f"Zero-width window [t={t}, t) must yield no strikes"
+            assert result == [], f"Zero-width window [t={t}, t) must yield no strikes"
 
     def test_inverted_window_no_strikes(self, cfg):
         """t1 < t0 is an empty window."""
@@ -364,13 +392,13 @@ class TestEdgeCaseWindows:
         cell = _thunderstorm(spawn_time=spawn, duration=10_800.0)
         result = scheduled_strikes(cell, 0.0, spawn + 3600.0, cfg)
         for s in result:
-            assert s.time_abs >= spawn, \
-                f"Strike at t={s.time_abs} before spawn_time={spawn}"
+            assert s.time_abs >= spawn, f"Strike at t={s.time_abs} before spawn_time={spawn}"
 
 
 # ---------------------------------------------------------------------------
 # Thinning: more strikes near the plateau than at the edges
 # ---------------------------------------------------------------------------
+
 
 class TestThinning:
     def test_plateau_denser_than_grow_edge(self, cfg):
@@ -382,12 +410,12 @@ class TestThinning:
         set_world_seed(1337)
         dur = 10_800.0
         cell = _thunderstorm(duration=dur)
-        window = 0.10 * dur          # equal-width sub-windows (1080 s)
+        window = 0.10 * dur  # equal-width sub-windows (1080 s)
 
         grow_start = 0.01 * dur
         plateau_mid = 0.45 * dur
 
-        grow_strikes   = scheduled_strikes(cell, grow_start, grow_start + window, cfg)
+        grow_strikes = scheduled_strikes(cell, grow_start, grow_start + window, cfg)
         plateau_strikes = scheduled_strikes(cell, plateau_mid, plateau_mid + window, cfg)
 
         assert len(plateau_strikes) >= len(grow_strikes), (
@@ -403,10 +431,10 @@ class TestThinning:
         window = 0.10 * dur
 
         plateau_mid = 0.45 * dur
-        decay_end   = 0.90 * dur
+        decay_end = 0.90 * dur
 
         plateau_strikes = scheduled_strikes(cell, plateau_mid, plateau_mid + window, cfg)
-        decay_strikes   = scheduled_strikes(cell, decay_end, decay_end + window, cfg)
+        decay_strikes = scheduled_strikes(cell, decay_end, decay_end + window, cfg)
 
         # decay_end + window may exceed cell lifetime — that's fine, the function
         # caps to the lifetime automatically.
@@ -420,50 +448,50 @@ class TestThinning:
 # StrikeParams field types and value ranges
 # ---------------------------------------------------------------------------
 
+
 class TestStrikeParamsFields:
     def test_all_fields_present(self, cfg):
         """StrikeParams must have exactly the four documented fields."""
         field_names = {f.name for f in fields(StrikeParams)}
-        assert "time_abs"  in field_names
-        assert "pos_xy"    in field_names
+        assert "time_abs" in field_names
+        assert "pos_xy" in field_names
         assert "intensity" in field_names
-        assert "seed"      in field_names
+        assert "seed" in field_names
 
     def test_time_abs_is_float(self, cfg):
         set_world_seed(1337)
         cell = _thunderstorm(duration=10_800.0)
         for s in scheduled_strikes(cell, 0.0, 5400.0, cfg):
-            assert isinstance(s.time_abs, float), \
+            assert isinstance(s.time_abs, float), (
                 f"time_abs should be float, got {type(s.time_abs)}"
+            )
 
     def test_pos_xy_is_length_2(self, cfg):
         set_world_seed(1337)
         cell = _thunderstorm(duration=10_800.0, radius=800.0)
         for s in scheduled_strikes(cell, 0.0, 5400.0, cfg):
-            assert len(s.pos_xy) == 2, \
-                f"pos_xy should be length-2, got length {len(s.pos_xy)}"
+            assert len(s.pos_xy) == 2, f"pos_xy should be length-2, got length {len(s.pos_xy)}"
 
     def test_intensity_in_unit_interval(self, cfg):
         set_world_seed(1337)
         cell = _thunderstorm(duration=10_800.0, peak=0.8)
         for s in scheduled_strikes(cell, 0.0, 10_800.0, cfg):
-            assert 0.0 <= s.intensity <= 1.0, \
-                f"intensity out of [0, 1]: {s.intensity}"
+            assert 0.0 <= s.intensity <= 1.0, f"intensity out of [0, 1]: {s.intensity}"
 
     def test_seed_is_non_negative_int(self, cfg):
         set_world_seed(1337)
         cell = _thunderstorm(duration=10_800.0)
         for s in scheduled_strikes(cell, 0.0, 5400.0, cfg):
-            assert isinstance(s.seed, int) and s.seed >= 0, \
+            assert isinstance(s.seed, int) and s.seed >= 0, (
                 f"seed must be non-negative int, got {s.seed!r}"
+            )
 
     def test_seed_fits_31_bits(self, cfg):
         """Seed is < 2**31 (signed shader-friendly int)."""
         set_world_seed(1337)
         cell = _thunderstorm(duration=10_800.0)
         for s in scheduled_strikes(cell, 0.0, 10_800.0, cfg):
-            assert s.seed < 2 ** 31, \
-                f"seed {s.seed} exceeds 31-bit signed range"
+            assert s.seed < 2**31, f"seed {s.seed} exceeds 31-bit signed range"
 
     def test_cell_id_field_on_strike_event_matches_int_fn(self, cfg):
         """
@@ -480,8 +508,9 @@ class TestStrikeParamsFields:
             seeds_a = {s.seed for s in strikes_a}
             seeds_b = {s.seed for s in strikes_b}
             # The union should be larger than each set (no total overlap)
-            assert seeds_a != seeds_b or len(strikes_a) != len(strikes_b), \
+            assert seeds_a != seeds_b or len(strikes_a) != len(strikes_b), (
                 "Different cell ids produced identical strike seeds — suspicious"
+            )
 
     def test_pos_xy_within_cell_radius(self, cfg):
         """Strike offset must be within the cell footprint (clamped by implementation)."""
@@ -490,5 +519,6 @@ class TestStrikeParamsFields:
         for s in scheduled_strikes(cell, 0.0, 10_800.0, cfg):
             r = cell.radius(s.time_abs)
             dist = np.hypot(*s.pos_xy)
-            assert dist <= r + 1e-6, \
+            assert dist <= r + 1e-6, (
                 f"Strike pos_xy {s.pos_xy} is outside radius {r:.2f}: dist={dist:.2f}"
+            )

@@ -94,9 +94,14 @@ class WindBallDebugComponent(Component):
     Units: meters, seconds, m/s.  World-space Z-up.
     """
 
-    def __init__(self, base: Any = None, clock: Any = None,
-                 wind_field: Any = None, radius_m: float = 0.4,
-                 sky_system: Any = None) -> None:
+    def __init__(
+        self,
+        base: Any = None,
+        clock: Any = None,
+        wind_field: Any = None,
+        radius_m: float = 0.4,
+        sky_system: Any = None,
+    ) -> None:
         super().__init__()
         self.base = base
         self.clock = clock
@@ -108,7 +113,7 @@ class WindBallDebugComponent(Component):
         self._params: BallParams | None = None
         self._pos = np.zeros(3, dtype=np.float64)
         self._vel = np.zeros(3, dtype=np.float64)
-        self._wind_time: float | None = None   # seeded on first CPU-path update
+        self._wind_time: float | None = None  # seeded on first CPU-path update
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -117,8 +122,7 @@ class WindBallDebugComponent(Component):
     def start(self) -> None:
         """Build the ball geometry and seat it on the ground near spawn."""
         if self.base is None or self.wind_field is None:
-            _log.warning("WindBallDebugComponent: missing base/wind_field — "
-                         "disabled")
+            _log.warning("WindBallDebugComponent: missing base/wind_field — disabled")
             self.enabled = False
             return
 
@@ -131,8 +135,8 @@ class WindBallDebugComponent(Component):
 
         # Rest the ball on the ground at the start XY (centre = ground + radius).
         self._pos = np.array(
-            [_BALL_START_XY[0], _BALL_START_XY[1], ground_z + self._radius_m],
-            dtype=np.float64)
+            [_BALL_START_XY[0], _BALL_START_XY[1], ground_z + self._radius_m], dtype=np.float64
+        )
         self._vel = np.zeros(3, dtype=np.float64)
 
         geom_node = GeomNode("wind_debug_ball")
@@ -141,19 +145,22 @@ class WindBallDebugComponent(Component):
         # Unlit + full-bright so it reads as a debug gizmo on either backend.
         node.set_light_off()
         node.set_color(*_BALL_COLOR)
-        node.set_shader_off()                 # ignore any inherited GPU shader
-        node.set_pos(float(self._pos[0]), float(self._pos[1]),
-                     float(self._pos[2]))
+        node.set_shader_off()  # ignore any inherited GPU shader
+        node.set_pos(float(self._pos[0]), float(self._pos[1]), float(self._pos[2]))
         self._node = node
 
-        _log.info("Wind debug ball online at (%.1f, %.1f, %.1f), r=%.2f m — "
-                  "watch it scoot when a gust crosses (storm = rolls hard)",
-                  self._pos[0], self._pos[1], self._pos[2], self._radius_m)
+        _log.info(
+            "Wind debug ball online at (%.1f, %.1f, %.1f), r=%.2f m — "
+            "watch it scoot when a gust crosses (storm = rolls hard)",
+            self._pos[0],
+            self._pos[1],
+            self._pos[2],
+            self._radius_m,
+        )
 
     def fixed_update(self, dt: float) -> None:
         """Sample the wind at the ball and step the pure integrator (50 Hz)."""
-        if self._node is None or self.wind_field is None \
-                or self._params is None:
+        if self._node is None or self.wind_field is None or self._params is None:
             return
 
         # If we own a sky_system we also drive the field's update; otherwise we
@@ -167,24 +174,24 @@ class WindBallDebugComponent(Component):
             # a loaded save resumes at a deterministic phase.
             rate = float(self.base._config.wind_time_scale)
             if self._wind_time is None:
-                game_s = (float(self.clock.game_day) * 86400.0
-                          + float(self.clock.game_time_of_day))
+                game_s = float(self.clock.game_day) * 86400.0 + float(self.clock.game_time_of_day)
                 scale = max(float(self.clock.game_time_scale), 1e-6)
                 self._wind_time = game_s / scale * rate
             self._wind_time += float(dt) * rate
             sky_state = getattr(self.sky_system, "state", None)
-            self.wind_field.update(dt, self._wind_time, sky_state,
-                                   (float(self._pos[0]), float(self._pos[1]),
-                                    float(self._pos[2])))
+            self.wind_field.update(
+                dt,
+                self._wind_time,
+                sky_state,
+                (float(self._pos[0]), float(self._pos[1]), float(self._pos[2])),
+            )
         try:
             v_wind = self.wind_field.sample(self._pos[None])[0]
         except RuntimeError:
             return  # field not updated yet this run — nothing to sample
 
-        self._pos, self._vel = debug_ball_step(
-            self._pos, self._vel, v_wind, dt, self._params)
-        self._node.set_pos(float(self._pos[0]), float(self._pos[1]),
-                           float(self._pos[2]))
+        self._pos, self._vel = debug_ball_step(self._pos, self._vel, v_wind, dt, self._params)
+        self._node.set_pos(float(self._pos[0]), float(self._pos[1]), float(self._pos[2]))
 
     def on_destroy(self) -> None:
         """Remove the ball geometry."""

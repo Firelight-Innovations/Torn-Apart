@@ -79,6 +79,7 @@ from fire_engine.lighting import TreeOccluderSet
 from fire_engine.render.component import Component
 from fire_engine.render import flora_shaders, tree_shaders
 from fire_engine.render.flora_renderer import _build_cross_geom
+
 # Weather → sway mapping shared with grass/flora so the scalar fallback
 # moves all vegetation in lockstep (scaled per kind via u_sway_gain).
 from fire_engine.render.grass_renderer import (
@@ -116,8 +117,8 @@ _LIGHT_OFFSET_FRAC = 0.45
 class _TreeKind:
     """One row of the kind table — everything that differs trees vs bushes."""
 
-    tag: str          # ZoneVolume tag this kind renders
-    prefix: str       # Config field prefix ("tree" / "bush")
+    tag: str  # ZoneVolume tag this kind renders
+    prefix: str  # Config field prefix ("tree" / "bush")
     sway_gain: float  # canopy sway amplitude (meters of lean at weight 1)
     sway_pivot: float  # impostor: normalised height where canopy sway starts
 
@@ -157,9 +158,15 @@ class TreeRendererComponent(Component):
     Units: meters, seconds, radians.  World-space Z-up.
     """
 
-    def __init__(self, base: Any = None, sky_system: Any = None,
-                 zone_store: Any = None, chunk_provider: Any = None,
-                 lighting_pipeline: Any = None, bus: Any = None) -> None:
+    def __init__(
+        self,
+        base: Any = None,
+        sky_system: Any = None,
+        zone_store: Any = None,
+        chunk_provider: Any = None,
+        lighting_pipeline: Any = None,
+        bus: Any = None,
+    ) -> None:
         super().__init__()
         self.base = base
         self.sky_system = sky_system
@@ -198,26 +205,26 @@ class TreeRendererComponent(Component):
 
     def start(self) -> None:
         """Compile shaders, build the root and every volume's draws (once)."""
-        if self.base is None or self.zone_store is None \
-                or self.chunk_provider is None:
-            _log.warning("TreeRendererComponent: missing base/zone_store/"
-                         "chunk_provider — disabled")
+        if self.base is None or self.zone_store is None or self.chunk_provider is None:
+            _log.warning("TreeRendererComponent: missing base/zone_store/chunk_provider — disabled")
             self.enabled = False
             return
         if self.lighting_pipeline is None:
-            _log.warning("TreeRendererComponent: GPU lighting pipeline "
-                         "required (lighting_backend = \"gpu\") — disabled")
+            _log.warning(
+                "TreeRendererComponent: GPU lighting pipeline "
+                'required (lighting_backend = "gpu") — disabled'
+            )
             self.enabled = False
             return
 
         self._mesh_shader = Shader.make(
-            Shader.SL_GLSL,
-            vertex=tree_shaders.TREE_VERTEX,
-            fragment=tree_shaders.TREE_FRAGMENT)
+            Shader.SL_GLSL, vertex=tree_shaders.TREE_VERTEX, fragment=tree_shaders.TREE_FRAGMENT
+        )
         self._impostor_shader = Shader.make(
             Shader.SL_GLSL,
             vertex=tree_shaders.TREE_IMPOSTOR_VERTEX,
-            fragment=flora_shaders.FLORA_FRAGMENT)
+            fragment=flora_shaders.FLORA_FRAGMENT,
+        )
 
         # Lighting (cascade/fog/celestial) inherits from ``render`` where
         # GpuLightingPipeline binds the lit-surface contract; the wind
@@ -238,19 +245,18 @@ class TreeRendererComponent(Component):
         # Shadow-refinement gate (lit_surface.glsl) for BOTH the mesh and
         # impostor draws.  Bound HERE, not inherited: terrain_root above us
         # pins u_refine = 1.0 for the terrain, foliage follows the preset.
-        self._root.set_shader_input(
-            "u_refine", 1.0 if cfg.gfx_foliage_shadow_refine else 0.0)
+        self._root.set_shader_input("u_refine", 1.0 if cfg.gfx_foliage_shadow_refine else 0.0)
         for kind in _TREE_KINDS:
             kroot = self._root.attach_new_node(f"tree_{kind.tag}")
             # Mesh draws fade OUT across the mesh window; impostor nodes
             # override u_fade_* with their own window below (node-level
             # ShaderInputs win over inherited ones).
             kroot.set_shader_input(
-                "u_fade_start_m",
-                float(getattr(cfg, f"{kind.prefix}_mesh_fade_start_m")))
+                "u_fade_start_m", float(getattr(cfg, f"{kind.prefix}_mesh_fade_start_m"))
+            )
             kroot.set_shader_input(
-                "u_fade_end_m",
-                float(getattr(cfg, f"{kind.prefix}_mesh_fade_end_m")))
+                "u_fade_end_m", float(getattr(cfg, f"{kind.prefix}_mesh_fade_end_m"))
+            )
             kroot.set_shader_input("u_sway_gain", kind.sway_gain)
             self._kind_roots[kind.tag] = kroot
 
@@ -273,25 +279,21 @@ class TreeRendererComponent(Component):
                 self._rebuild_volume(key)
             self._dirty_volumes.clear()
 
-        st = getattr(self.sky_system, "state", None) \
-            if self.sky_system is not None else None
+        st = getattr(self.sky_system, "state", None) if self.sky_system is not None else None
         if st is not None:
             wind = float(st.wind_speed)
             rain = float(st.rain_intensity)
             wn = max(0.0, min(wind / _WIND_SPEED_MAX, 1.0))
             self._root.set_shader_input(
-                "u_wind_dir",
-                LVecBase2f(float(st.wind_dir[0]), float(st.wind_dir[1])))
+                "u_wind_dir", LVecBase2f(float(st.wind_dir[0]), float(st.wind_dir[1]))
+            )
+            self._root.set_shader_input("u_sway_base", _SWAY_BASE_MIN_M + _SWAY_BASE_WIND_M * wn)
             self._root.set_shader_input(
-                "u_sway_base", _SWAY_BASE_MIN_M + _SWAY_BASE_WIND_M * wn)
+                "u_sway_gust", _SWAY_GUST_MIN_M + _SWAY_GUST_WIND_M * wn + _SWAY_GUST_RAIN_M * rain
+            )
             self._root.set_shader_input(
-                "u_sway_gust",
-                _SWAY_GUST_MIN_M + _SWAY_GUST_WIND_M * wn
-                + _SWAY_GUST_RAIN_M * rain)
-            self._root.set_shader_input(
-                "u_gust_freq",
-                _GUST_FREQ_MIN + _GUST_FREQ_PER_WIND * wind
-                + _GUST_FREQ_RAIN * rain)
+                "u_gust_freq", _GUST_FREQ_MIN + _GUST_FREQ_PER_WIND * wind + _GUST_FREQ_RAIN * rain
+            )
         self._root.set_shader_input("u_time_s", self._time_s)
 
     def on_destroy(self) -> None:
@@ -318,8 +320,7 @@ class TreeRendererComponent(Component):
 
     def _on_terrain_edited(self, event: TerrainEditedEvent) -> None:
         coords = event.chunk_coords
-        if isinstance(coords, tuple) and len(coords) == 3 \
-                and isinstance(coords[0], int):
+        if isinstance(coords, tuple) and len(coords) == 3 and isinstance(coords[0], int):
             coords = (coords,)
         self._mark_dirty_for_coords(coords)
 
@@ -365,8 +366,9 @@ class TreeRendererComponent(Component):
                 total_inst += node.get_instance_count()
         self._store_version_built = self.zone_store.version
         self._push_occluders()
-        _log.info("Trees built: %d draw node(s), %d instance draw(s) total",
-                  total_nodes, total_inst)
+        _log.info(
+            "Trees built: %d draw node(s), %d instance draw(s) total", total_nodes, total_inst
+        )
 
     def _rebuild_volume(self, key: tuple[str, int]) -> None:
         """Re-bake + rebuild one volume (terrain under it changed)."""
@@ -388,13 +390,13 @@ class TreeRendererComponent(Component):
 
         cfg = self.base._config
         mix = species_mix_from_params(
-            vol.params, str(getattr(cfg, f"{kind.prefix}_default_species")))
+            vol.params, str(getattr(cfg, f"{kind.prefix}_default_species"))
+        )
         variant_sets = {name: get_procedural(name) for name, _ in mix}
-        variant_counts = {name: vs.n_variants
-                          for name, vs in variant_sets.items()}
+        variant_counts = {name: vs.n_variants for name, vs in variant_sets.items()}
         inst = bake_tree_instances(
-            vol, cfg, self.chunk_provider.chunks, mix, variant_counts,
-            kind=kind.tag)
+            vol, cfg, self.chunk_provider.chunks, mix, variant_counts, kind=kind.tag
+        )
         if inst.count == 0:
             self._volume_nodes[(kind.tag, vol.id)] = []
             self._volume_occluders.pop((kind.tag, vol.id), None)
@@ -419,14 +421,22 @@ class TreeRendererComponent(Component):
             vs = variant_sets[name]
             occ_h[mask] = np.float32(vs.max_height_m) * inst.scale[mask]
             occ_r[mask] = np.float32(vs.max_radius_m) * inst.scale[mask]
-            occ_sigma[mask] = (np.float32(self._species_canopy_sigma(name, vs))
-                               / np.maximum(inst.scale[mask], 1e-3))
+            occ_sigma[mask] = np.float32(self._species_canopy_sigma(name, vs)) / np.maximum(
+                inst.scale[mask], 1e-3
+            )
             bark_rgb, leaf_rgb = self._species_splat_rgb(name, vs)
             occ_bark[mask] = bark_rgb
             occ_leaf[mask] = leaf_rgb
         self._volume_occluders[(kind.tag, vol.id)] = TreeOccluderSet(
-            x=inst.x, y=inst.y, z=inst.z, height_m=occ_h, canopy_r_m=occ_r,
-            canopy_sigma=occ_sigma, bark_rgb=occ_bark, leaf_rgb=occ_leaf)
+            x=inst.x,
+            y=inst.y,
+            z=inst.z,
+            height_m=occ_h,
+            canopy_r_m=occ_r,
+            canopy_sigma=occ_sigma,
+            bark_rgb=occ_bark,
+            leaf_rgb=occ_leaf,
+        )
 
         scale_min, scale_span = SCALE_JITTER[kind.tag]
         scale_max = scale_min + scale_span
@@ -438,13 +448,11 @@ class TreeRendererComponent(Component):
             species_mask = inst.species_idx == s_idx
             if not bool(species_mask.any()):
                 continue
-            pad = max(vs.max_height_m, vs.max_radius_m) * scale_max \
-                + _BOUNDS_PAD_M
+            pad = max(vs.max_height_m, vs.max_radius_m) * scale_max + _BOUNDS_PAD_M
             bounds = BoundingBox(
-                LPoint3(vol.min_corner[0] - pad, vol.min_corner[1] - pad,
-                        vol.min_corner[2] - pad),
-                LPoint3(vol.max_corner[0] + pad, vol.max_corner[1] + pad,
-                        vol.max_corner[2] + pad))
+                LPoint3(vol.min_corner[0] - pad, vol.min_corner[1] - pad, vol.min_corner[2] - pad),
+                LPoint3(vol.max_corner[0] + pad, vol.max_corner[1] + pad, vol.max_corner[2] + pad),
+            )
 
             # --- variant-mesh draws (near LOD) ---------------------------
             for v in range(vs.n_variants):
@@ -452,8 +460,7 @@ class TreeRendererComponent(Component):
                 n = int(np.count_nonzero(mask))
                 if n == 0:
                     continue
-                geom_node = GeomNode(
-                    f"tree_{kind.tag}_vol_{vol.id}_{name}_v{v}")
+                geom_node = GeomNode(f"tree_{kind.tag}_vol_{vol.id}_{name}_v{v}")
                 geom_node.add_geom(self._mesh_geom(name, v, vs))
                 node = kroot.attach_new_node(geom_node)
                 # Shader and instance count MUST live on the same node (the
@@ -463,8 +470,8 @@ class TreeRendererComponent(Component):
                 node.set_shader(self._mesh_shader)
                 node.set_instance_count(n)
                 node.set_shader_input(
-                    "u_inst_tex",
-                    to_data_texture_f32(instances_data_block(inst, mask)))
+                    "u_inst_tex", to_data_texture_f32(instances_data_block(inst, mask))
+                )
                 node.set_shader_input("u_atlas", self._species_atlas(name, vs))
                 # Instances are shader-positioned — give the node the
                 # volume's real box plus the scaled tree reach, and stop
@@ -481,27 +488,26 @@ class TreeRendererComponent(Component):
             inode.set_shader(self._impostor_shader)
             inode.set_instance_count(int(np.count_nonzero(species_mask)))
             inode.set_shader_input(
-                "u_inst_tex",
-                to_data_texture_f32(instances_data_block(inst, species_mask)))
+                "u_inst_tex", to_data_texture_f32(instances_data_block(inst, species_mask))
+            )
             inode.set_shader_input("u_sprite", self._species_impostor(name, vs))
             inode.set_shader_input("u_variants", float(vs.n_variants))
             # Fade IN over the mesh window, OUT over the impostor window —
             # overriding the kind root's mesh-window u_fade_*.
             inode.set_shader_input(
-                "u_mesh_fade_start_m",
-                float(getattr(cfg, f"{kind.prefix}_mesh_fade_start_m")))
+                "u_mesh_fade_start_m", float(getattr(cfg, f"{kind.prefix}_mesh_fade_start_m"))
+            )
             inode.set_shader_input(
-                "u_mesh_fade_end_m",
-                float(getattr(cfg, f"{kind.prefix}_mesh_fade_end_m")))
+                "u_mesh_fade_end_m", float(getattr(cfg, f"{kind.prefix}_mesh_fade_end_m"))
+            )
             inode.set_shader_input(
-                "u_fade_start_m",
-                float(getattr(cfg, f"{kind.prefix}_impostor_fade_start_m")))
+                "u_fade_start_m", float(getattr(cfg, f"{kind.prefix}_impostor_fade_start_m"))
+            )
             inode.set_shader_input(
-                "u_fade_end_m",
-                float(getattr(cfg, f"{kind.prefix}_impostor_fade_end_m")))
+                "u_fade_end_m", float(getattr(cfg, f"{kind.prefix}_impostor_fade_end_m"))
+            )
             inode.set_shader_input("u_sway_pivot", kind.sway_pivot)
-            inode.set_shader_input(
-                "u_light_offset_m", vs.max_height_m * _LIGHT_OFFSET_FRAC)
+            inode.set_shader_input("u_light_offset_m", vs.max_height_m * _LIGHT_OFFSET_FRAC)
             imp_node.set_bounds(bounds)
             imp_node.set_final(True)
             nodes.append(inode)
@@ -517,8 +523,7 @@ class TreeRendererComponent(Component):
         if self.lighting_pipeline is None:
             return
         sets = [s for s in self._volume_occluders.values() if s.count]
-        self.lighting_pipeline.set_static_occluders(
-            TreeOccluderSet.merge(sets) if sets else None)
+        self.lighting_pipeline.set_static_occluders(TreeOccluderSet.merge(sets) if sets else None)
 
     def _species_canopy_sigma(self, name: str, vs) -> float:
         """
@@ -536,10 +541,9 @@ class TreeRendererComponent(Component):
         sigma = self._species_sigma.get(name)
         if sigma is None:
             from fire_engine.procedural.flora import mesh_leaf_area_m2
-            from fire_engine.lighting.occluders import (
-                CANOPY_HALF_HEIGHT_FRAC)
-            leaf_area = float(np.mean(
-                [mesh_leaf_area_m2(m) for m in vs.meshes]))
+            from fire_engine.lighting.occluders import CANOPY_HALF_HEIGHT_FRAC
+
+            leaf_area = float(np.mean([mesh_leaf_area_m2(m) for m in vs.meshes]))
             cv = CANOPY_HALF_HEIGHT_FRAC * float(vs.max_height_m)
             r = float(vs.max_radius_m)
             volume = (4.0 / 3.0) * np.pi * r * r * max(cv, 1e-3)
@@ -565,8 +569,7 @@ class TreeRendererComponent(Component):
             sel = leaf_px[:, 3] > 0.5
             leaf = leaf_px[sel, :3].mean(axis=0) if bool(sel.any()) else bark
             # sRGB → linear (the cascade albedo channel is linear).
-            cached = ((bark ** 2.2).astype(np.float32),
-                      (leaf ** 2.2).astype(np.float32))
+            cached = ((bark**2.2).astype(np.float32), (leaf**2.2).astype(np.float32))
             self._species_occ_rgb[name] = cached
         return cached
 
@@ -580,6 +583,7 @@ class TreeRendererComponent(Component):
         geom = self._mesh_geoms.get(key)
         if geom is None:
             from fire_engine.render.geometry_bridge import to_geom
+
             geom = to_geom(vs.meshes[variant])
             self._mesh_geoms[key] = geom
         return geom
@@ -588,8 +592,7 @@ class TreeRendererComponent(Component):
         """Crossed-quad billboard sized to the species' impostor raster."""
         geom = self._impostor_geoms.get(name)
         if geom is None:
-            geom = _build_cross_geom(
-                vs.impostor_height_m, vs.impostor_width_m, 2)
+            geom = _build_cross_geom(vs.impostor_height_m, vs.impostor_width_m, 2)
             self._impostor_geoms[name] = geom
         return geom
 
@@ -598,6 +601,7 @@ class TreeRendererComponent(Component):
         tex = self._atlas_tex.get(name)
         if tex is None:
             from fire_engine.render.texture_bridge import to_panda_texture
+
             tex = to_panda_texture(vs.atlas)
             self._atlas_tex[name] = tex
         return tex
@@ -607,6 +611,7 @@ class TreeRendererComponent(Component):
         tex = self._impostor_tex.get(name)
         if tex is None:
             from fire_engine.render.texture_bridge import to_panda_texture
+
             tex = to_panda_texture(vs.impostors)
             self._impostor_tex[name] = tex
         return tex

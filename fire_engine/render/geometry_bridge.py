@@ -31,8 +31,7 @@ from panda3d.core import (  # type: ignore[import]
     TextureStage,
 )
 
-__all__ = ["to_geom", "to_geom_node", "make_vertex_format",
-           "make_material_state"]
+__all__ = ["to_geom", "to_geom_node", "make_vertex_format", "make_material_state"]
 
 # Texture stages for the GPU-lighting terrain shader: sort order maps to
 # p3d_Texture0 (albedo), p3d_Texture1 (normal map), p3d_Texture2 (emission).
@@ -64,8 +63,7 @@ def make_material_state(entry) -> RenderState:
         return RenderState.make_empty()
     if isinstance(entry, tuple):
         attrib = TextureAttrib.make()
-        for stage, tex in zip(
-                (_STAGE_ALBEDO, _STAGE_NORMAL, _STAGE_EMISSION), entry):
+        for stage, tex in zip((_STAGE_ALBEDO, _STAGE_NORMAL, _STAGE_EMISSION), entry):
             if tex is not None:
                 attrib = attrib.add_on_stage(stage, tex)
         return RenderState.make(attrib)
@@ -225,8 +223,8 @@ def to_geom_node(
 
     vpf = int(mesh.verts_per_face)
     for mat in np.unique(face_mats):
-        sel = face_mats == mat                      # (F,) whole-face select
-        vsel = np.repeat(sel, vpf)                  # (N,) vertex select
+        sel = face_mats == mat  # (F,) whole-face select
+        vsel = np.repeat(sel, vpf)  # (N,) vertex select
         count = int(sel.sum())
         sub = MeshArrays(
             positions=mesh.positions[vsel],
@@ -237,6 +235,5 @@ def to_geom_node(
             face_materials=face_mats[sel],
             verts_per_face=vpf,
         )
-        node.add_geom(to_geom(sub),
-                      make_material_state(material_textures.get(int(mat))))
+        node.add_geom(to_geom(sub), make_material_state(material_textures.get(int(mat))))
     return node

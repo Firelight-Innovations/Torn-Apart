@@ -108,19 +108,19 @@ class DustMoteDef(ProceduralTextureDef):
         # Normalised coordinates in [-1, 1] about the centre.
         ys = np.linspace(-1.0, 1.0, H, dtype=np.float32)
         xs = np.linspace(-1.0, 1.0, W, dtype=np.float32)
-        gx, gy = np.meshgrid(xs, ys)            # (H, W) each
+        gx, gy = np.meshgrid(xs, ys)  # (H, W) each
 
         # Low-frequency noise (in [0,1]) → ±asymmetry on the radius + alpha
         # dapple, so specks are subtly irregular rather than perfect circles.
-        noise = value_noise(rng, (H, W), octaves=2, base_freq=2)   # (H, W)
-        warp = (noise - 0.5) * 0.22             # ~±0.11 radial wobble
+        noise = value_noise(rng, (H, W), octaves=2, base_freq=2)  # (H, W)
+        warp = (noise - 0.5) * 0.22  # ~±0.11 radial wobble
 
         radius = np.hypot(gx, gy) * (1.0 + warp)
 
         # Smooth radial falloff: 1 at centre, 0 by the rim (smoothstep).
         # Inner core stays near-opaque, outer half fades to nothing.
         t = np.clip((1.0 - radius) / 0.85, 0.0, 1.0)
-        alpha = t * t * (3.0 - 2.0 * t)         # smoothstep(0,1,t)
+        alpha = t * t * (3.0 - 2.0 * t)  # smoothstep(0,1,t)
         # Dapple the alpha a little with the same noise so motes shimmer.
         alpha = alpha * (0.82 + 0.18 * noise)
         alpha = np.clip(alpha, 0.0, 1.0)

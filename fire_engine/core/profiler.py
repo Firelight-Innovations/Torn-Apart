@@ -93,6 +93,7 @@ SCHEMA_VERSION = 1
 # Pure stats helper (unit-testable in isolation against known arrays)
 # ---------------------------------------------------------------------------
 
+
 def frame_time_stats(frames_ms: np.ndarray, budget_ms: float) -> dict:
     """
     Compute frame-time summary statistics from an array of per-frame ms.
@@ -126,8 +127,14 @@ def frame_time_stats(frames_ms: np.ndarray, budget_ms: float) -> dict:
     n = int(frames_ms.size)
     if n == 0:
         return {
-            "mean": 0.0, "median": 0.0, "min": 0.0, "max": 0.0,
-            "p99": 0.0, "p999": 0.0, "fps_mean": 0.0, "over_budget_pct": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "p99": 0.0,
+            "p999": 0.0,
+            "fps_mean": 0.0,
+            "over_budget_pct": 0.0,
         }
     mean = float(frames_ms.mean())
     # p99 / p999 are the *high* percentiles (slow frames) — the 1% / 0.1% lows.
@@ -148,6 +155,7 @@ def frame_time_stats(frames_ms: np.ndarray, budget_ms: float) -> dict:
 # ---------------------------------------------------------------------------
 # Scope context objects
 # ---------------------------------------------------------------------------
+
 
 class NullScope:
     """
@@ -197,6 +205,7 @@ class _ScopeCtx:
 # ---------------------------------------------------------------------------
 # Profiler
 # ---------------------------------------------------------------------------
+
 
 class Profiler:
     """
@@ -356,8 +365,8 @@ class Profiler:
 
         # Frame timing state.
         self._frame_start_ns = 0
-        self._pending = False          # a frame is open / awaiting commit
-        self._cpu_ms = 0.0             # loop-body time recorded by end_frame
+        self._pending = False  # a frame is open / awaiting commit
+        self._cpu_ms = 0.0  # loop-body time recorded by end_frame
         self._start_wall = self._time()  # for hitches-per-second
         self._frame_cpu_ms_seen = False
 
@@ -450,6 +459,7 @@ class Profiler:
             @profiler.profiled("Weather:Update")
             def update(self, dt): ...
         """
+
         def decorator(fn):
             @functools.wraps(fn)
             def wrapper(*args, **kwargs):
@@ -457,7 +467,9 @@ class Profiler:
                     return fn(*args, **kwargs)
                 with self.scope(name):
                     return fn(*args, **kwargs)
+
             return wrapper
+
         return decorator
 
     def start(self, name: str) -> None:
@@ -487,11 +499,10 @@ class Profiler:
             return
         sid = self._scope_ids.get(name, -1)
         if sid < 0 or not self._stack or self._stack[-1] != sid:
-            innermost = (self._scope_names[self._stack[-1]]
-                         if self._stack else None)
+            innermost = self._scope_names[self._stack[-1]] if self._stack else None
             raise ValueError(
-                f"profiler.stop({name!r}) does not match the innermost open "
-                f"scope ({innermost!r})")
+                f"profiler.stop({name!r}) does not match the innermost open scope ({innermost!r})"
+            )
         self._stop_sid(sid)
 
     # ------------------------------------------------------------------
@@ -572,8 +583,7 @@ class Profiler:
         self._cpu_ms = (self._time() - self._frame_start_ns) / 1e6
         if self._stack:
             leaked = [self._scope_names[s] for s in self._stack]
-            _log.error("profiler: %d scope(s) never stopped this frame: %s",
-                       len(leaked), leaked)
+            _log.error("profiler: %d scope(s) never stopped this frame: %s", len(leaked), leaked)
             self._stack.clear()
             self._active_depth.fill(0)
         # Record the CPU-frame counter (reserved name).
@@ -600,8 +610,7 @@ class Profiler:
             self._stack.pop()
         elif sid in self._stack:
             # Out-of-order stop — unwind to it but warn (never silent).
-            _log.error("profiler: out-of-order stop of scope %r",
-                       self._scope_names[sid])
+            _log.error("profiler: out-of-order stop of scope %r", self._scope_names[sid])
             self._stack.remove(sid)
         d = int(self._active_depth[sid]) - 1
         if d < 0:
@@ -651,7 +660,13 @@ class Profiler:
             _log.warning(
                 "profiler: %s capacity reached — %r and further new %ss are "
                 "DROPPED (raise profiler_max_%ss in config). A dropped %s reads "
-                "as zero cost, not free.", kind, name, kind, kind, kind)
+                "as zero cost, not free.",
+                kind,
+                name,
+                kind,
+                kind,
+                kind,
+            )
             self._capacity_warned = True
 
     # ------------------------------------------------------------------
@@ -686,7 +701,7 @@ class Profiler:
     def _rolling_median(self) -> float:
         if self._recent_count == 0:
             return 0.0
-        return float(np.median(self._recent_ms[:self._recent_count]))
+        return float(np.median(self._recent_ms[: self._recent_count]))
 
     def _detect_hitch(self, total_ms: float) -> None:
         median = self._rolling_median()
@@ -761,11 +776,11 @@ class Profiler:
         n = min(n, self._recent_count)
         # Reconstruct chronological order from the ring.
         if self._recent_count < self.hitch_window:
-            chrono = self._recent_ms[:self._recent_count]
+            chrono = self._recent_ms[: self._recent_count]
         else:
             chrono = np.concatenate(
-                (self._recent_ms[self._recent_index:],
-                 self._recent_ms[:self._recent_index]))
+                (self._recent_ms[self._recent_index :], self._recent_ms[: self._recent_index])
+            )
         return chrono[-n:].copy()
 
     def snapshot(self) -> dict:
@@ -797,13 +812,15 @@ class Profiler:
             for sid in range(ns):
                 m = float(scope_mean[sid])
                 pct = (m / frame_mean * 100.0) if frame_mean > 0.0 else 0.0
-                scopes.append({
-                    "name": self._scope_names[sid],
-                    "mean_ms": m,
-                    "max_ms": float(scope_max[sid]),
-                    "pct_of_frame": pct,
-                    "calls_per_frame": float(calls_mean[sid]),
-                })
+                scopes.append(
+                    {
+                        "name": self._scope_names[sid],
+                        "mean_ms": m,
+                        "max_ms": float(scope_max[sid]),
+                        "pct_of_frame": pct,
+                        "calls_per_frame": float(calls_mean[sid]),
+                    }
+                )
             scopes.sort(key=lambda s: s["mean_ms"], reverse=True)
 
         # Counters: mean over frames where the counter was ever recorded.
@@ -821,9 +838,12 @@ class Profiler:
             "frames_measured": int(valid),
             "budget_ms": self.frame_budget_ms,
             "frame_ms": {
-                "mean": fstats["mean"], "median": fstats["median"],
-                "min": fstats["min"], "max": fstats["max"],
-                "p99": fstats["p99"], "p999": fstats["p999"],
+                "mean": fstats["mean"],
+                "median": fstats["median"],
+                "min": fstats["min"],
+                "max": fstats["max"],
+                "p99": fstats["p99"],
+                "p999": fstats["p999"],
                 "fps_mean": fstats["fps_mean"],
             },
             "over_budget_pct": fstats["over_budget_pct"],

@@ -49,6 +49,7 @@ _DEG2RAD = math.pi / 180.0
 # Public entry point
 # ---------------------------------------------------------------------------
 
+
 def describe_object(go: "GameObject") -> list[Section]:
     """
     Build the inspector sections for a GameObject.
@@ -79,6 +80,7 @@ def describe_object(go: "GameObject") -> list[Section]:
 # Terrain chunks (a non-GameObject the picker can also select)
 # ---------------------------------------------------------------------------
 
+
 def is_chunk(obj: Any) -> bool:
     """
     True when ``obj`` is a terrain :class:`~fire_engine.world.terrain.chunk.Chunk`.
@@ -88,11 +90,7 @@ def is_chunk(obj: Any) -> bool:
     ``materials`` / ``coord`` / ``chunk_meters``.  Used by the Inspector to route
     a picked chunk to :func:`describe_chunk` instead of :func:`describe_object`.
     """
-    return (
-        hasattr(obj, "materials")
-        and hasattr(obj, "coord")
-        and hasattr(obj, "chunk_meters")
-    )
+    return hasattr(obj, "materials") and hasattr(obj, "coord") and hasattr(obj, "chunk_meters")
 
 
 def describe_chunk(chunk: "Chunk") -> list[Section]:
@@ -121,6 +119,7 @@ def describe_chunk(chunk: "Chunk") -> list[Section]:
         sections = describe_chunk(chunk)
         # sections[0].title == "Chunk"
     """
+
     def origin_str() -> str:
         o = chunk.world_origin
         return f"({o.x:.1f}, {o.y:.1f}, {o.z:.1f}) m"
@@ -139,25 +138,32 @@ def describe_chunk(chunk: "Chunk") -> list[Section]:
         return ", ".join(str(m) for m in ids)
 
     return [
-        Section("Chunk", [
-            Field("coord", FieldKind.LABEL, lambda: str(tuple(chunk.coord))),
-            Field("world origin", FieldKind.LABEL, origin_str),
-            Field("size", FieldKind.LABEL, lambda: f"{chunk.chunk_meters:.1f} m"),
-        ]),
-        Section("Voxels", [
-            Field("solid", FieldKind.LABEL, solid_count),
-            Field("total", FieldKind.LABEL, lambda: int(chunk.materials.size)),
-            Field("fill", FieldKind.LABEL, fill_pct),
-            Field("material ids", FieldKind.LABEL, material_ids),
-            Field("dirty", FieldKind.LABEL, lambda: chunk.dirty),
-            Field("edited", FieldKind.LABEL, lambda: chunk.edited),
-        ]),
+        Section(
+            "Chunk",
+            [
+                Field("coord", FieldKind.LABEL, lambda: str(tuple(chunk.coord))),
+                Field("world origin", FieldKind.LABEL, origin_str),
+                Field("size", FieldKind.LABEL, lambda: f"{chunk.chunk_meters:.1f} m"),
+            ],
+        ),
+        Section(
+            "Voxels",
+            [
+                Field("solid", FieldKind.LABEL, solid_count),
+                Field("total", FieldKind.LABEL, lambda: int(chunk.materials.size)),
+                Field("fill", FieldKind.LABEL, fill_pct),
+                Field("material ids", FieldKind.LABEL, material_ids),
+                Field("dirty", FieldKind.LABEL, lambda: chunk.dirty),
+                Field("edited", FieldKind.LABEL, lambda: chunk.edited),
+            ],
+        ),
     ]
 
 
 # ---------------------------------------------------------------------------
 # Identity + Transform
 # ---------------------------------------------------------------------------
+
 
 def _identity_section(go: "GameObject") -> Section:
     """Name / tag / layer / active flag for the GameObject itself."""
@@ -235,6 +241,7 @@ def _transform_section(go: "GameObject") -> Section:
 # Components (generic reflection)
 # ---------------------------------------------------------------------------
 
+
 def _component_section(comp: "Component") -> Section:
     """
     One section per component, with a row per public tunable attribute.
@@ -290,31 +297,36 @@ def _field_for_attr(obj: Any, name: str) -> "Field | None":
     # bool must be checked before int (bool is a subclass of int).
     if isinstance(value, bool):
         return Field(
-            name, FieldKind.BOOL,
+            name,
+            FieldKind.BOOL,
             lambda o=obj, n=name: getattr(o, n),
             lambda v, o=obj, n=name: setattr(o, n, bool(v)),
         )
     if isinstance(value, int):
         return Field(
-            name, FieldKind.INT,
+            name,
+            FieldKind.INT,
             lambda o=obj, n=name: getattr(o, n),
             lambda v, o=obj, n=name: setattr(o, n, int(v)),
         )
     if isinstance(value, float):
         return Field(
-            name, FieldKind.FLOAT,
+            name,
+            FieldKind.FLOAT,
             lambda o=obj, n=name: getattr(o, n),
             lambda v, o=obj, n=name: setattr(o, n, float(v)),
         )
     if isinstance(value, str):
         return Field(
-            name, FieldKind.STRING,
+            name,
+            FieldKind.STRING,
             lambda o=obj, n=name: getattr(o, n),
             lambda v, o=obj, n=name: setattr(o, n, str(v)),
         )
     if isinstance(value, Vec3):
         return Field(
-            name, FieldKind.VEC3,
+            name,
+            FieldKind.VEC3,
             lambda o=obj, n=name: tuple(getattr(o, n)),
             lambda v, o=obj, n=name: setattr(o, n, Vec3(float(v[0]), float(v[1]), float(v[2]))),
         )

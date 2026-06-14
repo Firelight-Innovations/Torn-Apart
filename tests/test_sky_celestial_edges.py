@@ -34,6 +34,7 @@ HOUR = 3600.0
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _norm(v: Vec3) -> float:
     return math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
 
@@ -50,8 +51,8 @@ def _vec3_to_array(v: Vec3):
 # sun_direction — edge cases
 # ===========================================================================
 
-class TestSunDirectionEdges:
 
+class TestSunDirectionEdges:
     # --- Day-boundary wrap --------------------------------------------------
 
     def test_day_boundary_t0_equals_t24h(self):
@@ -113,9 +114,7 @@ class TestSunDirectionEdges:
             b = sun_direction(noon + offset + 1.0)
             dot = _dot(a, b)
             angle = math.acos(min(1.0, max(-1.0, dot)))
-            assert angle < math.radians(0.05), (
-                f"snap near noon at offset {offset}s: {angle} rad"
-            )
+            assert angle < math.radians(0.05), f"snap near noon at offset {offset}s: {angle} rad"
 
     def test_noon_is_maximum_elevation(self):
         """sun_direction(12h).z should be the maximum over the full day arc."""
@@ -166,8 +165,8 @@ class TestSunDirectionEdges:
 # moon_direction — edge cases
 # ===========================================================================
 
-class TestMoonDirectionEdges:
 
+class TestMoonDirectionEdges:
     def test_unit_length_fine_grid(self):
         """moon_direction must be unit-length at every 10-minute mark."""
         for i in range(0, int(GAME_SECONDS_PER_DAY), 600):
@@ -220,9 +219,7 @@ class TestMoonDirectionEdges:
         """
         m_at_sunrise = moon_direction(6.0 * HOUR)
         # Moon is below the horizon at 06:00 — pin the approximate z value.
-        assert m_at_sunrise.z < 0.0, (
-            f"moon z at sunrise = {m_at_sunrise.z}; expected below horizon"
-        )
+        assert m_at_sunrise.z < 0.0, f"moon z at sunrise = {m_at_sunrise.z}; expected below horizon"
         # Pin the golden-master z more tightly (actual ≈ -0.2515).
         assert abs(m_at_sunrise.z - (-0.2515)) < 0.01, (
             f"moon z at 06:00 drifted from golden-master -0.2515: got {m_at_sunrise.z}"
@@ -240,8 +237,8 @@ class TestMoonDirectionEdges:
 # daylight_factor — edge cases
 # ===========================================================================
 
-class TestDaylightFactorEdges:
 
+class TestDaylightFactorEdges:
     def test_midnight_exactly_zero(self):
         """daylight_factor(midnight) must be exactly 0.0 (sun well below horizon)."""
         assert daylight_factor(0.0) == 0.0
@@ -263,7 +260,7 @@ class TestDaylightFactorEdges:
             t = (6.0 + i * 0.5) * HOUR
             curr = daylight_factor(t)
             assert curr >= prev - 1e-9, (
-                f"daylight_factor not monotone at t={t/HOUR:.1f}h: {curr} < {prev}"
+                f"daylight_factor not monotone at t={t / HOUR:.1f}h: {curr} < {prev}"
             )
             prev = curr
 
@@ -276,7 +273,7 @@ class TestDaylightFactorEdges:
                 break
             curr = daylight_factor(t)
             assert curr <= prev + 1e-9, (
-                f"daylight_factor not monotone decreasing at t={t/HOUR:.1f}h: {curr} > {prev}"
+                f"daylight_factor not monotone decreasing at t={t / HOUR:.1f}h: {curr} > {prev}"
             )
             prev = curr
 
@@ -305,7 +302,7 @@ class TestDaylightFactorEdges:
             expected = smoothstep(z, DAYLIGHT_Z_LO, DAYLIGHT_Z_HI)
             got = daylight_factor(t)
             assert abs(got - expected) < 1e-9, (
-                f"daylight_factor({t/HOUR}h) = {got}, expected {expected} from z={z}"
+                f"daylight_factor({t / HOUR}h) = {got}, expected {expected} from z={z}"
             )
 
     def test_deterministic(self):
@@ -317,8 +314,8 @@ class TestDaylightFactorEdges:
 # smoothstep — edges
 # ===========================================================================
 
-class TestSmootstepEdges:
 
+class TestSmootstepEdges:
     def test_at_lo_returns_zero(self):
         assert smoothstep(0.0, 0.0, 1.0) == 0.0
 
@@ -360,7 +357,7 @@ class TestSmootstepEdges:
         vals = [smoothstep(float(x), 0.0, 1.0) for x in xs]
         for i in range(len(vals) - 1):
             assert vals[i + 1] >= vals[i] - 1e-12, (
-                f"not monotonic at i={i}: {vals[i]} -> {vals[i+1]}"
+                f"not monotonic at i={i}: {vals[i]} -> {vals[i + 1]}"
             )
 
     def test_negative_range_lo_hi(self):
@@ -378,8 +375,8 @@ class TestSmootstepEdges:
 # color_ramp — edges
 # ===========================================================================
 
-class TestColorRampEdges:
 
+class TestColorRampEdges:
     SIMPLE = (
         (0.0, (0.0, 0.0, 0.0)),
         (0.5, (0.5, 0.5, 0.5)),
@@ -437,12 +434,12 @@ class TestColorRampEdges:
 # lerp_color — edges
 # ===========================================================================
 
-class TestLerpColorEdges:
 
+class TestLerpColorEdges:
     BLACK = (0.0, 0.0, 0.0)
     WHITE = (1.0, 1.0, 1.0)
-    RED   = (1.0, 0.0, 0.0)
-    BLUE  = (0.0, 0.0, 1.0)
+    RED = (1.0, 0.0, 0.0)
+    BLUE = (0.0, 0.0, 1.0)
 
     def test_t0_returns_a(self):
         assert lerp_color(self.RED, self.BLUE, 0.0) == self.RED

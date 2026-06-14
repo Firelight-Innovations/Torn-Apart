@@ -103,7 +103,8 @@ class PStatsBridge:
             else:
                 _log.warning(
                     "PStats connect() returned False — is the 'pstats' GUI "
-                    "server running? (overlay still works without it)")
+                    "server running? (overlay still works without it)"
+                )
             return bool(ok)
         except Exception as exc:
             _log.warning("PStats connect failed: %s", exc)

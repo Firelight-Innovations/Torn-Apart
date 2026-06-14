@@ -37,9 +37,7 @@ def cfg():
 def _full_neighbor_materials(coord, cfg) -> dict:
     """All 26 neighbours from the deterministic generated baseline."""
     return {
-        off: generate_chunk(
-            (coord[0] + off[0], coord[1] + off[1], coord[2] + off[2]), cfg
-        )
+        off: generate_chunk((coord[0] + off[0], coord[1] + off[1], coord[2] + off[2]), cfg)
         for off in NEIGHBOR_OFFSETS_26
     }
 
@@ -48,11 +46,12 @@ def _full_neighbor_materials(coord, cfg) -> dict:
 # Generation: grass skin + dirt bulk
 # ===========================================================================
 
+
 class TestGrassDirtGeneration:
     def test_top_layer_is_grass_rest_is_dirt(self, cfg):
-        m = generate_chunk((0, 0, 0), cfg)            # world z ∈ [0, 16), ground at 8
+        m = generate_chunk((0, 0, 0), cfg)  # world z ∈ [0, 16), ground at 8
         vs = cfg.voxel_size
-        zc = (np.arange(32) + 0.5) * vs               # voxel-centre world Z
+        zc = (np.arange(32) + 0.5) * vs  # voxel-centre world Z
         below = zc < cfg.ground_height_m
         top = below & (zc + vs >= cfg.ground_height_m)
         # Exactly one grass layer, everything solid beneath it is dirt.
@@ -67,7 +66,7 @@ class TestGrassDirtGeneration:
 
     def test_buried_chunk_has_no_grass(self, cfg):
         """A chunk fully below another solid chunk is all dirt (no grass skin)."""
-        m = generate_chunk((0, 0, -1), cfg)           # world z ∈ [-16, 0)
+        m = generate_chunk((0, 0, -1), cfg)  # world z ∈ [-16, 0)
         assert np.all(m == MATERIAL_DIRT)
 
     def test_grass_layer_is_chunk_border_consistent(self, cfg):
@@ -75,14 +74,13 @@ class TestGrassDirtGeneration:
         a = generate_chunk((0, 0, 0), cfg)
         b = generate_chunk((1, 0, 0), cfg)
         assert np.array_equal(a[31, :, :] > 0, b[0, :, :] > 0)
-        assert np.array_equal(
-            a[31, :, :] == MATERIAL_GRASS, b[0, :, :] == MATERIAL_GRASS
-        )
+        assert np.array_equal(a[31, :, :] == MATERIAL_GRASS, b[0, :, :] == MATERIAL_GRASS)
 
 
 # ===========================================================================
 # Faceted mesher: counts, geometry, determinism
 # ===========================================================================
+
 
 class TestFacetedMesher:
     def test_single_voxel_counts(self):
@@ -102,7 +100,7 @@ class TestFacetedMesher:
         c = Chunk((0, 0, 0))
         c.materials[5, 5, 5] = 1
         mesh = build_mesh_faceted(c)
-        lo, hi = 5 * 0.5, 6 * 0.5                     # voxel spans [2.5, 3.0] m
+        lo, hi = 5 * 0.5, 6 * 0.5  # voxel spans [2.5, 3.0] m
         assert mesh.positions.min() >= lo - 1e-5
         assert mesh.positions.max() <= hi + 1e-5
 
@@ -117,7 +115,7 @@ class TestFacetedMesher:
             [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)],
             dtype=np.float32,
         )
-        tri_normals = mesh.normals.reshape(-1, 3, 3)[:, 0, :]   # (12, 3)
+        tri_normals = mesh.normals.reshape(-1, 3, 3)[:, 0, :]  # (12, 3)
         per_face = tri_normals.reshape(6, 2, 3)
         dots = np.einsum("fij,fj->fi", per_face, dirs)
         assert np.all(dots > 0.0)
@@ -147,11 +145,11 @@ class TestFacetedMesher:
     def test_carving_exposes_dirt(self, cfg):
         coord = (0, 0, 0)
         c = Chunk(coord, generate_chunk(coord, cfg))
-        c.materials[8:12, 8:12, 0:16] = 0              # carve a shaft to the floor
+        c.materials[8:12, 8:12, 0:16] = 0  # carve a shaft to the floor
         mesh = build_mesh_faceted(c, _full_neighbor_materials(coord, cfg))
         mats = set(np.unique(mesh.face_materials).tolist())
-        assert MATERIAL_DIRT in mats                   # shaft walls are dirt
-        assert MATERIAL_GRASS in mats                  # surrounding skin still grass
+        assert MATERIAL_DIRT in mats  # shaft walls are dirt
+        assert MATERIAL_GRASS in mats  # surrounding skin still grass
 
     def test_determinism(self, cfg):
         coord = (0, 0, 0)
@@ -190,14 +188,14 @@ class TestFacetedMesher:
         # shader's per-material palette selection, not a constant 1.0.
         expected_alpha = np.repeat(mesh.face_materials, 6).astype(np.float32) / 255.0
         assert np.allclose(mesh.colors[:, 3], expected_alpha)
-        assert np.all(mesh.face_materials > 0)        # all faces are solid voxels
+        assert np.all(mesh.face_materials > 0)  # all faces are solid voxels
 
     def test_facet_shade_darkens_side_faces(self):
         """With shade_strength > 0, side facets are darker than top facets."""
         c = Chunk((0, 0, 0))
         c.materials[5, 5, 5] = 1
         mesh = build_mesh_faceted(c, shade_strength=0.5)
-        grey = mesh.colors[:, 0].reshape(6, 6)         # (face, vert) grey
+        grey = mesh.colors[:, 0].reshape(6, 6)  # (face, vert) grey
         # Faces are direction-grouped: +Z is index 4, -Z is index 5.
         top = grey[4].mean()
         bottom = grey[5].mean()
@@ -207,6 +205,7 @@ class TestFacetedMesher:
 # ===========================================================================
 # Cross-chunk seams
 # ===========================================================================
+
 
 class TestSeams:
     def test_border_cell_vertices_match_across_chunks(self, cfg):
@@ -219,20 +218,18 @@ class TestSeams:
         store = {a_coord: a, b_coord: b}
 
         def provider(coord):
-            return store.setdefault(
-                coord, Chunk(coord, generate_chunk(coord, cfg))
-            )
+            return store.setdefault(coord, Chunk(coord, generate_chunk(coord, cfg)))
 
         apply_brush(
-            SphereBrush(2.5), Vec3(16.0, 8.0, 8.0), BrushMode.REMOVE,
+            SphereBrush(2.5),
+            Vec3(16.0, 8.0, 8.0),
+            BrushMode.REMOVE,
             chunk_provider=provider,
         )
 
         def neighbor_mats(coord):
             return {
-                off: provider(
-                    (coord[0] + off[0], coord[1] + off[1], coord[2] + off[2])
-                ).materials
+                off: provider((coord[0] + off[0], coord[1] + off[1], coord[2] + off[2])).materials
                 for off in NEIGHBOR_OFFSETS_26
             }
 
@@ -240,7 +237,7 @@ class TestSeams:
 
         def cell_world(chunk, nm):
             pad = _build_padded_materials(chunk.materials, nm, n)
-            vl = _cell_vertices(pad > 0, n)            # (33,33,33,3)
+            vl = _cell_vertices(pad > 0, n)  # (33,33,33,3)
             m = n + 1
             grid = np.stack(
                 np.meshgrid(np.arange(m), np.arange(m), np.arange(m), indexing="ij"),
@@ -260,14 +257,14 @@ class TestSeams:
         store: dict = {}
 
         def provider(coord):
-            return store.setdefault(
-                coord, Chunk(coord, generate_chunk(coord, cfg))
-            )
+            return store.setdefault(coord, Chunk(coord, generate_chunk(coord, cfg)))
 
         # Small sphere fully inside chunk (0,0,0) but touching its +X border
         # (border plane at x = 16 m): centre 1 m from the plane, radius 1 m.
         touched = apply_brush(
-            SphereBrush(1.0), Vec3(15.0, 8.0, 7.5), BrushMode.REMOVE,
+            SphereBrush(1.0),
+            Vec3(15.0, 8.0, 7.5),
+            BrushMode.REMOVE,
             chunk_provider=provider,
         )
         assert touched == {(0, 0, 0)}
@@ -279,6 +276,7 @@ class TestSeams:
 # ===========================================================================
 # ChunkManager dispatch + streaming integration
 # ===========================================================================
+
 
 class TestMeshStyleDispatch:
     def test_default_config_is_faceted(self, cfg):

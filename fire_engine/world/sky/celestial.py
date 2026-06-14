@@ -87,6 +87,7 @@ DAYLIGHT_Z_HI: float = 0.24
 # Generic math helpers
 # ---------------------------------------------------------------------------
 
+
 def smoothstep(x: float, lo: float, hi: float) -> float:
     """
     Hermite smoothstep of *x* between *lo* and *hi*.
@@ -176,6 +177,7 @@ def color_ramp(
 # ---------------------------------------------------------------------------
 # Celestial directions
 # ---------------------------------------------------------------------------
+
 
 def _arc_direction(phase: float, tilt_rad: float) -> Vec3:
     """

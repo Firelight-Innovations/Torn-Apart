@@ -24,19 +24,25 @@ from fire_engine.procedural.flora.atlas import (
 # ---------------------------------------------------------------------------
 
 # A minimal 4-colour bark palette (dark → light).
-BARK_PALETTE = np.array([
-    [40,  25,  10],
-    [80,  52,  22],
-    [120, 78,  34],
-    [160, 108, 52],
-], dtype=np.uint8)
+BARK_PALETTE = np.array(
+    [
+        [40, 25, 10],
+        [80, 52, 22],
+        [120, 78, 34],
+        [160, 108, 52],
+    ],
+    dtype=np.uint8,
+)
 
 # A minimal 3-colour leaf palette.
-LEAF_PALETTE = np.array([
-    [20,  60,  15],
-    [40, 110,  28],
-    [70, 155,  45],
-], dtype=np.uint8)
+LEAF_PALETTE = np.array(
+    [
+        [20, 60, 15],
+        [40, 110, 28],
+        [70, 155, 45],
+    ],
+    dtype=np.uint8,
+)
 
 BERRY_COLOR = (180, 30, 30)
 
@@ -50,6 +56,7 @@ def _rng(seed: int = 42) -> np.random.Generator:
 # ---------------------------------------------------------------------------
 # AtlasLayout
 # ---------------------------------------------------------------------------
+
 
 class TestAtlasLayout:
     def test_defaults(self):
@@ -85,6 +92,7 @@ class TestAtlasLayout:
 # bark_texture
 # ---------------------------------------------------------------------------
 
+
 class TestBarkTexture:
     W, H = 32, 64
 
@@ -111,7 +119,8 @@ class TestBarkTexture:
         palette_set = set(map(tuple, BARK_PALETTE.tolist()))
         for row in unique_rgb.tolist():
             assert tuple(row) in palette_set, (
-                f"RGB {row} is not in the supplied palette — posterisation broke")
+                f"RGB {row} is not in the supplied palette — posterisation broke"
+            )
 
     def test_determinism(self):
         arr1 = self._bark()
@@ -120,16 +129,15 @@ class TestBarkTexture:
 
     def test_shade_side_true_darkens_left(self):
         """shade_side=True must make the left half strictly darker (on average)."""
-        arr_shaded   = bark_texture(_rng(1), self.W, self.H, BARK_PALETTE,
-                                    shade_side=True)
-        arr_unshaded = bark_texture(_rng(1), self.W, self.H, BARK_PALETTE,
-                                    shade_side=False)
+        arr_shaded = bark_texture(_rng(1), self.W, self.H, BARK_PALETTE, shade_side=True)
+        arr_unshaded = bark_texture(_rng(1), self.W, self.H, BARK_PALETTE, shade_side=False)
         half = self.W // 2
         # The shaded version's left columns should have a lower mean luminance.
-        lum_shaded   = arr_shaded  [:, :half, :3].mean()
+        lum_shaded = arr_shaded[:, :half, :3].mean()
         lum_unshaded = arr_unshaded[:, :half, :3].mean()
         assert lum_shaded < lum_unshaded, (
-            "shade_side=True should darken the left half relative to shade_side=False")
+            "shade_side=True should darken the left half relative to shade_side=False"
+        )
 
     def test_shade_side_false_leaves_right_unchanged(self):
         """The right half should be identical regardless of shade_side."""
@@ -138,26 +146,28 @@ class TestBarkTexture:
         half = self.W // 2
         # Right half is not touched by shade_side logic.
         assert np.array_equal(arr_t[:, half:], arr_f[:, half:]), (
-            "shade_side only affects the left half — right half must be unchanged")
+            "shade_side only affects the left half — right half must be unchanged"
+        )
 
     def test_striation_freq_changes_pattern(self):
         """Different striation_freq must produce different pixel patterns."""
         a = bark_texture(_rng(3), self.W, self.H, BARK_PALETTE, striation_freq=3)
         b = bark_texture(_rng(3), self.W, self.H, BARK_PALETTE, striation_freq=12)
         assert not np.array_equal(a, b), (
-            "striation_freq changes the noise frequency — outputs must differ")
+            "striation_freq changes the noise frequency — outputs must differ"
+        )
 
     def test_streak_px_changes_pattern(self):
         """Different streak_px must produce different pixel patterns."""
         a = bark_texture(_rng(5), self.W, self.H, BARK_PALETTE, streak_px=2)
         b = bark_texture(_rng(5), self.W, self.H, BARK_PALETTE, streak_px=12)
-        assert not np.array_equal(a, b), (
-            "streak_px changes vertical stretch — outputs must differ")
+        assert not np.array_equal(a, b), "streak_px changes vertical stretch — outputs must differ"
 
 
 # ---------------------------------------------------------------------------
 # leaf_texture
 # ---------------------------------------------------------------------------
+
 
 class TestLeafTexture:
     W, H = 32, 64
@@ -177,8 +187,7 @@ class TestLeafTexture:
         """Alpha channel must be exactly 0 or 255 — no partial transparency."""
         arr = self._leaf()
         a = arr[..., 3]
-        assert ((a == 0) | (a == 255)).all(), (
-            "leaf alpha must be binary (0 or 255 only)")
+        assert ((a == 0) | (a == 255)).all(), "leaf alpha must be binary (0 or 255 only)"
 
     def test_some_opaque_pixels(self):
         """The leaf silhouette must cover at least a few pixels."""
@@ -192,22 +201,22 @@ class TestLeafTexture:
 
     def test_hole_thresh_direction(self):
         """Higher hole_thresh → more holes → fewer opaque pixels."""
-        low  = leaf_texture(_rng(10), self.W, self.H, LEAF_PALETTE,
-                            hole_thresh=0.05)
-        high = leaf_texture(_rng(10), self.W, self.H, LEAF_PALETTE,
-                            hole_thresh=0.60)
-        opaque_low  = int((low [..., 3] == 255).sum())
+        low = leaf_texture(_rng(10), self.W, self.H, LEAF_PALETTE, hole_thresh=0.05)
+        high = leaf_texture(_rng(10), self.W, self.H, LEAF_PALETTE, hole_thresh=0.60)
+        opaque_low = int((low[..., 3] == 255).sum())
         opaque_high = int((high[..., 3] == 255).sum())
         assert opaque_high < opaque_low, (
-            f"Higher hole_thresh should reduce opaque px: "
-            f"low={opaque_low}, high={opaque_high}")
+            f"Higher hole_thresh should reduce opaque px: low={opaque_low}, high={opaque_high}"
+        )
 
     def test_berry_density_adds_color(self):
         """berry_density > 0 with a berry_color must produce berry-colored pixels."""
-        no_berry = leaf_texture(_rng(20), self.W, self.H, LEAF_PALETTE,
-                                berry_density=0.0, berry_color=BERRY_COLOR)
-        with_berry = leaf_texture(_rng(20), self.W, self.H, LEAF_PALETTE,
-                                  berry_density=0.5, berry_color=BERRY_COLOR)
+        no_berry = leaf_texture(
+            _rng(20), self.W, self.H, LEAF_PALETTE, berry_density=0.0, berry_color=BERRY_COLOR
+        )
+        with_berry = leaf_texture(
+            _rng(20), self.W, self.H, LEAF_PALETTE, berry_density=0.5, berry_color=BERRY_COLOR
+        )
         # Pin: any pixel matching the berry RGB in the berry version that
         # doesn't exist in the no-berry version.
         br, bg, bb = BERRY_COLOR
@@ -224,7 +233,8 @@ class TestLeafTexture:
             & (no_berry[..., 3] == 255)
         )
         assert int(berry_mask.sum()) > int(no_berry_mask.sum()), (
-            "berry_density>0 with berry_color must add berry-colored pixels")
+            "berry_density>0 with berry_color must add berry-colored pixels"
+        )
 
     def test_determinism(self):
         arr1 = self._leaf()
@@ -239,26 +249,24 @@ class TestLeafTexture:
         palette_set = set(map(tuple, LEAF_PALETTE.tolist()))
         unique_opaque = np.unique(rgb_opaque, axis=0)
         for row in unique_opaque.tolist():
-            assert tuple(row) in palette_set, (
-                f"Leaf RGB {row} not in supplied palette")
+            assert tuple(row) in palette_set, f"Leaf RGB {row} not in supplied palette"
 
     def test_zero_berry_density_no_speckles(self):
         """berry_density=0 must not add any berry-colored pixels."""
-        arr = leaf_texture(_rng(30), self.W, self.H, LEAF_PALETTE,
-                           berry_density=0.0, berry_color=BERRY_COLOR)
+        arr = leaf_texture(
+            _rng(30), self.W, self.H, LEAF_PALETTE, berry_density=0.0, berry_color=BERRY_COLOR
+        )
         br, bg, bb = BERRY_COLOR
         # berry color shouldn't appear unless it also happens to be a palette color
         # (BERRY_COLOR is NOT in LEAF_PALETTE, so we can check directly)
-        berry_present = (
-            (arr[..., 0] == br) & (arr[..., 1] == bg) & (arr[..., 2] == bb)
-        )
-        assert not berry_present.any(), (
-            "berry_density=0 must not paint berry speckles")
+        berry_present = (arr[..., 0] == br) & (arr[..., 1] == bg) & (arr[..., 2] == bb)
+        assert not berry_present.any(), "berry_density=0 must not paint berry speckles"
 
 
 # ---------------------------------------------------------------------------
 # compose_atlas
 # ---------------------------------------------------------------------------
+
 
 class TestComposeAtlas:
     def _make_parts(self, layout: AtlasLayout, seed: int = 0):
@@ -288,7 +296,8 @@ class TestComposeAtlas:
         atlas = compose_atlas(layout, bark, leaf)
         hw = layout.half_px[0]
         assert (atlas[:, :hw, 3] == 255).all(), (
-            "bark region (left half) must have alpha=255 everywhere")
+            "bark region (left half) must have alpha=255 everywhere"
+        )
 
     def test_right_leaf_region_binary_alpha(self):
         """Right (leaf) half of the atlas must have binary alpha."""
@@ -298,7 +307,8 @@ class TestComposeAtlas:
         hw = layout.half_px[0]
         leaf_a = atlas[:, hw:, 3]
         assert ((leaf_a == 0) | (leaf_a == 255)).all(), (
-            "leaf region (right half) must have binary alpha only")
+            "leaf region (right half) must have binary alpha only"
+        )
 
     def test_bark_region_matches_source(self):
         """Left half of atlas must exactly match the bark texture input."""
@@ -307,7 +317,8 @@ class TestComposeAtlas:
         atlas = compose_atlas(layout, bark, leaf)
         hw = layout.half_px[0]
         assert np.array_equal(atlas[:, :hw], bark), (
-            "bark region in atlas must equal the bark_texture input exactly")
+            "bark region in atlas must equal the bark_texture input exactly"
+        )
 
     def test_leaf_region_matches_source(self):
         """Right half of atlas must exactly match the leaf texture input."""
@@ -315,8 +326,9 @@ class TestComposeAtlas:
         bark, leaf = self._make_parts(layout)
         atlas = compose_atlas(layout, bark, leaf)
         hw = layout.half_px[0]
-        assert np.array_equal(atlas[:, hw:hw * 2], leaf), (
-            "leaf region in atlas must equal the leaf_texture input exactly")
+        assert np.array_equal(atlas[:, hw : hw * 2], leaf), (
+            "leaf region in atlas must equal the leaf_texture input exactly"
+        )
 
     def test_wrong_shape_raises(self):
         """compose_atlas must raise ValueError when inputs have wrong shape."""
@@ -353,6 +365,7 @@ class TestComposeAtlas:
 # Cross-cutting determinism
 # ---------------------------------------------------------------------------
 
+
 class TestDeterminismAcrossBoard:
     """Two identical seeds must produce byte-identical outputs for all helpers."""
 
@@ -371,7 +384,7 @@ class TestDeterminismAcrossBoard:
         hw, hh = layout.half_px
 
         def _make(seed):
-            bark = bark_texture(_rng(seed),     hw, hh, BARK_PALETTE)
+            bark = bark_texture(_rng(seed), hw, hh, BARK_PALETTE)
             leaf = leaf_texture(_rng(seed + 1), hw, hh, LEAF_PALETTE)
             return compose_atlas(layout, bark, leaf)
 

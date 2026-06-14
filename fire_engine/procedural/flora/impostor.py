@@ -87,15 +87,13 @@ def rasterize_impostor(
 
     if px_per_m is None:
         # Self-fit (aspect-preserving): bound the tree, take the tighter axis.
-        reach = np.abs(np.concatenate([sk.start[:, 0:2],
-                                       sk.end[:, 0:2]])).max()
+        reach = np.abs(np.concatenate([sk.start[:, 0:2], sk.end[:, 0:2]])).max()
         top = float(sk.end[:, 2].max())
         if leaves.n_leaves:
-            reach = max(reach,
-                        float((np.abs(leaves.center[:, 0:2]).max(axis=1)
-                               + leaves.radius).max()))
-            top = max(top,
-                      float((leaves.center[:, 2] + leaves.radius).max()))
+            reach = max(
+                reach, float((np.abs(leaves.center[:, 0:2]).max(axis=1) + leaves.radius).max())
+            )
+            top = max(top, float((leaves.center[:, 2] + leaves.radius).max()))
         reach = max(float(reach), 0.25) * 1.05
         top = max(top, 0.5) * 1.02
         px_per_m = min((W - 1) / (2.0 * reach), (H - 1) / top)
@@ -136,11 +134,8 @@ def rasterize_impostor(
 
     # --- leaves: vectorized point scatter + diamond dilation -------------
     if leaves.n_leaves:
-        cols = np.clip(np.round(leaves.center[:, 0] * s
-                                + (W - 1) * 0.5).astype(np.int64), 0, W - 1)
-        rows = np.clip(np.round((H - 1)
-                                - leaves.center[:, 2] * s).astype(np.int64),
-                       0, H - 1)
+        cols = np.clip(np.round(leaves.center[:, 0] * s + (W - 1) * 0.5).astype(np.int64), 0, W - 1)
+        rows = np.clip(np.round((H - 1) - leaves.center[:, 2] * s).astype(np.int64), 0, H - 1)
         mask = np.zeros((H, W), dtype=bool)
         mask[rows, cols] = True
 
@@ -158,10 +153,10 @@ def rasterize_impostor(
         noise = pixel_noise(rng, (H, W), octaves=3, base_freq=5)
         inside = mask & (noise > hole_thresh * 0.8)
         if inside.any():
-            light = 1.0 - yy / max(H - 1, 1)         # higher = lighter
-            tier = np.clip(((noise * 0.55 + light * 0.5)
-                            * len(leaf_palette)),
-                           0, len(leaf_palette) - 1).astype(np.intp)
+            light = 1.0 - yy / max(H - 1, 1)  # higher = lighter
+            tier = np.clip(
+                ((noise * 0.55 + light * 0.5) * len(leaf_palette)), 0, len(leaf_palette) - 1
+            ).astype(np.intp)
             rgba[..., :3][inside] = leaf_palette[tier][inside]
             rgba[..., 3][inside] = 255
 

@@ -36,29 +36,29 @@ def _tex_to_numpy(app, tex):
         raise RuntimeError(f"extract_texture_data failed for {tex.get_name()}")
     n = tex.get_z_size()
     raw = tex.get_ram_image()
-    if tex.get_component_type() == 2:        # T_float
+    if tex.get_component_type() == 2:  # T_float
         arr = np.frombuffer(raw, dtype=np.float32).copy()
-    else:                                     # T_unsigned_byte
+    else:  # T_unsigned_byte
         arr = np.frombuffer(raw, dtype=np.uint8).astype(np.float32) / 255.0
     arr = arr.reshape(n, n, n, 4)
-    return arr[..., [2, 1, 0, 3]]            # panda ram order is BGRA -> RGBA
+    return arr[..., [2, 1, 0, 3]]  # panda ram order is BGRA -> RGBA
 
 
 def _lum(rad: np.ndarray) -> np.ndarray:
-    return (0.2126 * rad[..., 0] + 0.7152 * rad[..., 1]
-            + 0.0722 * rad[..., 2])
+    return 0.2126 * rad[..., 0] + 0.7152 * rad[..., 1] + 0.0722 * rad[..., 2]
 
 
-def _report(tag: str, lum: np.ndarray, mask: np.ndarray,
-            hf: np.ndarray) -> None:
+def _report(tag: str, lum: np.ndarray, mask: np.ndarray, hf: np.ndarray) -> None:
     if not mask.any():
         print(f"{tag}: EMPTY MASK")
         return
     v = lum[mask]
     h = hf[mask]
-    print(f"{tag}: n={mask.sum()}  mean {v.mean():.4f}  "
-          f"std {v.std():.4f}  cv {v.std() / max(v.mean(), 1e-6):.3f}  "
-          f"hf-std {h.std():.4f}")
+    print(
+        f"{tag}: n={mask.sum()}  mean {v.mean():.4f}  "
+        f"std {v.std():.4f}  cv {v.std() / max(v.mean(), 1e-6):.3f}  "
+        f"hf-std {h.std():.4f}"
+    )
 
 
 def _hf_residual(lum: np.ndarray, air: np.ndarray) -> np.ndarray:
@@ -104,7 +104,8 @@ def main() -> None:
     app.input_state.mouse_captured = False
     app._set_mouse_capture(False)
     app.camera_go.transform.local_rotation = Quat.from_axis_angle(
-        Vec3.RIGHT, math.radians(-20.0)).normalized()
+        Vec3.RIGHT, math.radians(-20.0)
+    ).normalized()
     _apply_sky_settings(app, args.time_of_day, "clear")
 
     cx, cy, z0 = demo.build_gi_test_room(app)
@@ -120,16 +121,16 @@ def main() -> None:
     ox, oy, oz = casc.origin_m()
     cell = casc.cell_m
     n = casc.cells
-    geom = _tex_to_numpy(app, casc.geom)        # [z, y, x, rgba]
+    geom = _tex_to_numpy(app, casc.geom)  # [z, y, x, rgba]
     rad = _tex_to_numpy(app, casc.radiance_current)
     lum = _lum(rad)
     # Ray-gathered component only: subtract the own-cell contact term
     # (u_source + u_lit), which is crisp BY DESIGN and must not be counted
     # as noise.  This is exactly the field smooth.comp filters.
-    own = (_tex_to_numpy(app, casc.source)[..., :3]
-           + _tex_to_numpy(app, casc.lit)[..., :3])
-    ray_lum = np.maximum(lum - (0.2126 * own[..., 0] + 0.7152 * own[..., 1]
-                                + 0.0722 * own[..., 2]), 0.0)
+    own = _tex_to_numpy(app, casc.source)[..., :3] + _tex_to_numpy(app, casc.lit)[..., :3]
+    ray_lum = np.maximum(
+        lum - (0.2126 * own[..., 0] + 0.7152 * own[..., 1] + 0.0722 * own[..., 2]), 0.0
+    )
 
     ks = np.arange(n)
     wz = oz + (ks + 0.5) * cell
@@ -154,22 +155,19 @@ def main() -> None:
     # (b) Air hugging the room's EXTERIOR walls: within 1 m (2 cells) of a
     # solid cell, just outside the outer wall plane (5.5 m), wall-height z.
     near_solid = _dilate(solid, 2)
-    wall_band = air & near_solid & (cheby > 5.4) & (cheby < 7.0) \
-        & (WZ > z0 + 0.2) & (WZ < z0 + 5.0)
+    wall_band = air & near_solid & (cheby > 5.4) & (cheby < 7.0) & (WZ > z0 + 0.2) & (WZ < z0 + 5.0)
     _report("exterior wall band ", lum, wall_band, hf)
 
     # (c) Air above the roof (the blotchy roof in the night shot).
-    roof_band = air & near_solid & (cheby < 5.4) \
-        & (WZ > z0 + 5.4) & (WZ < z0 + 7.0)
+    roof_band = air & near_solid & (cheby < 5.4) & (WZ > z0 + 5.4) & (WZ < z0 + 7.0)
     _report("roof band          ", lum, roof_band, hf)
 
     # Regression guards: interior mean must hold (±15 %), and the doorway
     # spill region (rainbow confetti in the night shot) gets its own line.
-    interior = (air & (cheby < 3.4) & (WZ > z0 + 0.3) & (WZ < z0 + 4.2))
+    interior = air & (cheby < 3.4) & (WZ > z0 + 0.3) & (WZ < z0 + 4.2)
     _report("interior air (all) ", lum, interior, hf)
 
-    door = air & (cheby > 5.4) & (cheby < 9.0) \
-        & (WZ > z0 - 0.5) & (WZ < z0 + 1.5) & ~ground
+    door = air & (cheby > 5.4) & (cheby < 9.0) & (WZ > z0 - 0.5) & (WZ < z0 + 1.5) & ~ground
     _report("doorway apron band ", lum, door, hf)
 
 

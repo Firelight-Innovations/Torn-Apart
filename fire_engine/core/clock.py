@@ -82,17 +82,17 @@ class Clock:
         bus: "EventBus | None" = None,
         game_time_scale: float = DEFAULT_GAME_TIME_SCALE,
     ) -> None:
-        self._fixed_dt:         float = float(fixed_dt)
-        self._bus               = bus
-        self._game_time_scale:  float = float(game_time_scale)
+        self._fixed_dt: float = float(fixed_dt)
+        self._bus = bus
+        self._game_time_scale: float = float(game_time_scale)
 
-        self.dt:                float = 0.0
-        self._accumulator:      float = 0.0
-        self.total_real_time:   float = 0.0
+        self.dt: float = 0.0
+        self._accumulator: float = 0.0
+        self.total_real_time: float = 0.0
 
         # Game calendar
-        self.game_day:          int   = 0
-        self.game_time_of_day:  float = 0.0  # seconds within current day
+        self.game_day: int = 0
+        self.game_time_of_day: float = 0.0  # seconds within current day
 
     # ------------------------------------------------------------------
     # Public interface
@@ -159,6 +159,7 @@ class Clock:
             if self._bus is not None:
                 # Import here to avoid a circular import at module level.
                 from fire_engine.core.event_bus import GameDayTickEvent
+
                 self._bus.publish_deferred(GameDayTickEvent(day=self.game_day))
 
     def fixed_steps(self) -> Iterator[float]:
@@ -211,10 +212,10 @@ class Clock:
             accumulator     : float  (fixed-step residual, seconds)
         """
         return {
-            "game_day":         self.game_day,
+            "game_day": self.game_day,
             "game_time_of_day": self.game_time_of_day,
-            "total_real_time":  self.total_real_time,
-            "accumulator":      self._accumulator,
+            "total_real_time": self.total_real_time,
+            "accumulator": self._accumulator,
         }
 
     def set_state(self, state: dict) -> None:
@@ -227,8 +228,8 @@ class Clock:
         ----------
         state : dict — as produced by ``get_state()``.
         """
-        self.game_day         = int(state["game_day"])
+        self.game_day = int(state["game_day"])
         self.game_time_of_day = float(state["game_time_of_day"])
-        self.total_real_time  = float(state["total_real_time"])
-        self._accumulator     = float(state.get("accumulator", 0.0))
-        self.dt               = 0.0
+        self.total_real_time = float(state["total_real_time"])
+        self._accumulator = float(state.get("accumulator", 0.0))
+        self.dt = 0.0

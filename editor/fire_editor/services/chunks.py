@@ -5,6 +5,7 @@ as binary MESH frames around the editor camera, prioritised nearest-first and
 yielding between batches so the control channel stays responsive. Sunlight is
 computed (CPU) before meshing so vertex colours match the game.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -228,7 +229,9 @@ class ChunkService:
         except ValueError as e:
             raise RpcError(ErrorCode.INVALID_PARAMS, str(e))
 
-        coords, touched, before, after = session.apply_brush_edit(brush, center, mode, int(material))
+        coords, touched, before, after = session.apply_brush_edit(
+            brush, center, mode, int(material)
+        )
         self.history.push(EditCommand(f"{shape} {mode_s}", before, after))
         await self._remesh_and_push(session, coords)
         await self._emit_edit_state(session)
@@ -243,40 +246,66 @@ class ChunkService:
         session = self._require_session()
         cmd = self.history.undo()
         if cmd is None:
-            return {"ok": False, "touched": 0, "label": "",
-                    "can_undo": False, "can_redo": self.history.can_redo}
+            return {
+                "ok": False,
+                "touched": 0,
+                "label": "",
+                "can_undo": False,
+                "can_redo": self.history.can_redo,
+            }
         if isinstance(cmd, SceneCommand):
             return await self._apply_scene_command(session, cmd, cmd.before_delta)
         session.restore(cmd.before)
         await self._remesh_and_push(session, cmd.coords)
         await self._emit_edit_state(session)
-        return {"ok": True, "touched": len(cmd.coords), "label": cmd.label,
-                "can_undo": self.history.can_undo, "can_redo": self.history.can_redo}
+        return {
+            "ok": True,
+            "touched": len(cmd.coords),
+            "label": cmd.label,
+            "can_undo": self.history.can_undo,
+            "can_redo": self.history.can_redo,
+        }
 
     async def redo(self, params: dict) -> dict:
         session = self._require_session()
         cmd = self.history.redo()
         if cmd is None:
-            return {"ok": False, "touched": 0, "label": "",
-                    "can_undo": self.history.can_undo, "can_redo": False}
+            return {
+                "ok": False,
+                "touched": 0,
+                "label": "",
+                "can_undo": self.history.can_undo,
+                "can_redo": False,
+            }
         if isinstance(cmd, SceneCommand):
             return await self._apply_scene_command(session, cmd, cmd.after_delta)
         session.restore(cmd.after)
         await self._remesh_and_push(session, cmd.coords)
         await self._emit_edit_state(session)
-        return {"ok": True, "touched": len(cmd.coords), "label": cmd.label,
-                "can_undo": self.history.can_undo, "can_redo": self.history.can_redo}
+        return {
+            "ok": True,
+            "touched": len(cmd.coords),
+            "label": cmd.label,
+            "can_undo": self.history.can_undo,
+            "can_redo": self.history.can_redo,
+        }
 
-    async def _apply_scene_command(self, session: EditorSession,
-                                   cmd: SceneCommand, delta: dict) -> dict:
+    async def _apply_scene_command(
+        self, session: EditorSession, cmd: SceneCommand, delta: dict
+    ) -> dict:
         """Restore a scene-hierarchy snapshot (undo/redo of a scene op)."""
         session.scene.apply_delta(delta)
         await self.daemon.server.broadcast_notification(
             Notification.SCENE_CHANGED, {"objects": session.scene.tree()}
         )
         await self._emit_edit_state(session)
-        return {"ok": True, "touched": 0, "label": cmd.label,
-                "can_undo": self.history.can_undo, "can_redo": self.history.can_redo}
+        return {
+            "ok": True,
+            "touched": 0,
+            "label": cmd.label,
+            "can_undo": self.history.can_undo,
+            "can_redo": self.history.can_redo,
+        }
 
     # ------------------------------------------------------------------ #
     # Push helpers
@@ -287,8 +316,14 @@ class ChunkService:
         pid = self._payload_seq
         await self.daemon.server.broadcast_notification(
             Notification.CHUNK_READY,
-            {"cx": coord[0], "cy": coord[1], "cz": coord[2], "payload_id": pid,
-             "vertices": mesh.vertex_count, "triangles": mesh.tri_count},
+            {
+                "cx": coord[0],
+                "cy": coord[1],
+                "cz": coord[2],
+                "payload_id": pid,
+                "vertices": mesh.vertex_count,
+                "triangles": mesh.tri_count,
+            },
         )
         await self.daemon.server.broadcast_binary(
             encode_frame(SchemaId.MESH, pid, encode_mesh_payload(coord, mesh))
@@ -331,8 +366,11 @@ class ChunkService:
     async def _emit_edit_state(self, session: EditorSession) -> None:
         await self.daemon.server.broadcast_notification(
             Notification.EDIT_STATE,
-            {"can_undo": self.history.can_undo, "can_redo": self.history.can_redo,
-             "edited_chunks": session.edited_chunk_count()},
+            {
+                "can_undo": self.history.can_undo,
+                "can_redo": self.history.can_redo,
+                "edited_chunks": session.edited_chunk_count(),
+            },
         )
 
     # ------------------------------------------------------------------ #

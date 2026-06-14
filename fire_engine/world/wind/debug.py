@@ -159,7 +159,7 @@ def debug_ball_step(
     if p[2] <= rest_z:
         p[2] = rest_z
         if v[2] < 0.0:
-            v[2] = 0.0                       # no bounce — it just rests
+            v[2] = 0.0  # no bounce — it just rests
         # Ground friction bleeds horizontal speed so the ball settles in calm.
         f = min(max(float(params.friction) * dt, 0.0), 1.0)
         v[0] -= v[0] * f

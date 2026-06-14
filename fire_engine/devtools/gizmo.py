@@ -127,6 +127,7 @@ def _axis_vec(i: int) -> Vec3:
 # Ray geometry primitives (numpy float64, pure functions)
 # ---------------------------------------------------------------------------
 
+
 def ray_plane_intersect(
     o: np.ndarray, d: np.ndarray, p: np.ndarray, n: np.ndarray
 ) -> Optional[np.ndarray]:
@@ -182,6 +183,7 @@ def _ring_angle(point: np.ndarray, pivot: np.ndarray, axis: int) -> float:
 # ---------------------------------------------------------------------------
 # Gizmo: picking + drag begin
 # ---------------------------------------------------------------------------
+
 
 class Gizmo:
     """
@@ -290,8 +292,13 @@ class Gizmo:
         """
         o, d, p = _np(ray_o), _np(ray_d), _np(self.pivot)
         st = DragState(
-            mode=self.mode, handle=handle, pivot=self.pivot, size=self.size,
-            start_position=position, start_rotation=rotation, start_scale=scale,
+            mode=self.mode,
+            handle=handle,
+            pivot=self.pivot,
+            size=self.size,
+            start_position=position,
+            start_rotation=rotation,
+            start_scale=scale,
         )
         if handle.type == HandleType.AXIS:
             st.ref_scalar = closest_on_axis(o, d, p, _AXIS_NP[handle.axis])[0]
@@ -315,6 +322,7 @@ def _ray_s_of(o: np.ndarray, d: np.ndarray, point: np.ndarray) -> float:
 # ---------------------------------------------------------------------------
 # Drag resolution (absolute from the captured reference)
 # ---------------------------------------------------------------------------
+
 
 def update_drag(state: DragState, ray_o: Vec3, ray_d: Vec3) -> tuple[Vec3, Quat, Vec3]:
     """

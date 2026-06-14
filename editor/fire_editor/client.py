@@ -27,6 +27,7 @@ Example::
 No panda3d import here (hard rule 1) — the client only speaks the wire
 protocol, so it stays in the headless test suite.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -126,8 +127,7 @@ class EditorClient:
         fut: asyncio.Future = asyncio.get_event_loop().create_future()
         self._pending[msg_id] = fut
         await self._ws.send(
-            json.dumps({"jsonrpc": "2.0", "id": msg_id, "method": method,
-                        "params": params or {}})
+            json.dumps({"jsonrpc": "2.0", "id": msg_id, "method": method, "params": params or {}})
         )
         return await fut
 
@@ -142,9 +142,7 @@ class EditorClient:
     # ------------------------------------------------------------------ #
     # Waiting on async daemon output
     # ------------------------------------------------------------------ #
-    async def wait_notification(
-        self, method: str, timeout: float = 10.0
-    ) -> dict:
+    async def wait_notification(self, method: str, timeout: float = 10.0) -> dict:
         """Block until a notification with ``method`` arrives; return its params."""
         return await self._wait(lambda m, _p: m == method, timeout)
 
@@ -197,8 +195,7 @@ class EditorClient:
             err = msg.get("error")
             if err is not None:
                 fut.set_exception(
-                    RpcRemoteError(err.get("code", 0), err.get("message", ""),
-                                   err.get("data"))
+                    RpcRemoteError(err.get("code", 0), err.get("message", ""), err.get("data"))
                 )
             else:
                 fut.set_result(msg.get("result"))
@@ -220,9 +217,7 @@ class EditorClient:
         if self.on_binary is not None:
             self.on_binary(frame)
 
-    def _wait(
-        self, predicate: Callable[[str, dict], bool], timeout: float
-    ) -> Awaitable[dict]:
+    def _wait(self, predicate: Callable[[str, dict], bool], timeout: float) -> Awaitable[dict]:
         # Wait for the NEXT matching notification, not a historical one: the
         # waiter is registered synchronously here (before any trigger fires), so
         # callers that register-then-trigger never miss the result, and stale
@@ -252,9 +247,7 @@ class EditorClient:
 
 
 @contextlib.asynccontextmanager
-async def spawn_daemon(
-    python: str | None = None, host: str = "127.0.0.1"
-):
+async def spawn_daemon(python: str | None = None, host: str = "127.0.0.1"):
     """Spawn ``python -m fire_editor --port 0`` and yield ``(proc, port)``.
 
     Parses the daemon's ``{"event":"listening","port":N}`` stdout line to learn
@@ -273,8 +266,13 @@ async def spawn_daemon(
         p for p in (repo_root, editor_dir, env.get("PYTHONPATH")) if p
     )
     proc = await asyncio.create_subprocess_exec(
-        python or sys.executable, "-m", "fire_editor", "--port", "0",
-        "--host", host,
+        python or sys.executable,
+        "-m",
+        "fire_editor",
+        "--port",
+        "0",
+        "--host",
+        host,
         cwd=repo_root,
         env=env,
         stdout=asyncio.subprocess.PIPE,
@@ -290,8 +288,7 @@ async def spawn_daemon(
             await asyncio.wait_for(proc.wait(), timeout=5.0)
 
 
-async def _read_listening_port(proc: asyncio.subprocess.Process,
-                               timeout: float = 30.0) -> int:
+async def _read_listening_port(proc: asyncio.subprocess.Process, timeout: float = 30.0) -> int:
     """Read daemon stdout until the listening line, return the bound port."""
     assert proc.stdout is not None
 

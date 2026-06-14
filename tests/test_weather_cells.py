@@ -56,11 +56,12 @@ def _cell(**kw) -> StormCell:
 # Envelope / intensity / radius
 # ---------------------------------------------------------------------------
 
+
 class TestEnvelope:
     def test_zero_outside_life(self):
         c = _cell(spawn_time=1000.0, duration_s=2000.0)
         assert c.intensity(999.0) == 0.0
-        assert c.intensity(1000.0) == 0.0      # boundary is exclusive
+        assert c.intensity(1000.0) == 0.0  # boundary is exclusive
         assert c.intensity(3000.0) == 0.0
         assert c.intensity(5000.0) == 0.0
         assert not c.active(999.0)
@@ -74,19 +75,20 @@ class TestEnvelope:
     def test_grows_and_decays_monotonically(self):
         c = _cell(spawn_time=0.0, duration_s=1000.0, peak_intensity=1.0)
         grow = [c.intensity(u * 1000.0) for u in (0.02, 0.08, 0.15, 0.20)]
-        assert grow == sorted(grow)              # non-decreasing through grow
+        assert grow == sorted(grow)  # non-decreasing through grow
         decay = [c.intensity(u * 1000.0) for u in (0.70, 0.85, 0.95, 0.99)]
-        assert decay == sorted(decay, reverse=True)   # non-increasing in decay
+        assert decay == sorted(decay, reverse=True)  # non-increasing in decay
 
     def test_radius_grows_to_full(self):
         c = _cell(spawn_time=0.0, duration_s=1000.0, radius_m=500.0)
-        assert c.radius(5.0) == pytest.approx(0.55 * 500.0, abs=2.0)   # birth
-        assert c.radius(500.0) == pytest.approx(500.0)                 # plateau
+        assert c.radius(5.0) == pytest.approx(0.55 * 500.0, abs=2.0)  # birth
+        assert c.radius(500.0) == pytest.approx(500.0)  # plateau
 
 
 # ---------------------------------------------------------------------------
 # contribution()
 # ---------------------------------------------------------------------------
+
 
 class TestContribution:
     def test_shape_and_peak_at_center(self):
@@ -97,8 +99,8 @@ class TestContribution:
         pts = np.array([center, center + np.array([1e6, 0.0])])
         out = c.contribution(pts, t, syn)
         assert out.shape == (2,)
-        assert out[0] == pytest.approx(c.intensity(t))   # peak at the center
-        assert out[1] == pytest.approx(0.0, abs=1e-9)     # far away → ~0
+        assert out[0] == pytest.approx(c.intensity(t))  # peak at the center
+        assert out[1] == pytest.approx(0.0, abs=1e-9)  # far away → ~0
 
     def test_falls_to_one_fiftieth_at_one_radius(self):
         syn = Synoptic(load_config())
@@ -113,7 +115,7 @@ class TestContribution:
         syn = Synoptic(load_config())
         c = _cell(spawn_time=1000.0, duration_s=1000.0)
         pts = np.zeros((4, 2))
-        out = c.contribution(pts, 5000.0, syn)     # well after death
+        out = c.contribution(pts, 5000.0, syn)  # well after death
         assert np.all(out == 0.0)
 
 
@@ -121,18 +123,17 @@ class TestContribution:
 # center() rides the synoptic displacement
 # ---------------------------------------------------------------------------
 
+
 class TestTrack:
     def test_no_drift_rides_displacement_exactly(self):
         set_world_seed(1337)
         syn = Synoptic(load_config())
         spawn_t = 2000.0
-        c = _cell(spawn_time=spawn_t, spawn_pos=(100.0, -50.0),
-                  duration_s=20000.0, drift_bias=(0.0, 0.0))
-        t = 8000.0
-        expected = (
-            np.array([100.0, -50.0])
-            + syn.displacement(t) - syn.displacement(spawn_t)
+        c = _cell(
+            spawn_time=spawn_t, spawn_pos=(100.0, -50.0), duration_s=20000.0, drift_bias=(0.0, 0.0)
         )
+        t = 8000.0
+        expected = np.array([100.0, -50.0]) + syn.displacement(t) - syn.displacement(spawn_t)
         assert np.allclose(c.center(t, syn), expected)
 
     def test_drift_bias_bends_track_linearly(self):
@@ -140,10 +141,10 @@ class TestTrack:
         syn = Synoptic(load_config())
         spawn_t = 0.0
         drift = (2.0, -1.0)
-        c0 = _cell(spawn_time=spawn_t, spawn_pos=(0.0, 0.0),
-                   duration_s=20000.0, drift_bias=(0.0, 0.0))
-        c1 = _cell(spawn_time=spawn_t, spawn_pos=(0.0, 0.0),
-                   duration_s=20000.0, drift_bias=drift)
+        c0 = _cell(
+            spawn_time=spawn_t, spawn_pos=(0.0, 0.0), duration_s=20000.0, drift_bias=(0.0, 0.0)
+        )
+        c1 = _cell(spawn_time=spawn_t, spawn_pos=(0.0, 0.0), duration_s=20000.0, drift_bias=drift)
         t = 3000.0
         diff = c1.center(t, syn) - c0.center(t, syn)
         assert np.allclose(diff, np.array(drift) * (t - spawn_t))
@@ -152,6 +153,7 @@ class TestTrack:
 # ---------------------------------------------------------------------------
 # Natural spawn schedule
 # ---------------------------------------------------------------------------
+
 
 class TestNaturalSchedule:
     def test_pure_function_of_seed_and_day(self):
@@ -170,7 +172,7 @@ class TestNaturalSchedule:
             natural_cells(d, cfg)
         after = natural_cells(5, cfg)
         set_world_seed(7)
-        direct = natural_cells(5, cfg)        # jump straight to day 5
+        direct = natural_cells(5, cfg)  # jump straight to day 5
         assert after == direct
 
     def test_different_seed_different_cells(self):
@@ -196,7 +198,7 @@ class TestNaturalSchedule:
         mid = 0.5 * (r_min + r_max)
         set_world_seed(13)
         seen = False
-        for d in range(60):                    # frontal days carry thunder
+        for d in range(60):  # frontal days carry thunder
             for c in natural_cells(d, cfg):
                 if c.kind is CellKind.THUNDERSTORM:
                     seen = True
@@ -214,6 +216,7 @@ class TestNaturalSchedule:
 # ---------------------------------------------------------------------------
 # Hard-rule guard: no panda3d under fire_engine/world/weather/
 # ---------------------------------------------------------------------------
+
 
 class TestNoPanda3D:
     def test_no_panda3d_import_in_weather_package(self):

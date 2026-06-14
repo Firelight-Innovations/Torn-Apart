@@ -52,6 +52,7 @@ from fire_engine.procedural.flora.species_def import (
     TreeSpeciesDef,
     TreeVariantSet,
 )
+
 # Importing the species sub-package registers all built-in species defs.
 import fire_engine.procedural.flora.species  # noqa: F401
 

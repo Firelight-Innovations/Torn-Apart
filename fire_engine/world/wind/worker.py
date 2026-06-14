@@ -195,8 +195,7 @@ class VenturiWorker:
         """Spawn the worker thread (idempotent)."""
         if self._thread is not None:
             return
-        self._thread = threading.Thread(
-            target=self._run, name="WindVenturiWorker", daemon=True)
+        self._thread = threading.Thread(target=self._run, name="WindVenturiWorker", daemon=True)
         self._thread.start()
 
     def submit(self, job: VenturiJob) -> None:
@@ -239,9 +238,7 @@ class VenturiWorker:
             try:
                 self._out.put(solve_venturi(job))
             except Exception:  # noqa: BLE001 — never let the worker die silently
-                _log.exception(
-                    "Venturi solve failed (origin %r, seq %d)",
-                    job.origin_cell, job.seq)
+                _log.exception("Venturi solve failed (origin %r, seq %d)", job.origin_cell, job.seq)
                 # Post a valid IDENTITY result so the consumer never starves —
                 # a raised job must not leave the field stuck without a
                 # correction grid forever (mirrors the assembly worker's

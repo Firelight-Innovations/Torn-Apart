@@ -26,16 +26,16 @@ importing it here.  See ``docs/systems/procedural.md`` for the authoring guide.
 
 from fire_engine.procedural.textures.base import ProceduralTextureDef, value_noise, pixel_noise
 from fire_engine.procedural.textures import wasteland_ground  # registers "wasteland_ground"
-from fire_engine.procedural.textures import night_sky         # registers "night_sky"
-from fire_engine.procedural.textures import rain_streak       # registers "rain_streak"
-from fire_engine.procedural.textures import grass_ground      # registers "grass_ground"
-from fire_engine.procedural.textures import dirt_ground       # registers "dirt_ground"
-from fire_engine.procedural.textures import moon_surface      # registers "moon_surface"
-from fire_engine.procedural.textures import grass_tuft        # registers "grass_tuft"
-from fire_engine.procedural.textures import dust_mote         # registers "dust_mote"
-from fire_engine.procedural.textures import leaf_sprite       # registers "leaf_sprite"
-from fire_engine.procedural.textures import flower_sprite     # registers "flower_sprite"
-from fire_engine.procedural.textures import plaster_wall      # registers "plaster_wall"
+from fire_engine.procedural.textures import night_sky  # registers "night_sky"
+from fire_engine.procedural.textures import rain_streak  # registers "rain_streak"
+from fire_engine.procedural.textures import grass_ground  # registers "grass_ground"
+from fire_engine.procedural.textures import dirt_ground  # registers "dirt_ground"
+from fire_engine.procedural.textures import moon_surface  # registers "moon_surface"
+from fire_engine.procedural.textures import grass_tuft  # registers "grass_tuft"
+from fire_engine.procedural.textures import dust_mote  # registers "dust_mote"
+from fire_engine.procedural.textures import leaf_sprite  # registers "leaf_sprite"
+from fire_engine.procedural.textures import flower_sprite  # registers "flower_sprite"
+from fire_engine.procedural.textures import plaster_wall  # registers "plaster_wall"
 
 __all__ = [
     "ProceduralTextureDef",

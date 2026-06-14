@@ -54,6 +54,7 @@ from typing import Any, Callable
 # Engine-level event types
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class ChunkLoadedEvent:
     """
@@ -64,6 +65,7 @@ class ChunkLoadedEvent:
     coord : tuple[int, int, int]
         Chunk grid coordinate (cx, cy, cz). Each unit = 16 meters.
     """
+
     coord: tuple[int, int, int]
 
 
@@ -77,6 +79,7 @@ class ChunkUnloadedEvent:
     coord : tuple[int, int, int]
         Chunk grid coordinate (cx, cy, cz).
     """
+
     coord: tuple[int, int, int]
 
 
@@ -94,6 +97,7 @@ class TerrainEditedEvent:
         The brush object used (SphereBrush, BoxBrush, etc.).
         Typed loosely as ``object`` to avoid an import cycle with terrain/.
     """
+
     chunk_coords: tuple
     brush: object
 
@@ -119,6 +123,7 @@ class WeatherChangedEvent:
     day : int
         In-game day number on which the change occurred.
     """
+
     previous: str
     current: str
     day: int
@@ -157,6 +162,7 @@ class LightningStrikeEvent:
     intensity : float
         0–1 strike brightness / scale (peak cell intensity at strike time).
     """
+
     pos: tuple[float, float, float]
     ground_pos: tuple[float, float, float]
     seed: int
@@ -189,6 +195,7 @@ class ThunderEvent:
     intensity : float
         0–1 strike intensity (drives the rumble loudness / low-pass roll-off).
     """
+
     pos: tuple[float, float, float]
     distance_m: float
     delay_s: float
@@ -208,6 +215,7 @@ class GameDayTickEvent:
     day : int
         The new day number (starts at 0; increments each in-game day).
     """
+
     day: int
 
 
@@ -232,6 +240,7 @@ class BuildingChangedEvent:
     bounds_max : tuple[float, float, float]
         World-space AABB maximum corner in meters.
     """
+
     building_id: int
     change: str
     bounds_min: tuple[float, float, float]

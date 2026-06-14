@@ -28,6 +28,7 @@ from fire_engine.core.event_bus import (
 # Helper event type for testing
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class _TestEvent:
     value: int
@@ -36,6 +37,7 @@ class _TestEvent:
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestSubscribePublish:
     def test_single_subscriber_receives_event(self):
@@ -70,12 +72,12 @@ class TestSubscribePublish:
     def test_different_event_types_do_not_cross(self):
         bus = EventBus()
         chunk_received = []
-        day_received   = []
+        day_received = []
         bus.subscribe(ChunkLoadedEvent, chunk_received.append)
         bus.subscribe(GameDayTickEvent, day_received.append)
         bus.publish(ChunkLoadedEvent(coord=(0, 0, 0)))
         assert len(chunk_received) == 1
-        assert len(day_received)   == 0
+        assert len(day_received) == 0
 
 
 class TestUnsubscribe:
@@ -169,14 +171,14 @@ class TestDeferredDuringDrain:
         bus.subscribe(_TestEvent, handler_first)
 
         bus.publish_deferred(_TestEvent(value=1))
-        bus.drain()          # dispatches value=1; value=2 should NOT be dispatched now
+        bus.drain()  # dispatches value=1; value=2 should NOT be dispatched now
 
         assert first_pass == [1], "Only the original event in first drain"
         assert second_pass == [], "value=2 not yet delivered"
 
         # Now add a subscriber for the second pass
         bus.subscribe(_TestEvent, second_pass.append)
-        bus.drain()          # now value=2 should dispatch
+        bus.drain()  # now value=2 should dispatch
 
         # first_pass gets value=2 too (still subscribed), second_pass gets it
         assert 2 in first_pass
@@ -186,6 +188,7 @@ class TestDeferredDuringDrain:
 # ---------------------------------------------------------------------------
 # Engine event type tests (smoke checks)
 # ---------------------------------------------------------------------------
+
 
 class TestEngineEventTypes:
     def test_chunk_loaded_event_frozen(self):

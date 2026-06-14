@@ -16,9 +16,9 @@ from __future__ import annotations
 
 import pytest
 
-from fire_engine.render.component  import Component
+from fire_engine.render.component import Component
 from fire_engine.render.gameobject import GameObject
-from fire_engine.render.registry   import (
+from fire_engine.render.registry import (
     ComponentRegistry,
     instantiate,
     destroy,
@@ -26,14 +26,15 @@ from fire_engine.render.registry   import (
     find_objects_with_tag,
     _STATE,
 )
-from fire_engine.core.clock     import Clock
+from fire_engine.core.clock import Clock
 from fire_engine.core.event_bus import EventBus
-from fire_engine.core.math3d    import Vec3, Quat
+from fire_engine.core.math3d import Vec3, Quat
 
 
 # ---------------------------------------------------------------------------
 # Pytest fixture — reset registry between every test
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True)
 def reset_registry():
@@ -51,6 +52,7 @@ def clock():
 # ---------------------------------------------------------------------------
 # Recording Component (used by lifecycle tests)
 # ---------------------------------------------------------------------------
+
 
 class Recorder(Component):
     """Records every lifecycle callback call in order."""
@@ -88,11 +90,12 @@ class Recorder(Component):
 # Lifecycle order tests
 # ---------------------------------------------------------------------------
 
+
 class TestLifecycleOrder:
     def test_single_component_first_frame(self, clock):
         """awake → on_enable → start → update → late_update in one frame."""
-        clock.update(0.016)   # advance so dt > 0
-        go  = instantiate()
+        clock.update(0.016)  # advance so dt > 0
+        go = instantiate()
         rec = go.add_component(Recorder)
         ComponentRegistry.run_frame(clock)
 
@@ -103,9 +106,9 @@ class TestLifecycleOrder:
         With two components, all awake() calls happen before any start() call.
         """
         clock.update(0.016)
-        go  = instantiate()
-        r1  = go.add_component(Recorder)
-        r2  = go.add_component(Recorder)
+        go = instantiate()
+        r1 = go.add_component(Recorder)
+        r2 = go.add_component(Recorder)
         ComponentRegistry.run_frame(clock)
 
         # Both recorders should have seen awake before start
@@ -121,12 +124,12 @@ class TestLifecycleOrder:
     def test_second_frame_no_double_start(self, clock):
         """start() must only fire once; second frame only has update + late_update."""
         clock.update(0.016)
-        go  = instantiate()
+        go = instantiate()
         rec = go.add_component(Recorder)
-        ComponentRegistry.run_frame(clock)    # frame 1
+        ComponentRegistry.run_frame(clock)  # frame 1
 
         clock.update(0.016)
-        ComponentRegistry.run_frame(clock)    # frame 2
+        ComponentRegistry.run_frame(clock)  # frame 2
 
         assert rec.log.count("start") == 1
         assert rec.log.count("update") == 2
@@ -135,7 +138,7 @@ class TestLifecycleOrder:
     def test_update_before_late_update(self, clock):
         """update always appears before late_update in the same frame."""
         clock.update(0.016)
-        go  = instantiate()
+        go = instantiate()
         rec = go.add_component(Recorder)
         ComponentRegistry.run_frame(clock)
         assert rec.log.index("update") < rec.log.index("late_update")
@@ -150,12 +153,12 @@ class TestLifecycleOrder:
         class Spawner(Component):
             def update(self, dt):
                 child = self.game_object.add_component(Recorder)
-                late_rec.append(child)   # store reference
+                late_rec.append(child)  # store reference
 
         clock.update(0.016)
         go = instantiate()
         go.add_component(Spawner)
-        ComponentRegistry.run_frame(clock)   # frame 1 — Spawner.update runs, spawns Recorder
+        ComponentRegistry.run_frame(clock)  # frame 1 — Spawner.update runs, spawns Recorder
 
         # Recorder should NOT have been awaked yet
         assert len(late_rec) == 1
@@ -173,13 +176,14 @@ class TestLifecycleOrder:
 # Destroy tests
 # ---------------------------------------------------------------------------
 
+
 class TestDestroy:
     def test_destroy_fires_on_disable_then_on_destroy_end_of_frame(self, clock):
         """destroy() defers teardown; on_disable + on_destroy fire at end of frame."""
         clock.update(0.016)
-        go  = instantiate()
+        go = instantiate()
         rec = go.add_component(Recorder)
-        ComponentRegistry.run_frame(clock)   # frame 1 — awake/start/update
+        ComponentRegistry.run_frame(clock)  # frame 1 — awake/start/update
 
         # Destroy the component
         destroy(rec)
@@ -188,7 +192,7 @@ class TestDestroy:
 
         # Next run_frame flushes the destroy queue
         clock.update(0.016)
-        ComponentRegistry.run_frame(clock)   # frame 2 — flush includes destroy
+        ComponentRegistry.run_frame(clock)  # frame 2 — flush includes destroy
         assert "on_disable" in rec.log
         assert "on_destroy" in rec.log
         assert rec.log.index("on_disable") < rec.log.index("on_destroy")
@@ -211,7 +215,7 @@ class TestDestroy:
     def test_destroyed_component_not_updated(self, clock):
         """A destroyed component should not receive update after the destroy frame."""
         clock.update(0.016)
-        go  = instantiate()
+        go = instantiate()
         rec = go.add_component(Recorder)
         ComponentRegistry.run_frame(clock)
 
@@ -229,10 +233,11 @@ class TestDestroy:
 # set_active cascade
 # ---------------------------------------------------------------------------
 
+
 class TestSetActive:
     def test_set_active_false_disables_components(self, clock):
         clock.update(0.016)
-        go  = instantiate()
+        go = instantiate()
         rec = go.add_component(Recorder)
         ComponentRegistry.run_frame(clock)
 
@@ -242,12 +247,14 @@ class TestSetActive:
     def test_set_active_false_cascades_to_children(self, clock):
         clock.update(0.016)
         parent_go = instantiate()
-        child_go  = instantiate()
+        child_go = instantiate()
         child_go.transform.set_parent(parent_go.transform, keep_world=False)
-        _STATE.objects.append(child_go)  # manual registration since instantiate already registered parent
+        _STATE.objects.append(
+            child_go
+        )  # manual registration since instantiate already registered parent
 
         rec_parent = parent_go.add_component(Recorder)
-        rec_child  = child_go.add_component(Recorder)
+        rec_child = child_go.add_component(Recorder)
         ComponentRegistry.run_frame(clock)
 
         # Deactivate parent
@@ -258,7 +265,7 @@ class TestSetActive:
 
     def test_set_active_false_child_inactive_in_hierarchy(self):
         parent_go = instantiate()
-        child_go  = instantiate()
+        child_go = instantiate()
         child_go.transform.set_parent(parent_go.transform, keep_world=False)
 
         parent_go.set_active(False)
@@ -266,7 +273,7 @@ class TestSetActive:
 
     def test_set_active_true_re_enables(self, clock):
         clock.update(0.016)
-        go  = instantiate()
+        go = instantiate()
         rec = go.add_component(Recorder)
         ComponentRegistry.run_frame(clock)
 
@@ -278,13 +285,13 @@ class TestSetActive:
 
     def test_no_update_while_inactive(self, clock):
         clock.update(0.016)
-        go  = instantiate()
+        go = instantiate()
         rec = go.add_component(Recorder)
-        ComponentRegistry.run_frame(clock)   # frame 1
+        ComponentRegistry.run_frame(clock)  # frame 1
 
         go.set_active(False)
         clock.update(0.016)
-        ComponentRegistry.run_frame(clock)   # frame 2
+        ComponentRegistry.run_frame(clock)  # frame 2
 
         update_count = rec.log.count("update")
         assert update_count == 1  # only frame 1
@@ -293,6 +300,7 @@ class TestSetActive:
 # ---------------------------------------------------------------------------
 # find_with_tag / find_objects_with_tag
 # ---------------------------------------------------------------------------
+
 
 class TestTagLookup:
     def test_find_with_tag(self):
@@ -305,9 +313,12 @@ class TestTagLookup:
         assert find_with_tag("nonexistent") is None
 
     def test_find_objects_with_tag_multiple(self):
-        g1 = instantiate(); g1.tag = "item"
-        g2 = instantiate(); g2.tag = "item"
-        g3 = instantiate(); g3.tag = "other"
+        g1 = instantiate()
+        g1.tag = "item"
+        g2 = instantiate()
+        g2.tag = "item"
+        g3 = instantiate()
+        g3.tag = "other"
         results = find_objects_with_tag("item")
         assert g1 in results
         assert g2 in results
@@ -324,16 +335,17 @@ class TestTagLookup:
 # get_component_in_children
 # ---------------------------------------------------------------------------
 
+
 class TestGetComponentInChildren:
     def test_finds_component_on_self(self):
-        go  = instantiate()
+        go = instantiate()
         rec = go.add_component(Recorder)
         assert go.get_component_in_children(Recorder) is rec
 
     def test_finds_component_in_direct_child(self, clock):
         clock.update(0.016)
         parent = instantiate()
-        child  = instantiate()
+        child = instantiate()
         child.transform.set_parent(parent.transform, keep_world=False)
 
         rec = child.add_component(Recorder)
@@ -346,11 +358,11 @@ class TestGetComponentInChildren:
 
     def test_finds_in_grandchild(self, clock):
         clock.update(0.016)
-        root   = instantiate()
-        mid    = instantiate()
-        leaf   = instantiate()
-        mid.transform.set_parent(root.transform,   keep_world=False)
-        leaf.transform.set_parent(mid.transform,   keep_world=False)
+        root = instantiate()
+        mid = instantiate()
+        leaf = instantiate()
+        mid.transform.set_parent(root.transform, keep_world=False)
+        leaf.transform.set_parent(mid.transform, keep_world=False)
 
         rec = leaf.add_component(Recorder)
         found = root.get_component_in_children(Recorder)
@@ -361,6 +373,7 @@ class TestGetComponentInChildren:
 # instantiate convenience
 # ---------------------------------------------------------------------------
 
+
 class TestInstantiate:
     def test_instantiate_sets_position(self):
         go = instantiate(position=Vec3(1, 2, 3))
@@ -368,6 +381,7 @@ class TestInstantiate:
 
     def test_instantiate_sets_rotation(self):
         import math
+
         q = Quat.from_axis_angle(Vec3.UP, math.pi / 2)
         go = instantiate(rotation=q)
         assert go.transform.local_rotation.approx_eq(q, eps=1e-5)
@@ -382,6 +396,7 @@ class TestInstantiate:
 # Multiple component types in order
 # ---------------------------------------------------------------------------
 
+
 class TestMultipleComponentTypes:
     def test_two_recorder_components_both_update(self, clock):
         clock.update(0.016)
@@ -394,7 +409,7 @@ class TestMultipleComponentTypes:
 
     def test_disabled_component_not_updated(self, clock):
         clock.update(0.016)
-        go  = instantiate()
+        go = instantiate()
         rec = go.add_component(Recorder)
         rec.enabled = False
         ComponentRegistry.run_frame(clock)

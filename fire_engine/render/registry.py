@@ -77,8 +77,9 @@ def _scope_name(phase: str, t: type) -> str:
         name = _SCOPE_NAME_CACHE[key] = f"{phase}:{t.__name__}"
     return name
 
+
 if TYPE_CHECKING:
-    from fire_engine.render.component  import Component
+    from fire_engine.render.component import Component
     from fire_engine.render.gameobject import GameObject
     from fire_engine.core.clock import Clock
 
@@ -88,6 +89,7 @@ T = TypeVar("T")
 # ---------------------------------------------------------------------------
 # _RegistryState — all mutable singleton state in one object (easy to clear)
 # ---------------------------------------------------------------------------
+
 
 class _RegistryState:
     """Internal mutable state bag for ComponentRegistry."""
@@ -101,12 +103,12 @@ class _RegistryState:
         self.buckets: dict[type, list["Component"]] = defaultdict(list)
 
         # Pending lifecycle queues
-        self.pending_awake:   list["Component"] = []
-        self.pending_start:   list["Component"] = []
+        self.pending_awake: list["Component"] = []
+        self.pending_start: list["Component"] = []
 
         # Deferred destroy queues (flushed at end of frame)
         self.pending_destroy_components: list["Component"] = []
-        self.pending_destroy_objects:    list["GameObject"] = []
+        self.pending_destroy_objects: list["GameObject"] = []
 
 
 _STATE: _RegistryState = _RegistryState()
@@ -115,6 +117,7 @@ _STATE: _RegistryState = _RegistryState()
 # ---------------------------------------------------------------------------
 # ComponentRegistry — public singleton facade
 # ---------------------------------------------------------------------------
+
 
 class _ComponentRegistry:
     """
@@ -274,7 +277,7 @@ class _ComponentRegistry:
         template: "GameObject | None" = None,
         position: Vec3 = None,
         rotation: Quat = None,
-        parent:   "object | None" = None,
+        parent: "object | None" = None,
     ) -> "GameObject":
         """
         Create (and register) a new GameObject, optionally copying a template.
@@ -299,7 +302,7 @@ class _ComponentRegistry:
             bullet = instantiate(position=Vec3(0, 10, 0))
         """
         from fire_engine.render.gameobject import GameObject
-        from fire_engine.render.transform  import Transform
+        from fire_engine.render.transform import Transform
 
         if position is None:
             position = Vec3(0.0, 0.0, 0.0)
@@ -351,7 +354,7 @@ class _ComponentRegistry:
             destroy(old_component)       # component torn down at end of frame
         """
         from fire_engine.render.gameobject import GameObject
-        from fire_engine.render.component  import Component
+        from fire_engine.render.component import Component
 
         if isinstance(obj_or_component, GameObject):
             if obj_or_component not in _STATE.pending_destroy_objects:
@@ -428,6 +431,7 @@ class _ComponentRegistry:
 ComponentRegistry: _ComponentRegistry = _ComponentRegistry()
 
 # Convenience module-level functions (mirrors Unity statics and ARCHITECTURE §5.4)
+
 
 def instantiate(
     template: "GameObject | None" = None,

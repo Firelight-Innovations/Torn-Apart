@@ -49,13 +49,16 @@ __all__ = ["GrassTuftDef"]
 
 # Blade colour ramp, base (dark) → tip (pale dried highlight).  Slightly
 # lighter than the ground's _GRASS_PALETTE mid-greens so tufts read against it.
-_BLADE_RAMP = np.array([
-    ( 52,  72,  36),   # 0 — base shadow green
-    ( 74,  96,  46),   # 1 — lower stem
-    ( 98, 118,  56),   # 2 — mid blade
-    (130, 142,  70),   # 3 — upper blade
-    (158, 152,  86),   # 4 — dried tip highlight
-], dtype=np.uint8)
+_BLADE_RAMP = np.array(
+    [
+        (52, 72, 36),  # 0 — base shadow green
+        (74, 96, 46),  # 1 — lower stem
+        (98, 118, 56),  # 2 — mid blade
+        (130, 142, 70),  # 3 — upper blade
+        (158, 152, 86),  # 4 — dried tip highlight
+    ],
+    dtype=np.uint8,
+)
 
 _BLADE_COUNT = 9
 
@@ -116,23 +119,23 @@ class GrassTuftDef(ProceduralTextureDef):
         rgba = np.zeros((H, W, 4), dtype=np.uint8)
         n_tiers = len(_BLADE_RAMP)
 
-        for _ in range(blades):                      # ~9 iterations, not per-pixel
+        for _ in range(blades):  # ~9 iterations, not per-pixel
             base_x = float(rng.uniform(W * 0.12, W * 0.88))
             height_px = int(rng.uniform(H * 0.45, H * 0.95))
             lean_px = float(rng.uniform(-W * 0.18, W * 0.18))
-            wide = bool(rng.uniform() < 0.4)         # some blades 2 px wide
+            wide = bool(rng.uniform() < 0.4)  # some blades 2 px wide
 
-            ys = np.arange(height_px)                # 0 = base
-            t = ys / max(height_px - 1, 1)           # 0..1 along the blade
+            ys = np.arange(height_px)  # 0 = base
+            t = ys / max(height_px - 1, 1)  # 0..1 along the blade
             xs = np.clip(np.round(base_x + lean_px * t * t), 0, W - 1)
             xs = xs.astype(np.intp)
-            rows = (H - 1 - ys).astype(np.intp)      # base on bottom image row
+            rows = (H - 1 - ys).astype(np.intp)  # base on bottom image row
             tiers = np.minimum((t * n_tiers).astype(np.intp), n_tiers - 1)
 
             rgba[rows, xs, :3] = _BLADE_RAMP[tiers]
             rgba[rows, xs, 3] = 255
             if wide:
-                lower = ys < height_px * 0.6         # widen the lower stem only
+                lower = ys < height_px * 0.6  # widen the lower stem only
                 xs2 = np.clip(xs[lower] + 1, 0, W - 1)
                 rgba[rows[lower], xs2, :3] = _BLADE_RAMP[tiers[lower]]
                 rgba[rows[lower], xs2, 3] = 255

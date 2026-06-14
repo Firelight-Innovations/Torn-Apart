@@ -65,6 +65,7 @@ def _field(cfg=None) -> WindField:
 # Determinism
 # ---------------------------------------------------------------------------
 
+
 class TestDeterminism:
     def test_two_fields_same_seed_identical(self):
         sky = _sky()
@@ -115,12 +116,13 @@ def _run_field_subprocess(seed: int) -> float:
     script = _SUBPROCESS_SCRIPT.format(seed=seed)
     result = subprocess.run(
         [sys.executable, "-c", script],
-        capture_output=True, text=True, cwd=root, timeout=60,
+        capture_output=True,
+        text=True,
+        cwd=root,
+        timeout=60,
     )
     if result.returncode != 0:
-        raise RuntimeError(
-            f"Subprocess failed:\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}"
-        )
+        raise RuntimeError(f"Subprocess failed:\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}")
     return eval(result.stdout.strip())
 
 
@@ -140,6 +142,7 @@ class TestCrossProcessDeterminism:
 # Gust travel — crests advect downwind at ~mean speed
 # ---------------------------------------------------------------------------
 
+
 class TestGustTravel:
     def test_single_mode_crest_advects_downwind(self):
         # The advection term is per-mode and exact: a single +X-propagating mode
@@ -147,19 +150,22 @@ class TestGustTravel:
         # Build a clean single-mode basis so the cross-correlation is
         # unambiguous (no multi-mode quasi-periodic spurious peaks).
         from fire_engine.world.wind.gusts import GustModes
+
         wavelength = 50.0
         k = 2.0 * np.pi / wavelength
         single = GustModes(
-            kx=np.array([k], np.float32), ky=np.array([0.0], np.float32),
-            omega=np.array([0.0], np.float32),          # no intrinsic pulsing
+            kx=np.array([k], np.float32),
+            ky=np.array([0.0], np.float32),
+            omega=np.array([0.0], np.float32),  # no intrinsic pulsing
             phase0=np.array([0.0], np.float32),
-            pux=np.array([1.0], np.float32), puy=np.array([0.0], np.float32),
+            pux=np.array([1.0], np.float32),
+            puy=np.array([0.0], np.float32),
             amp=np.array([1.0], np.float32),
         )
         mean = (6.0, 0.0)
         dt = 2.0
         t0 = 50.0
-        expected = mean[0] * dt        # 12 m downwind
+        expected = mean[0] * dt  # 12 m downwind
         spacing = 0.25
         xs = np.arange(0.0, 400.0, spacing)
         X = xs[:, None]
@@ -191,6 +197,7 @@ class TestGustTravel:
 # sample()
 # ---------------------------------------------------------------------------
 
+
 class TestSample:
     def test_shape(self):
         f = _field()
@@ -214,27 +221,29 @@ class TestSample:
         cm = snap.cell_m
         z_ref = Config().wind_profile_z_ref + Config().ground_height_m
         # Probe a handful of interior cells.
-        for (i, j) in [(10, 10), (20, 5), (33, 40)]:
-            cx = (ox + (i + 0.5) * cm)
-            cy = (oy + (j + 0.5) * cm)
+        for i, j in [(10, 10), (20, 5), (33, 40)]:
+            cx = ox + (i + 0.5) * cm
+            cy = oy + (j + 0.5) * cm
             v = f.sample(np.array([[cx, cy, z_ref]], dtype=np.float32))[0]
-            np.testing.assert_allclose(v[0], snap.field[i, j, 0], rtol=1e-4,
-                                       atol=1e-4)
-            np.testing.assert_allclose(v[1], snap.field[i, j, 1], rtol=1e-4,
-                                       atol=1e-4)
+            np.testing.assert_allclose(v[0], snap.field[i, j, 0], rtol=1e-4, atol=1e-4)
+            np.testing.assert_allclose(v[1], snap.field[i, j, 1], rtol=1e-4, atol=1e-4)
             assert v[2] == 0.0
 
     def test_profile_monotone_floor_cap(self):
         cfg = Config()
-        z = np.array([cfg.ground_height_m - 5.0,    # below ground -> floor
-                      cfg.ground_height_m,
-                      cfg.ground_height_m + 1.0,
-                      cfg.ground_height_m + 10.0,
-                      cfg.ground_height_m + 1000.0])
+        z = np.array(
+            [
+                cfg.ground_height_m - 5.0,  # below ground -> floor
+                cfg.ground_height_m,
+                cfg.ground_height_m + 1.0,
+                cfg.ground_height_m + 10.0,
+                cfg.ground_height_m + 1000.0,
+            ]
+        )
         m = vertical_profile(z, cfg.ground_height_m, cfg)
         assert m[0] == pytest.approx(cfg.wind_profile_floor)
         assert m[1] == pytest.approx(cfg.wind_profile_floor)
-        assert np.all(np.diff(m) >= -1e-6)               # non-decreasing
+        assert np.all(np.diff(m) >= -1e-6)  # non-decreasing
         assert m.max() <= cfg.wind_profile_cap + 1e-6
         assert m.min() >= cfg.wind_profile_floor - 1e-6
 
@@ -246,16 +255,14 @@ class TestSample:
         cm = snap.cell_m
         z_ref = Config().wind_profile_z_ref + Config().ground_height_m
         # Far outside the region (way past +X edge) clamps to the last column.
-        far = np.array([[ox + 100000.0, oy + (5 + 0.5) * cm, z_ref]],
-                       dtype=np.float32)
+        far = np.array([[ox + 100000.0, oy + (5 + 0.5) * cm, z_ref]], dtype=np.float32)
         v = f.sample(far)[0]
         edge = snap.field[snap.cells - 1, 5, :2]
         np.testing.assert_allclose(v[:2], edge, rtol=1e-4, atol=1e-4)
 
     def test_no_nan_anywhere(self):
         f = _field()
-        f.update(0.016, 11.0, _sky(wind_speed=10.0, rain=1.0, cov=1.0, den=1.0),
-                 (0.0, 0.0, 0.0))
+        f.update(0.016, 11.0, _sky(wind_speed=10.0, rain=1.0, cov=1.0, den=1.0), (0.0, 0.0, 0.0))
         pts = np.random.RandomState(0).uniform(-5000, 5000, (500, 3))
         v = f.sample(pts.astype(np.float32))
         assert not np.isnan(v).any()
@@ -270,28 +277,31 @@ class TestSample:
         ox, oy = f.snapshot.origin_m
         cm = f.snapshot.cell_m
         gx, gy = np.meshgrid(np.arange(0, 64, 4), np.arange(0, 64, 4))
-        pts = np.stack([ox + gx.ravel() * cm / 4,
-                        oy + gy.ravel() * cm / 4,
-                        np.full(gx.size, Config().ground_height_m + 2.0)],
-                       axis=1).astype(np.float32)
+        pts = np.stack(
+            [
+                ox + gx.ravel() * cm / 4,
+                oy + gy.ravel() * cm / 4,
+                np.full(gx.size, Config().ground_height_m + 2.0),
+            ],
+            axis=1,
+        ).astype(np.float32)
         v = f.sample(pts)
         speed = np.hypot(v[:, 0], v[:, 1])
         assert np.isfinite(speed).all()
-        assert speed.max() < 50.0       # sane for a 5 m/s mean + gusts
+        assert speed.max() < 50.0  # sane for a 5 m/s mean + gusts
 
 
 # ---------------------------------------------------------------------------
 # Weather scaling
 # ---------------------------------------------------------------------------
 
+
 class TestWeatherScaling:
     def test_storm_gustier_than_clear(self):
         clear = _field()
         storm = _field()
-        clear.update(0.016, 20.0, _sky(wind_speed=6.0, rain=0.0, cov=0.0,
-                                       den=0.0), (0.0, 0.0, 0.0))
-        storm.update(0.016, 20.0, _sky(wind_speed=6.0, rain=1.0, cov=1.0,
-                                       den=1.0), (0.0, 0.0, 0.0))
+        clear.update(0.016, 20.0, _sky(wind_speed=6.0, rain=0.0, cov=0.0, den=0.0), (0.0, 0.0, 0.0))
+        storm.update(0.016, 20.0, _sky(wind_speed=6.0, rain=1.0, cov=1.0, den=1.0), (0.0, 0.0, 0.0))
         # Subtract the mean so we compare gust variance, not the mean offset.
         cv = clear.snapshot.field[..., 0]
         sv = storm.snapshot.field[..., 0]
@@ -303,8 +313,7 @@ class TestWeatherScaling:
         f = _field()
         wd = (0.6, 0.8)
         ws = 7.0
-        f.update(0.016, 15.0, _sky(wind_dir=wd, wind_speed=ws),
-                 (0.0, 0.0, 0.0))
+        f.update(0.016, 15.0, _sky(wind_dir=wd, wind_speed=ws), (0.0, 0.0, 0.0))
         fld = f.snapshot.field
         # Average over the grid: gusts are zero-mean-ish, so the field mean
         # should sit near wind_dir * wind_speed.
@@ -318,12 +327,13 @@ class TestWeatherScaling:
 # Recenter hysteresis + shared-point bit-equality
 # ---------------------------------------------------------------------------
 
+
 class TestRecenter:
     def test_no_move_within_margin(self):
         f = _field()
         f.update(0.016, 1.0, _sky(), (0.0, 0.0, 0.0))
         o0 = f.snapshot.origin_m
-        f.update(0.016, 1.0, _sky(), (4.0, 4.0, 0.0))   # < 32 m margin
+        f.update(0.016, 1.0, _sky(), (4.0, 4.0, 0.0))  # < 32 m margin
         assert f.snapshot.origin_m == o0
 
     def test_move_outside_margin(self):
@@ -352,7 +362,7 @@ class TestRecenter:
 
         # Recenter by moving the player far enough to snap, same time t.
         f.update(0.016, t, sky, (px, py, 0.0))
-        assert f.snapshot.origin_m != snap_a.origin_m   # actually moved
+        assert f.snapshot.origin_m != snap_a.origin_m  # actually moved
         vb = f.sample(np.array([[px, py, z]], dtype=np.float32))[0]
         np.testing.assert_allclose(va, vb, rtol=1e-5, atol=1e-5)
 
@@ -361,13 +371,14 @@ class TestRecenter:
 # pack round-trip
 # ---------------------------------------------------------------------------
 
+
 class TestPack:
     def test_byte_length(self):
         f = _field()
         f.update(0.016, 1.0, _sky(), (0.0, 0.0, 0.0))
         data = pack_wind_field(f.snapshot)
         cells = f.snapshot.cells
-        assert len(data) == cells * cells * 4 * 2     # fp16 RGBA
+        assert len(data) == cells * cells * 4 * 2  # fp16 RGBA
 
     def test_channel_order_and_layout(self):
         # Decode the fp16 buffer and assert (y, x) row-major + BGRA mapping:
@@ -377,8 +388,8 @@ class TestPack:
         snap = f.snapshot
         cells = snap.cells
         buf = np.frombuffer(pack_wind_field(snap), dtype=np.float16)
-        dec = buf.reshape(cells, cells, 4).astype(np.float32)   # [y, x, BGRA]
-        for (i, j) in [(0, 0), (10, 20), (63, 63), (5, 50)]:
+        dec = buf.reshape(cells, cells, 4).astype(np.float32)  # [y, x, BGRA]
+        for i, j in [(0, 0), (10, 20), (63, 63), (5, 50)]:
             vx = snap.field[i, j, 0]
             vy = snap.field[i, j, 1]
             turb = snap.field[i, j, 2]
@@ -395,6 +406,7 @@ class TestPack:
 # Modifiers
 # ---------------------------------------------------------------------------
 
+
 class TestModifiers:
     def test_add_remove_restores_base(self):
         sky = _sky(wind_speed=5.0)
@@ -403,12 +415,11 @@ class TestModifiers:
         f.update(0.016, t, sky, (0.0, 0.0, 0.0))
         base = f.snapshot.field.copy()
 
-        front = GustFront(("test",), (1.0, 0.0), speed=12.0, strength=8.0,
-                          width_m=24.0)
+        front = GustFront(("test",), (1.0, 0.0), speed=12.0, strength=8.0, width_m=24.0)
         f.add_modifier(front)
         f.update(0.016, t, sky, (0.0, 0.0, 0.0))
         modified = f.snapshot.field
-        assert not np.array_equal(base, modified)     # modifier changed it
+        assert not np.array_equal(base, modified)  # modifier changed it
 
         f.remove_modifier(front)
         f.update(0.016, t, sky, (0.0, 0.0, 0.0))
@@ -417,15 +428,18 @@ class TestModifiers:
     def test_remove_absent_is_noop(self):
         f = _field()
         front = GustFront(("x",), (1.0, 0.0), 1.0, 1.0, 1.0)
-        f.remove_modifier(front)      # must not raise
+        f.remove_modifier(front)  # must not raise
 
     def test_gustfront_pure_function_of_time(self):
         # Same (seed_key, t) → identical in-place contribution.
-        X, Y = np.meshgrid(np.arange(0.0, 256.0, 4.0),
-                           np.arange(0.0, 256.0, 4.0), indexing="ij")
+        X, Y = np.meshgrid(np.arange(0.0, 256.0, 4.0), np.arange(0.0, 256.0, 4.0), indexing="ij")
         front = GustFront(("p",), (0.7, 0.7), 10.0, 5.0, 20.0)
-        a_vx = np.zeros_like(X); a_vy = np.zeros_like(X); a_t = np.zeros_like(X)
-        b_vx = np.zeros_like(X); b_vy = np.zeros_like(X); b_t = np.zeros_like(X)
+        a_vx = np.zeros_like(X)
+        a_vy = np.zeros_like(X)
+        a_t = np.zeros_like(X)
+        b_vx = np.zeros_like(X)
+        b_vy = np.zeros_like(X)
+        b_t = np.zeros_like(X)
         front.apply(X, Y, 13.0, a_vx, a_vy, a_t)
         front.apply(X, Y, 13.0, b_vx, b_vy, b_t)
         assert np.array_equal(a_vx, b_vx)
@@ -435,6 +449,7 @@ class TestModifiers:
 # ---------------------------------------------------------------------------
 # Hard-rule guard: no panda3d anywhere under fire_engine/world/wind/
 # ---------------------------------------------------------------------------
+
 
 class TestNoPanda3D:
     def test_no_panda3d_import_in_wind_package(self):

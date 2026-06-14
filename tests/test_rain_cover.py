@@ -29,11 +29,12 @@ def cfg():
     # Small window so fixtures stay cheap and assertions are easy to reason about.
     base = load_config()
     from dataclasses import replace
+
     return replace(base, rain_cover_cells=64, rain_cover_cell_m=1.0)
 
 
-VS = 0.5          # voxel size (m)
-N = 32            # chunk edge (voxels)
+VS = 0.5  # voxel size (m)
+N = 32  # chunk edge (voxels)
 CHUNK_M = N * VS  # 16 m
 
 
@@ -45,6 +46,7 @@ def _voxel_top_z(cz: int, z_idx: int) -> float:
 # ---------------------------------------------------------------------------
 # Brute-force reference for the per-chunk top-solid reduction
 # ---------------------------------------------------------------------------
+
 
 def _brute_top_z(chunk: Chunk) -> np.ndarray:
     """Reference (Python-loop) highest-solid top-face Z per [x, y] column."""
@@ -62,6 +64,7 @@ def _brute_top_z(chunk: Chunk) -> np.ndarray:
 # ===========================================================================
 # Per-chunk reduction correctness
 # ===========================================================================
+
 
 class TestColumnReduction:
     def test_matches_brute_force(self, cfg):
@@ -83,6 +86,7 @@ class TestColumnReduction:
 # Roof over the grid: covered columns = roof top, open columns = ground
 # ===========================================================================
 
+
 class TestRoofCover:
     def _floor_chunk(self) -> Chunk:
         # Solid bottom 4 voxels (ground), spanning the whole chunk footprint.
@@ -94,16 +98,16 @@ class TestRoofCover:
         # A roof slab one voxel thick at z=20 over HALF the footprint (x < 16).
         mats = np.zeros((N, N, N), dtype=np.uint8)
         mats[0:16, :, 20] = 1
-        return Chunk((0, 0, 1), mats)   # chunk-Z layer 1 → world Z 16..32 m
+        return Chunk((0, 0, 1), mats)  # chunk-Z layer 1 → world Z 16..32 m
 
     def test_roof_raises_covered_columns(self, cfg):
         field = RainCoverField(cfg)
-        field.recenter((CHUNK_M * 0.5, CHUNK_M * 0.5))   # window over chunk (0,0)
+        field.recenter((CHUNK_M * 0.5, CHUNK_M * 0.5))  # window over chunk (0,0)
         chunks = {(0, 0, 0): self._floor_chunk(), (0, 0, 1): self._roof_chunk()}
         field.rebuild_all(chunks)
 
-        ground_z = _voxel_top_z(0, 3)            # top of the floor slab (2.0 m)
-        roof_z = _voxel_top_z(1, 20)             # top of the roof slab
+        ground_z = _voxel_top_z(0, 3)  # top of the floor slab (2.0 m)
+        roof_z = _voxel_top_z(1, 20)  # top of the roof slab
 
         # Map a world XY to a texel.
         def texel(wx, wy):
@@ -129,8 +133,10 @@ class TestRoofCover:
 
         def texel(wx, wy):
             ox, oy = field.origin_m
-            return (int(np.floor((wy - oy) / field.cell_m)),
-                    int(np.floor((wx - ox) / field.cell_m)))
+            return (
+                int(np.floor((wy - oy) / field.cell_m)),
+                int(np.floor((wx - ox) / field.cell_m)),
+            )
 
         r, c = texel(4.0, 8.0)
         assert field.height[r, c] == pytest.approx(_voxel_top_z(1, 20))
@@ -138,12 +144,13 @@ class TestRoofCover:
         # "Edit" removes the roof: clear that chunk's voxels and re-fold the column.
         roof.materials[...] = 0
         field.rebuild_columns(chunks, [(0, 0)])
-        assert field.height[r, c] == pytest.approx(_voxel_top_z(0, 3))   # back to ground
+        assert field.height[r, c] == pytest.approx(_voxel_top_z(0, 3))  # back to ground
 
 
 # ===========================================================================
 # Recenter shifts the window
 # ===========================================================================
+
 
 class TestRecenter:
     def test_recenter_shifts_origin_and_data(self, cfg):
@@ -180,6 +187,7 @@ class TestRecenter:
 # Determinism
 # ===========================================================================
 
+
 class TestDeterminism:
     def test_same_chunks_identical_heightmap(self, cfg):
         rng = np.random.default_rng(99)
@@ -201,10 +209,11 @@ class TestDeterminism:
 
     def test_higher_chunk_layer_wins(self, cfg):
         # Two solid layers in the same column: the higher one must win.
-        low = np.zeros((N, N, N), dtype=np.uint8); low[:, :, 0:4] = 1
-        high = np.zeros((N, N, N), dtype=np.uint8); high[:, :, 10] = 1
-        chunks = {(0, 0, 0): Chunk((0, 0, 0), low),
-                  (0, 0, 1): Chunk((0, 0, 1), high)}
+        low = np.zeros((N, N, N), dtype=np.uint8)
+        low[:, :, 0:4] = 1
+        high = np.zeros((N, N, N), dtype=np.uint8)
+        high[:, :, 10] = 1
+        chunks = {(0, 0, 0): Chunk((0, 0, 0), low), (0, 0, 1): Chunk((0, 0, 1), high)}
         field = RainCoverField(cfg)
         field.recenter((CHUNK_M * 0.5, CHUNK_M * 0.5))
         field.rebuild_all(chunks)

@@ -89,8 +89,7 @@ def flora_hash_seed(volume: ZoneVolume, kind: str) -> int:
     kind : str
         One of :data:`FLORA_KINDS` (``"flowers"``).
     """
-    return int(for_domain("zones", "flora", kind, volume.id)
-               .integers(0, 2 ** 31))
+    return int(for_domain("zones", "flora", kind, volume.id).integers(0, 2**31))
 
 
 def flora_instance_count(volume: ZoneVolume, config: Config, kind: str) -> int:
@@ -165,7 +164,7 @@ def flora_instance_attribs(
     h4 = hash_lowbias32(h3 ^ _K4)
     h5 = hash_lowbias32(h4 ^ _K5)
 
-    inv = np.float32(1.0 / 4294967296.0)   # 1 / 2^32 — matches GLSL u2f()
+    inv = np.float32(1.0 / 4294967296.0)  # 1 / 2^32 — matches GLSL u2f()
     size_x = np.float32(max_corner[0] - min_corner[0])
     size_y = np.float32(max_corner[1] - min_corner[1])
     two_pi = np.float32(2.0 * math.pi)
@@ -173,8 +172,7 @@ def flora_instance_attribs(
         "x": np.float32(min_corner[0]) + h0.astype(np.float32) * inv * size_x,
         "y": np.float32(min_corner[1]) + h1.astype(np.float32) * inv * size_y,
         "rot": h2.astype(np.float32) * inv * two_pi,
-        "scale": np.float32(scale_min)
-        + h3.astype(np.float32) * inv * np.float32(scale_span),
+        "scale": np.float32(scale_min) + h3.astype(np.float32) * inv * np.float32(scale_span),
         "phase": h4.astype(np.float32) * inv * two_pi,
         "variant": (h5 % np.uint32(max(n_variants, 1))).astype(np.int32),
     }

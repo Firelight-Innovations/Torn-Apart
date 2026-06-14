@@ -85,9 +85,8 @@ def _flip_fraction(a: np.ndarray, b: np.ndarray, threshold: float):
     screen, so band 0 = bottom third = nearest ground at a downward pitch."""
     d = np.abs(a - b).max(axis=2)
     h = d.shape[0]
-    bands = [d[i * h // 3:(i + 1) * h // 3] for i in range(3)]
-    return (float((d > threshold).mean()),
-            *[float((bb > threshold).mean()) for bb in bands])
+    bands = [d[i * h // 3 : (i + 1) * h // 3] for i in range(3)]
+    return (float((d > threshold).mean()), *[float((bb > threshold).mean()) for bb in bands])
 
 
 def probe(args) -> float:
@@ -121,19 +120,25 @@ def probe(args) -> float:
         # a sealed underground cave that never shows) so the probe sweeps the
         # shadowed dirt walls the owner sees shimmering after shooting.
         from fire_engine.world.terrain import SphereBrush, BrushMode, apply_brush
+
         cam = app.camera_go.transform.position
         gz = float(app._config.ground_height_m)
-        apply_brush(SphereBrush(3.0), Vec3(cam.x, cam.y + 10.0, gz),
-                    BrushMode.REMOVE, material=1,
-                    chunk_provider=app.chunk_manager.get_or_create,
-                    bus=app._event_bus)
+        apply_brush(
+            SphereBrush(3.0),
+            Vec3(cam.x, cam.y + 10.0, gz),
+            BrushMode.REMOVE,
+            material=1,
+            chunk_provider=app.chunk_manager.get_or_create,
+            bus=app._event_bus,
+        )
 
     if args.gi_room:
         cx, cy, z0 = demo.build_gi_test_room(app)
         if args.inside:
             app.camera_go.transform.position = Vec3(cx, cy - 4.2, z0 + 2.4)
             app.camera_go.transform.local_rotation = Quat.from_axis_angle(
-                Vec3.RIGHT, math.radians(-7.0)).normalized()
+                Vec3.RIGHT, math.radians(-7.0)
+            ).normalized()
 
     # Continuous RAM copy of every rendered frame — no save/load round trip,
     # no stale ``get_screenshot`` between flips.
@@ -145,7 +150,7 @@ def probe(args) -> float:
     def step(n: int) -> None:
         for _ in range(n):
             app.taskMgr.step()
-            app._clock.game_time_of_day = hold_tod   # freeze the sun
+            app._clock.game_time_of_day = hold_tod  # freeze the sun
 
     # Warmup: stream chunks, assemble cascades, settle auto-exposure.
     step(args.frames)
@@ -155,6 +160,7 @@ def probe(args) -> float:
     grass_go = getattr(app, "grass_go", None)
     if grass_go is not None:
         from fire_engine.render.grass_renderer import GrassRendererComponent
+
         gc = grass_go.get_component(GrassRendererComponent)
         if gc is not None and getattr(gc, "_root", None) is not None:
             gc._root.hide()
@@ -175,10 +181,12 @@ def probe(args) -> float:
         print(msg)
         lines.append(msg)
 
-    say(f"window {w}x{h}  fov_x {fov_x:.2f} deg  "
+    say(
+        f"window {w}x{h}  fov_x {fov_x:.2f} deg  "
         f"({deg_per_px * 60.0:.2f} arcmin/px)  "
         f"step {args.step_px} px  settle {args.settle} frames/pose  "
-        f"threshold {args.threshold}")
+        f"threshold {args.threshold}"
+    )
 
     # ---- static control: same pose twice -> must be ~identical -----------
     step(args.settle)
@@ -187,9 +195,11 @@ def probe(args) -> float:
     f_b = _grab(cap, w, h)
     static_frac = _flip_fraction(f_a, f_b, args.threshold)[0]
     static_mean = float(np.abs(f_a - f_b).mean())
-    say(f"static control  flip fraction {static_frac:.5f}  "
+    say(
+        f"static control  flip fraction {static_frac:.5f}  "
         f"mean |diff| {static_mean:.6f} "
-        f"(must be ~0; nonzero = real-time animation polluting the metric)")
+        f"(must be ~0; nonzero = real-time animation polluting the metric)"
+    )
 
     # ---- positive control: an 8 px rotation -> must be clearly visible ---
     # Gate on MEAN |diff| (not the flip fraction): a well-filtered or dim
@@ -201,13 +211,15 @@ def probe(args) -> float:
     f_c = _grab(cap, w, h)
     pos_frac = _flip_fraction(f_b, f_c, args.threshold)[0]
     pos_mean = float(np.abs(f_b - f_c).mean())
-    say(f"positive control (8 px)  flip fraction {pos_frac:.5f}  "
+    say(
+        f"positive control (8 px)  flip fraction {pos_frac:.5f}  "
         f"mean |diff| {pos_mean:.6f} "
-        f"(mean must be >> static; ~static = STALE CAPTURE, harness broken)")
+        f"(mean must be >> static; ~static = STALE CAPTURE, harness broken)"
+    )
     if pos_mean < max(1e-4, static_mean * 4.0):
         say("HARNESS BROKEN: positive control did not register — aborting")
         return -1.0
-    fly.yaw = fly.yaw + math.radians(deg_per_px * 8.0)   # restore
+    fly.yaw = fly.yaw + math.radians(deg_per_px * 8.0)  # restore
     step(args.settle)
 
     # ---- the sub-pixel sweep ---------------------------------------------
@@ -221,7 +233,10 @@ def probe(args) -> float:
     heat = np.zeros((h, w), dtype=np.float32)
     for a, b in zip(frames, frames[1:]):
         full, bot, mid, top = _flip_fraction(a, b, args.threshold)
-        fulls.append(full); b0s.append(bot); b1s.append(mid); b2s.append(top)
+        fulls.append(full)
+        b0s.append(bot)
+        b1s.append(mid)
+        b2s.append(top)
         means.append(float(np.abs(a - b).mean()))
         heat = np.maximum(heat, np.abs(a - b).max(axis=2))
 
@@ -232,21 +247,22 @@ def probe(args) -> float:
     say(f"  flip fraction  middle {np.mean(b1s):.5f}   (far ground)")
     say(f"  flip fraction  top    {np.mean(b2s):.5f}   (horizon/sky)")
     say(f"  static floor          {static_frac:.5f}")
-    say(f"  mean |diff| per step  {np.mean(means):.6f}   "
+    say(
+        f"  mean |diff| per step  {np.mean(means):.6f}   "
         f"(low mean + low flips = smooth; high flips + low mean = "
-        f"broad small-amplitude change, check capture path)")
+        f"broad small-amplitude change, check capture path)"
+    )
 
     # ---- artifacts ---------------------------------------------------------
     out_dir = _REPO_ROOT / "tools" / "out" / args.out
     out_dir.mkdir(parents=True, exist_ok=True)
     from PIL import Image
-    Image.fromarray(
-        (np.clip(heat * 3.0, 0.0, 1.0) * 255).astype(np.uint8)[::-1]
-    ).save(out_dir / "heatmap.png")
-    Image.fromarray(
-        (frames[0] * 255).astype(np.uint8)[::-1]).save(out_dir / "frame_first.png")
-    Image.fromarray(
-        (frames[-1] * 255).astype(np.uint8)[::-1]).save(out_dir / "frame_last.png")
+
+    Image.fromarray((np.clip(heat * 3.0, 0.0, 1.0) * 255).astype(np.uint8)[::-1]).save(
+        out_dir / "heatmap.png"
+    )
+    Image.fromarray((frames[0] * 255).astype(np.uint8)[::-1]).save(out_dir / "frame_first.png")
+    Image.fromarray((frames[-1] * 255).astype(np.uint8)[::-1]).save(out_dir / "frame_last.png")
     (out_dir / "report.txt").write_text("\n".join(lines), encoding="utf-8")
     say(f"artifacts in {out_dir}")
 
@@ -255,27 +271,36 @@ def probe(args) -> float:
 
 def main() -> None:
     p = argparse.ArgumentParser(description="Measure terrain motion shimmer.")
-    p.add_argument("--frames", type=int, default=240,
-                   help="warmup frames (default 240)")
-    p.add_argument("--poses", type=int, default=13,
-                   help="poses in the sub-pixel sweep (default 13)")
-    p.add_argument("--step-px", type=float, default=0.25,
-                   help="yaw step between poses, screen pixels (default 0.25)")
-    p.add_argument("--settle", type=int, default=8,
-                   help="frames to settle per pose (default 8)")
-    p.add_argument("--threshold", type=float, default=0.12,
-                   help="per-pixel flip threshold in [0,1] (default 0.12)")
+    p.add_argument("--frames", type=int, default=240, help="warmup frames (default 240)")
+    p.add_argument(
+        "--poses", type=int, default=13, help="poses in the sub-pixel sweep (default 13)"
+    )
+    p.add_argument(
+        "--step-px",
+        type=float,
+        default=0.25,
+        help="yaw step between poses, screen pixels (default 0.25)",
+    )
+    p.add_argument("--settle", type=int, default=8, help="frames to settle per pose (default 8)")
+    p.add_argument(
+        "--threshold",
+        type=float,
+        default=0.12,
+        help="per-pixel flip threshold in [0,1] (default 0.12)",
+    )
     p.add_argument("--time-of-day", type=float, default=12.0)
     p.add_argument("--weather", default="clear")
     p.add_argument("--pitch", type=float, default=-12.0)
     p.add_argument("--yaw", type=float, default=0.0)
     p.add_argument("--height", type=float, default=None)
-    p.add_argument("--explode", action="store_true",
-                   help="carve a crater ahead of the camera before probing")
+    p.add_argument(
+        "--explode", action="store_true", help="carve a crater ahead of the camera before probing"
+    )
     p.add_argument("--gi-room", action="store_true")
     p.add_argument("--inside", action="store_true")
-    p.add_argument("--out", default="diag/probe",
-                   help="artifact dir under tools/out/ (default diag/probe)")
+    p.add_argument(
+        "--out", default="diag/probe", help="artifact dir under tools/out/ (default diag/probe)"
+    )
     args = p.parse_args()
 
     score = probe(args)

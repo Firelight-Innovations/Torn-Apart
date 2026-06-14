@@ -41,6 +41,7 @@ CFG = load_config()
 # Determinism / purity
 # ---------------------------------------------------------------------------
 
+
 class TestDeterminism:
     def test_classify_repeatable(self):
         a = classify_genus(0.6, 0.7, 0.0, Regime.MIXED)
@@ -66,6 +67,7 @@ class TestDeterminism:
 # ---------------------------------------------------------------------------
 # CellKind → genus family
 # ---------------------------------------------------------------------------
+
 
 class TestGenusFamily:
     def test_thunderstorm_is_cumulonimbus(self):
@@ -106,6 +108,7 @@ class TestGenusFamily:
 # Vectorisation
 # ---------------------------------------------------------------------------
 
+
 class TestVectorised:
     def test_array_matches_scalar(self):
         cov = np.array([0.08, 0.35, 0.85, 0.98])
@@ -114,8 +117,7 @@ class TestVectorised:
         high, mid, low = classify_genus(cov, den, pre, Regime.FRONTAL)
         assert high.shape == low.shape == (4,)
         for i in range(4):
-            sh, sm, sl = classify_genus(
-                float(cov[i]), float(den[i]), float(pre[i]), Regime.FRONTAL)
+            sh, sm, sl = classify_genus(float(cov[i]), float(den[i]), float(pre[i]), Regime.FRONTAL)
             assert high[i] is sh
             assert mid[i] is sm
             assert low[i] is sl
@@ -125,7 +127,7 @@ class TestVectorised:
         den = np.full(5, 0.95)
         pre = np.linspace(0.0, 1.0, 5)
         _, _, low = classify_genus(cov, den, pre, Regime.FRONTAL)
-        assert low[-1] is CloudGenus.CUMULONIMBUS   # full precip → tower
+        assert low[-1] is CloudGenus.CUMULONIMBUS  # full precip → tower
         assert low[0] is not CloudGenus.CUMULONIMBUS  # no precip → not a tower
 
 
@@ -133,12 +135,12 @@ class TestVectorised:
 # Layer params: shape, finiteness, ordering
 # ---------------------------------------------------------------------------
 
+
 class TestLayers:
     def test_shapes(self):
         L = cloud_layers(0.6, 0.6, 0.3, Regime.MIXED, CFG)
         assert isinstance(L, CloudLayers)
-        for arr in (L.base_altitude_m, L.thickness_m, L.coverage,
-                    L.density, L.detail_scale):
+        for arr in (L.base_altitude_m, L.thickness_m, L.coverage, L.density, L.detail_scale):
             assert arr.shape == (3,)
             assert np.all(np.isfinite(arr))
 
@@ -148,14 +150,17 @@ class TestLayers:
         assert L.base_altitude_m[BAND_HIGH] > L.base_altitude_m[BAND_MID]
         assert L.base_altitude_m[BAND_MID] > L.base_altitude_m[BAND_LOW]
 
-    @pytest.mark.parametrize("cov,den,pre,regime", [
-        (0.0, 0.0, 0.0, Regime.HIGH_PRESSURE),
-        (0.08, 0.30, 0.0, Regime.HIGH_PRESSURE),
-        (0.40, 0.52, 0.0, Regime.MIXED),
-        (0.75, 0.72, 0.0, Regime.FRONTAL),
-        (0.95, 0.90, 0.5, Regime.FRONTAL),
-        (1.0, 1.0, 1.0, Regime.FRONTAL),
-    ])
+    @pytest.mark.parametrize(
+        "cov,den,pre,regime",
+        [
+            (0.0, 0.0, 0.0, Regime.HIGH_PRESSURE),
+            (0.08, 0.30, 0.0, Regime.HIGH_PRESSURE),
+            (0.40, 0.52, 0.0, Regime.MIXED),
+            (0.75, 0.72, 0.0, Regime.FRONTAL),
+            (0.95, 0.90, 0.5, Regime.FRONTAL),
+            (1.0, 1.0, 1.0, Regime.FRONTAL),
+        ],
+    )
     def test_weights_in_range(self, cov, den, pre, regime):
         L = cloud_layers(cov, den, pre, regime, CFG)
         assert np.all(L.coverage >= 0.0) and np.all(L.coverage <= 1.0)
@@ -189,24 +194,26 @@ class TestLayers:
 # Continuity (no jumps in the continuous layer weights)
 # ---------------------------------------------------------------------------
 
+
 class TestContinuity:
     def test_coverage_sweep_continuous(self):
         # Sweep sampled coverage; per-band coverage must move smoothly (no
         # discontinuity larger than a small step) so drifting cells don't pop.
         cov = np.linspace(0.0, 1.0, 400)
-        low = np.array([
-            cloud_layers(float(c), 0.6, 0.0, Regime.MIXED, CFG).coverage[BAND_LOW]
-            for c in cov
-        ])
+        low = np.array(
+            [cloud_layers(float(c), 0.6, 0.0, Regime.MIXED, CFG).coverage[BAND_LOW] for c in cov]
+        )
         assert np.all(np.isfinite(low))
         assert np.max(np.abs(np.diff(low))) < 0.05
 
     def test_precip_sweep_continuous(self):
         pre = np.linspace(0.0, 1.0, 400)
-        thick = np.array([
-            cloud_layers(0.9, 0.9, float(p), Regime.FRONTAL, CFG).thickness_m[BAND_LOW]
-            for p in pre
-        ])
+        thick = np.array(
+            [
+                cloud_layers(0.9, 0.9, float(p), Regime.FRONTAL, CFG).thickness_m[BAND_LOW]
+                for p in pre
+            ]
+        )
         assert np.all(np.isfinite(thick))
         # Thickness grows smoothly with precip (bounded per-step change).
         span = thick.max() - thick.min()
@@ -218,8 +225,10 @@ class TestContinuity:
 # Headless guarantee
 # ---------------------------------------------------------------------------
 
+
 def test_no_panda3d_import_in_weather_clouds():
-    src = (Path(__file__).resolve().parents[1]
-           / "fire_engine" / "world" / "weather" / "clouds.py").read_text(encoding="utf-8")
+    src = (
+        Path(__file__).resolve().parents[1] / "fire_engine" / "world" / "weather" / "clouds.py"
+    ).read_text(encoding="utf-8")
     assert "panda3d" not in src
     assert "import panda3d" not in src

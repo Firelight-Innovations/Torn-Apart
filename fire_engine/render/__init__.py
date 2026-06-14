@@ -38,16 +38,17 @@ Quick-start example
     ComponentRegistry.run_frame(clock)  # awake + start + update
 """
 
-from fire_engine.render.transform  import Transform, Space
-from fire_engine.render.component  import Component
+from fire_engine.render.transform import Transform, Space
+from fire_engine.render.component import Component
 from fire_engine.render.gameobject import GameObject
-from fire_engine.render.registry   import (
+from fire_engine.render.registry import (
     ComponentRegistry,
     instantiate,
     destroy,
     find_with_tag,
     find_objects_with_tag,
 )
+
 # App is exported but has panda3d as a hard dependency — only import if
 # panda3d is installed (headless tests skip app.py via the import rule).
 try:
@@ -109,12 +110,12 @@ __all__ = [
     # Application shell (may be None when panda3d not installed)
     "App",
     # --- bridges (panda3d-backed; may be None when panda3d not installed) ---
-    "to_panda_texture",        # Phase 2: procedural RGBA → Panda3D Texture
+    "to_panda_texture",  # Phase 2: procedural RGBA → Panda3D Texture
     "register_panda_loaders",  # Phase 5: inject panda3d asset loaders into ResourceManager
-    "to_geom",                 # Phase 3: MeshArrays → Panda3D Geom (bulk writes)
-    "to_geom_node",            # Phase 3: MeshArrays → Panda3D GeomNode
-    "DevOverlay",              # Dev tools: in-game DirectGUI debug overlay renderer
-    "SkyRendererComponent",    # Sky/weather: dome + volumetric clouds + fog renderer
-    "WeatherMapComponent",     # M4: spatial weather-map texture upload + uniforms
-    "RainRendererComponent",   # M6: volumetric rain (cover-culled + storm-gated)
+    "to_geom",  # Phase 3: MeshArrays → Panda3D Geom (bulk writes)
+    "to_geom_node",  # Phase 3: MeshArrays → Panda3D GeomNode
+    "DevOverlay",  # Dev tools: in-game DirectGUI debug overlay renderer
+    "SkyRendererComponent",  # Sky/weather: dome + volumetric clouds + fog renderer
+    "WeatherMapComponent",  # M4: spatial weather-map texture upload + uniforms
+    "RainRendererComponent",  # M6: volumetric rain (cover-culled + storm-gated)
 ]

@@ -44,6 +44,7 @@ from fire_engine.world.terrain.chunk_manager import ChunkManager
 # Fixtures & helpers
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def cfg():
     return load_config()
@@ -100,6 +101,7 @@ def single_voxel_provider(cfg, vx, vy, vz):
 # 1. Basic downward (-Z) ray hitting flat generated terrain
 # ---------------------------------------------------------------------------
 
+
 class TestDownwardRayHitsTerrain:
     def test_hit_is_not_none(self, cfg):
         """A ray from above the surface pointing straight down MUST hit."""
@@ -126,7 +128,9 @@ class TestDownwardRayHitsTerrain:
         provider, _ = flat_provider(cfg)
         max_d = 100.0
         hit = raycast_voxel(
-            Vec3(8.0, 8.0, 30.0), Vec3(0.0, 0.0, -1.0), provider,
+            Vec3(8.0, 8.0, 30.0),
+            Vec3(0.0, 0.0, -1.0),
+            provider,
             max_distance_m=max_d,
         )
         assert hit is not None
@@ -145,7 +149,11 @@ class TestDownwardRayHitsTerrain:
         # The ray enters the top face of the topmost solid voxel.
         # Top of topmost solid voxel = ground_height_m (the surface).
         # hit.point.z should be within one voxel below ground_height_m.
-        assert cfg.ground_height_m - cfg.voxel_size <= hit.point.z <= cfg.ground_height_m + cfg.voxel_size
+        assert (
+            cfg.ground_height_m - cfg.voxel_size
+            <= hit.point.z
+            <= cfg.ground_height_m + cfg.voxel_size
+        )
 
     def test_hit_normal_points_up_for_top_face(self, cfg):
         """
@@ -167,6 +175,7 @@ class TestDownwardRayHitsTerrain:
 # 2. Six-axis normal sign convention (cardinal directions)
 # ---------------------------------------------------------------------------
 
+
 class TestNormalSignConvention:
     """
     Pin the exact normal a ray fired from each axis direction returns.
@@ -183,9 +192,11 @@ class TestNormalSignConvention:
         # Place a single solid voxel at global voxel (10, 10, 10).
         provider = single_voxel_provider(cfg, 10, 10, 10)
         # voxel centre = (10+0.5)*0.5 = 5.25 m on each axis
-        cx, cy, cz = 10 * cfg.voxel_size + cfg.voxel_size / 2, \
-                     10 * cfg.voxel_size + cfg.voxel_size / 2, \
-                     10 * cfg.voxel_size + cfg.voxel_size / 2
+        cx, cy, cz = (
+            10 * cfg.voxel_size + cfg.voxel_size / 2,
+            10 * cfg.voxel_size + cfg.voxel_size / 2,
+            10 * cfg.voxel_size + cfg.voxel_size / 2,
+        )
         origin = Vec3(cx + dx * offset, cy + dy * offset, cz + dz * offset)
         direction = Vec3(-dx, -dy, -dz)
         return raycast_voxel(origin, direction, provider, max_distance_m=offset + 5.0)
@@ -233,6 +244,7 @@ class TestNormalSignConvention:
 # 3. Miss — ray pointing into open sky / away from terrain
 # ---------------------------------------------------------------------------
 
+
 class TestMiss:
     def test_ray_straight_up_from_terrain_returns_none(self, cfg):
         """A ray from ground level pointing +Z (into sky) finds no solid above."""
@@ -277,6 +289,7 @@ class TestMiss:
 # ---------------------------------------------------------------------------
 # 4. max_distance_m boundary behaviour
 # ---------------------------------------------------------------------------
+
 
 class TestMaxDistance:
     def test_max_distance_zero_returns_none(self, cfg):
@@ -348,6 +361,7 @@ class TestMaxDistance:
 # 5. Origin inside solid terrain
 # ---------------------------------------------------------------------------
 
+
 class TestOriginInsideSolid:
     def test_inside_solid_returns_immediate_hit(self, cfg):
         """
@@ -417,6 +431,7 @@ class TestOriginInsideSolid:
 # 6. Hit dataclass: field types and completeness
 # ---------------------------------------------------------------------------
 
+
 class TestHitDataclass:
     def test_hit_fields_exist(self, cfg):
         """All documented fields of Hit must be present."""
@@ -483,6 +498,7 @@ class TestHitDataclass:
 # 7. chunk_coord and voxel consistency
 # ---------------------------------------------------------------------------
 
+
 class TestCoordConsistency:
     def test_chunk_coord_contains_voxel(self, cfg):
         """
@@ -544,6 +560,7 @@ class TestCoordConsistency:
 # 8. Determinism
 # ---------------------------------------------------------------------------
 
+
 class TestDeterminism:
     def test_same_inputs_same_hit(self, cfg):
         """Two identical calls must return byte-identical Hit fields."""
@@ -579,6 +596,7 @@ class TestDeterminism:
 # 9. Unnormalised direction vector
 # ---------------------------------------------------------------------------
 
+
 class TestUnnormalisedDirection:
     def test_unnormalised_dir_same_hit_as_normalised(self, cfg):
         """
@@ -605,6 +623,7 @@ class TestUnnormalisedDirection:
 # ---------------------------------------------------------------------------
 # 10. ChunkManager as provider (integration path, as shown in docs example)
 # ---------------------------------------------------------------------------
+
 
 class TestChunkManagerProvider:
     def test_chunk_manager_as_provider(self, cfg):

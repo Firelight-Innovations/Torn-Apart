@@ -24,13 +24,14 @@ from fire_engine.core.lod import LODPolicy
 # ---------------------------------------------------------------------------
 
 _DEFAULT_POLICY = LODPolicy()
-_BANDS = _DEFAULT_POLICY.bands          # (32.0, 96.0, 192.0, 512.0)
-_LAST_BAND_IDX = len(_BANDS)           # 4  — "beyond last threshold"
+_BANDS = _DEFAULT_POLICY.bands  # (32.0, 96.0, 192.0, 512.0)
+_LAST_BAND_IDX = len(_BANDS)  # 4  — "beyond last threshold"
 
 
 # ===========================================================================
 # Default-bands: below / above / at each threshold
 # ===========================================================================
+
 
 class TestDefaultBandsBelow:
     """Distances strictly below the first threshold → band 0."""
@@ -44,6 +45,7 @@ class TestDefaultBandsBelow:
     def test_just_below_first_threshold_is_band_0(self):
         # One float ULP below bands[0] is still band 0
         import struct
+
         bits = struct.unpack("Q", struct.pack("d", _BANDS[0]))[0]
         just_below = struct.unpack("d", struct.pack("Q", bits - 1))[0]
         assert _DEFAULT_POLICY.band_for(just_below) == 0
@@ -108,6 +110,7 @@ class TestDefaultBandsBeyondLast:
 # Edge inputs: negative distance, -inf
 # ===========================================================================
 
+
 class TestEdgeDistances:
     """
     Pin current behaviour for out-of-range inputs (negative, -inf).
@@ -135,6 +138,7 @@ class TestEdgeDistances:
 # Determinism
 # ===========================================================================
 
+
 class TestDeterminism:
     """Same distance → same band, every call, no state mutation."""
 
@@ -154,6 +158,7 @@ class TestDeterminism:
 # ===========================================================================
 # Custom bands
 # ===========================================================================
+
 
 class TestSingleEntryBands:
     """bands with exactly one threshold → bands 0 or 1."""
@@ -201,8 +206,7 @@ class TestMonotonicBandFor:
         for d in range(1, 500):
             cur = p.band_for(float(d))
             assert cur >= prev, (
-                f"band_for not monotone: band_for({d-1}) = {prev} > "
-                f"band_for({d}) = {cur}"
+                f"band_for not monotone: band_for({d - 1}) = {prev} > band_for({d}) = {cur}"
             )
             prev = cur
 
@@ -210,6 +214,7 @@ class TestMonotonicBandFor:
 # ===========================================================================
 # Edge construction: empty bands, unsorted bands, duplicate thresholds
 # ===========================================================================
+
 
 class TestEdgeConstruction:
     """
@@ -248,7 +253,7 @@ class TestEdgeConstruction:
         p = LODPolicy(bands=(100.0, 50.0))
         # Pin the current (wrong) result without asserting it is correct
         result = p.band_for(60.0)
-        assert result == 0   # 60 < 100 → first threshold matches → band 0
+        assert result == 0  # 60 < 100 → first threshold matches → band 0
 
     def test_duplicate_thresholds_skips_a_band(self):
         """
@@ -276,6 +281,7 @@ class TestEdgeConstruction:
     def test_frozen_dataclass_rejects_mutation(self):
         """LODPolicy is a frozen dataclass; mutation raises FrozenInstanceError."""
         import dataclasses
+
         p = LODPolicy()
         with pytest.raises((dataclasses.FrozenInstanceError, AttributeError, TypeError)):
             p.bands = (1.0, 2.0)  # type: ignore[misc]

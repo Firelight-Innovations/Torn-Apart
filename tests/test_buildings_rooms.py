@@ -26,14 +26,12 @@ def _defaults() -> BuildingDefaults:
 
 
 def _storey():
-    b = Building(name="t", position=Vec3(0, 0, 8.0),
-                 rotation=Quat.identity(), defaults=_defaults())
+    b = Building(name="t", position=Vec3(0, 0, 8.0), rotation=Quat.identity(), defaults=_defaults())
     return b, b.add_storey()
 
 
 def _detect(storey):
-    return detect_room_polygons(storey.walls, snap_eps_m=_SNAP,
-                                arc_segments_per_quarter=_QPQ)
+    return detect_room_polygons(storey.walls, snap_eps_m=_SNAP, arc_segments_per_quarter=_QPQ)
 
 
 def _shoelace(poly: np.ndarray) -> float:
@@ -50,7 +48,7 @@ class TestEnclosure:
         s.add_wall((0, 6), (0, 0))
         rooms = _detect(s)
         assert len(rooms) == 1
-        assert _shoelace(rooms[0]) > 0.0          # CCW
+        assert _shoelace(rooms[0]) > 0.0  # CCW
         assert abs(abs(_shoelace(rooms[0])) - 48.0) < 1e-9
 
     def test_winding_is_ccw_even_for_cw_authored_walls(self):
@@ -67,7 +65,7 @@ class TestEnclosure:
     def test_open_l_encloses_nothing(self):
         _, s = _storey()
         s.add_wall((0, 0), (8, 0))
-        s.add_wall((8, 0), (8, 6))   # two walls meeting at a corner, open
+        s.add_wall((8, 0), (8, 6))  # two walls meeting at a corner, open
         assert _detect(s) == []
 
     def test_shared_wall_yields_two_rooms(self):
@@ -91,13 +89,13 @@ class TestEnclosure:
     def test_shared_wall_with_split_perimeter_yields_two_rooms(self):
         # Proper authoring: perimeter verticals split at the divider node.
         _, s = _storey()
-        s.add_wall((0, 0), (8, 0))      # bottom
-        s.add_wall((8, 0), (8, 3))      # right-lower
-        s.add_wall((8, 3), (8, 6))      # right-upper
-        s.add_wall((8, 6), (0, 6))      # top
-        s.add_wall((0, 6), (0, 3))      # left-upper
-        s.add_wall((0, 3), (0, 0))      # left-lower
-        s.add_wall((0, 3), (8, 3))      # divider, meets endpoints both sides
+        s.add_wall((0, 0), (8, 0))  # bottom
+        s.add_wall((8, 0), (8, 3))  # right-lower
+        s.add_wall((8, 3), (8, 6))  # right-upper
+        s.add_wall((8, 6), (0, 6))  # top
+        s.add_wall((0, 6), (0, 3))  # left-upper
+        s.add_wall((0, 3), (0, 0))  # left-lower
+        s.add_wall((0, 3), (8, 3))  # divider, meets endpoints both sides
         rooms = _detect(s)
         assert len(rooms) == 2
         areas = sorted(abs(_shoelace(r)) for r in rooms)
@@ -111,7 +109,7 @@ class TestArcs:
         # Three straight walls + one bulging wall closing the loop.
         _, s = _storey()
         s.add_wall((0, 0), (8, 0))
-        s.add_wall((8, 0), (8, 6), bulge=-0.4)   # bows outward (east)
+        s.add_wall((8, 0), (8, 6), bulge=-0.4)  # bows outward (east)
         s.add_wall((8, 6), (0, 6))
         s.add_wall((0, 6), (0, 0))
         rooms = _detect(s)
@@ -122,8 +120,8 @@ class TestArcs:
     def test_arc_polygon_uses_tessellation_density(self):
         # A semicircle wall + its chord: polygon vertex count tracks density.
         _, s = _storey()
-        s.add_wall((0, 0), (6, 0), bulge=1.0)    # semicircle, sweep = 180°
-        s.add_wall((6, 0), (0, 0))               # closing chord
+        s.add_wall((0, 0), (6, 0), bulge=1.0)  # semicircle, sweep = 180°
+        s.add_wall((6, 0), (0, 0))  # closing chord
         rooms = _detect(s)
         assert len(rooms) == 1
         # 2 quarters × _QPQ chords on the arc + 1 chord vertex shared.
@@ -138,7 +136,7 @@ class TestSnapping:
         s.add_wall((0, 0), (8, 0))
         s.add_wall((8, 0), (8, 6))
         s.add_wall((8, 6), (0, 6))
-        s.add_wall((0 + gap, 6 - gap), (0, 0))   # start nudged < eps
+        s.add_wall((0 + gap, 6 - gap), (0, 0))  # start nudged < eps
         rooms = _detect(s)
         assert len(rooms) == 1
 
@@ -148,7 +146,7 @@ class TestSnapping:
         s.add_wall((0, 0), (8, 0))
         s.add_wall((8, 0), (8, 6))
         s.add_wall((8, 6), (0, 6))
-        s.add_wall((0 + gap, 6), (0 + gap, 0))   # left wall offset, no closure
+        s.add_wall((0 + gap, 6), (0 + gap, 0))  # left wall offset, no closure
         assert _detect(s) == []
 
 
@@ -159,8 +157,7 @@ class TestStoreyIntegration:
         s.add_wall((4, 0), (4, 4))
         s.add_wall((4, 4), (0, 4))
         s.add_wall((0, 4), (0, 0))
-        detected = s.detect_rooms(snap_eps_m=_SNAP,
-                                  arc_segments_per_quarter=_QPQ)
+        detected = s.detect_rooms(snap_eps_m=_SNAP, arc_segments_per_quarter=_QPQ)
         assert len(detected) == 1
         assert detected[0].auto is True
         assert detected[0] in s.rooms
@@ -189,6 +186,5 @@ class TestStoreyIntegration:
         s.add_wall((5, 0), (5, 5))
         s.add_wall((5, 5), (0, 5))
         s.add_wall((0, 5), (0, 0))
-        [room] = s.detect_rooms(snap_eps_m=_SNAP,
-                                arc_segments_per_quarter=_QPQ)
+        [room] = s.detect_rooms(snap_eps_m=_SNAP, arc_segments_per_quarter=_QPQ)
         assert abs(room.area_m2() - 25.0) < 1e-9

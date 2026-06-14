@@ -18,6 +18,7 @@ from fire_engine.buildings.triangulate import triangulate_polygon
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _shoelace(poly: np.ndarray) -> float:
     """Signed area via shoelace (CCW positive)."""
     x, y = poly[:, 0], poly[:, 1]
@@ -34,8 +35,7 @@ def _triangle_areas(poly2d: np.ndarray, indices: np.ndarray) -> np.ndarray:
     a = poly2d[indices[:, 0]]
     b = poly2d[indices[:, 1]]
     c = poly2d[indices[:, 2]]
-    cross = (b[:, 0] - a[:, 0]) * (c[:, 1] - a[:, 1]) \
-          - (b[:, 1] - a[:, 1]) * (c[:, 0] - a[:, 0])
+    cross = (b[:, 0] - a[:, 0]) * (c[:, 1] - a[:, 1]) - (b[:, 1] - a[:, 1]) * (c[:, 0] - a[:, 0])
     return 0.5 * np.abs(cross)
 
 
@@ -44,8 +44,7 @@ def _signed_triangle_areas(poly2d: np.ndarray, indices: np.ndarray) -> np.ndarra
     a = poly2d[indices[:, 0]]
     b = poly2d[indices[:, 1]]
     c = poly2d[indices[:, 2]]
-    cross = (b[:, 0] - a[:, 0]) * (c[:, 1] - a[:, 1]) \
-          - (b[:, 1] - a[:, 1]) * (c[:, 0] - a[:, 0])
+    cross = (b[:, 0] - a[:, 0]) * (c[:, 1] - a[:, 1]) - (b[:, 1] - a[:, 1]) * (c[:, 0] - a[:, 0])
     return 0.5 * cross
 
 
@@ -54,26 +53,43 @@ def _signed_triangle_areas(poly2d: np.ndarray, indices: np.ndarray) -> np.ndarra
 # ---------------------------------------------------------------------------
 
 _TRIANGLE_CCW = np.array([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]])
-_TRIANGLE_CW  = np.array([[0.0, 0.0], [0.0, 1.0], [1.0, 0.0]])
+_TRIANGLE_CW = np.array([[0.0, 0.0], [0.0, 1.0], [1.0, 0.0]])
 
-_SQUARE_CCW   = np.array([[0.0, 0.0], [4.0, 0.0], [4.0, 4.0], [0.0, 4.0]])
-_SQUARE_CW    = _SQUARE_CCW[::-1].copy()
+_SQUARE_CCW = np.array([[0.0, 0.0], [4.0, 0.0], [4.0, 4.0], [0.0, 4.0]])
+_SQUARE_CW = _SQUARE_CCW[::-1].copy()
 
-_PENTAGON_CCW = np.array([
-    [0.0, 0.0], [2.0, 0.0], [3.0, 1.5],
-    [1.5, 3.0], [-0.5, 2.0],
-])
+_PENTAGON_CCW = np.array(
+    [
+        [0.0, 0.0],
+        [2.0, 0.0],
+        [3.0, 1.5],
+        [1.5, 3.0],
+        [-0.5, 2.0],
+    ]
+)
 
-_HEXAGON_CCW  = np.array([
-    [1.0, 0.0], [2.0, 0.0], [3.0, 1.0],
-    [2.0, 2.0], [1.0, 2.0], [0.0, 1.0],
-])
+_HEXAGON_CCW = np.array(
+    [
+        [1.0, 0.0],
+        [2.0, 0.0],
+        [3.0, 1.0],
+        [2.0, 2.0],
+        [1.0, 2.0],
+        [0.0, 1.0],
+    ]
+)
 
 # L-shaped concave polygon (CCW)
-_L_SHAPE_CCW  = np.array([
-    [0.0, 0.0], [3.0, 0.0], [3.0, 1.0],
-    [1.0, 1.0], [1.0, 3.0], [0.0, 3.0],
-])
+_L_SHAPE_CCW = np.array(
+    [
+        [0.0, 0.0],
+        [3.0, 0.0],
+        [3.0, 1.0],
+        [1.0, 1.0],
+        [1.0, 3.0],
+        [0.0, 3.0],
+    ]
+)
 
 # Near-zero-area sliver (very thin triangle)
 _SLIVER = np.array([[0.0, 0.0], [10.0, 0.0], [5.0, 1e-8]])
@@ -85,6 +101,7 @@ _COLLINEAR = np.array([[0.0, 0.0], [1.0, 0.0], [2.0, 0.0]])
 # ---------------------------------------------------------------------------
 # Triangle count: N-vertex simple polygon yields exactly N-2 triangles
 # ---------------------------------------------------------------------------
+
 
 class TestTriangleCount:
     def test_triangle_yields_1_triangle(self):
@@ -113,23 +130,22 @@ class TestTriangleCount:
 # Output dtype and shape
 # ---------------------------------------------------------------------------
 
+
 class TestOutputContract:
     def test_dtype_is_uint32(self):
         idx = triangulate_polygon(_SQUARE_CCW)
         assert idx.dtype == np.uint32
 
     def test_shape_is_t_by_3(self):
-        for poly in (_TRIANGLE_CCW, _SQUARE_CCW, _PENTAGON_CCW,
-                     _HEXAGON_CCW, _L_SHAPE_CCW):
+        for poly in (_TRIANGLE_CCW, _SQUARE_CCW, _PENTAGON_CCW, _HEXAGON_CCW, _L_SHAPE_CCW):
             n = poly.shape[0]
             idx = triangulate_polygon(poly)
             assert idx.shape == (n - 2, 3), (
-                f"Expected ({n-2}, 3) for {n}-vertex polygon, got {idx.shape}"
+                f"Expected ({n - 2}, 3) for {n}-vertex polygon, got {idx.shape}"
             )
 
     def test_all_indices_in_range(self):
-        for poly in (_TRIANGLE_CCW, _SQUARE_CCW, _PENTAGON_CCW,
-                     _HEXAGON_CCW, _L_SHAPE_CCW):
+        for poly in (_TRIANGLE_CCW, _SQUARE_CCW, _PENTAGON_CCW, _HEXAGON_CCW, _L_SHAPE_CCW):
             n = poly.shape[0]
             idx = triangulate_polygon(poly)
             assert np.all(idx >= 0), "Negative index found"
@@ -139,6 +155,7 @@ class TestOutputContract:
 # ---------------------------------------------------------------------------
 # Area preservation
 # ---------------------------------------------------------------------------
+
 
 class TestAreaPreservation:
     def test_square_area_preserved(self):
@@ -173,6 +190,7 @@ class TestAreaPreservation:
 # ---------------------------------------------------------------------------
 # Winding: all output triangles must be CCW
 # ---------------------------------------------------------------------------
+
 
 class TestWinding:
     def _all_ccw(self, poly):
@@ -213,9 +231,7 @@ class TestWinding:
 
     def test_ccw_input_pentagon_emits_ccw_triangles(self):
         signed, _ = self._all_ccw(_PENTAGON_CCW)
-        assert np.all(signed > 0), (
-            f"Non-CCW triangle in pentagon: {signed}"
-        )
+        assert np.all(signed > 0), f"Non-CCW triangle in pentagon: {signed}"
 
     def test_ccw_l_shape_emits_ccw_triangles(self):
         signed, _ = self._all_ccw(_L_SHAPE_CCW)
@@ -240,6 +256,7 @@ class TestWinding:
 # Convex square coverage
 # ---------------------------------------------------------------------------
 
+
 class TestSquareCoverage:
     def test_square_exactly_2_triangles(self):
         idx = triangulate_polygon(_SQUARE_CCW)
@@ -261,6 +278,7 @@ class TestSquareCoverage:
 # ---------------------------------------------------------------------------
 # Determinism
 # ---------------------------------------------------------------------------
+
 
 class TestDeterminism:
     def test_same_polygon_same_result_square(self):
@@ -290,6 +308,7 @@ class TestDeterminism:
 # ---------------------------------------------------------------------------
 # Degenerate inputs
 # ---------------------------------------------------------------------------
+
 
 class TestDegenerateInputs:
     def test_empty_polygon_returns_empty(self):
@@ -350,12 +369,13 @@ class TestDegenerateInputs:
 # CW input path — pin index content (not just shape)
 # ---------------------------------------------------------------------------
 
+
 class TestCWInput:
     def test_cw_square_same_area_as_ccw_square(self):
         idx_ccw = triangulate_polygon(_SQUARE_CCW)
-        idx_cw  = triangulate_polygon(_SQUARE_CW)
+        idx_cw = triangulate_polygon(_SQUARE_CW)
         area_ccw = _triangle_areas(_SQUARE_CCW, idx_ccw).sum()
-        area_cw  = _triangle_areas(_SQUARE_CW,  idx_cw).sum()
+        area_cw = _triangle_areas(_SQUARE_CW, idx_cw).sum()
         assert np.isclose(area_ccw, area_cw, rtol=1e-9), (
             "CW and CCW squares should triangulate to the same total area"
         )

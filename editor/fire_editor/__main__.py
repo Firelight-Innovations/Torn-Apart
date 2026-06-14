@@ -7,6 +7,7 @@ port is announced on stdout as a JSON line (see :meth:`Daemon.run`).
 Run ``--port 0`` to let the OS pick a free port (recommended; the extension
 reads the announced port back).
 """
+
 from __future__ import annotations
 
 import argparse

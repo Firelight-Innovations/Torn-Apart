@@ -52,6 +52,7 @@ __all__ = ["WastelandGroundDef"]
 # Colour ramp helpers — pure array operations, no per-pixel loops
 # ---------------------------------------------------------------------------
 
+
 def _apply_ramp(
     field: np.ndarray,
     stops: list[tuple[float, tuple[int, int, int]]],
@@ -88,11 +89,13 @@ def _apply_ramp(
             continue
         # Pixels that fall in [p0, p1]
         t = np.clip((field - p0) / span, 0.0, 1.0)  # (H, W)
-        mask = (field >= p0) & (field < p1)           # (H, W) bool
+        mask = (field >= p0) & (field < p1)  # (H, W) bool
 
         t3 = t[..., None]  # (H, W, 1) for broadcast
-        blend = np.array([r0, g0, b0], dtype=np.float32) * (1.0 - t3) + \
-                np.array([r1, g1, b1], dtype=np.float32) * t3
+        blend = (
+            np.array([r0, g0, b0], dtype=np.float32) * (1.0 - t3)
+            + np.array([r1, g1, b1], dtype=np.float32) * t3
+        )
         result[mask] = blend[mask]
 
     # Last stop: pixels at exactly the last position
@@ -144,7 +147,7 @@ class WastelandGroundDef(ProceduralTextureDef):
     name = "wasteland_ground"
 
     # Default output size
-    DEFAULT_WIDTH  = 256
+    DEFAULT_WIDTH = 256
     DEFAULT_HEIGHT = 256
 
     def generate(self, rng: np.random.Generator, **params) -> np.ndarray:
@@ -165,7 +168,7 @@ class WastelandGroundDef(ProceduralTextureDef):
         numpy.ndarray
             Shape ``(H, W, 4)``, dtype ``uint8``.
         """
-        W = int(params.get("width",  self.DEFAULT_WIDTH))
+        W = int(params.get("width", self.DEFAULT_WIDTH))
         H = int(params.get("height", self.DEFAULT_HEIGHT))
         shape = (H, W)
 
@@ -192,24 +195,24 @@ class WastelandGroundDef(ProceduralTextureDef):
         # --- Colour ramps (post-apocalyptic palette) ---
         # Dirt ramp: dark cracked earth → sandy tan → pale ochre
         dirt_ramp: list[tuple[float, tuple[int, int, int]]] = [
-            (0.00, ( 42,  28,  18)),   # very dark brown
-            (0.25, ( 80,  55,  35)),   # dark earthy brown
-            (0.50, (130,  95,  60)),   # medium tan-brown
-            (0.75, (170, 135,  85)),   # sandy tan
-            (1.00, (195, 165, 110)),   # pale ochre / dry dust
+            (0.00, (42, 28, 18)),  # very dark brown
+            (0.25, (80, 55, 35)),  # dark earthy brown
+            (0.50, (130, 95, 60)),  # medium tan-brown
+            (0.75, (170, 135, 85)),  # sandy tan
+            (1.00, (195, 165, 110)),  # pale ochre / dry dust
         ]
 
         # Dead-grass ramp: pale dead straw → sickly yellow-green → dull olive
         grass_ramp: list[tuple[float, tuple[int, int, int]]] = [
-            (0.00, (135, 120,  65)),   # pale straw
-            (0.30, (120, 115,  50)),   # yellowish dry grass
-            (0.60, (105, 110,  45)),   # sickly yellow-green
-            (0.85, ( 88,  95,  38)),   # dull muted olive
-            (1.00, ( 70,  80,  30)),   # dark dead olive-green
+            (0.00, (135, 120, 65)),  # pale straw
+            (0.30, (120, 115, 50)),  # yellowish dry grass
+            (0.60, (105, 110, 45)),  # sickly yellow-green
+            (0.85, (88, 95, 38)),  # dull muted olive
+            (1.00, (70, 80, 30)),  # dark dead olive-green
         ]
 
         # Apply ramps → float32 (H, W, 3) in [0, 255]
-        dirt_rgb  = _apply_ramp(base_noise,  dirt_ramp)   # (H, W, 3)
+        dirt_rgb = _apply_ramp(base_noise, dirt_ramp)  # (H, W, 3)
         grass_rgb = _apply_ramp(patch_noise, grass_ramp)  # (H, W, 3)
 
         # --- Blend: use patch_noise as the grass-blend weight ---
@@ -218,7 +221,8 @@ class WastelandGroundDef(ProceduralTextureDef):
         patch_threshold = 0.55
         patch_blend = np.clip(
             (patch_noise - patch_threshold) / (1.0 - patch_threshold),
-            0.0, 1.0,
+            0.0,
+            1.0,
         )  # (H, W) in [0, 1]
 
         # Smooth step for organic-looking patch edges

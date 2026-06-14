@@ -43,8 +43,7 @@ from fire_engine.procedural.flora.skeleton import (
     _normalize,
 )
 
-__all__ = ["TreeMesh", "mesh_branches", "mesh_leaves", "merge_parts",
-           "mesh_leaf_area_m2"]
+__all__ = ["TreeMesh", "mesh_branches", "mesh_leaves", "merge_parts", "mesh_leaf_area_m2"]
 
 
 @dataclass
@@ -92,12 +91,15 @@ class TreeMesh:
     @staticmethod
     def empty() -> "TreeMesh":
         """A zero-vertex mesh part."""
-        return TreeMesh(positions=np.empty((0, 3), dtype=np.float32),
-                        normals=np.empty((0, 3), dtype=np.float32),
-                        uvs=np.empty((0, 2), dtype=np.float32),
-                        colors=np.empty((0, 4), dtype=np.float32),
-                        indices=np.empty(0, dtype=np.uint32),
-                        height_m=0.0, radius_m=0.0)
+        return TreeMesh(
+            positions=np.empty((0, 3), dtype=np.float32),
+            normals=np.empty((0, 3), dtype=np.float32),
+            uvs=np.empty((0, 2), dtype=np.float32),
+            colors=np.empty((0, 4), dtype=np.float32),
+            indices=np.empty(0, dtype=np.uint32),
+            height_m=0.0,
+            radius_m=0.0,
+        )
 
 
 def mesh_leaf_area_m2(mesh: TreeMesh) -> float:
@@ -205,18 +207,17 @@ def mesh_branches(
         return TreeMesh.empty()
     u0, v0, u1, v1 = (float(c) for c in uv_rect)
 
-    axis = _normalize(sk.end - sk.start)                       # (S, 3)
-    fu, fv = _frames(axis)                                     # (S, 3) each
-    theta = ((np.arange(sides, dtype=np.float32) + 0.5)
-             * (2.0 * math.pi / sides))                        # (sides,)
+    axis = _normalize(sk.end - sk.start)  # (S, 3)
+    fu, fv = _frames(axis)  # (S, 3) each
+    theta = (np.arange(sides, dtype=np.float32) + 0.5) * (2.0 * math.pi / sides)  # (sides,)
     corner_mult = 1.0 / math.cos(math.pi / sides)
     # Corner directions per segment: (S, sides, 3).
-    cd = (fu[:, None, :] * np.cos(theta)[None, :, None]
-          + fv[:, None, :] * np.sin(theta)[None, :, None])
-    ring0 = (sk.start[:, None, :]
-             + cd * (sk.radius_start * corner_mult)[:, None, None])
-    ring1 = (sk.end[:, None, :]
-             + cd * (sk.radius_end * corner_mult)[:, None, None])
+    cd = (
+        fu[:, None, :] * np.cos(theta)[None, :, None]
+        + fv[:, None, :] * np.sin(theta)[None, :, None]
+    )
+    ring0 = sk.start[:, None, :] + cd * (sk.radius_start * corner_mult)[:, None, None]
+    ring1 = sk.end[:, None, :] + cd * (sk.radius_end * corner_mult)[:, None, None]
 
     nxt = (np.arange(sides) + 1) % sides
     # Side-face quads (S, sides, 4, 3): start_k, start_k+1, end_k+1, end_k —
@@ -226,13 +227,11 @@ def mesh_branches(
     p2, p3 = ring1[:, nxt], ring1
     quads = np.stack([p0, p1, p2, p3], axis=2).astype(np.float32)
 
-    face_n = _normalize(np.cross(p1 - p0, p3 - p0))            # (S, sides, 3)
+    face_n = _normalize(np.cross(p1 - p0, p3 - p0))  # (S, sides, 3)
     normals = np.broadcast_to(face_n[:, :, None, :], quads.shape)
 
-    uv_quad = np.array([[u0, v0], [u1, v0], [u1, v1], [u0, v1]],
-                       dtype=np.float32)
-    uvs = np.broadcast_to(uv_quad[None, None, :, :],
-                          (S, sides, 4, 2))
+    uv_quad = np.array([[u0, v0], [u1, v0], [u1, v1], [u0, v1]], dtype=np.float32)
+    uvs = np.broadcast_to(uv_quad[None, None, :, :], (S, sides, 4, 2))
 
     sway0 = sk.sway_start()
     sway_vert = np.stack([sway0, sway0, sk.sway, sk.sway], axis=1)  # (S, 4)
@@ -249,10 +248,9 @@ def mesh_branches(
     if cap_tips:
         # End-cap fan per segment over its `sides` end-ring corners; normal
         # along the segment axis; bark-rect center UV (caps are tiny).
-        cap_verts = ring1.reshape(-1, 3).astype(np.float32)        # (S*sides, 3)
+        cap_verts = ring1.reshape(-1, 3).astype(np.float32)  # (S*sides, 3)
         cap_norms = np.repeat(axis, sides, axis=0).astype(np.float32)
-        cap_uv = np.full((S * sides, 2),
-                         ((u0 + u1) * 0.5, (v0 + v1) * 0.5), dtype=np.float32)
+        cap_uv = np.full((S * sides, 2), ((u0 + u1) * 0.5, (v0 + v1) * 0.5), dtype=np.float32)
         cap_col = np.empty((S * sides, 4), dtype=np.float32)
         cap_col[:, 0:3] = np.asarray(tint, dtype=np.float32)
         cap_col[:, 3] = np.repeat(sk.sway, sides)
@@ -270,12 +268,15 @@ def mesh_branches(
         indices = np.concatenate([indices, cap_idx.astype(np.uint32)])
 
     height, radius = _metadata(positions)
-    return TreeMesh(positions=np.ascontiguousarray(positions, np.float32),
-                    normals=np.ascontiguousarray(normals, np.float32),
-                    uvs=np.ascontiguousarray(uvs, np.float32),
-                    colors=np.ascontiguousarray(colors, np.float32),
-                    indices=np.ascontiguousarray(indices, np.uint32),
-                    height_m=height, radius_m=radius)
+    return TreeMesh(
+        positions=np.ascontiguousarray(positions, np.float32),
+        normals=np.ascontiguousarray(normals, np.float32),
+        uvs=np.ascontiguousarray(uvs, np.float32),
+        colors=np.ascontiguousarray(colors, np.float32),
+        indices=np.ascontiguousarray(indices, np.uint32),
+        height_m=height,
+        radius_m=radius,
+    )
 
 
 def mesh_leaves(
@@ -326,18 +327,16 @@ def mesh_leaves(
         return TreeMesh.empty()
     u0, v0, u1, v1 = (float(c) for c in uv_rect)
 
-    half = (leaves.radius
-            * rng.uniform(size_jitter[0], size_jitter[1], L)
-            ).astype(np.float32)                               # (L,)
+    half = (leaves.radius * rng.uniform(size_jitter[0], size_jitter[1], L)).astype(
+        np.float32
+    )  # (L,)
 
     # Per-leaf normal: tilt off +Z at a random yaw.
     yaw = rng.uniform(0.0, 2.0 * math.pi, L).astype(np.float32)
-    tilt = rng.uniform(tilt_range_rad[0], tilt_range_rad[1], L) \
-        .astype(np.float32)
+    tilt = rng.uniform(tilt_range_rad[0], tilt_range_rad[1], L).astype(np.float32)
     st, ct = np.sin(tilt), np.cos(tilt)
-    n = np.stack([st * np.cos(yaw), st * np.sin(yaw), ct], axis=1) \
-        .astype(np.float32)                                    # (L, 3)
-    fu, fv = _frames(n)                                        # card axes
+    n = np.stack([st * np.cos(yaw), st * np.sin(yaw), ct], axis=1).astype(np.float32)  # (L, 3)
+    fu, fv = _frames(n)  # card axes
 
     ctr = leaves.center
     hw = half[:, None]
@@ -346,12 +345,10 @@ def mesh_leaves(
     p1 = ctr + fu * hw - fv * hw
     p2 = ctr + fu * hw + fv * hw
     p3 = ctr - fu * hw + fv * hw
-    positions = np.stack([p0, p1, p2, p3], axis=1) \
-        .reshape(-1, 3).astype(np.float32)
+    positions = np.stack([p0, p1, p2, p3], axis=1).reshape(-1, 3).astype(np.float32)
     normals = np.repeat(n, 4, axis=0)
 
-    uv_quad = np.array([[u0, v0], [u1, v0], [u1, v1], [u0, v1]],
-                       dtype=np.float32)
+    uv_quad = np.array([[u0, v0], [u1, v0], [u1, v1], [u0, v1]], dtype=np.float32)
     uvs = np.tile(uv_quad, (L, 1))
     colors = np.empty((L * 4, 4), dtype=np.float32)
     colors[:, 0:3] = np.asarray(tint, dtype=np.float32)
@@ -359,12 +356,15 @@ def mesh_leaves(
 
     indices = _quad_indices(L)
     height, radius = _metadata(positions)
-    return TreeMesh(positions=np.ascontiguousarray(positions, np.float32),
-                    normals=np.ascontiguousarray(normals, np.float32),
-                    uvs=np.ascontiguousarray(uvs, np.float32),
-                    colors=np.ascontiguousarray(colors, np.float32),
-                    indices=np.ascontiguousarray(indices, np.uint32),
-                    height_m=height, radius_m=radius)
+    return TreeMesh(
+        positions=np.ascontiguousarray(positions, np.float32),
+        normals=np.ascontiguousarray(normals, np.float32),
+        uvs=np.ascontiguousarray(uvs, np.float32),
+        colors=np.ascontiguousarray(colors, np.float32),
+        indices=np.ascontiguousarray(indices, np.uint32),
+        height_m=height,
+        radius_m=radius,
+    )
 
 
 def merge_parts(*parts: TreeMesh) -> TreeMesh:
@@ -385,16 +385,15 @@ def merge_parts(*parts: TreeMesh) -> TreeMesh:
     offsets = np.cumsum([0] + [p.n_vertices for p in live[:-1]])
     positions = np.concatenate([p.positions for p in live])
     indices = np.concatenate(
-        [p.indices.astype(np.uint64) + off
-         for p, off in zip(live, offsets)]).astype(np.uint32)
+        [p.indices.astype(np.uint64) + off for p, off in zip(live, offsets)]
+    ).astype(np.uint32)
     height, radius = _metadata(positions)
     return TreeMesh(
         positions=np.ascontiguousarray(positions, np.float32),
-        normals=np.ascontiguousarray(
-            np.concatenate([p.normals for p in live]), np.float32),
-        uvs=np.ascontiguousarray(
-            np.concatenate([p.uvs for p in live]), np.float32),
-        colors=np.ascontiguousarray(
-            np.concatenate([p.colors for p in live]), np.float32),
+        normals=np.ascontiguousarray(np.concatenate([p.normals for p in live]), np.float32),
+        uvs=np.ascontiguousarray(np.concatenate([p.uvs for p in live]), np.float32),
+        colors=np.ascontiguousarray(np.concatenate([p.colors for p in live]), np.float32),
         indices=np.ascontiguousarray(indices, np.uint32),
-        height_m=height, radius_m=radius)
+        height_m=height,
+        radius_m=radius,
+    )

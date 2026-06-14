@@ -55,18 +55,20 @@ def _solid_slab_z(z_start: int, z_end: int, mat: int = 1) -> Chunk:
 # Helper: expected counts for the blocky mesher
 # ---------------------------------------------------------------------------
 
+
 def _expected_counts(face_count: int):
     """Return (vertex_count, index_count, tri_count) for *face_count* quads."""
     return (
-        face_count * _VPF,          # vertex_count
-        face_count * 6,             # index_count  (2 tris × 3 indices each)
-        face_count * 2,             # tri_count
+        face_count * _VPF,  # vertex_count
+        face_count * 6,  # index_count  (2 tris × 3 indices each)
+        face_count * 2,  # tri_count
     )
 
 
 # ===========================================================================
 # 1. Empty chunk → 0 faces / empty arrays
 # ===========================================================================
+
 
 class TestEmptyChunk:
     def test_all_air_zero_faces(self):
@@ -93,6 +95,7 @@ class TestEmptyChunk:
 # ===========================================================================
 # 2. Single solid voxel surrounded by air → exactly 6 faces (cube)
 # ===========================================================================
+
 
 class TestSingleVoxel:
     def test_six_faces(self):
@@ -130,6 +133,7 @@ class TestSingleVoxel:
 # ===========================================================================
 # 3. Fully-solid chunk with all neighbors solid → 0 exterior faces
 # ===========================================================================
+
 
 class TestFullySolidWithSolidNeighbors:
     def _all_solid_neighbor_solids(self) -> dict:
@@ -170,6 +174,7 @@ class TestFullySolidWithSolidNeighbors:
 # 4. Neighbor influence: border voxel face present (absent) or culled (solid)
 # ===========================================================================
 
+
 class TestNeighborCulling:
     """A solid voxel on the +X border of a chunk (x=31)."""
 
@@ -187,18 +192,14 @@ class TestNeighborCulling:
         """Solid voxel at (0, 5, 5) of the +X chunk culls the shared face."""
         nb = np.zeros((32, 32, 32), dtype=bool)
         nb[0, 5, 5] = True
-        mesh = build_mesh(
-            self._border_chunk_px(), neighbor_solids={(1, 0, 0): nb}
-        )
+        mesh = build_mesh(self._border_chunk_px(), neighbor_solids={(1, 0, 0): nb})
         assert mesh.face_count == 5
 
     def test_plus_x_face_still_visible_when_neighbor_solid_elsewhere(self):
         """A solid neighbor voxel NOT at (0,5,5) doesn't cull the face."""
         nb = np.zeros((32, 32, 32), dtype=bool)
-        nb[0, 10, 10] = True        # different YZ position — not the matching face
-        mesh = build_mesh(
-            self._border_chunk_px(), neighbor_solids={(1, 0, 0): nb}
-        )
+        nb[0, 10, 10] = True  # different YZ position — not the matching face
+        mesh = build_mesh(self._border_chunk_px(), neighbor_solids={(1, 0, 0): nb})
         assert mesh.face_count == 6
 
     def test_minus_x_border_culled_when_neg_x_neighbor_solid(self):
@@ -240,6 +241,7 @@ class TestNeighborCulling:
 # 5. WORLD_FLOOR_SOLID: pins -Z sentinel behaviour
 # ===========================================================================
 
+
 class TestWorldFloorSolid:
     def _bottom_z_chunk(self):
         """Chunk with a single solid voxel on the -Z border (z=0)."""
@@ -273,7 +275,7 @@ class TestWorldFloorSolid:
         """WORLD_FLOOR_SOLID on -Z with voxel NOT at z=0 border → still 6 faces
         (the sentinel pads the slab below the chunk, not a voxel inside it)."""
         c = Chunk((0, 0, -2))
-        c.materials[5, 5, 5] = 1   # z=5, well above the -Z border
+        c.materials[5, 5, 5] = 1  # z=5, well above the -Z border
         mesh = build_mesh(c, neighbor_solids={(0, 0, -1): WORLD_FLOOR_SOLID})
         assert mesh.face_count == 6
 
@@ -285,7 +287,7 @@ class TestWorldFloorSolid:
         Pin this as observed current behaviour; may be a bug.
         """
         c = Chunk((0, 0, 0))
-        c.materials[31, 5, 5] = 1   # voxel on the +X border
+        c.materials[31, 5, 5] = 1  # voxel on the +X border
         # Absent +X → open, 6 faces
         mesh_open = build_mesh(c, neighbor_solids=None)
         assert mesh_open.face_count == 6
@@ -298,12 +300,13 @@ class TestWorldFloorSolid:
 # 6. Normals: axis-aligned unit vectors pointing outward
 # ===========================================================================
 
+
 class TestNormals:
     def test_single_voxel_normals_are_axis_aligned(self):
         """All normals for a single voxel are unit-length axis-aligned vectors."""
         mesh = build_mesh(_single_voxel_chunk(), neighbor_solids=None)
         # Each normal row should be one of the 6 unit axis directions.
-        norms = mesh.normals                      # (N, 3)
+        norms = mesh.normals  # (N, 3)
         # All components are 0 or ±1.
         assert np.all((norms == 0) | (norms == 1) | (norms == -1))
         # Each row has exactly one non-zero component (axis-aligned).
@@ -320,7 +323,7 @@ class TestNormals:
         The centroid is at the voxel centre; face normals should have positive dot
         product with (face_centre - voxel_centre)."""
         c = _single_voxel_chunk(x=5, y=5, z=5)
-        vs = 0.5   # default voxel_size
+        vs = 0.5  # default voxel_size
         voxel_centre = np.array([(5 + 0.5) * vs, (5 + 0.5) * vs, (5 + 0.5) * vs])
         mesh = build_mesh(c, neighbor_solids=None)
 
@@ -328,9 +331,9 @@ class TestNormals:
         vpf = mesh.verts_per_face
         n_faces = mesh.face_count
         for fi in range(n_faces):
-            verts = mesh.positions[fi * vpf:(fi + 1) * vpf]   # (vpf, 3)
+            verts = mesh.positions[fi * vpf : (fi + 1) * vpf]  # (vpf, 3)
             face_centre = verts.mean(axis=0)
-            normal = mesh.normals[fi * vpf]                   # flat — all same in face
+            normal = mesh.normals[fi * vpf]  # flat — all same in face
             outward = face_centre - voxel_centre
             dot = float(np.dot(normal, outward))
             assert dot > 0, (
@@ -340,12 +343,12 @@ class TestNormals:
 
     def test_top_face_normal_is_plus_z(self):
         """A solid slab exposed only on top should have +Z normals."""
-        chunk = _solid_slab_z(0, 16)    # solid voxels z=0..15, air above
+        chunk = _solid_slab_z(0, 16)  # solid voxels z=0..15, air above
         mesh = build_mesh(chunk, neighbor_solids=None)
         # Only the top face layer should be exposed (bottom is open as AIR, sides too).
         # Filter normals that are +Z.
         nrm = mesh.normals
-        top_mask = (nrm[:, 2] > 0.5)
+        top_mask = nrm[:, 2] > 0.5
         assert top_mask.any(), "Expected some +Z normals for solid slab top"
         assert np.allclose(nrm[top_mask], [0, 0, 1])
 
@@ -362,6 +365,7 @@ class TestNormals:
 # 7. Determinism: same inputs → identical arrays
 # ===========================================================================
 
+
 class TestDeterminism:
     def test_single_voxel_deterministic(self):
         c = _single_voxel_chunk()
@@ -377,9 +381,9 @@ class TestDeterminism:
         m1 = build_mesh(c, neighbor_solids=None)
         m2 = build_mesh(c, neighbor_solids=None)
         for field in ("positions", "normals", "uvs", "colors", "indices"):
-            assert np.array_equal(
-                getattr(m1, field), getattr(m2, field)
-            ), f"Field '{field}' differs between two calls"
+            assert np.array_equal(getattr(m1, field), getattr(m2, field)), (
+                f"Field '{field}' differs between two calls"
+            )
 
     def test_deterministic_with_neighbors(self):
         """Same chunk + same neighbor_solids → identical output."""
@@ -397,6 +401,7 @@ class TestDeterminism:
 # 8. face_materials: blocky mesher should return None (no material split)
 # ===========================================================================
 
+
 class TestFaceMaterials:
     def test_blocky_face_materials_is_none(self):
         """build_mesh (blocky) does not set face_materials — it is None."""
@@ -411,6 +416,7 @@ class TestFaceMaterials:
 # ===========================================================================
 # 9. Colors: full-bright default, alpha = 1.0, light_sampler hook
 # ===========================================================================
+
 
 class TestColors:
     def test_default_colors_full_bright_rgb(self):
@@ -451,6 +457,7 @@ class TestColors:
 # ===========================================================================
 # 10. Position / world-space consistency
 # ===========================================================================
+
 
 class TestPositions:
     def test_single_voxel_positions_within_voxel_bounds(self):

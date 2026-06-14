@@ -64,6 +64,7 @@ from fire_engine.core import (
 )
 from fire_engine.render.component import Component
 from fire_engine.render import flora_shaders
+
 # Weather → sway mapping shared with grass so the scalar fallback moves all
 # vegetation in lockstep (flora scales it per kind via u_sway_gain).
 from fire_engine.render.grass_renderer import (
@@ -95,28 +96,39 @@ _BOUNDS_PAD_M = 0.5
 class _FloraKind:
     """One row of the flora table — everything that differs between kinds."""
 
-    tag: str               # ZoneVolume tag this kind renders
-    texture: str           # procedural sprite-atlas def name
-    variants: int          # atlas cell count
-    n_quads: int           # crossed quads per instance
-    aspect: float          # quad width / height (match the atlas cell aspect)
-    height_cfg: str        # Config field: unscaled plant height (m)
-    fade_start_cfg: str    # Config fields: distance fade window (m)
+    tag: str  # ZoneVolume tag this kind renders
+    texture: str  # procedural sprite-atlas def name
+    variants: int  # atlas cell count
+    n_quads: int  # crossed quads per instance
+    aspect: float  # quad width / height (match the atlas cell aspect)
+    height_cfg: str  # Config field: unscaled plant height (m)
+    fade_start_cfg: str  # Config fields: distance fade window (m)
     fade_end_cfg: str
-    scale_min: float       # per-instance size jitter range
+    scale_min: float  # per-instance size jitter range
     scale_span: float
-    sway_gain: float       # sway amplitude vs grass (1.0 = grass-equal)
-    sway_pivot: float      # normalised height where bending starts
+    sway_gain: float  # sway amplitude vs grass (1.0 = grass-equal)
+    sway_pivot: float  # normalised height where bending starts
     light_offset_m: float  # cascade sample height above the plant base
 
 
 # Flowers bend like grass.  (Bushes and trees left this table for
 # world/tree_renderer.py's 3-D mesh pipeline.)
 _FLORA_KINDS: tuple[_FloraKind, ...] = (
-    _FloraKind("flowers", "flower_sprite", 4, 2, 1.0,
-               "flora_flower_height_m",
-               "flora_flower_fade_start_m", "flora_flower_fade_end_m",
-               0.7, 0.6, 0.8, 0.0, 0.5),
+    _FloraKind(
+        "flowers",
+        "flower_sprite",
+        4,
+        2,
+        1.0,
+        "flora_flower_height_m",
+        "flora_flower_fade_start_m",
+        "flora_flower_fade_end_m",
+        0.7,
+        0.6,
+        0.8,
+        0.0,
+        0.5,
+    ),
 )
 
 
@@ -146,9 +158,15 @@ class FloraRendererComponent(Component):
     Units: meters, seconds, radians.  World-space Z-up.
     """
 
-    def __init__(self, base: Any = None, sky_system: Any = None,
-                 zone_store: Any = None, chunk_provider: Any = None,
-                 lighting_pipeline: Any = None, bus: Any = None) -> None:
+    def __init__(
+        self,
+        base: Any = None,
+        sky_system: Any = None,
+        zone_store: Any = None,
+        chunk_provider: Any = None,
+        lighting_pipeline: Any = None,
+        bus: Any = None,
+    ) -> None:
         super().__init__()
         self.base = base
         self.sky_system = sky_system
@@ -172,28 +190,30 @@ class FloraRendererComponent(Component):
 
     def start(self) -> None:
         """Build the shared geoms, shader and per-kind/volume nodes (once)."""
-        if self.base is None or self.zone_store is None \
-                or self.chunk_provider is None:
-            _log.warning("FloraRendererComponent: missing base/zone_store/"
-                         "chunk_provider — disabled")
+        if self.base is None or self.zone_store is None or self.chunk_provider is None:
+            _log.warning(
+                "FloraRendererComponent: missing base/zone_store/chunk_provider — disabled"
+            )
             self.enabled = False
             return
         if self.lighting_pipeline is None:
-            _log.warning("FloraRendererComponent: GPU lighting pipeline "
-                         "required (lighting_backend = \"gpu\") — disabled")
+            _log.warning(
+                "FloraRendererComponent: GPU lighting pipeline "
+                'required (lighting_backend = "gpu") — disabled'
+            )
             self.enabled = False
             return
 
         cfg = self.base._config
-        self._shader = Shader.make(Shader.SL_GLSL,
-                                   vertex=flora_shaders.FLORA_VERTEX,
-                                   fragment=flora_shaders.FLORA_FRAGMENT)
+        self._shader = Shader.make(
+            Shader.SL_GLSL, vertex=flora_shaders.FLORA_VERTEX, fragment=flora_shaders.FLORA_FRAGMENT
+        )
 
         # Lighting (cascade/fog/celestial) inherits from ``render`` where
         # GpuLightingPipeline binds the lit-surface contract; the wind
         # shader inputs inherit from terrain_root.
         self._root = self.base.terrain_root.attach_new_node("flora_root")
-        self._root.set_two_sided(True)        # crossed quads face both ways
+        self._root.set_two_sided(True)  # crossed quads face both ways
         # Scalar-fallback sway defaults until the first late_update.
         self._root.set_shader_input("u_wind_dir", LVecBase2f(1.0, 0.0))
         self._root.set_shader_input("u_sway_base", _SWAY_BASE_MIN_M)
@@ -205,20 +225,18 @@ class FloraRendererComponent(Component):
         # Shadow-refinement gate (lit_surface.glsl).  Bound HERE, not
         # inherited: terrain_root above us pins u_refine = 1.0 for the
         # terrain, foliage follows the graphics preset.
-        self._root.set_shader_input(
-            "u_refine", 1.0 if cfg.gfx_foliage_shadow_refine else 0.0)
+        self._root.set_shader_input("u_refine", 1.0 if cfg.gfx_foliage_shadow_refine else 0.0)
 
         for kind in _FLORA_KINDS:
             height = float(getattr(cfg, kind.height_cfg))
             self._kind_geoms[kind.tag] = _build_cross_geom(
-                height, height * kind.aspect, kind.n_quads)
+                height, height * kind.aspect, kind.n_quads
+            )
             kroot = self._root.attach_new_node(f"flora_{kind.tag}")
             kroot.set_shader_input("u_sprite", self._sprite_texture(kind))
             kroot.set_shader_input("u_plant_height_m", height)
-            kroot.set_shader_input("u_fade_start_m",
-                                   float(getattr(cfg, kind.fade_start_cfg)))
-            kroot.set_shader_input("u_fade_end_m",
-                                   float(getattr(cfg, kind.fade_end_cfg)))
+            kroot.set_shader_input("u_fade_start_m", float(getattr(cfg, kind.fade_start_cfg)))
+            kroot.set_shader_input("u_fade_end_m", float(getattr(cfg, kind.fade_end_cfg)))
             kroot.set_shader_input("u_scale_min", kind.scale_min)
             kroot.set_shader_input("u_scale_span", kind.scale_span)
             kroot.set_shader_input("u_sway_gain", kind.sway_gain)
@@ -246,25 +264,21 @@ class FloraRendererComponent(Component):
                 self._rebake_field(key)
             self._dirty_fields.clear()
 
-        st = getattr(self.sky_system, "state", None) \
-            if self.sky_system is not None else None
+        st = getattr(self.sky_system, "state", None) if self.sky_system is not None else None
         if st is not None:
             wind = float(st.wind_speed)
             rain = float(st.rain_intensity)
             wn = max(0.0, min(wind / _WIND_SPEED_MAX, 1.0))
             self._root.set_shader_input(
-                "u_wind_dir",
-                LVecBase2f(float(st.wind_dir[0]), float(st.wind_dir[1])))
+                "u_wind_dir", LVecBase2f(float(st.wind_dir[0]), float(st.wind_dir[1]))
+            )
+            self._root.set_shader_input("u_sway_base", _SWAY_BASE_MIN_M + _SWAY_BASE_WIND_M * wn)
             self._root.set_shader_input(
-                "u_sway_base", _SWAY_BASE_MIN_M + _SWAY_BASE_WIND_M * wn)
+                "u_sway_gust", _SWAY_GUST_MIN_M + _SWAY_GUST_WIND_M * wn + _SWAY_GUST_RAIN_M * rain
+            )
             self._root.set_shader_input(
-                "u_sway_gust",
-                _SWAY_GUST_MIN_M + _SWAY_GUST_WIND_M * wn
-                + _SWAY_GUST_RAIN_M * rain)
-            self._root.set_shader_input(
-                "u_gust_freq",
-                _GUST_FREQ_MIN + _GUST_FREQ_PER_WIND * wind
-                + _GUST_FREQ_RAIN * rain)
+                "u_gust_freq", _GUST_FREQ_MIN + _GUST_FREQ_PER_WIND * wind + _GUST_FREQ_RAIN * rain
+            )
         self._root.set_shader_input("u_time_s", self._time_s)
 
     def on_destroy(self) -> None:
@@ -284,8 +298,7 @@ class FloraRendererComponent(Component):
 
     def _on_terrain_edited(self, event: TerrainEditedEvent) -> None:
         coords = event.chunk_coords
-        if isinstance(coords, tuple) and len(coords) == 3 \
-                and isinstance(coords[0], int):
+        if isinstance(coords, tuple) and len(coords) == 3 and isinstance(coords[0], int):
             coords = (coords,)
         self._mark_dirty_for_coords(coords)
 
@@ -333,32 +346,38 @@ class FloraRendererComponent(Component):
                 # attribs compose, so the kind/root uniforms still arrive.
                 node.set_shader(self._shader)
                 node.set_instance_count(count)
-                node.set_shader_input("u_bounds_min",
-                                      LVecBase3f(*vol.min_corner))
-                node.set_shader_input("u_bounds_max",
-                                      LVecBase3f(*vol.max_corner))
-                node.set_shader_input("u_hash_seed",
-                                      flora_hash_seed(vol, kind.tag))
+                node.set_shader_input("u_bounds_min", LVecBase3f(*vol.min_corner))
+                node.set_shader_input("u_bounds_max", LVecBase3f(*vol.max_corner))
+                node.set_shader_input("u_hash_seed", flora_hash_seed(vol, kind.tag))
                 self._upload_field(node, vol)
 
                 # Instances are shader-positioned — give the node the
                 # volume's real box plus the scaled plant reach, and stop
                 # bounds recomputation (Panda3D would cull by the base
                 # Geom's tiny origin bounds otherwise).
-                pad = height * (kind.scale_min + kind.scale_span) \
-                    + _BOUNDS_PAD_M
-                geom_node.set_bounds(BoundingBox(
-                    LPoint3(vol.min_corner[0] - pad, vol.min_corner[1] - pad,
-                            vol.min_corner[2] - pad),
-                    LPoint3(vol.max_corner[0] + pad, vol.max_corner[1] + pad,
-                            vol.max_corner[2] + pad)))
+                pad = height * (kind.scale_min + kind.scale_span) + _BOUNDS_PAD_M
+                geom_node.set_bounds(
+                    BoundingBox(
+                        LPoint3(
+                            vol.min_corner[0] - pad,
+                            vol.min_corner[1] - pad,
+                            vol.min_corner[2] - pad,
+                        ),
+                        LPoint3(
+                            vol.max_corner[0] + pad,
+                            vol.max_corner[1] + pad,
+                            vol.max_corner[2] + pad,
+                        ),
+                    )
+                )
                 geom_node.set_final(True)
                 self._volume_nodes[(kind.tag, vol.id)] = node
                 total += count
 
         self._store_version_built = self.zone_store.version
-        _log.info("Flora built: %d volume node(s), %d instances total",
-                  len(self._volume_nodes), total)
+        _log.info(
+            "Flora built: %d volume node(s), %d instances total", len(self._volume_nodes), total
+        )
 
     def _rebake_field(self, key: tuple[str, int]) -> None:
         """Re-bake + re-upload one volume's height field (terrain changed)."""
@@ -368,26 +387,27 @@ class FloraRendererComponent(Component):
         if vol is None or node is None:
             return
         self._upload_field(node, vol)
-        _log.debug("Flora height field re-baked for %s volume %d",
-                   tag, vol_id)
+        _log.debug("Flora height field re-baked for %s volume %d", tag, vol_id)
 
     def _upload_field(self, node: NodePath, vol) -> None:
         """Bake the volume's height field and bind it as u_height_field."""
         from fire_engine.render.texture_bridge import to_field_texture
-        field = bake_grass_height_field(
-            vol, self.chunk_provider.chunks, self.base._config)
+
+        field = bake_grass_height_field(vol, self.chunk_provider.chunks, self.base._config)
         node.set_shader_input("u_height_field", to_field_texture(field))
 
     def _sprite_texture(self, kind: _FloraKind):
         """The kind's procedural sprite atlas as a Panda3D texture (nearest)."""
         from fire_engine.procedural import get as get_procedural
         from fire_engine.render.texture_bridge import to_panda_texture
+
         return to_panda_texture(get_procedural(kind.texture))
 
 
 # ---------------------------------------------------------------------------
 # Crossed-quad geometry (built once per kind, shared by its volume GeomNodes)
 # ---------------------------------------------------------------------------
+
 
 def _build_cross_geom(height_m: float, width_m: float, n_quads: int) -> Geom:
     """
@@ -418,7 +438,7 @@ def _build_cross_geom(height_m: float, width_m: float, n_quads: int) -> Geom:
     tris = GeomTriangles(Geom.UH_static)
 
     half_w = width_m * 0.5
-    for k in range(n_quads):                 # fixed tiny loop
+    for k in range(n_quads):  # fixed tiny loop
         ang = k * math.pi / n_quads
         dx, dy = math.cos(ang) * half_w, math.sin(ang) * half_w
         base = k * 4

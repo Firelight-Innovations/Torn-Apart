@@ -24,17 +24,26 @@ from fire_engine.procedural.flora import (
 def _grow_oak(rng):
     """Reference recipe used across these tests (mirrors gnarled oak)."""
     sb = SkeletonBuilder(rng)
-    trunk = sb.trunk(height_m=5.5, base_radius_m=0.28, segments=4,
-                     wobble_m=0.35)
-    limbs = sb.branches(trunk, count=(3, 5), t_range=(0.35, 0.95),
-                        pitch_set=(math.radians(80), math.radians(95)),
-                        length_ratio=(0.5, 0.8),
-                        length_scale_by_height=(1.0, 0.45),
-                        radius_ratio=0.5, upturn_rad=math.radians(18),
-                        segments=2)
-    twigs = sb.branches(limbs, count=(1, 3), pitch_set=(math.radians(85),),
-                        length_ratio=(0.4, 0.6), radius_ratio=0.5,
-                        upturn_rad=math.radians(25))
+    trunk = sb.trunk(height_m=5.5, base_radius_m=0.28, segments=4, wobble_m=0.35)
+    limbs = sb.branches(
+        trunk,
+        count=(3, 5),
+        t_range=(0.35, 0.95),
+        pitch_set=(math.radians(80), math.radians(95)),
+        length_ratio=(0.5, 0.8),
+        length_scale_by_height=(1.0, 0.45),
+        radius_ratio=0.5,
+        upturn_rad=math.radians(18),
+        segments=2,
+    )
+    twigs = sb.branches(
+        limbs,
+        count=(1, 3),
+        pitch_set=(math.radians(85),),
+        length_ratio=(0.4, 0.6),
+        radius_ratio=0.5,
+        upturn_rad=math.radians(25),
+    )
     return sb.skeleton(), trunk, limbs, twigs
 
 
@@ -55,15 +64,13 @@ class TestDeterminism:
         sk1, *_ = _grow_oak(for_domain("test", "tree"))
         set_world_seed(43)
         sk2, *_ = _grow_oak(for_domain("test", "tree"))
-        assert sk1.n_segments != sk2.n_segments \
-            or not np.array_equal(sk1.end, sk2.end)
+        assert sk1.n_segments != sk2.n_segments or not np.array_equal(sk1.end, sk2.end)
 
 
 class TestStructure:
     def setup_method(self):
         set_world_seed(7)
-        self.sk, self.trunk, self.limbs, self.twigs = \
-            _grow_oak(for_domain("test", "tree"))
+        self.sk, self.trunk, self.limbs, self.twigs = _grow_oak(for_domain("test", "tree"))
 
     def test_validates_clean(self):
         validate_skeleton(self.sk)
@@ -91,9 +98,9 @@ class TestStructure:
         assert (sk.radius_end <= sk.radius_start + 1e-5).all()
         child = np.nonzero(sk.parent >= 0)[0]
         p = sk.parent[child]
-        assert (sk.radius_start[child]
-                <= np.maximum(sk.radius_start[p], sk.radius_end[p])
-                + 1e-5).all()
+        assert (
+            sk.radius_start[child] <= np.maximum(sk.radius_start[p], sk.radius_end[p]) + 1e-5
+        ).all()
 
     def test_sway_range_and_monotone(self):
         sk = self.sk
@@ -108,11 +115,10 @@ class TestStructure:
         """First sub-segment directions honour pitch_set within jitter."""
         set_world_seed(11)
         sb = SkeletonBuilder(for_domain("test", "pitch"))
-        trunk = sb.trunk(height_m=4.0, base_radius_m=0.2, segments=1,
-                         wobble_m=0.0)
-        limbs = sb.branches(trunk, count=(8, 8),
-                            pitch_set=(math.radians(90),),
-                            pitch_jitter_rad=0.05, segments=1)
+        trunk = sb.trunk(height_m=4.0, base_radius_m=0.2, segments=1, wobble_m=0.0)
+        limbs = sb.branches(
+            trunk, count=(8, 8), pitch_set=(math.radians(90),), pitch_jitter_rad=0.05, segments=1
+        )
         sk = sb.skeleton()
         axis = np.array([0.0, 0.0, 1.0])
         d = sk.end[limbs] - sk.start[limbs]
@@ -126,14 +132,20 @@ class TestBushPath:
         set_world_seed(5)
         sb = SkeletonBuilder(for_domain("test", "bush"))
         stub = sb.trunk(height_m=0.15, base_radius_m=0.06, segments=1)
-        stems = sb.branches(stub, count=(4, 7), t_range=(0.6, 1.0),
-                            pitch_set=(math.radians(50), math.radians(70)),
-                            yaw_mode="random", length_m=(0.5, 0.9),
-                            radius_ratio=0.7, segments=2)
+        stems = sb.branches(
+            stub,
+            count=(4, 7),
+            t_range=(0.6, 1.0),
+            pitch_set=(math.radians(50), math.radians(70)),
+            yaw_mode="random",
+            length_m=(0.5, 0.9),
+            radius_ratio=0.7,
+            segments=2,
+        )
         sk = sb.skeleton()
         validate_skeleton(sk)
-        assert stems.size >= 8                  # 4 stems × 2 sub-segments
-        assert sk.end[:, 2].max() < 1.5         # bushes stay low
+        assert stems.size >= 8  # 4 stems × 2 sub-segments
+        assert sk.end[:, 2].max() < 1.5  # bushes stay low
 
     def test_yaw_mode_rejects_unknown(self):
         set_world_seed(5)
@@ -152,15 +164,13 @@ class TestLeaves:
         rng = for_domain("test", "leaves")
         sk, trunk, limbs, twigs = _grow_oak(rng)
         ids = np.concatenate([limbs, twigs])
-        leaves = leaves_at_tips(sk, ids, rng, cell_m=self.CELL,
-                                rounds=self.ROUNDS, density=0.8)
+        leaves = leaves_at_tips(sk, ids, rng, cell_m=self.CELL, rounds=self.ROUNDS, density=0.8)
         assert leaves.n_leaves > 0
         # Every leaf sits within the CA growth reach of SOME tip end point:
         # hydration spreads `rounds − 1` cells from the seed cell, plus the
         # seed-snap and in-cell jitter (≤ ~1 cell each diagonal).
         tips = sk.tip_ids(ids)
-        d = np.linalg.norm(leaves.center[:, None, :]
-                           - sk.end[tips][None, :, :], axis=2).min(axis=1)
+        d = np.linalg.norm(leaves.center[:, None, :] - sk.end[tips][None, :, :], axis=2).min(axis=1)
         reach = (self.ROUNDS + 1.0) * self.CELL * math.sqrt(3.0)
         assert (d <= reach + 1e-5).all()
         assert (leaves.sway >= 0.85).all() and (leaves.sway <= 1.0).all()
@@ -171,12 +181,18 @@ class TestLeaves:
         set_world_seed(9)
         rng = for_domain("test", "leaves")
         sk, trunk, limbs, twigs = _grow_oak(rng)
-        full = leaves_at_tips(sk, np.concatenate([limbs, twigs]), rng,
-                              cell_m=self.CELL, rounds=self.ROUNDS,
-                              density=0.8, max_leaves=10_000)
-        one = leaves_at_tips(sk, twigs[:1], rng,
-                             cell_m=self.CELL, rounds=self.ROUNDS,
-                             density=0.8, max_leaves=10_000)
+        full = leaves_at_tips(
+            sk,
+            np.concatenate([limbs, twigs]),
+            rng,
+            cell_m=self.CELL,
+            rounds=self.ROUNDS,
+            density=0.8,
+            max_leaves=10_000,
+        )
+        one = leaves_at_tips(
+            sk, twigs[:1], rng, cell_m=self.CELL, rounds=self.ROUNDS, density=0.8, max_leaves=10_000
+        )
         assert full.n_leaves > one.n_leaves > 0
 
     def test_zero_rounds_or_density_gives_empty(self):
@@ -191,7 +207,14 @@ class TestLeaves:
         set_world_seed(9)
         rng = for_domain("test", "leaves")
         sk, _, limbs, twigs = _grow_oak(rng)
-        leaves = leaves_at_tips(sk, np.concatenate([limbs, twigs]), rng,
-                                cell_m=self.CELL, rounds=self.ROUNDS,
-                                density=1.0, per_cell=(2, 2), max_leaves=50)
+        leaves = leaves_at_tips(
+            sk,
+            np.concatenate([limbs, twigs]),
+            rng,
+            cell_m=self.CELL,
+            rounds=self.ROUNDS,
+            density=1.0,
+            per_cell=(2, 2),
+            max_leaves=50,
+        )
         assert leaves.n_leaves == 50

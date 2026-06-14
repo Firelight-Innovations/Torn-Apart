@@ -51,10 +51,10 @@ from fire_engine.procedural.textures.base import ProceduralTextureDef, value_noi
 __all__ = ["MoonSurfaceDef"]
 
 # Linear-ish RGB tones (0-255).
-_REGOLITH = np.array([168.0, 166.0, 158.0])   # pale warm-gray highlands
-_MARIA = np.array([96.0, 98.0, 104.0])        # dark blue-gray seas
-_RIM_BOOST = 36.0                              # ejecta rim brightening
-_FLOOR_DARKEN = 42.0                           # crater floor shadowing
+_REGOLITH = np.array([168.0, 166.0, 158.0])  # pale warm-gray highlands
+_MARIA = np.array([96.0, 98.0, 104.0])  # dark blue-gray seas
+_RIM_BOOST = 36.0  # ejecta rim brightening
+_FLOOR_DARKEN = 42.0  # crater floor shadowing
 
 
 @register_def
@@ -101,8 +101,7 @@ class MoonSurfaceDef(ProceduralTextureDef):
 
         # 1. Regolith base with large-scale albedo variation.
         base_var = value_noise(rng, (size, size), octaves=4, base_freq=3)
-        rgb = _REGOLITH[None, None, :] * (
-            0.92 + 0.16 * base_var[..., None].astype(np.float64))
+        rgb = _REGOLITH[None, None, :] * (0.92 + 0.16 * base_var[..., None].astype(np.float64))
 
         # 2. Maria: soft-thresholded low-frequency blotches.
         maria_field = value_noise(rng, (size, size), octaves=3, base_freq=2)
@@ -111,20 +110,22 @@ class MoonSurfaceDef(ProceduralTextureDef):
 
         # 3. Craters — vectorised radial profiles over an (N, H, W) tensor.
         theta = rng.random(crater_count) * 2.0 * np.pi
-        rad_pos = np.sqrt(rng.random(crater_count)) * 0.82   # stay inside disc
+        rad_pos = np.sqrt(rng.random(crater_count)) * 0.82  # stay inside disc
         cx = (rad_pos * np.cos(theta)).astype(np.float32)
         cy = (rad_pos * np.sin(theta)).astype(np.float32)
         cr = (0.02 + 0.13 * rng.random(crater_count) ** 2.2).astype(np.float32)
 
-        d = np.sqrt(
-            (xx[None, :, :] - cx[:, None, None]) ** 2
-            + (yy[None, :, :] - cy[:, None, None]) ** 2
-        ) / cr[:, None, None]                                # (N, H, W) in radii
+        d = (
+            np.sqrt(
+                (xx[None, :, :] - cx[:, None, None]) ** 2
+                + (yy[None, :, :] - cy[:, None, None]) ** 2
+            )
+            / cr[:, None, None]
+        )  # (N, H, W) in radii
 
-        floor = np.clip(1.0 - d / 0.8, 0.0, 1.0) ** 0.7      # 1 at centre → 0 at 0.8r
-        rim = np.exp(-((d - 1.0) / 0.18) ** 2)               # gaussian ring at r
-        shade = (rim.sum(axis=0) * _RIM_BOOST
-                 - floor.sum(axis=0) * _FLOOR_DARKEN)        # (H, W)
+        floor = np.clip(1.0 - d / 0.8, 0.0, 1.0) ** 0.7  # 1 at centre → 0 at 0.8r
+        rim = np.exp(-(((d - 1.0) / 0.18) ** 2))  # gaussian ring at r
+        shade = rim.sum(axis=0) * _RIM_BOOST - floor.sum(axis=0) * _FLOOR_DARKEN  # (H, W)
         rgb = rgb + shade[..., None]
 
         out = np.zeros((size, size, 4), dtype=np.uint8)

@@ -7,6 +7,7 @@ Covers EDITOR_PRD Phase E1 acceptance (the headless half):
 - save -> reopen shows edits (craters visible in the data),
 - live socket: world.open(seed) -> set_center -> MESH binary + notifications.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -30,7 +31,7 @@ from fire_editor import (
 from fire_editor._generated import PROTOCOL_VERSION, SchemaId
 
 SEED = 1337
-SURFACE = (0, 0, 0)   # spans z [0,16) m; flat ground at 8 m -> non-empty mesh
+SURFACE = (0, 0, 0)  # spans z [0,16) m; flat ground at 8 m -> non-empty mesh
 HIGH_AIR = (0, 0, 3)  # spans z [48,64) m -> all air -> empty mesh
 
 
@@ -128,18 +129,41 @@ class TestLiveSocket:
             port = await daemon.server.start(0)
             try:
                 async with websockets.connect(f"ws://127.0.0.1:{port}") as ws:
-                    await ws.send(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "hello",
-                                              "params": {"protocol_version": PROTOCOL_VERSION,
-                                                         "client": "t"}}))
+                    await ws.send(
+                        json.dumps(
+                            {
+                                "jsonrpc": "2.0",
+                                "id": 1,
+                                "method": "hello",
+                                "params": {"protocol_version": PROTOCOL_VERSION, "client": "t"},
+                            }
+                        )
+                    )
                     assert json.loads(await ws.recv())["result"]["ok"] is True
 
-                    await ws.send(json.dumps({"jsonrpc": "2.0", "id": 2, "method": "world.open",
-                                              "params": {"seed": SEED}}))
+                    await ws.send(
+                        json.dumps(
+                            {
+                                "jsonrpc": "2.0",
+                                "id": 2,
+                                "method": "world.open",
+                                "params": {"seed": SEED},
+                            }
+                        )
+                    )
                     opened = json.loads(await ws.recv())["result"]
                     assert opened["ok"] is True and opened["seed"] == SEED
 
-                    await ws.send(json.dumps({"jsonrpc": "2.0", "id": 3, "method": "chunks.set_center",
-                                              "params": {"x": 0, "y": 0, "z": 12, "radius": 1}}))
+                    await ws.send(
+                        json.dumps(
+                            {
+                                "jsonrpc": "2.0",
+                                "id": 3,
+                                "method": "chunks.set_center",
+                                "params": {"x": 0, "y": 0, "z": 12, "radius": 1},
+                            }
+                        )
+                    )
                     # Collect frames until stream.done. Expect >=1 binary MESH frame.
                     got_binary = False
                     got_ready = False

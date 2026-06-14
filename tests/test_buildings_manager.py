@@ -26,16 +26,19 @@ _CFG = Config()
 
 
 def _spec(name: str = "hut") -> Building:
-    b = Building(name=name, position=Vec3(-24.0, 10.0, 8.0),
-                 rotation=Quat.from_axis_angle(Vec3.UP, math.radians(15)),
-                 defaults=BuildingDefaults.from_config(_CFG), tags=["rural"])
+    b = Building(
+        name=name,
+        position=Vec3(-24.0, 10.0, 8.0),
+        rotation=Quat.from_axis_angle(Vec3.UP, math.radians(15)),
+        defaults=BuildingDefaults.from_config(_CFG),
+        tags=["rural"],
+    )
     s0 = b.add_storey()
     south = s0.add_wall((0, 0), (8, 0))
     s0.add_wall((8, 0), (8, 6))
     s0.add_wall((8, 6), (0, 6))
     s0.add_wall((0, 6), (0, 0))
-    s0.add_opening(south.id, OpeningKind.DOOR, offset_m=3.5, width_m=0.9,
-                   head_m=2.0)
+    s0.add_opening(south.id, OpeningKind.DOOR, offset_m=3.5, width_m=0.9, head_m=2.0)
     b.set_foundation()
     b.set_roof()
     return b
@@ -52,9 +55,9 @@ class TestMutation:
         mgr = BuildingManager(_CFG, bus=None)
         spec = _spec()
         managed = mgr.add(spec)
-        assert managed is not spec               # clone, not the argument
+        assert managed is not spec  # clone, not the argument
         assert managed.id == 1
-        assert spec.id == 0                       # argument untouched
+        assert spec.id == 0  # argument untouched
         assert mgr.get(1) is managed
 
     def test_add_same_spec_twice_independent(self):
@@ -138,8 +141,7 @@ class TestSaveable:
         fresh = BuildingManager(_CFG, bus=None)
         fresh.apply_delta(delta)
         assert [b.id for b in fresh.buildings()] == [1, 2]
-        assert [b.to_dict() for b in fresh.buildings()] == \
-               [b.to_dict() for b in mgr.buildings()]
+        assert [b.to_dict() for b in fresh.buildings()] == [b.to_dict() for b in mgr.buildings()]
         assert fresh._next_id == mgr._next_id
 
     def test_delta_survives_msgpack_encode_decode(self):

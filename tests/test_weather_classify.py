@@ -26,12 +26,12 @@ from fire_engine.world.weather.system import LocalWeather
 # Threshold constants (read directly from the source; if the module ever
 # exposes them as public names we can import instead).
 # ---------------------------------------------------------------------------
-_FOG_THRESHOLD   = 0.008   # fog_density > this → FOG
-_STORM_RAIN      = 0.55    # rain_intensity > this (AND wind > _STORM_WIND) → STORM
-_STORM_WIND      = 9.0     # wind_speed > this (AND rain > _STORM_RAIN) → STORM
-_RAIN_THRESHOLD  = 0.05    # rain_intensity > this → RAIN
-_OVERCAST_COV    = 0.7     # cloud_coverage > this → OVERCAST
-_CLOUDY_COV      = 0.3     # cloud_coverage > this → CLOUDY
+_FOG_THRESHOLD = 0.008  # fog_density > this → FOG
+_STORM_RAIN = 0.55  # rain_intensity > this (AND wind > _STORM_WIND) → STORM
+_STORM_WIND = 9.0  # wind_speed > this (AND rain > _STORM_RAIN) → STORM
+_RAIN_THRESHOLD = 0.05  # rain_intensity > this → RAIN
+_OVERCAST_COV = 0.7  # cloud_coverage > this → OVERCAST
+_CLOUDY_COV = 0.3  # cloud_coverage > this → CLOUDY
 
 # A neutral wind direction used wherever direction is irrelevant.
 _WIND_DIR = (1.0, 0.0)
@@ -60,6 +60,7 @@ def _lw(
 # WeatherType enum
 # ===========================================================================
 
+
 class TestWeatherTypeEnum:
     def test_all_members_present(self):
         members = {m.name for m in WeatherType}
@@ -67,12 +68,12 @@ class TestWeatherTypeEnum:
 
     def test_values_are_legacy_strings(self):
         """Values must not change — saves and WeatherChangedEvent use them."""
-        assert WeatherType.CLEAR.value   == "clear"
-        assert WeatherType.CLOUDY.value  == "cloudy"
+        assert WeatherType.CLEAR.value == "clear"
+        assert WeatherType.CLOUDY.value == "cloudy"
         assert WeatherType.OVERCAST.value == "overcast"
-        assert WeatherType.FOG.value     == "fog"
-        assert WeatherType.RAIN.value    == "rain"
-        assert WeatherType.STORM.value   == "storm"
+        assert WeatherType.FOG.value == "fog"
+        assert WeatherType.RAIN.value == "rain"
+        assert WeatherType.STORM.value == "storm"
 
     def test_str_mixin_str_returns_name_not_value(self):
         """CURRENT BEHAVIOUR (potential bug): str(member) returns
@@ -85,15 +86,15 @@ class TestWeatherTypeEnum:
         """
         # .value IS the plain string
         for member in WeatherType:
-            assert member.value == member.value.lower()        # sanity
+            assert member.value == member.value.lower()  # sanity
 
         # str() is NOT the plain value under current Python/Enum behaviour
         assert str(WeatherType.CLEAR) == "WeatherType.CLEAR"
-        assert str(WeatherType.RAIN)  == "WeatherType.RAIN"
+        assert str(WeatherType.RAIN) == "WeatherType.RAIN"
 
         # But equality with the plain string still works (str mixin __eq__)
         assert WeatherType.CLEAR == "clear"
-        assert WeatherType.RAIN  == "rain"
+        assert WeatherType.RAIN == "rain"
         assert WeatherType.STORM == "storm"
 
     def test_equality_by_identity(self):
@@ -109,6 +110,7 @@ class TestWeatherTypeEnum:
 # classify() — all-zero baseline
 # ===========================================================================
 
+
 class TestClassifyBaseline:
     def test_all_zero_is_clear(self):
         assert classify(_lw()) is WeatherType.CLEAR
@@ -121,6 +123,7 @@ class TestClassifyBaseline:
 # ===========================================================================
 # FOG threshold boundary  (fog_density: > 0.008)
 # ===========================================================================
+
 
 class TestFogThreshold:
     def test_fog_density_exactly_at_threshold_is_not_fog(self):
@@ -140,6 +143,7 @@ class TestFogThreshold:
 # ===========================================================================
 # FOG priority — wins over storm, rain, overcast, cloudy
 # ===========================================================================
+
 
 class TestFogPriority:
     def test_fog_beats_storm(self):
@@ -177,6 +181,7 @@ class TestFogPriority:
 # ===========================================================================
 # STORM threshold boundary  (rain_intensity > 0.55 AND wind_speed > 9.0)
 # ===========================================================================
+
 
 class TestStormThreshold:
     def test_storm_requires_both_rain_and_wind(self):
@@ -225,6 +230,7 @@ class TestStormThreshold:
 # RAIN threshold boundary  (rain_intensity > 0.05)
 # ===========================================================================
 
+
 class TestRainThreshold:
     def test_rain_intensity_exactly_at_threshold_is_not_rain(self):
         # Strict >: 0.05 exactly should NOT trigger RAIN.
@@ -245,6 +251,7 @@ class TestRainThreshold:
 # ===========================================================================
 # OVERCAST threshold boundary  (cloud_coverage > 0.7)
 # ===========================================================================
+
 
 class TestOvercastThreshold:
     def test_coverage_exactly_at_overcast_threshold_is_not_overcast(self):
@@ -271,6 +278,7 @@ class TestOvercastThreshold:
 # CLOUDY threshold boundary  (cloud_coverage > 0.3)
 # ===========================================================================
 
+
 class TestCloudyThreshold:
     def test_coverage_exactly_at_cloudy_threshold_is_not_cloudy(self):
         # Strict >: 0.3 exactly should NOT trigger CLOUDY → falls through to CLEAR.
@@ -286,6 +294,7 @@ class TestCloudyThreshold:
 # ===========================================================================
 # Realistic combined states
 # ===========================================================================
+
 
 class TestRealisticStates:
     def test_light_drizzle(self):
@@ -345,9 +354,9 @@ class TestRealisticStates:
     def test_foggy_storm_fog_wins(self):
         """Even at storm-strength values, fog takes priority."""
         lw = _lw(
-            fog_density=0.030,          # >> 0.008
-            rain_intensity=0.80,        # >> 0.55
-            wind_speed=12.0,            # >> 9.0
+            fog_density=0.030,  # >> 0.008
+            rain_intensity=0.80,  # >> 0.55
+            wind_speed=12.0,  # >> 9.0
             cloud_coverage=0.99,
         )
         assert classify(lw) is WeatherType.FOG

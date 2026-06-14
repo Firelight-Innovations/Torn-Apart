@@ -23,6 +23,7 @@ CHUNK = 32  # voxels per chunk edge
 # Fixtures / helpers
 # ----------------------------------------------------------------------
 
+
 def make_config() -> Config:
     """Default engine config (exposure keys fall back to module defaults)."""
     return Config()
@@ -36,9 +37,7 @@ def noon_sky() -> SimpleNamespace:
         sun_radiance=(3.2, 3.0, 2.6),
         sky_ambient=(0.21, 0.40, 0.71),
         moon_radiance=(0.0, 0.0, 0.0),
-        sun_dir=SimpleNamespace(x=float(sun_dir[0]),
-                                y=float(sun_dir[1]),
-                                z=float(sun_dir[2])),
+        sun_dir=SimpleNamespace(x=float(sun_dir[0]), y=float(sun_dir[1]), z=float(sun_dir[2])),
     )
 
 
@@ -54,14 +53,13 @@ def cave_chunks() -> dict[tuple[int, int, int], SimpleNamespace]:
     return {(0, 0, 0): SimpleNamespace(materials=materials)}
 
 
-CAVE_CAM = (8.0, 8.0, 8.0)          # center of the air pocket, meters
-OPEN_CAM = (8.0, 8.0, 30.0)         # floating in open air (no chunks)
+CAVE_CAM = (8.0, 8.0, 8.0)  # center of the air pocket, meters
+OPEN_CAM = (8.0, 8.0, 30.0)  # floating in open air (no chunks)
 
 NO_LIGHTS = (np.zeros((4, 12), dtype=np.float32), 0)
 
 
-def step(meter: ExposureMeter, cam, sky, chunks, lights,
-         seconds: float, dt: float = 0.1) -> float:
+def step(meter: ExposureMeter, cam, sky, chunks, lights, seconds: float, dt: float = 0.1) -> float:
     """Run update() repeatedly for `seconds` of simulated time."""
     val = meter.exposure
     n = int(round(seconds / dt))
@@ -73,6 +71,7 @@ def step(meter: ExposureMeter, cam, sky, chunks, lights,
 # ----------------------------------------------------------------------
 # (a) determinism
 # ----------------------------------------------------------------------
+
 
 def test_determinism_same_inputs_identical_result():
     cfg = make_config()
@@ -91,6 +90,7 @@ def test_determinism_same_inputs_identical_result():
 # (b) noon open field ~ 1.0
 # ----------------------------------------------------------------------
 
+
 def test_noon_open_field_stays_near_one():
     cfg = make_config()
     meter = ExposureMeter(cfg)
@@ -102,6 +102,7 @@ def test_noon_open_field_stays_near_one():
 # ----------------------------------------------------------------------
 # (c) sealed cave: climbs slowly toward exposure_max
 # ----------------------------------------------------------------------
+
 
 def test_cave_adapts_slowly_toward_max():
     cfg = make_config()
@@ -122,6 +123,7 @@ def test_cave_adapts_slowly_toward_max():
 # (d) back outside: drops near 1.0 quickly
 # ----------------------------------------------------------------------
 
+
 def test_back_outside_drops_fast():
     cfg = make_config()
     meter = ExposureMeter(cfg)
@@ -137,15 +139,16 @@ def test_back_outside_drops_fast():
 # (e) bright light inside the cave caps adaptation
 # ----------------------------------------------------------------------
 
+
 def test_light_in_cave_keeps_exposure_low():
     cfg = make_config()
     meter = ExposureMeter(cfg)
     sky = noon_sky()
     chunks = cave_chunks()
     lights = np.zeros((4, 12), dtype=np.float32)
-    lights[0, 0:3] = (9.0, 8.0, 8.0)        # 1 m from the camera
-    lights[0, 3] = 10.0                      # falloff radius, meters
-    lights[0, 4:7] = (8.0, 8.0, 8.0)         # color * intensity, HDR
+    lights[0, 0:3] = (9.0, 8.0, 8.0)  # 1 m from the camera
+    lights[0, 3] = 10.0  # falloff radius, meters
+    lights[0, 4:7] = (8.0, 8.0, 8.0)  # color * intensity, HDR
     packed = (lights, 1)
     val = step(meter, CAVE_CAM, sky, chunks, packed, seconds=20.0)
     assert val < 2.0  # well below exposure_max despite total sky occlusion
@@ -154,6 +157,7 @@ def test_light_in_cave_keeps_exposure_low():
 # ----------------------------------------------------------------------
 # (f) None sky_state -> 1.0
 # ----------------------------------------------------------------------
+
 
 def test_none_sky_state_holds_one():
     cfg = make_config()
@@ -171,6 +175,7 @@ def test_none_sky_state_holds_one():
 # ----------------------------------------------------------------------
 # (g) numeric robustness: dt=0 and dt=10
 # ----------------------------------------------------------------------
+
 
 def test_dt_zero_and_dt_huge_no_nans():
     cfg = make_config()
@@ -197,10 +202,9 @@ def test_dt_zero_and_dt_huge_no_nans():
 # extra: exposure_adapt_enabled=False pins the multiplier at 1.0
 # ----------------------------------------------------------------------
 
+
 def test_disabled_decays_to_one():
-    cfg = SimpleNamespace(exposure_adapt_enabled=False,
-                          chunk_size=32, voxel_size=0.5)
+    cfg = SimpleNamespace(exposure_adapt_enabled=False, chunk_size=32, voxel_size=0.5)
     meter = ExposureMeter(cfg)
-    val = step(meter, CAVE_CAM, noon_sky(), cave_chunks(), NO_LIGHTS,
-               seconds=5.0)
+    val = step(meter, CAVE_CAM, noon_sky(), cave_chunks(), NO_LIGHTS, seconds=5.0)
     assert val == pytest.approx(1.0)

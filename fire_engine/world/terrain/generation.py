@@ -45,7 +45,7 @@ from fire_engine.core import Config
 # core.config.Config (ground_height_m, world_size_m); keep these in sync.
 # ---------------------------------------------------------------------------
 
-_FLAT_GROUND_Z_M: float = 8.0       # default flat ground surface height (world Z, meters)
+_FLAT_GROUND_Z_M: float = 8.0  # default flat ground surface height (world Z, meters)
 _DEFAULT_WORLD_SIZE_M: float = 1000.0  # default square footprint side length (meters)
 
 # ---------------------------------------------------------------------------
@@ -55,8 +55,8 @@ _DEFAULT_WORLD_SIZE_M: float = 1000.0  # default square footprint side length (m
 #   MATERIAL_GRASS -> "grass_ground"
 # ---------------------------------------------------------------------------
 
-MATERIAL_DIRT: int = 1              # bulk solid ground (exposed by digging)
-MATERIAL_GRASS: int = 2             # topmost solid voxel layer of the baseline
+MATERIAL_DIRT: int = 1  # bulk solid ground (exposed by digging)
+MATERIAL_GRASS: int = 2  # topmost solid voxel layer of the baseline
 
 
 def _ground_height(config: Config | None) -> float:
@@ -76,6 +76,7 @@ def _world_half_extent(config: Config | None) -> float:
 # ===========================================================================
 # Surface height (world XY → meters)
 # ===========================================================================
+
 
 def surface_height(
     world_x: np.ndarray,
@@ -120,6 +121,7 @@ def surface_height(
 # ===========================================================================
 # Chunk generation
 # ===========================================================================
+
 
 def generate_chunk(coord: tuple[int, int, int], config: Config) -> np.ndarray:
     """
@@ -179,24 +181,24 @@ def generate_chunk(coord: tuple[int, int, int], config: Config) -> np.ndarray:
     # World-space centre coordinate of every voxel along each local axis.
     # Voxel (x,y,z) centre world coord = origin + (idx + 0.5) * voxel_size.
     lin = (np.arange(n, dtype=np.float64) + 0.5) * vs
-    wx_axis = ox + lin            # (n,) along local X
-    wy_axis = oy + lin            # (n,) along local Y
-    wz_axis = oz + lin            # (n,) along local Z
+    wx_axis = ox + lin  # (n,) along local X
+    wy_axis = oy + lin  # (n,) along local Y
+    wz_axis = oz + lin  # (n,) along local Z
 
     # Inside the square world footprint (centred on origin) along X and Y.
-    in_x = (wx_axis >= -half) & (wx_axis < half)   # (n,)
-    in_y = (wy_axis >= -half) & (wy_axis < half)   # (n,)
-    in_bounds = in_x[:, None] & in_y[None, :]      # (n, n) over (x, y)
+    in_x = (wx_axis >= -half) & (wx_axis < half)  # (n,)
+    in_y = (wy_axis >= -half) & (wy_axis < half)  # (n,)
+    in_bounds = in_x[:, None] & in_y[None, :]  # (n, n) over (x, y)
 
     # Flat ground: solid below the ground height.
-    below = wz_axis < ground_z                     # (n,) over z
+    below = wz_axis < ground_z  # (n,) over z
 
     # Topmost solid layer: solid here, but the voxel above would be air.
     # Pure function of world Z → identical across chunk borders.
     top_layer = below & (wz_axis + vs >= ground_z)  # (n,) over z
 
     # Solid where in-bounds AND below the ground surface.
-    solid = in_bounds[:, :, None] & below[None, None, :]   # (n, n, n) [x, y, z]
+    solid = in_bounds[:, :, None] & below[None, None, :]  # (n, n, n) [x, y, z]
     grass = in_bounds[:, :, None] & top_layer[None, None, :]
 
     materials = np.zeros((n, n, n), dtype=np.uint8)

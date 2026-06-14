@@ -52,26 +52,32 @@ from fire_engine.procedural.textures.base import ProceduralTextureDef
 
 __all__ = ["FlowerSpriteDef"]
 
-_CELL = 32                 # one flower cell is 32×32
+_CELL = 32  # one flower cell is 32×32
 _VARIANTS = 4
 
 # Petal hue per variant (RGB).  Everything dusty and desaturated — RimWorld ×
 # Morrowind wildflowers, nothing saturated enough to read as a power-up.
-_PETAL_HUES = np.array([
-    (198, 190, 170),    # 0 — yarrow off-white
-    (190, 158,  66),    # 1 — dusty yellow
-    (138, 112, 158),    # 2 — faded violet
-    (168,  86,  72),    # 3 — washed poppy red
-], dtype=np.float32)
+_PETAL_HUES = np.array(
+    [
+        (198, 190, 170),  # 0 — yarrow off-white
+        (190, 158, 66),  # 1 — dusty yellow
+        (138, 112, 158),  # 2 — faded violet
+        (168, 86, 72),  # 3 — washed poppy red
+    ],
+    dtype=np.float32,
+)
 
 # Stem colour ramp, base (dark) → top (lighter); matches grass_tuft greens.
-_STEM_RAMP = np.array([
-    (46, 64, 34),
-    (68, 90, 44),
-    (94, 112, 54),
-], dtype=np.uint8)
+_STEM_RAMP = np.array(
+    [
+        (46, 64, 34),
+        (68, 90, 44),
+        (94, 112, 54),
+    ],
+    dtype=np.uint8,
+)
 
-_CENTER_RGB = np.array((96, 76, 36), dtype=np.uint8)   # seed-head amber
+_CENTER_RGB = np.array((96, 76, 36), dtype=np.uint8)  # seed-head amber
 
 
 @register_def
@@ -104,8 +110,8 @@ class FlowerSpriteDef(ProceduralTextureDef):
 
     name = "flower_sprite"
 
-    DEFAULT_WIDTH = _CELL * _VARIANTS          # 128
-    DEFAULT_HEIGHT = _CELL                     # 32
+    DEFAULT_WIDTH = _CELL * _VARIANTS  # 128
+    DEFAULT_HEIGHT = _CELL  # 32
 
     def generate(self, rng: np.random.Generator, **params) -> np.ndarray:
         """
@@ -130,9 +136,9 @@ class FlowerSpriteDef(ProceduralTextureDef):
 
         rgba = np.zeros((H, W, 4), dtype=np.uint8)
         n_tiers = len(_STEM_RAMP)
-        yy, xx = np.mgrid[0:H, 0:cell_w]       # cell-local pixel grids
+        yy, xx = np.mgrid[0:H, 0:cell_w]  # cell-local pixel grids
 
-        for k in range(_VARIANTS):             # fixed 4-iteration loop
+        for k in range(_VARIANTS):  # fixed 4-iteration loop
             x0 = k * cell_w
 
             # --- head size first, so the stem leaves room for it -----------
@@ -147,15 +153,14 @@ class FlowerSpriteDef(ProceduralTextureDef):
 
             ys = np.arange(height_px)
             t = ys / max(height_px - 1, 1)
-            sx = np.clip(np.round(base_x + lean_px * t * t),
-                         0, cell_w - 1).astype(np.intp)
+            sx = np.clip(np.round(base_x + lean_px * t * t), 0, cell_w - 1).astype(np.intp)
             rows = (H - 1 - ys).astype(np.intp)
             tiers = np.minimum((t * n_tiers).astype(np.intp), n_tiers - 1)
             rgba[rows, x0 + sx, :3] = _STEM_RAMP[tiers]
             rgba[rows, x0 + sx, 3] = 255
 
             # --- one or two leaf nubs: short diagonal runs off the stem ----
-            for frac in (0.35, 0.6)[:int(rng.integers(1, 3))]:
+            for frac in (0.35, 0.6)[: int(rng.integers(1, 3))]:
                 iy = int(frac * (height_px - 1))
                 side = 1 if rng.uniform() < 0.5 else -1
                 run = np.arange(1, int(rng.integers(3, 5)))
@@ -166,24 +171,25 @@ class FlowerSpriteDef(ProceduralTextureDef):
 
             # --- petal rosette around the stem tip --------------------------
             hx = float(sx[-1])
-            hy = float(rows[-1]) - 1.0          # head centre, just above tip
+            hy = float(rows[-1]) - 1.0  # head centre, just above tip
             hue = _PETAL_HUES[k]
             n_petals = int(rng.integers(5, 8))
-            angles = (np.arange(n_petals) * 2.0 * np.pi / n_petals
-                      + float(rng.uniform(0.0, 2.0 * np.pi)))
+            angles = np.arange(n_petals) * 2.0 * np.pi / n_petals + float(
+                rng.uniform(0.0, 2.0 * np.pi)
+            )
             # Two-tone petal shading: upper half of the head catches the sky.
             shade = np.where(yy < hy, 1.06, 0.85)
-            for a in angles:                    # ≤7 iterations, blobs are numpy
+            for a in angles:  # ≤7 iterations, blobs are numpy
                 px = hx + np.cos(a) * head_r * 0.62
-                py = hy + np.sin(a) * head_r * 0.45   # squash → rosette reads from the side too
-                blob = (xx - px) ** 2 + (yy - py) ** 2 <= petal_r ** 2
+                py = hy + np.sin(a) * head_r * 0.45  # squash → rosette reads from the side too
+                blob = (xx - px) ** 2 + (yy - py) ** 2 <= petal_r**2
                 rgb = np.clip(hue[None, None, :] * shade[..., None], 0, 255)
-                rgba[:, x0:x0 + cell_w, :3][blob] = rgb[blob].astype(np.uint8)
-                rgba[:, x0:x0 + cell_w, 3][blob] = 255
+                rgba[:, x0 : x0 + cell_w, :3][blob] = rgb[blob].astype(np.uint8)
+                rgba[:, x0 : x0 + cell_w, 3][blob] = 255
 
             # --- dark seed-head centre overwrites the petal inner edge -----
             centre = (xx - hx) ** 2 + (yy - hy) ** 2 <= (head_r * 0.4) ** 2
-            rgba[:, x0:x0 + cell_w, :3][centre] = _CENTER_RGB
-            rgba[:, x0:x0 + cell_w, 3][centre] = 255
+            rgba[:, x0 : x0 + cell_w, :3][centre] = _CENTER_RGB
+            rgba[:, x0 : x0 + cell_w, 3][centre] = 255
 
         return rgba

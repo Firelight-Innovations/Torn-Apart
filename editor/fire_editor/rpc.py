@@ -8,6 +8,7 @@ Handlers are ``async`` callables taking ``(params: dict) -> result`` and may
 raise :class:`RpcError` to return a structured JSON-RPC error. Any other
 exception becomes an ``INTERNAL_ERROR`` with the message attached.
 """
+
 from __future__ import annotations
 
 from typing import Awaitable, Callable

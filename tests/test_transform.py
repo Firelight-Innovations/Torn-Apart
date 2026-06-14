@@ -27,6 +27,7 @@ EPS = 1e-4  # float32 accumulation tolerance for composed matrices
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_transform(pos: Vec3 = None, rot: Quat = None) -> Transform:
     t = Transform()
     if pos is not None:
@@ -39,6 +40,7 @@ def _make_transform(pos: Vec3 = None, rot: Quat = None) -> Transform:
 # ---------------------------------------------------------------------------
 # Basic local TRS
 # ---------------------------------------------------------------------------
+
 
 class TestLocalTRS:
     def test_default_position_zero(self):
@@ -60,15 +62,16 @@ class TestLocalTRS:
 
     def test_set_local_rotation_normalises(self):
         t = Transform()
-        q = Quat(2.0, 0.0, 0.0, 0.0)   # not unit
+        q = Quat(2.0, 0.0, 0.0, 0.0)  # not unit
         t.local_rotation = q
         n = t.local_rotation
-        assert abs(n.w ** 2 + n.x ** 2 + n.y ** 2 + n.z ** 2 - 1.0) < 1e-5
+        assert abs(n.w**2 + n.x**2 + n.y**2 + n.z**2 - 1.0) < 1e-5
 
 
 # ---------------------------------------------------------------------------
 # World-space position with no parent
 # ---------------------------------------------------------------------------
+
 
 class TestWorldPositionNoParent:
     def test_world_pos_equals_local_when_no_parent(self):
@@ -85,11 +88,12 @@ class TestWorldPositionNoParent:
 # Parent/child world-position composition
 # ---------------------------------------------------------------------------
 
+
 class TestParentChildComposition:
     def test_child_offset_under_translated_parent(self):
         """Child at local (0,5,0) under parent at world (10,0,0) → world (10,5,0)."""
         parent = _make_transform(pos=Vec3(10, 0, 0))
-        child  = _make_transform(pos=Vec3(0, 5, 0))
+        child = _make_transform(pos=Vec3(0, 5, 0))
         child.set_parent(parent, keep_world=False)
         assert child.position.approx_eq(Vec3(10, 5, 0), eps=EPS)
 
@@ -98,10 +102,8 @@ class TestParentChildComposition:
         Parent at origin, rotated 90° about Z (+Y→−X).
         Child local (0,1,0) should map to world (−1,0,0).
         """
-        parent = _make_transform(
-            rot=Quat.from_axis_angle(Vec3.UP, math.pi / 2)
-        )
-        child  = _make_transform(pos=Vec3(0, 1, 0))
+        parent = _make_transform(rot=Quat.from_axis_angle(Vec3.UP, math.pi / 2))
+        child = _make_transform(pos=Vec3(0, 1, 0))
         child.set_parent(parent, keep_world=False)
         expected = Vec3(-1, 0, 0)
         assert child.position.approx_eq(expected, eps=1e-3)
@@ -115,9 +117,9 @@ class TestParentChildComposition:
             pos=Vec3(5, 0, 0),
             rot=Quat.from_axis_angle(Vec3.UP, math.pi / 2),
         )
-        child  = _make_transform(pos=Vec3(0, 2, 0))
+        child = _make_transform(pos=Vec3(0, 2, 0))
         child.set_parent(parent, keep_world=False)
-        expected = Vec3(5 - 2, 0, 0)   # (3,0,0)
+        expected = Vec3(5 - 2, 0, 0)  # (3,0,0)
         assert child.position.approx_eq(expected, eps=1e-3)
 
     def test_deeply_nested_hierarchy(self):
@@ -134,11 +136,12 @@ class TestParentChildComposition:
 # Dirty-flag propagation
 # ---------------------------------------------------------------------------
 
+
 class TestDirtyFlag:
     def test_moving_parent_updates_child_world_position(self):
         """After moving the parent, child world position should update lazily."""
         parent = _make_transform(pos=Vec3(0, 0, 0))
-        child  = _make_transform(pos=Vec3(0, 0, 5))
+        child = _make_transform(pos=Vec3(0, 0, 5))
         child.set_parent(parent, keep_world=False)
 
         # Before move
@@ -164,7 +167,7 @@ class TestDirtyFlag:
     def test_rotating_parent_updates_child_direction(self):
         """Rotating the parent should change the child's world position."""
         parent = _make_transform()
-        child  = _make_transform(pos=Vec3(0, 1, 0))  # 1 m forward
+        child = _make_transform(pos=Vec3(0, 1, 0))  # 1 m forward
         child.set_parent(parent, keep_world=False)
 
         # After 90° yaw, child should be at (−1, 0, 0)
@@ -175,6 +178,7 @@ class TestDirtyFlag:
 # ---------------------------------------------------------------------------
 # look_at
 # ---------------------------------------------------------------------------
+
 
 class TestLookAt:
     def test_forward_points_at_target_basic(self):
@@ -224,6 +228,7 @@ class TestLookAt:
 # transform_point / inverse_transform_point
 # ---------------------------------------------------------------------------
 
+
 class TestTransformPoint:
     def test_transform_point_translation_only(self):
         t = _make_transform(pos=Vec3(3, 4, 5))
@@ -246,19 +251,19 @@ class TestTransformPoint:
         )
         local = Vec3(1, 2, 3)
         world = t.transform_point(local)
-        back  = t.inverse_transform_point(world)
+        back = t.inverse_transform_point(world)
         assert back.approx_eq(local, eps=1e-3)
 
     def test_inverse_transform_point_translation(self):
         t = _make_transform(pos=Vec3(10, 0, 0))
         world_pt = Vec3(10, 5, 0)
-        local    = t.inverse_transform_point(world_pt)
+        local = t.inverse_transform_point(world_pt)
         assert local.approx_eq(Vec3(0, 5, 0), eps=EPS)
 
     def test_transform_point_nested_hierarchy(self):
         """A two-level hierarchy: grandchild local origin → correct world point."""
         parent = _make_transform(pos=Vec3(10, 0, 0))
-        child  = _make_transform(pos=Vec3(0, 5, 0))
+        child = _make_transform(pos=Vec3(0, 5, 0))
         child.set_parent(parent, keep_world=False)
 
         # transform_point of child local origin = child world position
@@ -269,6 +274,7 @@ class TestTransformPoint:
 # ---------------------------------------------------------------------------
 # Space enum usage
 # ---------------------------------------------------------------------------
+
 
 class TestTranslate:
     def test_translate_world(self):

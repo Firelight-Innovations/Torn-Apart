@@ -33,6 +33,7 @@ from fire_engine.world.terrain.surface_nets import (
 # Shared fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def cfg():
     return load_config()
@@ -46,9 +47,7 @@ def _simple_sampler(face_centers: np.ndarray) -> np.ndarray:
 def _full_neighbor_materials(coord, cfg) -> dict:
     """All 26 neighbours from the deterministic generated baseline."""
     return {
-        off: generate_chunk(
-            (coord[0] + off[0], coord[1] + off[1], coord[2] + off[2]), cfg
-        )
+        off: generate_chunk((coord[0] + off[0], coord[1] + off[1], coord[2] + off[2]), cfg)
         for off in NEIGHBOR_OFFSETS_26
     }
 
@@ -57,8 +56,8 @@ def _full_neighbor_materials(coord, cfg) -> dict:
 # 1. NEIGHBOR_OFFSETS_26 structural invariants
 # ===========================================================================
 
-class TestNeighborOffsets26:
 
+class TestNeighborOffsets26:
     def test_exactly_26_entries(self):
         """All 3^3 - 1 = 26 offsets must be present."""
         assert len(NEIGHBOR_OFFSETS_26) == 26
@@ -82,9 +81,7 @@ class TestNeighborOffsets26:
         The 26 offsets must be exactly the set
         {-1,0,1}^3 \\ {(0,0,0)}.
         """
-        expected = set(
-            o for o in itertools.product((-1, 0, 1), repeat=3) if o != (0, 0, 0)
-        )
+        expected = set(o for o in itertools.product((-1, 0, 1), repeat=3) if o != (0, 0, 0))
         assert set(NEIGHBOR_OFFSETS_26) == expected
 
     def test_all_entries_are_3_tuples(self):
@@ -97,10 +94,10 @@ class TestNeighborOffsets26:
 # 2. Empty chunk → empty mesh
 # ===========================================================================
 
-class TestEmptyChunk:
 
+class TestEmptyChunk:
     def test_all_air_gives_zero_faces(self):
-        c = Chunk((0, 0, 0))          # default: all zeros = air
+        c = Chunk((0, 0, 0))  # default: all zeros = air
         mesh = build_mesh_faceted(c)
         assert mesh.face_count == 0
 
@@ -137,8 +134,8 @@ class TestEmptyChunk:
 # 3. Solid slab — basic face count and internal consistency
 # ===========================================================================
 
-class TestSolidSlab:
 
+class TestSolidSlab:
     def _make_slab(self) -> Chunk:
         """A 32×32×1 slab at z=0 (material id 1) in an otherwise-air chunk."""
         c = Chunk((0, 0, 0))
@@ -190,8 +187,8 @@ class TestSolidSlab:
 # 4. face_materials — grass/dirt assignment rule
 # ===========================================================================
 
-class TestFaceMaterials:
 
+class TestFaceMaterials:
     def test_top_face_of_grass_column_is_grass(self, cfg):
         """
         A column that is grass on top (the generated baseline):
@@ -214,7 +211,7 @@ class TestFaceMaterials:
         face_material is the solid voxel's own material id, not the neighbour's.
         """
         c = Chunk((0, 0, 0))
-        c.materials[10, 10, 10] = MATERIAL_DIRT   # id == 1
+        c.materials[10, 10, 10] = MATERIAL_DIRT  # id == 1
         mesh = build_mesh_faceted(c)
         assert mesh.face_materials is not None
         assert np.all(mesh.face_materials == MATERIAL_DIRT)
@@ -238,7 +235,7 @@ class TestFaceMaterials:
         its own solid voxel's material (not a neighbour's).
         """
         c = Chunk((0, 0, 0))
-        c.materials[2, 2, 2] = MATERIAL_DIRT    # id 1
+        c.materials[2, 2, 2] = MATERIAL_DIRT  # id 1
         c.materials[20, 20, 20] = MATERIAL_GRASS  # id 2
         mesh = build_mesh_faceted(c)
         unique_mats = set(np.unique(mesh.face_materials).tolist())
@@ -259,9 +256,7 @@ class TestFaceMaterials:
         c = Chunk((0, 0, 0))
         c.materials[5, 5, 5] = MATERIAL_GRASS
         mesh = build_mesh_faceted(c, shade_strength=0.0)
-        expected_alpha = (
-            np.repeat(mesh.face_materials, 6).astype(np.float32) / 255.0
-        )
+        expected_alpha = np.repeat(mesh.face_materials, 6).astype(np.float32) / 255.0
         assert np.allclose(mesh.colors[:, 3], expected_alpha, atol=1e-6)
 
 
@@ -269,8 +264,8 @@ class TestFaceMaterials:
 # 5. Determinism
 # ===========================================================================
 
-class TestDeterminism:
 
+class TestDeterminism:
     def test_isolated_voxel_same_arrays_twice(self):
         """Same isolated chunk → identical arrays on two calls."""
         c = Chunk((0, 0, 0))
@@ -309,15 +304,15 @@ class TestDeterminism:
 # 6. Border / neighbor_materials behaviour — pin current behaviour
 # ===========================================================================
 
-class TestBorderBehavior:
 
+class TestBorderBehavior:
     def test_border_voxel_no_neighbors_has_exposed_faces(self):
         """
         A solid voxel at the chunk border with no neighbor_materials supplied
         (None → pad air) should expose ALL 6 faces, including the border face.
         """
         c = Chunk((0, 0, 0))
-        c.materials[31, 31, 31] = 1   # corner voxel
+        c.materials[31, 31, 31] = 1  # corner voxel
         mesh_no_nb = build_mesh_faceted(c, neighbor_materials=None)
         assert mesh_no_nb.face_count == 6
 
@@ -333,7 +328,7 @@ class TestBorderBehavior:
         neighbours.
         """
         c = Chunk((0, 0, 0))
-        c.materials[31, 31, 31] = 1   # solid at +X +Y +Z corner
+        c.materials[31, 31, 31] = 1  # solid at +X +Y +Z corner
 
         # Build a solid-filled neighbour in the +X direction.
         nb_mat = np.ones((32, 32, 32), dtype=np.uint8)
@@ -363,7 +358,7 @@ class TestBorderBehavior:
         also solid.  PIN current behaviour: 3 exposed faces.
         """
         c = Chunk((0, 0, 0))
-        c.materials[0, 0, 0] = 1     # min-corner voxel, rest of chunk is air
+        c.materials[0, 0, 0] = 1  # min-corner voxel, rest of chunk is air
 
         nb_mat = np.ones((32, 32, 32), dtype=np.uint8)
         nm = {off: nb_mat for off in NEIGHBOR_OFFSETS_26}
@@ -386,7 +381,7 @@ class TestBorderBehavior:
         """
         n = 32
         mat = np.zeros((n, n, n), dtype=np.uint8)
-        mat[5, 5, 0] = 1    # solid at z=0, -Z face normally exposed
+        mat[5, 5, 0] = 1  # solid at z=0, -Z face normally exposed
 
         # Without sentinel: pad is air below → -Z face is visible.
         pad_air = _build_padded_materials(mat, None, n)
@@ -397,7 +392,7 @@ class TestBorderBehavior:
         # - air pad: pad_air[:, :, 0] should be 0 (air) at (5+1, 5+1)
         # - floor sentinel: pad_floor[:, :, 0] should be > 0 (dirt)
         assert pad_air[6, 6, 0] == 0
-        assert pad_floor[6, 6, 0] > 0   # sentinel filled solid dirt
+        assert pad_floor[6, 6, 0] > 0  # sentinel filled solid dirt
 
     def test_none_neighbor_pads_air(self):
         """
@@ -419,15 +414,15 @@ class TestBorderBehavior:
 # 7. _build_padded_materials internals
 # ===========================================================================
 
-class TestBuildPaddedMaterials:
 
+class TestBuildPaddedMaterials:
     def test_interior_matches_chunk_materials(self):
         """Center region of the padded array must equal the chunk materials."""
         n = 32
-        mat = np.arange(n ** 3, dtype=np.uint8).reshape(n, n, n)
+        mat = np.arange(n**3, dtype=np.uint8).reshape(n, n, n)
         pad = _build_padded_materials(mat, None, n)
         assert pad.shape == (n + 2, n + 2, n + 2)
-        assert np.array_equal(pad[1:n + 1, 1:n + 1, 1:n + 1], mat)
+        assert np.array_equal(pad[1 : n + 1, 1 : n + 1, 1 : n + 1], mat)
 
     def test_no_neighbors_pads_air(self):
         """Without neighbours the shell must be all zeros (air)."""
@@ -452,7 +447,7 @@ class TestBuildPaddedMaterials:
         nb = np.full((n, n, n), fill_value=7, dtype=np.uint8)
         pad = _build_padded_materials(mat, {(1, 0, 0): nb}, n)
         # Shell at x = n+1 (index n+1) should be nb[0, :, :]
-        assert np.array_equal(pad[n + 1, 1:n + 1, 1:n + 1], nb[0, :, :])
+        assert np.array_equal(pad[n + 1, 1 : n + 1, 1 : n + 1], nb[0, :, :])
 
     def test_face_neighbor_x_minus_fills_shell(self):
         """
@@ -463,15 +458,15 @@ class TestBuildPaddedMaterials:
         mat = np.zeros((n, n, n), dtype=np.uint8)
         nb = np.full((n, n, n), fill_value=3, dtype=np.uint8)
         pad = _build_padded_materials(mat, {(-1, 0, 0): nb}, n)
-        assert np.array_equal(pad[0, 1:n + 1, 1:n + 1], nb[n - 1, :, :])
+        assert np.array_equal(pad[0, 1 : n + 1, 1 : n + 1], nb[n - 1, :, :])
 
 
 # ===========================================================================
 # 8. _cell_vertices shape and range
 # ===========================================================================
 
-class TestCellVertices:
 
+class TestCellVertices:
     def test_output_shape(self):
         """_cell_vertices returns (n+1, n+1, n+1, 3)."""
         n = 32

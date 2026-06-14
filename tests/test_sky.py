@@ -33,6 +33,7 @@ HOUR = 3600.0
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_sky(seed: int = 1337, day: int = 0, tod: float = 0.0):
     """Fresh SkySystem with the world seed set and the clock at (day, tod)."""
     set_world_seed(seed)
@@ -51,6 +52,7 @@ def _length(v) -> float:
 # ---------------------------------------------------------------------------
 # sun_direction / moon_direction
 # ---------------------------------------------------------------------------
+
 
 class TestSunDirection:
     def test_unit_length_all_day(self):
@@ -116,6 +118,7 @@ class TestMoonDirection:
 # daylight
 # ---------------------------------------------------------------------------
 
+
 class TestDaylight:
     def test_noon_full(self):
         assert daylight_factor(12 * HOUR) == 1.0
@@ -134,6 +137,7 @@ class TestDaylight:
 # ---------------------------------------------------------------------------
 # SkyState determinism
 # ---------------------------------------------------------------------------
+
 
 class TestSkyStateDeterminism:
     def test_same_seed_identical_state(self):
@@ -180,6 +184,7 @@ class TestDifferentSeed:
 # terrain_light_scale
 # ---------------------------------------------------------------------------
 
+
 class TestTerrainLightScale:
     def test_within_range_over_two_days(self):
         sky, clock = _make_sky(seed=1337)
@@ -198,7 +203,7 @@ class TestTerrainLightScale:
         """Forced-clear noon → terrain_light_scale ≈ (1, 1, 1)."""
         sky, clock = _make_sky(seed=1337, day=0, tod=12 * HOUR - 1500.0)
         sky.weather.force_weather(WeatherType.CLEAR)
-        sky.update()                       # anchors the override blend
+        sky.update()  # anchors the override blend
         clock.game_time_of_day = 12 * HOUR  # 1500 s later — blend complete
         st = sky.update()
         for c in st.terrain_light_scale:
@@ -210,7 +215,7 @@ class TestTerrainLightScale:
         sky, clock = _make_sky(seed=1337, day=0, tod=0.0)
         sky.weather.force_weather(WeatherType.CLEAR)
         sky.update()
-        clock.game_time_of_day = 1500.0    # past the override blend, still night
+        clock.game_time_of_day = 1500.0  # past the override blend, still night
         st = sky.update()
         r, g, b = st.terrain_light_scale
         assert b > g > r, "night floor should be cool blue (b > g > r)"
@@ -221,6 +226,7 @@ class TestTerrainLightScale:
 # ---------------------------------------------------------------------------
 # Misc SkyState invariants
 # ---------------------------------------------------------------------------
+
 
 class TestSkyStateInvariants:
     def test_sun_intensity_zero_below_horizon(self):
@@ -243,9 +249,9 @@ class TestSkyStateInvariants:
 
     def test_moon_phase_cycles_from_game_day(self):
         sky0, _ = _make_sky(seed=5, day=0, tod=0.0)
-        assert sky0.update().moon_phase == 0.0          # new moon
+        assert sky0.update().moon_phase == 0.0  # new moon
         sky15, _ = _make_sky(seed=5, day=15, tod=0.0)
-        assert sky15.update().moon_phase == 0.5         # full moon
+        assert sky15.update().moon_phase == 0.5  # full moon
 
     def test_wind_dir_unit_length(self):
         sky, clock = _make_sky(seed=5)

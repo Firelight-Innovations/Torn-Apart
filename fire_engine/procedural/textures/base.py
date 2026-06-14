@@ -50,6 +50,7 @@ __all__ = ["ProceduralTextureDef", "value_noise", "pixel_noise"]
 # Noise helper — reusable by terrain (Phase 3) and any texture def
 # ---------------------------------------------------------------------------
 
+
 def value_noise(
     rng: np.random.Generator,
     shape: tuple[int, int],
@@ -144,10 +145,10 @@ def value_noise(
         r_f = np.linspace(0.0, freq_h, H, endpoint=False)  # shape (H,)
         c_f = np.linspace(0.0, freq_w, W, endpoint=False)  # shape (W,)
 
-        r0 = r_f.astype(np.int32)          # floor row  (H,)
-        c0 = c_f.astype(np.int32)          # floor col  (W,)
-        r1 = np.minimum(r0 + 1, freq_h)    # ceil row   (H,)
-        c1 = np.minimum(c0 + 1, freq_w)    # ceil col   (W,)
+        r0 = r_f.astype(np.int32)  # floor row  (H,)
+        c0 = c_f.astype(np.int32)  # floor col  (W,)
+        r1 = np.minimum(r0 + 1, freq_h)  # ceil row   (H,)
+        c1 = np.minimum(c0 + 1, freq_w)  # ceil col   (W,)
 
         wy = (r_f - r0).astype(np.float64)  # vertical fraction   (H,)
         wx = (c_f - c0).astype(np.float64)  # horizontal fraction (W,)
@@ -155,13 +156,13 @@ def value_noise(
         # Bilinear interpolation via broadcasting — shape (H, W)
         # TL = grid[r0, c0], TR = grid[r0, c1], BL = grid[r1, c0], BR = grid[r1, c1]
         # Each corner array is (H, W) via index broadcasting.
-        TL = grid[r0[:, None], c0[None, :]]   # (H, W)
-        TR = grid[r0[:, None], c1[None, :]]   # (H, W)
-        BL = grid[r1[:, None], c0[None, :]]   # (H, W)
-        BR = grid[r1[:, None], c1[None, :]]   # (H, W)
+        TL = grid[r0[:, None], c0[None, :]]  # (H, W)
+        TR = grid[r0[:, None], c1[None, :]]  # (H, W)
+        BL = grid[r1[:, None], c0[None, :]]  # (H, W)
+        BR = grid[r1[:, None], c1[None, :]]  # (H, W)
 
-        wy2d = wy[:, None]   # (H, 1) — broadcast over W
-        wx2d = wx[None, :]   # (1, W) — broadcast over H
+        wy2d = wy[:, None]  # (H, 1) — broadcast over W
+        wx2d = wx[None, :]  # (1, W) — broadcast over H
 
         octave_val = (
             TL * (1.0 - wx2d) * (1.0 - wy2d)
@@ -274,8 +275,8 @@ def pixel_noise(
         r_f = np.linspace(0.0, freq_h, H, endpoint=False)
         c_f = np.linspace(0.0, freq_w, W, endpoint=False)
 
-        r_idx = r_f.astype(np.int32)   # (H,)  nearest cell row
-        c_idx = c_f.astype(np.int32)   # (W,)  nearest cell col
+        r_idx = r_f.astype(np.int32)  # (H,)  nearest cell row
+        c_idx = c_f.astype(np.int32)  # (W,)  nearest cell col
 
         # Clamp to valid range (should already be in-range, but guard against
         # floating-point rounding at the boundary).
@@ -298,6 +299,7 @@ def pixel_noise(
 # ---------------------------------------------------------------------------
 # ProceduralTextureDef domain base class
 # ---------------------------------------------------------------------------
+
 
 class ProceduralTextureDef(ProceduralDef):
     """

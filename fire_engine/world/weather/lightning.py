@@ -100,8 +100,9 @@ def cell_id_int(cell_id: str) -> int:
     int — a 31-bit non-negative digest (fits a signed shader/event int).
     """
     import hashlib
+
     d = hashlib.blake2b(str(cell_id).encode("utf-8"), digest_size=8).digest()
-    return int.from_bytes(d, "big", signed=False) % (2 ** 31)
+    return int.from_bytes(d, "big", signed=False) % (2**31)
 
 
 def scheduled_strikes(
@@ -146,7 +147,7 @@ def scheduled_strikes(
     rate_per_min = float(config.weather_lightning_strikes_per_min)
     if rate_per_min <= 0.0:
         return []
-    rate_per_s = rate_per_min / _MIN_S        # peak λ (strikes per game second)
+    rate_per_s = rate_per_min / _MIN_S  # peak λ (strikes per game second)
 
     # Anchor the stream at the cell's spawn time and clamp the scan to the cell's
     # lifetime — strikes only happen while the cell is alive.
@@ -188,13 +189,15 @@ def scheduled_strikes(
         # live wind; the consumer adds the synoptic-advected center for world XY.
         xy_rng = for_domain("weather", "lightning", cid, "xy", idx)
         pos_xy = _strike_offset(cell, t, xy_rng)
-        seed = (cid * 1_000_003 + idx) % (2 ** 31)
-        out.append(StrikeParams(
-            time_abs=t,
-            pos_xy=pos_xy,
-            intensity=intensity,
-            seed=int(seed),
-        ))
+        seed = (cid * 1_000_003 + idx) % (2**31)
+        out.append(
+            StrikeParams(
+                time_abs=t,
+                pos_xy=pos_xy,
+                intensity=intensity,
+                seed=int(seed),
+            )
+        )
     return out
 
 

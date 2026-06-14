@@ -13,6 +13,7 @@ This module is pure data + numpy; applying a command back onto the live session
 (remesh/relight/restream or scene apply_delta) is the caller's job (see
 ``services/chunks.py``).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

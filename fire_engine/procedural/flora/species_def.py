@@ -141,10 +141,10 @@ class TreeSpeciesDef(ProceduralDef):
     atlas_layout: AtlasLayout = AtlasLayout()
     impostor_cell: tuple[int, int] = (64, 96)
 
-    BARK_PALETTE = np.array([(38, 30, 22), (56, 44, 32), (76, 60, 42)],
-                            dtype=np.uint8)
-    LEAF_PALETTE = np.array([(30, 44, 26), (44, 62, 34), (60, 80, 42),
-                             (80, 98, 52), (104, 116, 64)], dtype=np.uint8)
+    BARK_PALETTE = np.array([(38, 30, 22), (56, 44, 32), (76, 60, 42)], dtype=np.uint8)
+    LEAF_PALETTE = np.array(
+        [(30, 44, 26), (44, 62, 34), (60, 80, 42), (80, 98, 52), (104, 116, 64)], dtype=np.uint8
+    )
     LEAF_HOLE_THRESH: float = 0.18
     BERRY_COLOR: tuple[int, int, int] | None = None
     BERRY_DENSITY: float = 0.0
@@ -154,8 +154,7 @@ class TreeSpeciesDef(ProceduralDef):
     # Species hooks
     # ------------------------------------------------------------------
 
-    def grow(self, rng: np.random.Generator,
-             variant: int) -> tuple[TreeSkeleton, Leaves]:
+    def grow(self, rng: np.random.Generator, variant: int) -> tuple[TreeSkeleton, Leaves]:
         """
         Grow one variant — THE species recipe.  Override this.
 
@@ -176,7 +175,8 @@ class TreeSpeciesDef(ProceduralDef):
         """
         raise NotImplementedError(
             f"{type(self).__name__}.grow() not implemented — see "
-            "docs/content/tree_species_authoring.md")
+            "docs/content/tree_species_authoring.md"
+        )
 
     def palettes(self, rng: np.random.Generator) -> dict[str, np.ndarray]:
         """``{"bark", "leaf"}`` ramps; override for per-world hue drift."""
@@ -210,29 +210,32 @@ class TreeSpeciesDef(ProceduralDef):
         atlas = compose_atlas(
             layout,
             bark_texture(rng, hw, hh, pal["bark"]),
-            leaf_texture(rng, hw, hh, pal["leaf"],
-                         hole_thresh=self.LEAF_HOLE_THRESH,
-                         berry_color=self.BERRY_COLOR,
-                         berry_density=self.BERRY_DENSITY))
+            leaf_texture(
+                rng,
+                hw,
+                hh,
+                pal["leaf"],
+                hole_thresh=self.LEAF_HOLE_THRESH,
+                berry_color=self.BERRY_COLOR,
+                berry_density=self.BERRY_DENSITY,
+            ),
+        )
 
         # Per-variant child rngs chained off the injected rng — deterministic
         # and independent of how many draws each grow() consumes.  Separate
         # seeds for growth and impostor noise so the two-pass build below
         # (grow all → raster all at the POOL-COMMON scale) stays stable.
-        grow_seeds = rng.integers(0, 2 ** 63, size=n)
-        imp_seeds = rng.integers(0, 2 ** 63, size=n)
+        grow_seeds = rng.integers(0, 2**63, size=n)
+        imp_seeds = rng.integers(0, 2**63, size=n)
         meshes: list[TreeMesh] = []
         grown: list = []
-        for v in range(n):                       # pool-size loop (≤ 8)
+        for v in range(n):  # pool-size loop (≤ 8)
             vrng = np.random.default_rng(int(grow_seeds[v]))
             sk, leaves = self.grow(vrng, v)
             validate_skeleton(sk)
             tint = float(vrng.uniform(*self.TINT_RANGE))
-            wood = mesh_branches(sk, uv_rect=layout.bark_rect,
-                                 tint=(tint, tint, tint))
-            foliage = mesh_leaves(leaves, vrng,
-                                  uv_rect=layout.leaf_rect,
-                                  tint=(tint, tint, tint))
+            wood = mesh_branches(sk, uv_rect=layout.bark_rect, tint=(tint, tint, tint))
+            foliage = mesh_leaves(leaves, vrng, uv_rect=layout.leaf_rect, tint=(tint, tint, tint))
             meshes.append(merge_parts(wood, foliage))
             grown.append((sk, leaves))
 
@@ -241,14 +244,20 @@ class TreeSpeciesDef(ProceduralDef):
         max_h = max(m.height_m for m in meshes)
         max_r = max(m.radius_m for m in meshes)
         cw, ch = self.impostor_cell
-        px_per_m = min((cw - 1) / (2.0 * max(max_r, 0.25) * 1.05),
-                       (ch - 1) / (max(max_h, 0.5) * 1.02))
+        px_per_m = min(
+            (cw - 1) / (2.0 * max(max_r, 0.25) * 1.05), (ch - 1) / (max(max_h, 0.5) * 1.02)
+        )
         cells = [
-            rasterize_impostor(sk, leaves, pal["bark"], pal["leaf"],
-                               np.random.default_rng(int(imp_seeds[v])),
-                               cell_wh=self.impostor_cell,
-                               hole_thresh=self.LEAF_HOLE_THRESH,
-                               px_per_m=px_per_m)
+            rasterize_impostor(
+                sk,
+                leaves,
+                pal["bark"],
+                pal["leaf"],
+                np.random.default_rng(int(imp_seeds[v])),
+                cell_wh=self.impostor_cell,
+                hole_thresh=self.LEAF_HOLE_THRESH,
+                px_per_m=px_per_m,
+            )
             for v, (sk, leaves) in enumerate(grown)
         ]
 
@@ -260,4 +269,5 @@ class TreeSpeciesDef(ProceduralDef):
             max_height_m=max_h,
             max_radius_m=max_r,
             impostor_width_m=cw / px_per_m,
-            impostor_height_m=ch / px_per_m)
+            impostor_height_m=ch / px_per_m,
+        )

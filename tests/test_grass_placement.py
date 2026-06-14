@@ -65,6 +65,7 @@ class _Chunk:
 
 def _flat_chunks(cfg: Config, coords):
     from fire_engine.world.terrain.generation import generate_chunk
+
     return {c: _Chunk(generate_chunk(c, cfg)) for c in coords}
 
 
@@ -76,6 +77,7 @@ def _spawn_coords():
 # ---------------------------------------------------------------------------
 # hash_lowbias32
 # ---------------------------------------------------------------------------
+
 
 class TestHashLowbias32:
     def test_dtype_uint32(self):
@@ -105,7 +107,7 @@ class TestHashLowbias32:
         because each step is purely multiplicative/XOR with no additive offset).
         Pinning current behaviour so any fix is visible in the diff."""
         out = hash_lowbias32(np.array([0], dtype=np.uint32))
-        assert out[0] == np.uint32(0)   # CURRENT behaviour — pinned, not desired
+        assert out[0] == np.uint32(0)  # CURRENT behaviour — pinned, not desired
 
     def test_output_shape_preserved(self):
         x = np.arange(10, dtype=np.uint32)
@@ -120,25 +122,29 @@ class TestHashLowbias32:
             x *= 0x846CA68B; x ^= x >> 16
         and recorded as a golden master.
         """
-        inputs  = np.array([1, 100, 65535, 2147483647, 4294967295],
-                           dtype=np.uint32)
-        expected = hash_lowbias32(inputs).copy()   # first run IS the golden master
+        inputs = np.array([1, 100, 65535, 2147483647, 4294967295], dtype=np.uint32)
+        expected = hash_lowbias32(inputs).copy()  # first run IS the golden master
         # Re-run to confirm byte-identical replay.
         assert np.array_equal(hash_lowbias32(inputs), expected)
 
     def test_glsl_mirror_constants_in_shader(self):
         """The GLSL grass.vert must carry the same lowbias32 multipliers."""
-        src = (_REPO / "fire_engine" / "render" / "shaders" / "grass.vert"
-               ).read_text(encoding="utf-8").lower()
+        src = (
+            (_REPO / "fire_engine" / "render" / "shaders" / "grass.vert")
+            .read_text(encoding="utf-8")
+            .lower()
+        )
         for const in ("0x7feb352du", "0x846ca68bu"):
             assert const in src, f"GLSL constant missing: {const}"
 
     def test_glsl_chain_xor_constants_in_shader(self):
         """The GLSL grass.vert must carry the four inter-link XOR constants."""
-        src = (_REPO / "fire_engine" / "render" / "shaders" / "grass.vert"
-               ).read_text(encoding="utf-8").lower()
-        for const in ("0x9e3779b9u", "0x85ebca6bu", "0xc2b2ae35u",
-                      "0x27d4eb2fu"):
+        src = (
+            (_REPO / "fire_engine" / "render" / "shaders" / "grass.vert")
+            .read_text(encoding="utf-8")
+            .lower()
+        )
+        for const in ("0x9e3779b9u", "0x85ebca6bu", "0xc2b2ae35u", "0x27d4eb2fu"):
             assert const in src, f"GLSL XOR constant missing: {const}"
 
     def test_non_trivial_spread(self):
@@ -151,6 +157,7 @@ class TestHashLowbias32:
 # ---------------------------------------------------------------------------
 # grass_hash_seed
 # ---------------------------------------------------------------------------
+
 
 class TestGrassHashSeed:
     def setup_method(self):
@@ -165,14 +172,12 @@ class TestGrassHashSeed:
 
     def test_bounded_signed_int(self):
         s = grass_hash_seed(_VOL_GRASS)
-        assert 0 <= s < 2 ** 31
+        assert 0 <= s < 2**31
 
     def test_different_volumes_differ(self):
         set_world_seed(1337)
-        s1 = grass_hash_seed(ZoneVolume(1, "grass", (0.0, 0.0, 0.0),
-                                        (10.0, 10.0, 4.0)))
-        s2 = grass_hash_seed(ZoneVolume(2, "grass", (0.0, 0.0, 0.0),
-                                        (10.0, 10.0, 4.0)))
+        s1 = grass_hash_seed(ZoneVolume(1, "grass", (0.0, 0.0, 0.0), (10.0, 10.0, 4.0)))
+        s2 = grass_hash_seed(ZoneVolume(2, "grass", (0.0, 0.0, 0.0), (10.0, 10.0, 4.0)))
         assert s1 != s2
 
     def test_world_seed_changes_result(self):
@@ -187,6 +192,7 @@ class TestGrassHashSeed:
 # leaf_hash_seed
 # ---------------------------------------------------------------------------
 
+
 class TestLeafHashSeed:
     def test_deterministic_same_world_seed(self):
         set_world_seed(1337)
@@ -198,7 +204,7 @@ class TestLeafHashSeed:
     def test_bounded_signed_int(self):
         set_world_seed(1337)
         s = leaf_hash_seed(_VOL_TREES)
-        assert 0 <= s < 2 ** 31
+        assert 0 <= s < 2**31
 
     def test_different_volumes_differ(self):
         set_world_seed(1337)
@@ -221,11 +227,11 @@ class TestLeafHashSeed:
 # grass_instance_count
 # ---------------------------------------------------------------------------
 
+
 class TestGrassInstanceCount:
     def test_area_times_density_param(self):
         cfg = Config()
-        v = ZoneVolume(1, "grass", (0.0, 0.0, 0.0), (10.0, 10.0, 4.0),
-                       params={"density": 8.0})
+        v = ZoneVolume(1, "grass", (0.0, 0.0, 0.0), (10.0, 10.0, 4.0), params={"density": 8.0})
         assert grass_instance_count(v, cfg) == 800
 
     def test_falls_back_to_config_density(self):
@@ -236,8 +242,9 @@ class TestGrassInstanceCount:
 
     def test_capped_by_grass_max_instances(self):
         cfg = Config()
-        v = ZoneVolume(1, "grass", (-500.0, -500.0, 0.0),
-                       (500.0, 500.0, 4.0), params={"density": 1000.0})
+        v = ZoneVolume(
+            1, "grass", (-500.0, -500.0, 0.0), (500.0, 500.0, 4.0), params={"density": 1000.0}
+        )
         assert grass_instance_count(v, cfg) == int(cfg.grass_max_instances)
 
     def test_zero_area_volume(self):
@@ -251,8 +258,7 @@ class TestGrassInstanceCount:
 
     def test_negative_density_clamps_to_zero(self):
         cfg = Config()
-        v = ZoneVolume(1, "grass", (0.0, 0.0, 0.0), (10.0, 10.0, 4.0),
-                       params={"density": -1.0})
+        v = ZoneVolume(1, "grass", (0.0, 0.0, 0.0), (10.0, 10.0, 4.0), params={"density": -1.0})
         assert grass_instance_count(v, cfg) == 0
 
     def test_large_volume_caps(self):
@@ -267,6 +273,7 @@ class TestGrassInstanceCount:
 # leaf_instance_count
 # ---------------------------------------------------------------------------
 
+
 class TestLeafInstanceCount:
     def test_area_times_default_density(self):
         cfg = Config()
@@ -276,20 +283,21 @@ class TestLeafInstanceCount:
 
     def test_leaf_density_param_override(self):
         cfg = Config()
-        v = ZoneVolume(1, "trees", (0.0, 0.0, 0.0), (10.0, 10.0, 4.0),
-                       params={"leaf_density": 2.0})
+        v = ZoneVolume(1, "trees", (0.0, 0.0, 0.0), (10.0, 10.0, 4.0), params={"leaf_density": 2.0})
         assert leaf_instance_count(v, cfg) == 200
 
     def test_capped_by_wind_leaf_max_instances(self):
         cfg = Config()
-        v = ZoneVolume(1, "trees", (-500.0, -500.0, 0.0),
-                       (500.0, 500.0, 4.0), params={"leaf_density": 1000.0})
+        v = ZoneVolume(
+            1, "trees", (-500.0, -500.0, 0.0), (500.0, 500.0, 4.0), params={"leaf_density": 1000.0}
+        )
         assert leaf_instance_count(v, cfg) == int(cfg.wind_leaf_max_instances)
 
     def test_negative_leaf_density_clamps_to_zero(self):
         cfg = Config()
-        v = ZoneVolume(1, "trees", (0.0, 0.0, 0.0), (10.0, 10.0, 4.0),
-                       params={"leaf_density": -3.0})
+        v = ZoneVolume(
+            1, "trees", (0.0, 0.0, 0.0), (10.0, 10.0, 4.0), params={"leaf_density": -3.0}
+        )
         assert leaf_instance_count(v, cfg) == 0
 
 
@@ -379,6 +387,7 @@ class TestInstanceAttribs:
 # bake_grass_height_field
 # ---------------------------------------------------------------------------
 
+
 class TestBakeGrassHeightField:
     def setup_method(self):
         set_world_seed(1337)
@@ -414,7 +423,7 @@ class TestBakeGrassHeightField:
 
     def test_carved_column_gets_sentinel(self):
         chunk = self.chunks[(0, 0, 0)]
-        chunk.materials[2, 3, :] = 0   # carve world x [1.0,1.5), y [1.5,2.0)
+        chunk.materials[2, 3, :] = 0  # carve world x [1.0,1.5), y [1.5,2.0)
         field = bake_grass_height_field(self.vol, self.chunks, self.cfg)
         # ix = (1.25 - (-12)) / 0.5 = 26; iy = (1.75 - (-5)) / 0.5 = 13
         assert field[13, 26, 0] == HEIGHT_SENTINEL

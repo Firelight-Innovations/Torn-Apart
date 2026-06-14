@@ -80,11 +80,11 @@ _log = get_logger("main")
 
 # Demo constants (not gameplay magic numbers — these are dev-binding tuning).
 _SAVE_PATH = "saves/quick.ta"
-_EXPLOSION_RADIUS_M = 2.5      # SphereBrush radius for left-click explosions
-_RAY_MAX_DISTANCE_M = 100.0    # how far the click ray probes for terrain
-_PREWARM_STREAM_FRAMES = 80    # stream_frame iterations to pre-load spawn area
-_BOOT_TIME_OF_DAY_H = 10.0     # boot the demo mid-morning (game clock starts at
-                               # 00:00 otherwise and the sky dims terrain to night)
+_EXPLOSION_RADIUS_M = 2.5  # SphereBrush radius for left-click explosions
+_RAY_MAX_DISTANCE_M = 100.0  # how far the click ray probes for terrain
+_PREWARM_STREAM_FRAMES = 80  # stream_frame iterations to pre-load spawn area
+_BOOT_TIME_OF_DAY_H = 10.0  # boot the demo mid-morning (game clock starts at
+# 00:00 otherwise and the sky dims terrain to night)
 
 # GI test-room materials (debug ids far above the terrain materials).  Albedo
 # rows are patched into the lighting palette; flat-colour texture triples are
@@ -95,24 +95,25 @@ _MAT_GI_GREEN = 202
 _MAT_GI_GLOW = 203
 _GI_TEST_ALBEDO: dict[int, tuple[float, float, float]] = {
     _MAT_GI_WHITE: (0.86, 0.86, 0.86),
-    _MAT_GI_RED:   (0.78, 0.06, 0.05),
+    _MAT_GI_RED: (0.78, 0.06, 0.05),
     _MAT_GI_GREEN: (0.07, 0.66, 0.08),
-    _MAT_GI_GLOW:  (0.90, 0.88, 0.84),
+    _MAT_GI_GLOW: (0.90, 0.88, 0.84),
 }
-_GI_GLOW_RADIANCE = (4.0, 3.6, 2.8)   # ceiling-panel emission (linear HDR;
-                                      # EMISSION_SCALE=8 is the storage cap).
-                                      # Lowered from (8,7.2,5.6): a panel that
-                                      # bright in a closed white box blows the
-                                      # auto-exposed interior to flat gray and
-                                      # hides the red/green wall bleed.  This
-                                      # value still strongly lights the coloured
-                                      # walls (saturated bounce) without blowout.
+_GI_GLOW_RADIANCE = (4.0, 3.6, 2.8)  # ceiling-panel emission (linear HDR;
+# EMISSION_SCALE=8 is the storage cap).
+# Lowered from (8,7.2,5.6): a panel that
+# bright in a closed white box blows the
+# auto-exposed interior to flat gray and
+# hides the red/green wall bleed.  This
+# value still strongly lights the coloured
+# walls (saturated bounce) without blowout.
 # AreaLight co-located with the panel (fills the room; meter-visible).
-_GI_PANEL_COLOR = (1.0, 0.95, 0.85)   # warm white
-_GI_PANEL_INTENSITY = 2.0             # HDR; a low white direct fill so the
-                                      # red/green wall inter-reflection isn't
-                                      # swamped by white light (was 6.0 → the
-                                      # closed white box blew out flat gray).
+_GI_PANEL_COLOR = (1.0, 0.95, 0.85)  # warm white
+_GI_PANEL_INTENSITY = 2.0  # HDR; a low white direct fill so the
+# red/green wall inter-reflection isn't
+# swamped by white light (was 6.0 → the
+# closed white box blew out flat gray).
+
 
 def _gi_ground_lut_entries():
     """
@@ -130,10 +131,12 @@ def _gi_ground_lut_entries():
     dict[int, tuple[numpy.ndarray, numpy.ndarray]]
     """
     import numpy as np
+
     entries = {}
     for mid, rgb in _GI_TEST_ALBEDO.items():
-        srgb = (np.clip(np.asarray(rgb, np.float32), 0.0, 1.0)
-                ** (1.0 / 2.2) * 255.0 + 0.5).astype(np.uint8)
+        srgb = (np.clip(np.asarray(rgb, np.float32), 0.0, 1.0) ** (1.0 / 2.2) * 255.0 + 0.5).astype(
+            np.uint8
+        )
         entries[mid] = (srgb.reshape(1, 3), np.zeros((0,), np.float32))
     return entries
 
@@ -170,13 +173,14 @@ def _ensure_dedicated_gpu() -> None:
     try:
         import ctypes
         import winreg
+
         targets = {sys.executable}
         base = getattr(sys, "_base_executable", None)
         if base:
             targets.add(base)
         buf = ctypes.create_unicode_buffer(1024)
         if ctypes.windll.kernel32.GetModuleFileNameW(None, buf, 1024):
-            targets.add(buf.value)            # the actual process image
+            targets.add(buf.value)  # the actual process image
         key_path = r"Software\Microsoft\DirectX\UserGpuPreferences"
         value = "GpuPreference=2;"
         with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path) as key:
@@ -188,8 +192,8 @@ def _ensure_dedicated_gpu() -> None:
                 if current != value:
                     winreg.SetValueEx(key, exe, 0, winreg.REG_SZ, value)
                     _log.info(
-                        "Registered %s for the high-performance GPU "
-                        "(applies on next launch)", exe)
+                        "Registered %s for the high-performance GPU (applies on next launch)", exe
+                    )
     except OSError as exc:
         _log.warning("GPU preference registry write failed: %s", exc)
 
@@ -235,11 +239,12 @@ def _load_proof_model(app) -> None:
     """
     try:
         from fire_engine.resources import default_manager, acquire
+
         fixture = Path(__file__).resolve().parent / "tests" / "fixtures" / "triangle.egg"
         handle = acquire(default_manager.load(str(fixture)))
         nodepath = handle.resource
         nodepath.reparent_to(app.render)
-        nodepath.set_pos(0.0, 0.0, 12.0)   # near spawn, small + visible
+        nodepath.set_pos(0.0, 0.0, 12.0)  # near spawn, small + visible
         nodepath.set_scale(2.0)
         _log.info("Loaded proof model tests/fixtures/triangle.egg")
     except Exception as exc:  # noqa: BLE001  (demo proof; never fatal)
@@ -291,6 +296,7 @@ def build_demo(load_path: str | None = None):
     # 5. App — creates the window + camera_go (at (0,-20,10)) + CameraComponent.
     #    (Constructed before step 4 so the Panda3D global loader exists.)
     from fire_engine.render.app import App  # panda3d import lives behind world/
+
     app = App(cfg, clock, bus)
 
     # Which GPU did Windows actually give us?  On hybrid laptops an "Intel"
@@ -303,13 +309,15 @@ def build_demo(load_path: str | None = None):
         if "intel" in renderer.lower():
             _log.warning(
                 "Integrated GPU in use — restart the game to pick up the "
-                "high-performance GPU preference written this boot.")
+                "high-performance GPU preference written this boot."
+            )
     except Exception as exc:  # noqa: BLE001  (diagnostics; never fatal)
         _log.debug("Renderer query failed: %s", exc)
 
     # 4. Resource manager loaders — register AFTER the window/loader exists.
     from fire_engine.resources import default_manager
     from fire_engine.render.resource_adapter import register_panda_loaders
+
     register_panda_loaders(default_manager)
 
     # 7. Terrain manager — built BEFORE the SunlightComputer (which needs it as
@@ -321,10 +329,12 @@ def build_demo(load_path: str | None = None):
     #     mark_baseline() makes these defaults the save baseline, so untouched
     #     worlds keep a ~0-byte "zones" delta.
     from fire_engine.zones import ZoneStore
+
     zone_store = ZoneStore()
     zone_store.add(
         "grass",
-        (-12.0, -5.0, 6.0), (12.0, 25.0, 10.0),
+        (-12.0, -5.0, 6.0),
+        (12.0, 25.0, 10.0),
         params={"density": cfg.grass_density_per_m2},
     )
     # Demo "trees" volume — 3-D instanced trees (world/tree_renderer.py) AND
@@ -335,7 +345,8 @@ def build_demo(load_path: str | None = None):
     # picks from the registered TreeSpeciesDefs (procedural/flora/species/).
     zone_store.add(
         "trees",
-        (14.0, -5.0, 6.0), (34.0, 15.0, 14.0),
+        (14.0, -5.0, 6.0),
+        (34.0, 15.0, 14.0),
         params={"species_mix": "tree_gnarled_oak:3,tree_dead:1"},
     )
     # Flora volumes — wildflower sprites (world/flora_renderer.py) scattered
@@ -344,11 +355,13 @@ def build_demo(load_path: str | None = None):
     # running from the meadow into the treeline.
     zone_store.add(
         "flowers",
-        (-12.0, -5.0, 6.0), (12.0, 25.0, 10.0),
+        (-12.0, -5.0, 6.0),
+        (12.0, 25.0, 10.0),
     )
     zone_store.add(
         "bushes",
-        (-12.0, -5.0, 6.0), (34.0, 25.0, 11.0),
+        (-12.0, -5.0, 6.0),
+        (34.0, 25.0, 11.0),
         params={"species_mix": "bush_scrub:2,bush_berry:1"},
     )
     zone_store.mark_baseline()
@@ -361,11 +374,12 @@ def build_demo(load_path: str | None = None):
     #     baseline (ZoneStore pattern): an untouched world keeps a ~0-byte
     #     "buildings" delta, and the house regenerates on load.
     from fire_engine.buildings import BuildingManager
+
     building_manager = BuildingManager(cfg, bus)
     if cfg.debug_demo_building:
         from fire_engine.procedural import get as _get_def
-        building_manager.add(
-            _get_def("building_demo_house", ground_z=cfg.ground_height_m))
+
+        building_manager.add(_get_def("building_demo_house", ground_z=cfg.ground_height_m))
     building_manager.mark_baseline()
     app.building_manager = building_manager
 
@@ -388,8 +402,9 @@ def build_demo(load_path: str | None = None):
     #     the SkyRendererComponent (added below) drives sky_system.update() once
     #     per frame from its update() and reads the SkyState in late_update().
     from fire_engine.world.sky import SkySystem, WeatherType
+
     sky_system = SkySystem(cfg, clock, bus)
-    app.sky_system = sky_system   # exposed for tooling (tools/screenshot.py)
+    app.sky_system = sky_system  # exposed for tooling (tools/screenshot.py)
 
     # 8. Save manager — register terrain first (registration order matters),
     #    then the weather schedule (Saveable, save_key="weather").
@@ -410,8 +425,7 @@ def build_demo(load_path: str | None = None):
     # texture stage would steal a texture unit from the shader's 3-D
     # samplers (albedo arrives via the per-material stage triples instead).
     ground_tex = None if use_gpu_lighting else _to_ground_texture()
-    app.setup_terrain_rendering(
-        ground_tex, _to_material_textures(triples=use_gpu_lighting))
+    app.setup_terrain_rendering(ground_tex, _to_material_textures(triples=use_gpu_lighting))
 
     # 9b. GPU volumetric lighting pipeline + terrain surface shader.  The
     #     palette is the default (texture-derived) one plus the GI test-room
@@ -422,20 +436,24 @@ def build_demo(load_path: str | None = None):
         from fire_engine.lighting.gpu import GpuLightingPipeline
         from fire_engine.lighting.palette import build_default_palette
         from fire_engine.render.terrain_shader import apply_terrain_shader
+
         palette = build_default_palette()
         for mid, rgb in _GI_TEST_ALBEDO.items():
             palette.albedo[mid] = rgb
         palette = palette.with_emission(_MAT_GI_GLOW, _GI_GLOW_RADIANCE)
-        lighting_pipeline = GpuLightingPipeline(cfg, app, chunk_manager, bus,
-                                                palette=palette)
+        lighting_pipeline = GpuLightingPipeline(cfg, app, chunk_manager, bus, palette=palette)
         app.lighting_pipeline = lighting_pipeline
         # Deterministic per-world hash offset for the procedural ground pattern.
         from fire_engine.core.rng import for_domain
+
         ground_seed = float(for_domain("terrain", "ground").integers(0, 65536))
-        apply_terrain_shader(app.terrain_root, lighting_pipeline,
-                             seed=ground_seed,
-                             texels_per_m=cfg.ground_texels_per_m,
-                             extra_materials=_gi_ground_lut_entries())
+        apply_terrain_shader(
+            app.terrain_root,
+            lighting_pipeline,
+            seed=ground_seed,
+            texels_per_m=cfg.ground_texels_per_m,
+            extra_materials=_gi_ground_lut_entries(),
+        )
         # Bind the lit-surface uniform contract on ``render`` so EVERY shader
         # that includes lit_surface.glsl — terrain, foliage, future
         # buildings/NPCs anywhere in the graph — inherits it.  The frame loop
@@ -450,6 +468,7 @@ def build_demo(load_path: str | None = None):
     #      runs update before late_update), so no App changes are needed.
     from fire_engine.render import instantiate
     from fire_engine.render.sky_renderer import SkyRendererComponent
+
     sky_go = instantiate()
     sky_go.name = "Sky"
     sky_go.add_component(
@@ -473,6 +492,7 @@ def build_demo(load_path: str | None = None):
     #      this component only READS the advanced weather (no double-update).
     #      Gated by gfx_weather_map (kill switch); virga by gfx_cloud_virga.
     from fire_engine.render.weather_renderer import WeatherMapComponent
+
     weather_go = instantiate()
     weather_go.name = "WeatherMap"
     weather_go.add_component(
@@ -491,16 +511,17 @@ def build_demo(load_path: str | None = None):
     #      terrain_root BEFORE any component starts, so grass is valid (scalar
     #      fallback) until the WindSystemComponent's first upload flips it to 1.
     from fire_engine.world.wind import WindField
+
     try:
-        from fire_engine.world.wind import VenturiWorker        # WP2 (may not exist yet)
+        from fire_engine.world.wind import VenturiWorker  # WP2 (may not exist yet)
+
         venturi_worker = VenturiWorker()
         venturi_worker.start()
     except ImportError:
         venturi_worker = None
-        _log.info("Venturi worker unavailable (WP2 not landed) — wind runs "
-                  "with identity venturi")
+        _log.info("Venturi worker unavailable (WP2 not landed) — wind runs with identity venturi")
     wind_field = WindField(cfg, worker=venturi_worker)
-    app.wind_worker = venturi_worker        # exposed so main() can stop it on exit
+    app.wind_worker = venturi_worker  # exposed so main() can stop it on exit
     app.terrain_root.set_shader_input("u_wind_enabled", 0.0)
 
     # 10b-gust. Couple the weather sim's gust fronts (M8) to the wind field: a
@@ -515,6 +536,7 @@ def build_demo(load_path: str | None = None):
     #      radiance cascades as the terrain, swaying with the weather.
     #      GPU lighting backend only (the component disables itself on cpu).
     from fire_engine.render.grass_renderer import GrassRendererComponent
+
     grass_go = instantiate()
     grass_go.name = "Grass"
     grass_go.add_component(
@@ -534,6 +556,7 @@ def build_demo(load_path: str | None = None):
     #      sprite-atlas variants).  GPU lighting backend only (disables
     #      itself on cpu).
     from fire_engine.render.flora_renderer import FloraRendererComponent
+
     flora_go = instantiate()
     flora_go.name = "Flora"
     flora_go.add_component(
@@ -554,6 +577,7 @@ def build_demo(load_path: str | None = None):
     #      see docs/content/tree_species_authoring.md.  GPU lighting backend
     #      only (disables itself on cpu).
     from fire_engine.render.tree_renderer import TreeRendererComponent
+
     tree_go = instantiate()
     tree_go.name = "Trees"
     tree_go.add_component(
@@ -575,9 +599,10 @@ def build_demo(load_path: str | None = None):
     #      it is empty (the component just draws nothing).  GPU backend only.
     if lighting_pipeline is not None:
         from fire_engine.buildings.occlusion import BuildingOccupancyRasterizer
-        lighting_pipeline.register_geometry_provider(
-            BuildingOccupancyRasterizer(building_manager))
+
+        lighting_pipeline.register_geometry_provider(BuildingOccupancyRasterizer(building_manager))
     from fire_engine.render.building_renderer import BuildingRendererComponent
+
     building_go = instantiate()
     building_go.name = "Buildings"
     building_go.add_component(
@@ -595,6 +620,7 @@ def build_demo(load_path: str | None = None):
     #      GPU lighting backend only (disables itself + leaves the scalar
     #      fallback on cpu); it OWNS the venturi worker and stops it on destroy.
     from fire_engine.render.wind_renderer import WindSystemComponent
+
     wind_go = instantiate()
     wind_go.name = "Wind"
     wind_go.add_component(
@@ -620,6 +646,7 @@ def build_demo(load_path: str | None = None):
         DustMoteComponent,
         LeafLitterComponent,
     )
+
     dust_go = instantiate()
     dust_go.name = "DustMotes"
     dust_go.add_component(
@@ -651,6 +678,7 @@ def build_demo(load_path: str | None = None):
     #      Gated by gfx_rain_mode ("off"/"cylinders"/"particles") +
     #      gfx_rain_occlusion; GPU lighting backend only (disables itself on cpu).
     from fire_engine.render.rain_renderer import RainRendererComponent
+
     rain_go = instantiate()
     rain_go.name = "Rain"
     rain_go.add_component(
@@ -671,6 +699,7 @@ def build_demo(load_path: str | None = None):
     #      gfx_lightning_bolts; GPU lighting backend only (disables itself on
     #      cpu — the headless strike schedule + thunder still run).
     from fire_engine.render.lightning_renderer import LightningRendererComponent
+
     lightning_go = instantiate()
     lightning_go.name = "Lightning"
     lightning_go.add_component(
@@ -693,6 +722,7 @@ def build_demo(load_path: str | None = None):
     #      sky_system) so it still has a field to sample.
     if cfg.debug_wind_ball and wind_field is not None:
         from fire_engine.render.wind_debug import WindBallDebugComponent
+
         wind_component_active = use_gpu_lighting and lighting_pipeline is not None
         ball_go = instantiate()
         ball_go.name = "WindDebugBall"
@@ -712,6 +742,7 @@ def build_demo(load_path: str | None = None):
     #      [graphics] preset (gfx_post_process); on failure it disables itself
     #      and the surface shaders keep tonemapping internally (no crash).
     from fire_engine.render.post_process import PostProcessPipeline
+
     app.post_process = PostProcessPipeline(app, cfg)
 
     # 11. Resource-manager proof model (non-fatal).
@@ -765,10 +796,16 @@ def build_demo(load_path: str | None = None):
         # froxel fog catches it as a glow.
         if lighting_pipeline is not None:
             from fire_engine.lighting.lights import PointLight
-            lighting_pipeline.lights.add(PointLight(
-                position=(hit.point.x, hit.point.y, hit.point.z),
-                color=(1.0, 0.55, 0.2), intensity=40.0, radius=18.0,
-                ttl_s=0.5))
+
+            lighting_pipeline.lights.add(
+                PointLight(
+                    position=(hit.point.x, hit.point.y, hit.point.z),
+                    color=(1.0, 0.55, 0.2),
+                    intensity=40.0,
+                    radius=18.0,
+                    ttl_s=0.5,
+                )
+            )
         _log.info("Explosion at %s — %d chunk(s) cratered", hit.point, len(touched))
 
     def on_click() -> None:
@@ -831,10 +868,15 @@ def build_demo(load_path: str | None = None):
     # F7 toggles the game-time scale for day-cycle fast-forward, F8 jumps the
     # game clock forward 6 game-hours to snap to interesting skies.
     weather_cycle: list = [
-        WeatherType.CLEAR, WeatherType.CLOUDY, WeatherType.OVERCAST,
-        WeatherType.FOG, WeatherType.RAIN, WeatherType.STORM, None,
+        WeatherType.CLEAR,
+        WeatherType.CLOUDY,
+        WeatherType.OVERCAST,
+        WeatherType.FOG,
+        WeatherType.RAIN,
+        WeatherType.STORM,
+        None,
     ]
-    weather_index = [len(weather_cycle) - 1]   # starts at None (natural)
+    weather_index = [len(weather_cycle) - 1]  # starts at None (natural)
 
     def on_cycle_weather() -> None:
         """F6 → force the next weather type in the cycle (None = natural)."""
@@ -843,18 +885,22 @@ def build_demo(load_path: str | None = None):
         sky_system.weather.force_weather(forced)
         st = sky_system.state
         _log.info(
-            "Weather forced to %s (current=%s, coverage=%.2f, fog=%.4f /m, "
-            "rain=%.2f)",
+            "Weather forced to %s (current=%s, coverage=%.2f, fog=%.4f /m, rain=%.2f)",
             forced.name if forced is not None else "None (natural schedule)",
             sky_system.weather.current.name,
-            st.cloud_coverage, st.fog_density, st.rain_intensity,
+            st.cloud_coverage,
+            st.fog_density,
+            st.rain_intensity,
         )
 
     def on_toggle_time_scale() -> None:
         """F7 → toggle clock.game_time_scale between 60 (normal) and 1800 (fast)."""
         clock.game_time_scale = 1800.0 if clock.game_time_scale <= 60.0 else 60.0
-        _log.info("game_time_scale = %.0f (1 real s = %.0f game s)",
-                  clock.game_time_scale, clock.game_time_scale)
+        _log.info(
+            "game_time_scale = %.0f (1 real s = %.0f game s)",
+            clock.game_time_scale,
+            clock.game_time_scale,
+        )
 
     def on_jump_time() -> None:
         """F8 → jump the game clock forward 6 game-hours (wraps the day)."""
@@ -863,8 +909,12 @@ def build_demo(load_path: str | None = None):
             new_tod -= 24.0 * 3600.0
             clock.game_day += 1
         clock.game_time_of_day = new_tod
-        _log.info("Game time jumped to day %d, %02d:%02d", clock.game_day,
-                  int(new_tod // 3600), int(new_tod % 3600 // 60))
+        _log.info(
+            "Game time jumped to day %d, %02d:%02d",
+            clock.game_day,
+            int(new_tod // 3600),
+            int(new_tod % 3600 // 60),
+        )
 
     # --- Dynamic-light dev bindings (L / K) — GPU lighting backend only -----
     # L drops a warm torch point-light at the camera (watch the gathered GI
@@ -874,12 +924,14 @@ def build_demo(load_path: str | None = None):
         if lighting_pipeline is None:
             return
         from fire_engine.lighting.lights import PointLight
+
         pos = app.camera_go.transform.position
-        lighting_pipeline.lights.add(PointLight(
-            position=(pos.x, pos.y, pos.z),
-            color=(1.0, 0.62, 0.28), intensity=8.0, radius=16.0))
-        _log.info("Torch dropped at %s (%d light(s) active)",
-                  pos, lighting_pipeline.lights.count)
+        lighting_pipeline.lights.add(
+            PointLight(
+                position=(pos.x, pos.y, pos.z), color=(1.0, 0.62, 0.28), intensity=8.0, radius=16.0
+            )
+        )
+        _log.info("Torch dropped at %s (%d light(s) active)", pos, lighting_pipeline.lights.count)
 
     def on_clear_lights() -> None:
         """K → remove all dynamic lights."""
@@ -899,6 +951,7 @@ def build_demo(load_path: str | None = None):
         if lighting_pipeline is None:
             return
         from fire_engine.lighting.lights import SpotLight
+
         if flashlight["id"] is not None:
             lighting_pipeline.lights.remove(flashlight["id"])
             flashlight["id"] = flashlight["light"] = None
@@ -926,11 +979,10 @@ def build_demo(load_path: str | None = None):
             fwd = app.camera_go.transform.forward
             new_pos = (pos.x, pos.y, pos.z)
             new_dir = (fwd.x, fwd.y, fwd.z)
-            moved = sum((a - b) ** 2 for a, b in
-                        zip(new_pos, light.position)) > 0.15 ** 2
-            turned = sum(a * b for a, b in
-                         zip(new_dir, light.direction)) < math.cos(
-                             math.radians(1.5))
+            moved = sum((a - b) ** 2 for a, b in zip(new_pos, light.position)) > 0.15**2
+            turned = sum(a * b for a, b in zip(new_dir, light.direction)) < math.cos(
+                math.radians(1.5)
+            )
             if moved or turned:
                 light.position = new_pos
                 light.direction = new_dir
@@ -955,13 +1007,14 @@ def build_demo(load_path: str | None = None):
     # picking; see docs/systems/devtools.md.  Expose the demo explosion as an
     # action button too so it can be triggered from the menu.
     from fire_engine.render import DevOverlay
+
     overlay = DevOverlay(app) if DevOverlay is not None else None
     if overlay is not None:
         overlay.actions.add_action("Fire Explosion", fire_explosion)
         app.accept("f1", overlay.toggle)
         # Releasing the mouse ends an in-progress transform-gizmo drag.
         app.accept("mouse1-up", overlay.end_gizmo_drag)
-        app.dev_overlay = overlay   # exposed for tooling (tools/screenshot.py)
+        app.dev_overlay = overlay  # exposed for tooling (tools/screenshot.py)
 
     # --- Editor-authored scenes — load placed objects from .ta saves --------
     # SceneRuntime is the game-side Saveable for the Fire Editor's
@@ -971,11 +1024,12 @@ def build_demo(load_path: str | None = None):
     # and after the overlay/lighting exist (the visual factory needs both).
     from fire_engine.scene import SceneRuntime
     from fire_engine.render.scene_visuals import SceneVisualFactory
+
     scene_visuals = SceneVisualFactory(app, lighting_pipeline, overlay)
     scene_runtime = SceneRuntime(visual_factory=scene_visuals)
-    scene_visuals.runtime = scene_runtime   # gizmo edits write back for F5
+    scene_visuals.runtime = scene_runtime  # gizmo edits write back for F5
     save_manager.register(scene_runtime)
-    app.scene_runtime = scene_runtime       # exposed for tooling/tests
+    app.scene_runtime = scene_runtime  # exposed for tooling/tests
 
     app.accept("mouse1", on_click)
     app.accept("f5", on_save)
@@ -992,19 +1046,25 @@ def build_demo(load_path: str | None = None):
         except FileNotFoundError:
             _log.error("--load: no such save: %s", load_path)
         except SaveIncompatibleError as exc:
-            _log.error("--load: incompatible save (its world seed must match "
-                       "config.toml's world_seed): %s", exc)
+            _log.error(
+                "--load: incompatible save (its world seed must match "
+                "config.toml's world_seed): %s",
+                exc,
+            )
         else:
             app._stream_and_upload_terrain()
             if scene_runtime.spawn_position is not None:
                 app.camera_go.transform.position = scene_runtime.spawn_position
-                _log.info("Player start set by authored spawn point: %s",
-                          scene_runtime.spawn_position)
+                _log.info(
+                    "Player start set by authored spawn point: %s", scene_runtime.spawn_position
+                )
 
-    _log.info("Demo ready — WASD+mouse to fly, ESC to capture mouse, "
-              "left-click to explode, F1 dev overlay, F5 save, F9 load, "
-              "F6 cycle weather, F7 time scale, F8 +6h, F flashlight, "
-              "G GI test room, L torch, K clear lights.")
+    _log.info(
+        "Demo ready — WASD+mouse to fly, ESC to capture mouse, "
+        "left-click to explode, F1 dev overlay, F5 save, F9 load, "
+        "F6 cycle weather, F7 time scale, F8 +6h, F flashlight, "
+        "G GI test room, L torch, K clear lights."
+    )
 
     return app
 
@@ -1031,6 +1091,7 @@ def build_gi_test_room(app) -> tuple[float, float, float]:
     tuple[float, float, float] — the room's (cx, cy, floor_z) in meters.
     """
     from fire_engine.world.terrain import BoxBrush
+
     chunk_manager = app.chunk_manager
     bus = app._event_bus
     cfg = app._config
@@ -1042,18 +1103,28 @@ def build_gi_test_room(app) -> tuple[float, float, float]:
     sign = 1.0 if (fwd.x if along_x else fwd.y) >= 0.0 else -1.0
     cx = pos.x + (14.0 * sign if along_x else 0.0)
     cy = pos.y + (0.0 if along_x else 14.0 * sign)
-    hit = raycast_voxel(Vec3(cx, cy, pos.z + 40.0), Vec3(0.0, 0.0, -1.0),
-                        chunk_manager.get_or_create, max_distance_m=90.0)
+    hit = raycast_voxel(
+        Vec3(cx, cy, pos.z + 40.0),
+        Vec3(0.0, 0.0, -1.0),
+        chunk_manager.get_or_create,
+        max_distance_m=90.0,
+    )
     z0 = (hit.point.z if hit is not None else cfg.ground_height_m) + 0.5
-    cz = z0 + 2.25                                       # interior mid-height
+    cz = z0 + 2.25  # interior mid-height
 
     room_touched: set = set()
 
     def box(half: tuple, at: tuple, mode: BrushMode, material: int = 1):
-        room_touched.update(apply_brush(
-            BoxBrush(half_extents_m=Vec3(*half)), Vec3(*at), mode,
-            material=material,
-            chunk_provider=chunk_manager.get_or_create, bus=bus))
+        room_touched.update(
+            apply_brush(
+                BoxBrush(half_extents_m=Vec3(*half)),
+                Vec3(*at),
+                mode,
+                material=material,
+                chunk_provider=chunk_manager.get_or_create,
+                bus=bus,
+            )
+        )
 
     # Solid white block, then hollow the interior.
     box((5.5, 5.5, 3.25), (cx, cy, z0 + 2.25), BrushMode.ADD, _MAT_GI_WHITE)
@@ -1070,11 +1141,9 @@ def build_gi_test_room(app) -> tuple[float, float, float]:
     box((1.5, 1.5, 0.5), (cx, cy, z0 + 4.75), BrushMode.ADD, _MAT_GI_GLOW)
     # Doorway through the camera-facing wall + a small roof shaft hole.
     if along_x:
-        box((0.75, 1.25, 1.5), (cx - sign * 5.0, cy, z0 + 1.5),
-            BrushMode.REMOVE)
+        box((0.75, 1.25, 1.5), (cx - sign * 5.0, cy, z0 + 1.5), BrushMode.REMOVE)
     else:
-        box((1.25, 0.75, 1.5), (cx, cy - sign * 5.0, z0 + 1.5),
-            BrushMode.REMOVE)
+        box((1.25, 0.75, 1.5), (cx, cy - sign * 5.0, z0 + 1.5), BrushMode.REMOVE)
     box((0.75, 0.75, 1.0), (cx + 2.8, cy + 2.8, z0 + 5.0), BrushMode.REMOVE)
 
     # Same-frame remesh of every chunk the room carved (plus border
@@ -1091,25 +1160,39 @@ def build_gi_test_room(app) -> tuple[float, float, float]:
     pipeline = getattr(app, "lighting_pipeline", None)
     if pipeline is not None:
         from fire_engine.lighting.lights import AreaLight
-        pipeline.lights.add(AreaLight(
-            center=(cx, cy, z0 + 4.1),            # just below the panel face
-            half_extents=(1.5, 1.5, 0.15),
-            color=_GI_PANEL_COLOR, intensity=_GI_PANEL_INTENSITY,
-            radius=18.0))
 
-    _log.info("GI test room built at (%.1f, %.1f, %.1f) — walk in and watch "
-              "the white walls pick up red/green bounce", cx, cy, z0)
+        pipeline.lights.add(
+            AreaLight(
+                center=(cx, cy, z0 + 4.1),  # just below the panel face
+                half_extents=(1.5, 1.5, 0.15),
+                color=_GI_PANEL_COLOR,
+                intensity=_GI_PANEL_INTENSITY,
+                radius=18.0,
+            )
+        )
+
+    _log.info(
+        "GI test room built at (%.1f, %.1f, %.1f) — walk in and watch "
+        "the white walls pick up red/green bounce",
+        cx,
+        cy,
+        z0,
+    )
     return cx, cy, z0
 
 
 def main() -> None:
     """Boot the demo and run the blocking main loop (opens a window)."""
     import argparse
+
     parser = argparse.ArgumentParser(description="Torn Apart demo")
     parser.add_argument(
-        "--load", metavar="PATH", default=None,
+        "--load",
+        metavar="PATH",
+        default=None,
         help="open a .ta save/scene at boot (e.g. scenes/foo.ta saved from the "
-             "Fire Editor); its world seed must match config.toml's world_seed")
+        "Fire Editor); its world seed must match config.toml's world_seed",
+    )
     args = parser.parse_args()
     app = build_demo(load_path=args.load)
     # 12. Run (blocks until the window closes).  The try/finally stops the
@@ -1144,7 +1227,8 @@ def _to_ground_texture():
     """
     try:
         from fire_engine.render.texture_bridge import to_panda_texture
-        rgba = get_procedural("wasteland_ground")   # (256,256,4) uint8
+
+        rgba = get_procedural("wasteland_ground")  # (256,256,4) uint8
         return to_panda_texture(rgba)
     except Exception as exc:  # noqa: BLE001
         _log.warning("Ground texture build failed (untextured terrain): %s", exc)
@@ -1177,6 +1261,7 @@ def _to_material_textures(triples: bool = False):
     try:
         from fire_engine.render.texture_bridge import to_panda_texture
         from fire_engine.world.terrain import MATERIAL_DIRT, MATERIAL_GRASS
+
         if not triples:
             return {
                 MATERIAL_DIRT: to_panda_texture(get_procedural("dirt_ground")),
@@ -1188,19 +1273,19 @@ def _to_material_textures(triples: bool = False):
             flat_normal_map,
         )
         import numpy as np
+
         emis_tex = to_panda_texture(black_emission_map())
         flat_n_tex = to_panda_texture(flat_normal_map())
 
         def triple(def_name: str):
             rgba = get_procedural(def_name)
-            return (to_panda_texture(rgba),
-                    to_panda_texture(derive_normal_map(rgba)),
-                    emis_tex)
+            return (to_panda_texture(rgba), to_panda_texture(derive_normal_map(rgba)), emis_tex)
 
         def flat_rgba(rgb_linear, alpha: int = 255) -> np.ndarray:
             """16×16 solid-colour RGBA from linear RGB (sRGB-encoded)."""
-            srgb = (np.clip(np.asarray(rgb_linear, np.float32), 0.0, 1.0)
-                    ** (1.0 / 2.2) * 255.0).astype(np.uint8)
+            srgb = (
+                np.clip(np.asarray(rgb_linear, np.float32), 0.0, 1.0) ** (1.0 / 2.2) * 255.0
+            ).astype(np.uint8)
             arr = np.empty((16, 16, 4), dtype=np.uint8)
             arr[..., :3] = srgb
             arr[..., 3] = alpha
@@ -1208,8 +1293,7 @@ def _to_material_textures(triples: bool = False):
 
         def flat_triple(material_id: int, emissive: bool = False):
             alb = to_panda_texture(flat_rgba(_GI_TEST_ALBEDO[material_id]))
-            em = to_panda_texture(flat_rgba((1.0, 0.92, 0.78))) if emissive \
-                else emis_tex
+            em = to_panda_texture(flat_rgba((1.0, 0.92, 0.78))) if emissive else emis_tex
             return (alb, flat_n_tex, em)
 
         textures = {

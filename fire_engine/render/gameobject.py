@@ -79,15 +79,15 @@ class GameObject:
 
     def __init__(
         self,
-        name:  str = "GameObject",
-        tag:   str = "Untagged",
+        name: str = "GameObject",
+        tag: str = "Untagged",
         layer: int = 0,
     ) -> None:
-        self.id:          uuid.UUID = uuid.uuid4()
-        self.name:        str       = name
-        self.tag:         str       = tag
-        self.layer:       int       = layer
-        self.active_self: bool      = True
+        self.id: uuid.UUID = uuid.uuid4()
+        self.name: str = name
+        self.tag: str = tag
+        self.layer: int = layer
+        self.active_self: bool = True
 
         self.transform: Transform = Transform()
         self.transform.game_object = self
@@ -147,12 +147,13 @@ class GameObject:
         """
         component = t(**kwargs)
         component.game_object = self
-        component.transform   = self.transform
+        component.transform = self.transform
         self._components.append(component)
 
         # Schedule awake + start through the singleton registry.
         # Import lazily to avoid a circular import at module load time.
         from fire_engine.render.registry import ComponentRegistry
+
         ComponentRegistry._schedule_awake(component)
 
         return component
@@ -248,13 +249,12 @@ class GameObject:
         ValueError if the component is not attached to this object.
         """
         if c not in self._components:
-            raise ValueError(
-                f"Component {c!r} is not attached to GameObject '{self.name}'."
-            )
+            raise ValueError(f"Component {c!r} is not attached to GameObject '{self.name}'.")
         self._components.remove(c)
 
         # Deferred teardown via registry
         from fire_engine.render.registry import ComponentRegistry
+
         ComponentRegistry._schedule_destroy_component(c)
 
     # ------------------------------------------------------------------

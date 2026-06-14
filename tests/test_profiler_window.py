@@ -30,7 +30,7 @@ def _drive(prof: Profiler, frames: int = 6) -> None:
             pass
         prof.set_counter("draw_calls", 123)
         prof.end_frame()
-    prof.begin_frame()        # commit the last frame
+    prof.begin_frame()  # commit the last frame
 
 
 @pytest.mark.window
@@ -40,7 +40,7 @@ def test_pstats_bridge_mirrors_scopes_and_counters():
     from fire_engine.render.profiler_bridge import PStatsBridge
 
     prof = Profiler(enabled=True, history_frames=32, hitch_window=8)
-    bridge = PStatsBridge(prof, connect=False)   # no server needed
+    bridge = PStatsBridge(prof, connect=False)  # no server needed
     _drive(prof)
 
     # Every scope that ran got a collector; counters too.
@@ -56,12 +56,14 @@ def test_overlay_builds_toggles_and_refreshes():
     from the ring buffer without raising."""
     pytest.importorskip("panda3d.core")
     from panda3d.core import loadPrcFileData  # type: ignore[import]
+
     loadPrcFileData("", "window-type offscreen\naudio-library-name null")
     from direct.showbase.ShowBase import ShowBase  # type: ignore[import]
 
     base = ShowBase()
     try:
         from fire_engine.render.profiler_overlay import ProfilerOverlay
+
         prof = Profiler(enabled=True, history_frames=64, hitch_window=8)
         cfg = Config(profiler_enabled=True, profiler_overlay_hz=1000.0)
         overlay = ProfilerOverlay(base, prof, cfg)
@@ -74,7 +76,7 @@ def test_overlay_builds_toggles_and_refreshes():
         _drive(prof, frames=10)
         overlay.toggle()
         assert overlay.visible is True
-        overlay.update()          # forces a refresh (hz is huge)
+        overlay.update()  # forces a refresh (hz is huge)
         # Text node reflects the data (frame ms string is non-empty).
         assert overlay._t_frame.getText() != ""
         # Hide again.

@@ -35,12 +35,12 @@ def _tex_to_numpy(app, tex):
         raise RuntimeError(f"extract_texture_data failed for {tex.get_name()}")
     n = tex.get_z_size()
     raw = tex.get_ram_image()
-    if tex.get_component_type() == 2:        # T_float
+    if tex.get_component_type() == 2:  # T_float
         arr = np.frombuffer(raw, dtype=np.float32).copy()
-    else:                                     # T_unsigned_byte
+    else:  # T_unsigned_byte
         arr = np.frombuffer(raw, dtype=np.uint8).astype(np.float32) / 255.0
     arr = arr.reshape(n, n, n, 4)
-    return arr[..., [2, 1, 0, 3]]            # panda ram order is BGRA -> RGBA
+    return arr[..., [2, 1, 0, 3]]  # panda ram order is BGRA -> RGBA
 
 
 def _report(tag: str, rad: np.ndarray, mask: np.ndarray) -> None:
@@ -49,9 +49,11 @@ def _report(tag: str, rad: np.ndarray, mask: np.ndarray) -> None:
         return
     r = rad[mask]
     m = r[:, :3].mean(axis=0)
-    print(f"{tag}: n={mask.sum()}  mean rgb ({m[0]:.4f}, {m[1]:.4f}, "
-          f"{m[2]:.4f})  b/r {m[2] / max(m[0], 1e-6):.2f}  "
-          f"g/r {m[1] / max(m[0], 1e-6):.2f}")
+    print(
+        f"{tag}: n={mask.sum()}  mean rgb ({m[0]:.4f}, {m[1]:.4f}, "
+        f"{m[2]:.4f})  b/r {m[2] / max(m[0], 1e-6):.2f}  "
+        f"g/r {m[1] / max(m[0], 1e-6):.2f}"
+    )
 
 
 def main() -> None:
@@ -70,7 +72,8 @@ def main() -> None:
     app.input_state.mouse_captured = False
     app._set_mouse_capture(False)
     app.camera_go.transform.local_rotation = Quat.from_axis_angle(
-        Vec3.RIGHT, math.radians(-20.0)).normalized()
+        Vec3.RIGHT, math.radians(-20.0)
+    ).normalized()
     _apply_sky_settings(app, args.time_of_day, "clear")
 
     cx, cy, z0 = demo.build_gi_test_room(app)
@@ -86,7 +89,7 @@ def main() -> None:
     ox, oy, oz = casc.origin_m()
     cell = casc.cell_m
     n = casc.cells
-    geom = _tex_to_numpy(app, casc.geom)        # [z, y, x, rgba]
+    geom = _tex_to_numpy(app, casc.geom)  # [z, y, x, rgba]
     rad = _tex_to_numpy(app, casc.radiance_current)
 
     ks = np.arange(n)
@@ -97,19 +100,25 @@ def main() -> None:
 
     occ = geom[..., 3]
     air = occ < 0.5
-    interior = (air
-                & (np.abs(WX - cx) < 3.4) & (np.abs(WY - cy) < 3.4)
-                & (WZ > z0 + 0.3) & (WZ < z0 + 4.2))
+    interior = (
+        air & (np.abs(WX - cx) < 3.4) & (np.abs(WY - cy) < 3.4) & (WZ > z0 + 0.3) & (WZ < z0 + 4.2)
+    )
     _report("interior air (all)", rad, interior)
 
     # Locate the coloured walls by their albedo in the geometry volume.
     solid = occ > 0.5
-    g_wall = solid & (geom[..., 1] > 0.35) \
-        & (geom[..., 1] > 2.0 * geom[..., 0]) \
+    g_wall = (
+        solid
+        & (geom[..., 1] > 0.35)
+        & (geom[..., 1] > 2.0 * geom[..., 0])
         & (geom[..., 1] > 2.0 * geom[..., 2])
-    r_wall = solid & (geom[..., 0] > 0.35) \
-        & (geom[..., 0] > 2.0 * geom[..., 1]) \
+    )
+    r_wall = (
+        solid
+        & (geom[..., 0] > 0.35)
+        & (geom[..., 0] > 2.0 * geom[..., 1])
         & (geom[..., 0] > 2.0 * geom[..., 2])
+    )
     print(f"green wall cells: {g_wall.sum()}   red wall cells: {r_wall.sum()}")
 
     # Air within ~1.5 m (3 cells) of each coloured wall: dilate the wall mask.
@@ -127,8 +136,12 @@ def main() -> None:
     _report("room centre column ", rad, centre)
 
     # Outdoor reference: open air band 1-2 cells above ground, outside the room.
-    outside = air & ((np.abs(WX - cx) > 8.0) | (np.abs(WY - cy) > 8.0)) \
-        & (WZ > z0 - 0.5) & (WZ < z0 + 1.0)
+    outside = (
+        air
+        & ((np.abs(WX - cx) > 8.0) | (np.abs(WY - cy) > 8.0))
+        & (WZ > z0 - 0.5)
+        & (WZ < z0 + 1.0)
+    )
     _report("outdoor ground air ", rad, outside)
 
 

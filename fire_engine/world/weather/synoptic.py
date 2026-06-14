@@ -96,9 +96,7 @@ class Synoptic:
         v_min = float(config.weather_synoptic_speed_min_ms)
         v_max = float(config.weather_synoptic_speed_max_ms)
         if not (0.0 <= v_min < v_max):
-            raise ValueError(
-                f"weather synoptic speed band invalid: [{v_min}, {v_max}]"
-            )
+            raise ValueError(f"weather synoptic speed band invalid: [{v_min}, {v_max}]")
         v_mean = 0.5 * (v_min + v_max)
 
         # Prevailing heading: uniform per world.
@@ -111,7 +109,7 @@ class Synoptic:
         p_min = float(config.weather_synoptic_period_min_h) * _HOUR_S
         p_max = float(config.weather_synoptic_period_max_h) * _HOUR_S
         periods = np.exp(rng.uniform(math.log(p_min), math.log(p_max), size=n))
-        self._omega: np.ndarray = 2.0 * math.pi / periods          # (n,)
+        self._omega: np.ndarray = 2.0 * math.pi / periods  # (n,)
 
         # Per-axis amplitudes: random weights normalised so Σ|a| per axis
         # equals the ripple budget → |W| stays inside [v_min, v_max] (see
@@ -124,9 +122,7 @@ class Synoptic:
         self._phase: np.ndarray = rng.uniform(0.0, 2.0 * math.pi, size=(2, n))
 
         # Integration constant so that D(0) == (0, 0).
-        self._d0: np.ndarray = (
-            (self._amp / self._omega) * np.cos(self._phase)
-        ).sum(axis=1)
+        self._d0: np.ndarray = ((self._amp / self._omega) * np.cos(self._phase)).sum(axis=1)
 
     # ------------------------------------------------------------------
     # Evaluation (scalar t → shape (2,);  (M,) array t → shape (M, 2))
@@ -147,7 +143,7 @@ class Synoptic:
         """
         t = np.asarray(t_abs, dtype=np.float64)
         scalar = t.ndim == 0
-        t = np.atleast_1d(t)                                       # (M,)
+        t = np.atleast_1d(t)  # (M,)
         # (M, 1, n) phase argument broadcast against (2, n) coefficients.
         arg = self._omega[None, None, :] * t[:, None, None] + self._phase[None, :, :]
         w = self._c[None, :] + (self._amp[None, :, :] * np.sin(arg)).sum(axis=2)
@@ -187,6 +183,6 @@ class Synoptic:
         """
         w = self.wind_vec(float(t_abs))
         speed = float(math.hypot(w[0], w[1]))
-        if speed < 1e-9:                          # unreachable with v_min > 0
+        if speed < 1e-9:  # unreachable with v_min > 0
             return (1.0, 0.0), 0.0
         return (float(w[0] / speed), float(w[1] / speed)), speed

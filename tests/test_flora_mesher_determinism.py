@@ -32,6 +32,7 @@ from fire_engine.procedural.flora.mesher import TreeMesh, mesh_leaf_area_m2
 # Shared fixtures
 # ---------------------------------------------------------------------------
 
+
 def _fixed_rng(seed: int = 77) -> np.random.Generator:
     set_world_seed(seed)
     return for_domain("test", "mesher_det")
@@ -42,20 +43,19 @@ def _build_sk_and_leaves(seed: int = 77):
     set_world_seed(seed)
     rng = for_domain("test", "mesher_det")
     sb = SkeletonBuilder(rng)
-    trunk = sb.trunk(height_m=5.0, base_radius_m=0.25, segments=3,
-                     wobble_m=0.2)
-    limbs = sb.branches(trunk, count=(3, 4),
-                        pitch_set=(math.radians(85),),
-                        length_ratio=(0.4, 0.6), segments=2)
+    trunk = sb.trunk(height_m=5.0, base_radius_m=0.25, segments=3, wobble_m=0.2)
+    limbs = sb.branches(
+        trunk, count=(3, 4), pitch_set=(math.radians(85),), length_ratio=(0.4, 0.6), segments=2
+    )
     sk = sb.skeleton()
-    leaves = leaves_at_tips(sk, limbs, rng, cell_m=0.25, rounds=3,
-                            density=0.8)
+    leaves = leaves_at_tips(sk, limbs, rng, cell_m=0.25, rounds=3, density=0.8)
     return sk, leaves, rng
 
 
 # ---------------------------------------------------------------------------
 # 1. TreeMesh dataclass: dtypes, shapes, and empty constructor
 # ---------------------------------------------------------------------------
+
 
 class TestTreeMeshDataclass:
     def setup_method(self):
@@ -107,6 +107,7 @@ class TestTreeMeshDataclass:
 # ---------------------------------------------------------------------------
 # 2. mesh_branches: vertex/face counts, position dtype, normals, UVs, sway
 # ---------------------------------------------------------------------------
+
 
 class TestMeshBranches:
     def setup_method(self):
@@ -198,6 +199,7 @@ class TestMeshBranches:
         # SUSPICION: the docstring says S==0 returns empty, but SkeletonBuilder
         # raises before you can finalize; test the internal guard path directly.
         from fire_engine.procedural.flora.skeleton import TreeSkeleton
+
         sk_empty = TreeSkeleton(
             parent=np.empty(0, dtype=np.int32),
             start=np.empty((0, 3), dtype=np.float32),
@@ -214,6 +216,7 @@ class TestMeshBranches:
 # ---------------------------------------------------------------------------
 # 3. mesh_leaves: determinism (rng-dependent), counts, normals, UVs, sway
 # ---------------------------------------------------------------------------
+
 
 class TestMeshLeavesDeterminism:
     """mesh_leaves consumes rng — identical state must give byte-identical output."""
@@ -349,6 +352,7 @@ class TestMeshLeavesDeterminism:
 # 4. merge_parts: concatenation, index offset, no out-of-range
 # ---------------------------------------------------------------------------
 
+
 class TestMergeParts:
     def setup_method(self):
         sk, leaves, rng = _build_sk_and_leaves()
@@ -357,12 +361,13 @@ class TestMergeParts:
         self.merged = merge_parts(self.wood, self.foliage)
 
     def test_vertex_count_is_sum(self):
-        assert (self.merged.n_vertices
-                == self.wood.n_vertices + self.foliage.n_vertices)
+        assert self.merged.n_vertices == self.wood.n_vertices + self.foliage.n_vertices
 
     def test_index_count_is_sum(self):
-        assert (self.merged.indices.shape[0]
-                == self.wood.indices.shape[0] + self.foliage.indices.shape[0])
+        assert (
+            self.merged.indices.shape[0]
+            == self.wood.indices.shape[0] + self.foliage.indices.shape[0]
+        )
 
     def test_no_out_of_range_index(self):
         assert int(self.merged.indices.max()) < self.merged.n_vertices
@@ -401,6 +406,7 @@ class TestMergeParts:
 # 5. mesh_leaf_area_m2
 # ---------------------------------------------------------------------------
 
+
 class TestMeshLeafAreaM2:
     def test_empty_mesh_returns_zero(self):
         assert mesh_leaf_area_m2(TreeMesh.empty()) == 0.0
@@ -429,16 +435,16 @@ class TestMeshLeafAreaM2:
         set_world_seed(55)
         rng_a = for_domain("test", "area_a")
         small_leaves = leaves_at_tips(
-            sk, sk.tip_ids(), rng_a, cell_m=0.25, rounds=1, density=0.5,
-            max_leaves=20)
+            sk, sk.tip_ids(), rng_a, cell_m=0.25, rounds=1, density=0.5, max_leaves=20
+        )
         foliage_a = mesh_leaves(small_leaves, rng_a)
         area_a = mesh_leaf_area_m2(merge_parts(mesh_branches(sk), foliage_a))
 
         set_world_seed(55)
         rng_b = for_domain("test", "area_b")
         big_leaves = leaves_at_tips(
-            sk, sk.tip_ids(), rng_b, cell_m=0.25, rounds=3, density=0.9,
-            max_leaves=400)
+            sk, sk.tip_ids(), rng_b, cell_m=0.25, rounds=3, density=0.9, max_leaves=400
+        )
         foliage_b = mesh_leaves(big_leaves, rng_b)
         area_b = mesh_leaf_area_m2(merge_parts(mesh_branches(sk), foliage_b))
 
@@ -449,19 +455,18 @@ class TestMeshLeafAreaM2:
 # 6. Full-path determinism: skeleton + leaves + mesh, twice
 # ---------------------------------------------------------------------------
 
+
 class TestFullPathDeterminism:
     def _full(self, world_seed: int):
         set_world_seed(world_seed)
         rng = for_domain("test", "full_path")
         sb = SkeletonBuilder(rng)
-        trunk = sb.trunk(height_m=5.0, base_radius_m=0.25, segments=3,
-                         wobble_m=0.2)
-        limbs = sb.branches(trunk, count=(3, 4),
-                            pitch_set=(math.radians(85),),
-                            length_ratio=(0.4, 0.6), segments=2)
+        trunk = sb.trunk(height_m=5.0, base_radius_m=0.25, segments=3, wobble_m=0.2)
+        limbs = sb.branches(
+            trunk, count=(3, 4), pitch_set=(math.radians(85),), length_ratio=(0.4, 0.6), segments=2
+        )
         sk = sb.skeleton()
-        leaves = leaves_at_tips(sk, limbs, rng, cell_m=0.25, rounds=3,
-                                density=0.8)
+        leaves = leaves_at_tips(sk, limbs, rng, cell_m=0.25, rounds=3, density=0.8)
         wood = mesh_branches(sk)
         foliage = mesh_leaves(leaves, rng)
         return merge_parts(wood, foliage)

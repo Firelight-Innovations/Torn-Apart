@@ -40,10 +40,8 @@ from panda3d.core import NodePath, Shader  # type: ignore[import]
 
 from fire_engine.core.shader_source import load_glsl
 from fire_engine.procedural.textures.ground_lut import build_ground_lut
-from fire_engine.procedural.textures.grass_ground import (
-    GRASS_PALETTE, GRASS_THRESHOLDS)
-from fire_engine.procedural.textures.dirt_ground import (
-    DIRT_PALETTE, DIRT_THRESHOLDS)
+from fire_engine.procedural.textures.grass_ground import GRASS_PALETTE, GRASS_THRESHOLDS
+from fire_engine.procedural.textures.dirt_ground import DIRT_PALETTE, DIRT_THRESHOLDS
 from fire_engine.world.terrain.generation import MATERIAL_DIRT, MATERIAL_GRASS
 from fire_engine.render.texture_bridge import to_field_texture
 
@@ -98,9 +96,7 @@ def apply_terrain_shader(
         from a flat palette instead of clamping to the last LUT row.  Palettes
         are sRGB-encoded uint8 (the shader gamma-decodes via ``pow(alb, 2.2)``).
     """
-    shader = Shader.make(Shader.SL_GLSL,
-                         vertex=TERRAIN_VERTEX,
-                         fragment=TERRAIN_FRAGMENT)
+    shader = Shader.make(Shader.SL_GLSL, vertex=TERRAIN_VERTEX, fragment=TERRAIN_FRAGMENT)
     terrain_root.set_shader(shader)
     # The lighting uniform contract itself is bound on ``render`` (main.py
     # calls ``pipeline.bind_surface_inputs(app.render)``) so EVERY lit-surface
@@ -112,7 +108,7 @@ def apply_terrain_shader(
 
     # World-space procedural ground palette LUT (rows indexed by material id).
     entries = {
-        MATERIAL_DIRT:  (DIRT_PALETTE,  DIRT_THRESHOLDS),
+        MATERIAL_DIRT: (DIRT_PALETTE, DIRT_THRESHOLDS),
         MATERIAL_GRASS: (GRASS_PALETTE, GRASS_THRESHOLDS),
     }
     if extra_materials:

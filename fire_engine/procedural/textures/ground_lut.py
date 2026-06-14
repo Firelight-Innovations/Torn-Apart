@@ -90,12 +90,12 @@ def build_ground_lut(
         palette = np.asarray(palette, dtype=np.uint8)
         thresholds = np.asarray(thresholds, dtype=np.float32)
         if palette.ndim != 2 or palette.shape[1] != 3:
-            raise ValueError(
-                f"palette for material {mat} must be (N, 3); got {palette.shape}")
+            raise ValueError(f"palette for material {mat} must be (N, 3); got {palette.shape}")
         if thresholds.shape[0] != palette.shape[0] - 1:
             raise ValueError(
                 f"material {mat}: expected {palette.shape[0] - 1} thresholds, "
-                f"got {thresholds.shape[0]}")
+                f"got {thresholds.shape[0]}"
+            )
         idx = np.searchsorted(thresholds, ramp, side="right").astype(np.int32)
         np.clip(idx, 0, len(palette) - 1, out=idx)
         lut[mat, :, :3] = palette[idx]

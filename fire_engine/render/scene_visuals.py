@@ -83,7 +83,7 @@ class SceneVisualFactory:
         self._nodes: dict["GameObject", NodePath] = {}
         self._node_scale: dict["GameObject", float] = {}  # model-unit fixup
         self._light_ids: dict["GameObject", int] = {}
-        self._ids: dict["GameObject", int] = {}           # go -> scene object id
+        self._ids: dict["GameObject", int] = {}  # go -> scene object id
         self._last_synced: dict["GameObject", tuple] = {}
         self._warned_no_pipeline = False
         app.taskMgr.add(self._sync_task, "scene-visuals-sync")
@@ -142,17 +142,20 @@ class SceneVisualFactory:
                 self._warned_no_pipeline = True
             return
         from fire_engine.lighting.lights import PointLight
+
         defaults = default_params("Light")
         color = tuple(float(c) for c in params.get("color", defaults["color"]))
         intensity = float(params.get("intensity", defaults["intensity"]))
         radius = float(params.get("radius", defaults["radius"]))
         p = go.transform.position
-        lid = self._pipeline.lights.add(PointLight(
-            position=(p.x, p.y, p.z),
-            color=color,
-            intensity=intensity,
-            radius=radius,
-        ))
+        lid = self._pipeline.lights.add(
+            PointLight(
+                position=(p.x, p.y, p.z),
+                color=color,
+                intensity=intensity,
+                radius=radius,
+            )
+        )
         self._light_ids[go] = lid
 
     def teardown(self) -> None:
@@ -194,8 +197,7 @@ class SceneVisualFactory:
             p, q, s = t.position, t.rotation, t.local_scale
             key = (p.x, p.y, p.z, q.w, q.x, q.y, q.z, s.x, s.y, s.z)
             last = self._last_synced.get(go)
-            if last is not None and all(
-                    abs(a - b) <= _MOVE_EPS for a, b in zip(key, last)):
+            if last is not None and all(abs(a - b) <= _MOVE_EPS for a, b in zip(key, last)):
                 continue
             self._last_synced[go] = key
 

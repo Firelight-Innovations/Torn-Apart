@@ -69,9 +69,11 @@ class Leaves:
     @staticmethod
     def empty() -> "Leaves":
         """A zero-leaf instance (leafless species)."""
-        return Leaves(center=np.empty((0, 3), dtype=np.float32),
-                      radius=np.empty(0, dtype=np.float32),
-                      sway=np.empty(0, dtype=np.float32))
+        return Leaves(
+            center=np.empty((0, 3), dtype=np.float32),
+            radius=np.empty(0, dtype=np.float32),
+            sway=np.empty(0, dtype=np.float32),
+        )
 
 
 def leaves_at_tips(
@@ -143,8 +145,8 @@ def leaves_at_tips(
     if tips.size == 0 or rounds <= 0 or density <= 0.0:
         return Leaves.empty()
 
-    seeds = sk.end[tips].astype(np.float32)                    # (T, 3)
-    seed_sway = sk.sway[tips].astype(np.float32)               # (T,)
+    seeds = sk.end[tips].astype(np.float32)  # (T, 3)
+    seed_sway = sk.sway[tips].astype(np.float32)  # (T,)
 
     # --- grid covering the seeds plus the CA growth reach -----------------
     pad = (rounds + 0.5) * cell_m
@@ -155,19 +157,18 @@ def leaves_at_tips(
         raise ValueError(
             f"leaves_at_tips: CA grid {tuple(dims)} exceeds "
             f"{_MAX_GRID_CELLS} cells — canopy reach or cell_m is off "
-            f"(seeds span {hi - lo} m at cell_m={cell_m})")
+            f"(seeds span {hi - lo} m at cell_m={cell_m})"
+        )
 
     # --- seed + propagate hydration (and the sway field alongside) --------
     hyd = np.zeros(tuple(dims), dtype=np.int16)
     swf = np.zeros(tuple(dims), dtype=np.float32)
-    cell_idx = np.clip(((seeds - lo) / cell_m).astype(np.int64),
-                       0, dims - 1)
+    cell_idx = np.clip(((seeds - lo) / cell_m).astype(np.int64), 0, dims - 1)
     hyd[cell_idx[:, 0], cell_idx[:, 1], cell_idx[:, 2]] = rounds
     # np.maximum.at: two seeds in one cell keep the higher sway.
-    np.maximum.at(swf, (cell_idx[:, 0], cell_idx[:, 1], cell_idx[:, 2]),
-                  seed_sway)
+    np.maximum.at(swf, (cell_idx[:, 0], cell_idx[:, 1], cell_idx[:, 2]), seed_sway)
 
-    for _ in range(rounds):                  # fixed small loop (≤ a few)
+    for _ in range(rounds):  # fixed small loop (≤ a few)
         spread = hyd
         sw_spread = swf
         for axis, step in _NEIGHBOR_SHIFTS:
@@ -188,7 +189,7 @@ def leaves_at_tips(
     ix, iy, iz = np.nonzero(hyd > 0)
     if ix.size == 0:
         return Leaves.empty()
-    h = hyd[ix, iy, iz].astype(np.float32)                     # 1 … rounds
+    h = hyd[ix, iy, iz].astype(np.float32)  # 1 … rounds
     cell_sway = swf[ix, iy, iz]
 
     # Interior cells (high hydration) nearly always leaf; rim cells thin out.
@@ -203,20 +204,21 @@ def leaves_at_tips(
     n = int(counts.sum())
     if n == 0:
         return Leaves.empty()
-    cell_center = (lo + (np.stack([ix, iy, iz], axis=1) + 0.5) * cell_m) \
-        .astype(np.float32)
+    cell_center = (lo + (np.stack([ix, iy, iz], axis=1) + 0.5) * cell_m).astype(np.float32)
     centers = np.repeat(cell_center, counts, axis=0)
-    centers = centers + rng.uniform(-0.45 * cell_m, 0.45 * cell_m,
-                                    (n, 3)).astype(np.float32)
+    centers = centers + rng.uniform(-0.45 * cell_m, 0.45 * cell_m, (n, 3)).astype(np.float32)
 
-    sway = np.maximum(np.repeat(cell_sway, counts),
-                      rng.uniform(sway_min, 1.0, n)).astype(np.float32)
-    radius = rng.uniform(leaf_size_m[0], leaf_size_m[1], n) \
-        .astype(np.float32)
+    sway = np.maximum(np.repeat(cell_sway, counts), rng.uniform(sway_min, 1.0, n)).astype(
+        np.float32
+    )
+    radius = rng.uniform(leaf_size_m[0], leaf_size_m[1], n).astype(np.float32)
 
-    if n > max_leaves:                       # deterministic unbiased thinning
+    if n > max_leaves:  # deterministic unbiased thinning
         pick = np.sort(rng.permutation(n)[:max_leaves])
         centers, radius, sway = centers[pick], radius[pick], sway[pick]
 
-    return Leaves(center=np.ascontiguousarray(centers, np.float32),
-                  radius=radius, sway=np.clip(sway, 0.0, 1.0))
+    return Leaves(
+        center=np.ascontiguousarray(centers, np.float32),
+        radius=radius,
+        sway=np.clip(sway, 0.0, 1.0),
+    )

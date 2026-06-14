@@ -78,14 +78,15 @@ from fire_engine.render.registry import ComponentRegistry, instantiate
 from fire_engine.render.camera import CameraComponent
 
 if TYPE_CHECKING:
-    from fire_engine.core.config    import Config
-    from fire_engine.core.clock     import Clock
+    from fire_engine.core.config import Config
+    from fire_engine.core.clock import Clock
     from fire_engine.core.event_bus import EventBus
 
 
 # ---------------------------------------------------------------------------
 # InputState — panda3d-free snapshot that FlyController reads
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class InputState:
@@ -109,22 +110,24 @@ class InputState:
     mouse_captured: bool  — True when the cursor is locked to the window
     escape_pressed: bool  — True on the frame ESC was pressed (toggle mouse capture)
     """
-    move_forward:   bool  = False
-    move_backward:  bool  = False
-    move_left:      bool  = False
-    move_right:     bool  = False
-    move_up:        bool  = False
-    move_down:      bool  = False
-    sprint:         bool  = False
-    mouse_dx:       float = 0.0
-    mouse_dy:       float = 0.0
-    mouse_captured: bool  = False
-    escape_pressed: bool  = False
+
+    move_forward: bool = False
+    move_backward: bool = False
+    move_left: bool = False
+    move_right: bool = False
+    move_up: bool = False
+    move_down: bool = False
+    sprint: bool = False
+    mouse_dx: float = 0.0
+    mouse_dy: float = 0.0
+    mouse_captured: bool = False
+    escape_pressed: bool = False
 
 
 # ---------------------------------------------------------------------------
 # App
 # ---------------------------------------------------------------------------
+
 
 class App(ShowBase):
     """
@@ -157,8 +160,8 @@ class App(ShowBase):
 
     def __init__(
         self,
-        config:    "Config",
-        clock:     "Clock",
+        config: "Config",
+        clock: "Clock",
         event_bus: "EventBus",
     ) -> None:
         # The HDR post-processing buffers are full-window render targets.
@@ -170,6 +173,7 @@ class App(ShowBase):
         # post-processing is on.  Must run before the GSG is created.
         if getattr(config, "gfx_post_process", True):
             from panda3d.core import loadPrcFileData  # type: ignore[import]
+
             loadPrcFileData("torn-apart-hdr", "textures-power-2 none")
         # MSAA must be requested BEFORE the window is opened (framebuffer
         # property).  It anti-aliases GEOMETRY edges only — facet silhouettes,
@@ -179,12 +183,12 @@ class App(ShowBase):
         if int(getattr(config, "msaa_samples", 0)) > 0:
             loadPrcFileData(
                 "torn-apart-msaa",
-                f"framebuffer-multisample 1\n"
-                f"multisamples {int(config.msaa_samples)}")
+                f"framebuffer-multisample 1\nmultisamples {int(config.msaa_samples)}",
+            )
         super().__init__()
 
-        self._config    = config
-        self._clock     = clock
+        self._config = config
+        self._clock = clock
         self._event_bus = event_bus
 
         # Performance profiler (core, panda3d-free) — configure the process
@@ -192,11 +196,10 @@ class App(ShowBase):
         # overlay / PStats bridge are constructed only when enabled (see
         # _setup_profiler, called after the window + camera exist).
         self._profiler = init_profiler(config)
-        self._profiler_overlay = None   # ProfilerOverlay | None (F3)
-        self._profiler_bridge = None    # PStatsBridge | None
+        self._profiler_overlay = None  # ProfilerOverlay | None (F3)
+        self._profiler_bridge = None  # PStatsBridge | None
         self._snapshot_path: str | None = None
-        self._snapshot_interval_s = float(
-            getattr(config, "profiler_snapshot_interval_s", 1.0))
+        self._snapshot_interval_s = float(getattr(config, "profiler_snapshot_interval_s", 1.0))
         self._last_snapshot_t = 0.0
 
         self.input_state = InputState()
@@ -214,17 +217,17 @@ class App(ShowBase):
         # Terrain-render injection slots (set by main.py after construction).
         # Left None so the engine shell can run without terrain (tooling).
         # ------------------------------------------------------------------
-        self.chunk_manager = None          # ChunkManager | None
-        self.light_sampler = None          # Callable | None
+        self.chunk_manager = None  # ChunkManager | None
+        self.light_sampler = None  # Callable | None
         # GPU volumetric lighting (Phase 4 GPU backend) — set by main.py when
         # config.lighting_backend == "gpu".  Driven in step 6 of the frame
         # task; None keeps the legacy baked-vertex-light path.
-        self.lighting_pipeline = None      # GpuLightingPipeline | None
-        self.sky_system = None             # SkySystem | None (set by main.py)
+        self.lighting_pipeline = None  # GpuLightingPipeline | None
+        self.sky_system = None  # SkySystem | None (set by main.py)
         # HDR post-processing pipeline (set by main.py after sky/grass exist;
         # None keeps the legacy in-shader-tonemap path).  Driven in step 6b of
         # the frame task.
-        self.post_process = None           # PostProcessPipeline | None
+        self.post_process = None  # PostProcessPipeline | None
         # Per-chunk NodePath bookkeeping: coord -> NodePath under terrain_root.
         self._chunk_nodes: dict[tuple[int, int, int], NodePath] = {}
 
@@ -241,7 +244,7 @@ class App(ShowBase):
             self.setFrameRateMeter(True)
 
         # Vsync — Panda3D uses sync-video property
-        self.set_sleep(0.0)   # let OS vsync do its job
+        self.set_sleep(0.0)  # let OS vsync do its job
 
         # Geometry-edge AA only: with msaa_samples > 0, multisample the
         # triangle edges (interiors are single-sample — retro texels intact).
@@ -274,6 +277,7 @@ class App(ShowBase):
         self.camera_go = instantiate()
         self.camera_go.name = "MainCamera"
         from fire_engine.core.math3d import Vec3
+
         self.camera_go.transform.local_position = Vec3(0.0, -20.0, 10.0)
         self.camera_comp = self.camera_go.add_component(CameraComponent, base=self)
 
@@ -291,8 +295,19 @@ class App(ShowBase):
         # Key bindings (Panda3D event strings)
         # ------------------------------------------------------------------
         self._key_state: dict[str, bool] = {}
-        for key in ["w", "s", "a", "d", "space", "lcontrol", "rcontrol",
-                    "lshift", "rshift", "e", "q"]:
+        for key in [
+            "w",
+            "s",
+            "a",
+            "d",
+            "space",
+            "lcontrol",
+            "rcontrol",
+            "lshift",
+            "rshift",
+            "e",
+            "q",
+        ]:
             self.accept(key, self._key_down, [key])
             self.accept(key + "-up", self._key_up, [key])
         self.accept("escape", self._on_escape)
@@ -335,27 +350,28 @@ class App(ShowBase):
         if getattr(cfg, "profiler_pstats", False):
             try:
                 from fire_engine.render.profiler_bridge import PStatsBridge
+
                 self._profiler_bridge = PStatsBridge(self._profiler, connect=True)
             except Exception as exc:  # noqa: BLE001  (diagnostics; never fatal)
                 from fire_engine.core.log import get_logger
-                get_logger("profiler").warning(
-                    "PStats bridge unavailable: %s", exc)
+
+                get_logger("profiler").warning("PStats bridge unavailable: %s", exc)
 
         # In-game overlay (F3).
         if getattr(cfg, "profiler_overlay_enabled", True):
             try:
                 from fire_engine.render.profiler_overlay import ProfilerOverlay
+
                 self._profiler_overlay = ProfilerOverlay(self, self._profiler, cfg)
                 self.accept("f3", self._profiler_overlay.toggle)
             except Exception as exc:  # noqa: BLE001
                 from fire_engine.core.log import get_logger
-                get_logger("profiler").warning(
-                    "Profiler overlay unavailable: %s", exc)
+
+                get_logger("profiler").warning("Profiler overlay unavailable: %s", exc)
 
         # Rolling JSON snapshot (the AI-agent contract).
         if getattr(cfg, "profiler_snapshot_enabled", False):
-            self._snapshot_path = getattr(
-                cfg, "profiler_snapshot_path", "profiling/latest.json")
+            self._snapshot_path = getattr(cfg, "profiler_snapshot_path", "profiling/latest.json")
 
     # ------------------------------------------------------------------
     # Input handlers
@@ -381,14 +397,15 @@ class App(ShowBase):
         ks = self._key_state
         inp = self.input_state
 
-        inp.move_forward  = bool(ks.get("w",        False))
-        inp.move_backward = bool(ks.get("s",        False))
-        inp.move_left     = bool(ks.get("a",        False))
-        inp.move_right    = bool(ks.get("d",        False))
-        inp.move_up       = bool(ks.get("space",    False) or ks.get("e", False))
-        inp.move_down     = bool(ks.get("lcontrol", False) or
-                                  ks.get("rcontrol", False) or ks.get("q", False))
-        inp.sprint        = bool(ks.get("lshift",   False) or ks.get("rshift", False))
+        inp.move_forward = bool(ks.get("w", False))
+        inp.move_backward = bool(ks.get("s", False))
+        inp.move_left = bool(ks.get("a", False))
+        inp.move_right = bool(ks.get("d", False))
+        inp.move_up = bool(ks.get("space", False) or ks.get("e", False))
+        inp.move_down = bool(
+            ks.get("lcontrol", False) or ks.get("rcontrol", False) or ks.get("q", False)
+        )
+        inp.sprint = bool(ks.get("lshift", False) or ks.get("rshift", False))
 
         # Toggle mouse capture
         if inp.escape_pressed:
@@ -527,12 +544,9 @@ class App(ShowBase):
         #    refresh on ``render`` (inherited by every lit shader).
         if self.lighting_pipeline is not None:
             with prof.scope("Lighting"):
-                sky_state = (self.sky_system.state
-                             if self.sky_system is not None else None)
-                self.lighting_pipeline.update(
-                    self.camera_go.transform.position, sky_state, real_dt)
-                self.lighting_pipeline.update_surface_inputs(
-                    self.render, sky_state)
+                sky_state = self.sky_system.state if self.sky_system is not None else None
+                self.lighting_pipeline.update(self.camera_go.transform.position, sky_state, real_dt)
+                self.lighting_pipeline.update_surface_inputs(self.render, sky_state)
 
         # 6b. integration hook: HDR post-processing (Phase 2+)
         #     Refresh per-frame post inputs (bloom strength, lens-flare sun
@@ -565,6 +579,7 @@ class App(ShowBase):
         if self._snapshot_path is None:
             return
         import time as _time
+
         now = _time.perf_counter()
         if now - self._last_snapshot_t < self._snapshot_interval_s:
             return
@@ -573,6 +588,7 @@ class App(ShowBase):
             self._profiler.write_snapshot(self._snapshot_path)
         except OSError as exc:
             from fire_engine.core.log import get_logger
+
             get_logger("profiler").warning("snapshot write failed: %s", exc)
 
     def _push_input_to_controllers(self) -> None:
@@ -589,6 +605,7 @@ class App(ShowBase):
             return
 
         from fire_engine.render.registry import _STATE
+
         bucket = _STATE.buckets.get(FlyController, [])
         for ctrl in bucket:
             ctrl.set_input_state(self.input_state)
@@ -597,9 +614,7 @@ class App(ShowBase):
     # Terrain rendering (Phase 3 integration)
     # ------------------------------------------------------------------
 
-    def setup_terrain_rendering(
-        self, ground_texture=None, material_textures=None
-    ) -> None:
+    def setup_terrain_rendering(self, ground_texture=None, material_textures=None) -> None:
         """
         Configure the terrain render state once at boot.
 

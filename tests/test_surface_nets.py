@@ -12,16 +12,16 @@ import pytest
 from fire_engine.core import load_config, EventBus
 from fire_engine.core.config import Config
 from fire_engine.core.math3d import Vec3
-from fire_engine.terrain.chunk import Chunk
-from fire_engine.terrain.chunk_manager import ChunkManager
-from fire_engine.terrain.generation import (
+from fire_engine.world.terrain.chunk import Chunk
+from fire_engine.world.terrain.chunk_manager import ChunkManager
+from fire_engine.world.terrain.generation import (
     MATERIAL_DIRT,
     MATERIAL_GRASS,
     generate_chunk,
 )
-from fire_engine.terrain.brush import SphereBrush, BrushMode, apply_brush
-from fire_engine.terrain.meshing import build_mesh
-from fire_engine.terrain.surface_nets import (
+from fire_engine.world.terrain.brush import SphereBrush, BrushMode, apply_brush
+from fire_engine.world.terrain.meshing import build_mesh
+from fire_engine.world.terrain.surface_nets import (
     NEIGHBOR_OFFSETS_26,
     _build_padded_materials,
     _cell_vertices,

@@ -12,7 +12,7 @@ import logging
 
 from fire_engine.core.math3d import Vec3
 from fire_engine.save import SaveIncompatibleError
-from fire_engine.terrain import BrushMode
+from fire_engine.world.terrain import BrushMode
 
 from .._generated import ErrorCode, Method, Notification, SchemaId
 from ..binary import encode_frame

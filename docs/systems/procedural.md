@@ -217,7 +217,7 @@ class CrackedRockDef(ProceduralTextureDef):
 ```python
 # Only in world/ â€” do not call this from procedural/ or tests/
 from fire_engine.procedural import get
-from fire_engine.world.texture_bridge import to_panda_texture
+from fire_engine.render.texture_bridge import to_panda_texture
 
 arr = get("wasteland_ground")      # (256,256,4) uint8
 tex = to_panda_texture(arr)        # panda3d.core.Texture, nearest-neighbour

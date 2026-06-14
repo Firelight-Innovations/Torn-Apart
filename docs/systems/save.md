@@ -182,7 +182,7 @@ None.  `save/` is called directly (F5 → `sm.save(path)`, F9 → `sm.load(path)
 ```python
 from fire_engine.core import load_config, Clock, EventBus
 from fire_engine.core.rng import set_world_seed
-from fire_engine.terrain import ChunkManager
+from fire_engine.world.terrain import ChunkManager
 from fire_engine.save import SaveManager
 
 cfg = load_config()

@@ -17,7 +17,7 @@ import pytest
 import websockets
 
 from fire_engine.core.math3d import Vec3
-from fire_engine.terrain import BrushMode, SphereBrush, apply_brush
+from fire_engine.world.terrain import BrushMode, SphereBrush, apply_brush
 
 from fire_editor import (
     Daemon,

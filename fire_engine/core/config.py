@@ -407,7 +407,7 @@ class Config:
 
     Wind-field fields (from [wind] table, prefix ``wind_``)
     -------------------------------------------------------
-    These drive the spatially-varying wind field (``fire_engine/wind/``): a
+    These drive the spatially-varying wind field (``fire_engine/world/wind/``): a
     64×64-cell × 4 m (256 m) player-centred grid of horizontal wind velocity,
     summed from ~12 seeded spectral gust modes that advect downwind, plus an
     analytic vertical boundary-layer profile.  All distances meters, speeds
@@ -679,7 +679,7 @@ class Config:
     building_foundation_depth_m:       float = 0.5
     building_arc_segments_per_quarter: int   = 8
     building_snap_eps_m:               float = 0.01
-    # --- Wind field ([wind] table; consumed by fire_engine/wind/) ---
+    # --- Wind field ([wind] table; consumed by fire_engine/world/wind/) ---
     wind_time_scale:          float = 1.0
     wind_cells:               int   = 64
     wind_cell_m:              float = 4.0
@@ -716,7 +716,7 @@ class Config:
     rain_cover_cells:         int   = 256
     rain_cover_cell_m:        float = 1.0
     rain_cover_budget_columns: int  = 4
-    # --- Weather simulation ([weather] table; consumed by fire_engine/weather/) ---
+    # --- Weather simulation ([weather] table; consumed by fire_engine/world/weather/) ---
     # Synoptic flow: the slow steering current that carries storm cells.
     # Closed-form pure function of (seed, game time) — see weather/synoptic.py.
     weather_synoptic_components:   int   = 4      # vector sinusoids in W(t)

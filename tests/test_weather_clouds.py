@@ -12,7 +12,7 @@ Coverage
 - classify_genus vectorises (array in → array out, matching the scalar path).
 - cloud_layers params are finite, ordered by altitude (high > mid > low), have
   the right shapes, and are continuous in the inputs (no NaN, no jumps).
-- No panda3d import leaks into fire_engine/weather/.
+- No panda3d import leaks into fire_engine/world/weather/.
 """
 
 from __future__ import annotations
@@ -23,8 +23,8 @@ import numpy as np
 import pytest
 
 from fire_engine.core import load_config
-from fire_engine.weather.cells import Regime
-from fire_engine.weather.clouds import (
+from fire_engine.world.weather.cells import Regime
+from fire_engine.world.weather.clouds import (
     BAND_HIGH,
     BAND_LOW,
     BAND_MID,
@@ -220,6 +220,6 @@ class TestContinuity:
 
 def test_no_panda3d_import_in_weather_clouds():
     src = (Path(__file__).resolve().parents[1]
-           / "fire_engine" / "weather" / "clouds.py").read_text(encoding="utf-8")
+           / "fire_engine" / "world" / "weather" / "clouds.py").read_text(encoding="utf-8")
     assert "panda3d" not in src
     assert "import panda3d" not in src

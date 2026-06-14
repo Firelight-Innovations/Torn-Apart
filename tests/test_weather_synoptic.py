@@ -1,5 +1,5 @@
 """
-tests/test_weather_synoptic.py — Synoptic flow (fire_engine/weather/synoptic.py).
+tests/test_weather_synoptic.py — Synoptic flow (fire_engine/world/weather/synoptic.py).
 
 Covers the M1 contract:
 * determinism — same seed → identical flow across instances; different seed
@@ -21,8 +21,8 @@ import pytest
 
 from fire_engine.core.config import Config
 from fire_engine.core.rng import set_world_seed
-from fire_engine.sky.weather import WeatherSystem
-from fire_engine.weather.synoptic import Synoptic
+from fire_engine.world.sky.weather import WeatherSystem
+from fire_engine.world.weather.synoptic import Synoptic
 
 DAY = 86400.0
 

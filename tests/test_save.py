@@ -16,8 +16,8 @@ import pytest
 from fire_engine.core import load_config, Clock, EventBus
 from fire_engine.core.math3d import Vec3
 from fire_engine.core.rng import set_world_seed
-from fire_engine.terrain import ChunkManager
-from fire_engine.terrain.brush import SphereBrush, BrushMode, apply_brush
+from fire_engine.world.terrain import ChunkManager
+from fire_engine.world.terrain.brush import SphereBrush, BrushMode, apply_brush
 from fire_engine.save import SaveManager, Saveable, SaveIncompatibleError
 from fire_engine.save.save_manager import (
     _encode_delta,

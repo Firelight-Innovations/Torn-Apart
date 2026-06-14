@@ -32,10 +32,10 @@ import pytest
 
 from fire_engine.core import EventBus, load_config
 from fire_engine.core.rng import set_world_seed
-from fire_engine.weather import WeatherSystem
-from fire_engine.weather.cells import CellKind, StormCell, day_regime
-from fire_engine.weather.cells import Regime
-from fire_engine.weather import humidity as H
+from fire_engine.world.weather import WeatherSystem
+from fire_engine.world.weather.cells import CellKind, StormCell, day_regime
+from fire_engine.world.weather.cells import Regime
+from fire_engine.world.weather import humidity as H
 
 HOUR = 3600.0
 DAY = 24 * HOUR

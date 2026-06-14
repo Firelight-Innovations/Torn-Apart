@@ -1,11 +1,11 @@
 """Headless diagnosis: GI room cascade occupancy + downsample collapse."""
 import numpy as np
 from fire_engine.core.config import load_config
-from fire_engine.terrain import BoxBrush, apply_brush, BrushMode
+from fire_engine.world.terrain import BoxBrush, apply_brush, BrushMode
 from fire_engine.core.math3d import Vec3
 from fire_engine.lighting.volume import VolumeWindow, assemble_geometry
 from fire_engine.lighting.palette import build_default_palette
-from fire_engine.terrain.chunk import Chunk
+from fire_engine.world.terrain.chunk import Chunk
 
 cfg = load_config("config.toml")
 print("voxel_size", cfg.voxel_size, "chunk_size", cfg.chunk_size)

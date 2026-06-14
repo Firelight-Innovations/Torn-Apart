@@ -18,8 +18,8 @@ from fire_engine.core.rng import set_world_seed
 from fire_engine.save import SaveManager
 from fire_engine.scene import SceneRuntime
 from fire_engine.scene.objects import SceneObjectStore
-from fire_engine.terrain import ChunkManager
-from fire_engine.world.registry import ComponentRegistry
+from fire_engine.world.terrain import ChunkManager
+from fire_engine.render.registry import ComponentRegistry
 
 from fire_editor import Daemon, EditorSession
 

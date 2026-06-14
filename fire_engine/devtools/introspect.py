@@ -32,9 +32,9 @@ from fire_engine.core.math3d import Vec3, Quat
 from fire_engine.devtools.fields import Field, FieldKind, Section
 
 if TYPE_CHECKING:
-    from fire_engine.world.gameobject import GameObject
-    from fire_engine.world.component import Component
-    from fire_engine.terrain.chunk import Chunk
+    from fire_engine.render.gameobject import GameObject
+    from fire_engine.render.component import Component
+    from fire_engine.world.terrain.chunk import Chunk
 
 
 # Attributes every Component carries for the framework's own bookkeeping — never
@@ -81,7 +81,7 @@ def describe_object(go: "GameObject") -> list[Section]:
 
 def is_chunk(obj: Any) -> bool:
     """
-    True when ``obj`` is a terrain :class:`~fire_engine.terrain.chunk.Chunk`.
+    True when ``obj`` is a terrain :class:`~fire_engine.world.terrain.chunk.Chunk`.
 
     Duck-typed (never imports terrain at runtime, so this package stays panda3d-
     *and* terrain-free): a chunk is anything carrying the voxel-array trio

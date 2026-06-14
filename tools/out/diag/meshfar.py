@@ -25,9 +25,9 @@ for coord in [(0,51,0),(0,0,0)]:
     print(f"{coord}: solid_voxels={solid}/{mats.size} zmaxsolid={np.argwhere(mats>0)[:,2].max() if solid else None} zminsolid={np.argwhere(mats>0)[:,2].min() if solid else None}")
     # Try meshing directly
     try:
-        from fire_engine.terrain.meshing import build_mesh
+        from fire_engine.world.terrain.meshing import build_mesh
     except Exception:
-        import fire_engine.terrain as T
+        import fire_engine.world.terrain as T
         build_mesh=getattr(T,"build_mesh",None)
     if build_mesh:
         try:

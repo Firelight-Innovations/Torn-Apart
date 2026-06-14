@@ -27,7 +27,7 @@ def run(out_name: str = "weather_verify/thunder.png",
     import numpy as np
     import main as demo
     from fire_engine.core.math3d import Vec3, Quat
-    from fire_engine.weather import CellKind, StormCell
+    from fire_engine.world.weather import CellKind, StormCell
     from fire_engine.core.event_bus import LightningStrikeEvent
 
     app = demo.build_demo()

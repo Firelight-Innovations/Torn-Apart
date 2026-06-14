@@ -93,7 +93,7 @@ def _flip_fraction(a: np.ndarray, b: np.ndarray, threshold: float):
 def probe(args) -> float:
     import main as demo
     from fire_engine.core.math3d import Vec3, Quat
-    from fire_engine.player.fly_controller import FlyController
+    from fire_engine.simulation.player.fly_controller import FlyController
     from panda3d.core import Texture, GraphicsOutput
     from tools.screenshot import _apply_sky_settings
 
@@ -120,7 +120,7 @@ def probe(args) -> float:
         # the bowl opens to the sky — screenshot.py's cam.z-8 placement carves
         # a sealed underground cave that never shows) so the probe sweeps the
         # shadowed dirt walls the owner sees shimmering after shooting.
-        from fire_engine.terrain import SphereBrush, BrushMode, apply_brush
+        from fire_engine.world.terrain import SphereBrush, BrushMode, apply_brush
         cam = app.camera_go.transform.position
         gz = float(app._config.ground_height_m)
         apply_brush(SphereBrush(3.0), Vec3(cam.x, cam.y + 10.0, gz),
@@ -154,7 +154,7 @@ def probe(args) -> float:
     # only exists after the first frame, hence after the warmup).
     grass_go = getattr(app, "grass_go", None)
     if grass_go is not None:
-        from fire_engine.world.grass_renderer import GrassRendererComponent
+        from fire_engine.render.grass_renderer import GrassRendererComponent
         gc = grass_go.get_component(GrassRendererComponent)
         if gc is not None and getattr(gc, "_root", None) is not None:
             gc._root.hide()

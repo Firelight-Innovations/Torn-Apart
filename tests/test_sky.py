@@ -23,8 +23,8 @@ import pytest
 
 from fire_engine.core import Clock, EventBus, load_config
 from fire_engine.core.rng import set_world_seed
-from fire_engine.sky import SkySystem, WeatherType, moon_direction, sun_direction
-from fire_engine.sky.celestial import daylight_factor
+from fire_engine.world.sky import SkySystem, WeatherType, moon_direction, sun_direction
+from fire_engine.world.sky.celestial import daylight_factor
 
 HOUR = 3600.0
 

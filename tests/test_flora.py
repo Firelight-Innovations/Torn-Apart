@@ -212,7 +212,7 @@ class TestFloraInstanceAttribs:
 
 class TestShaderMirrorPin:
     def test_flora_vert_carries_chain_constants(self):
-        src = (_REPO / "fire_engine" / "world" / "shaders"
+        src = (_REPO / "fire_engine" / "render" / "shaders"
                / "flora.vert").read_text(encoding="utf-8").lower()
         for const in ("0x9e3779b9u", "0x85ebca6bu", "0xc2b2ae35u",
                       "0x27d4eb2fu", "0x165667b1u", "0x7feb352du",

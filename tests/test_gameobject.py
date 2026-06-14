@@ -16,9 +16,9 @@ from __future__ import annotations
 
 import pytest
 
-from fire_engine.world.component  import Component
-from fire_engine.world.gameobject import GameObject
-from fire_engine.world.registry   import (
+from fire_engine.render.component  import Component
+from fire_engine.render.gameobject import GameObject
+from fire_engine.render.registry   import (
     ComponentRegistry,
     instantiate,
     destroy,

@@ -1,5 +1,5 @@
 """
-tests/test_wind.py — Headless tests for fire_engine/wind/ (WP1).
+tests/test_wind.py — Headless tests for fire_engine/world/wind/ (WP1).
 
 Covers the full WP1 contract:
 - determinism (same seed/time/state → bit-identical field), in-process and
@@ -14,7 +14,7 @@ Covers the full WP1 contract:
   recenter at fixed time;
 - pack round-trip (decode float16, channel order, byte length);
 - modifier add/remove restores the base field exactly;
-- a panda3d-import guard: nothing under fire_engine/wind/ imports panda3d.
+- a panda3d-import guard: nothing under fire_engine/world/wind/ imports panda3d.
 
 Headless: no window, no GPU, no sky package import (weather is duck-typed via
 SimpleNamespace).
@@ -32,14 +32,14 @@ import pytest
 
 from fire_engine.core.config import Config
 from fire_engine.core.rng import set_world_seed
-from fire_engine.wind import (
+from fire_engine.world.wind import (
     GustFront,
     WindField,
     WindSnapshot,
     pack_wind_field,
     vertical_profile,
 )
-from fire_engine.wind.gusts import build_modes, eval_gusts
+from fire_engine.world.wind.gusts import build_modes, eval_gusts
 
 
 SEED = 1337
@@ -98,7 +98,7 @@ sys.path.insert(0, os.getcwd())
 import numpy as np
 from fire_engine.core.config import Config
 from fire_engine.core.rng import set_world_seed
-from fire_engine.wind import WindField
+from fire_engine.world.wind import WindField
 from types import SimpleNamespace
 set_world_seed({seed})
 sky = SimpleNamespace(wind_dir=(0.6, 0.8), wind_speed=6.0,
@@ -146,7 +146,7 @@ class TestGustTravel:
         # in a +X mean wind has its crests travel downwind by exactly mean*dt.
         # Build a clean single-mode basis so the cross-correlation is
         # unambiguous (no multi-mode quasi-periodic spurious peaks).
-        from fire_engine.wind.gusts import GustModes
+        from fire_engine.world.wind.gusts import GustModes
         wavelength = 50.0
         k = 2.0 * np.pi / wavelength
         single = GustModes(
@@ -433,14 +433,14 @@ class TestModifiers:
 
 
 # ---------------------------------------------------------------------------
-# Hard-rule guard: no panda3d anywhere under fire_engine/wind/
+# Hard-rule guard: no panda3d anywhere under fire_engine/world/wind/
 # ---------------------------------------------------------------------------
 
 class TestNoPanda3D:
     def test_no_panda3d_import_in_wind_package(self):
         import ast
 
-        wind_dir = Path(__file__).parent.parent / "fire_engine" / "wind"
+        wind_dir = Path(__file__).parent.parent / "fire_engine" / "world" / "wind"
         offenders = []
         for src in wind_dir.glob("*.py"):
             tree = ast.parse(src.read_text(encoding="utf-8"), filename=str(src))

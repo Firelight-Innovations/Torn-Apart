@@ -18,7 +18,7 @@ from fire_engine.procedural.textures.grass_ground import (
     GRASS_PALETTE, GRASS_THRESHOLDS, _posterise as _grass_posterise)
 from fire_engine.procedural.textures.dirt_ground import (
     DIRT_PALETTE, DIRT_THRESHOLDS)
-from fire_engine.terrain.generation import MATERIAL_DIRT, MATERIAL_GRASS
+from fire_engine.world.terrain.generation import MATERIAL_DIRT, MATERIAL_GRASS
 
 
 def _entries():

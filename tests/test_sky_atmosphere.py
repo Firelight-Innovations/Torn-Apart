@@ -15,8 +15,8 @@ import pytest
 
 from fire_engine.core import Clock, EventBus, load_config
 from fire_engine.core.rng import set_world_seed
-from fire_engine.sky import atmosphere
-from fire_engine.sky.sky_state import MOON_CYCLE_DAYS, SkySystem
+from fire_engine.world.sky import atmosphere
+from fire_engine.world.sky.sky_state import MOON_CYCLE_DAYS, SkySystem
 
 NOON_Z = 0.94          # sin(sun elevation) at the v0 noon arc peak
 

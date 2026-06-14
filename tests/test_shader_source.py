@@ -45,7 +45,7 @@ class TestPassthrough:
 
     def test_real_repo_shaders_still_load(self):
         # The loader change must not disturb existing sidecar files.
-        anchor = str(_REPO / "fire_engine" / "world" / "fake.py")
+        anchor = str(_REPO / "fire_engine" / "render" / "fake.py")
         text = load_glsl(anchor, "terrain.frag")
         assert text.startswith("#version")
 

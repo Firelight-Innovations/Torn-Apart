@@ -19,7 +19,7 @@ import numpy as np
 import pytest
 
 from fire_engine.core import EventBus, load_config, set_world_seed
-from fire_engine.weather import CellKind, WeatherSystem
+from fire_engine.world.weather import CellKind, WeatherSystem
 
 
 @pytest.fixture(autouse=True)

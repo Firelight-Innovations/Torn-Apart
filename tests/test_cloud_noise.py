@@ -1,6 +1,6 @@
 """Volumetric cloud noise bake: determinism, tileability, shape, coverage.
 
-The bake (``fire_engine.sky.cloud_noise``) feeds the volumetric cloud raymarch.
+The bake (``fire_engine.world.sky.cloud_noise``) feeds the volumetric cloud raymarch.
 It must be deterministic (same seed → byte-identical, so worlds reproduce) and
 tileable (no seam as the field scrolls with the wind).  Pure numpy / headless.
 """
@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 from fire_engine.core.rng import set_world_seed
-from fire_engine.sky.cloud_noise import bake_shape_noise, bake_detail_noise
+from fire_engine.world.sky.cloud_noise import bake_shape_noise, bake_detail_noise
 
 _ROOT = Path(__file__).resolve().parents[1]
 
@@ -79,7 +79,7 @@ def test_cross_process_determinism():
     probe = (
         "import numpy as np;"
         "from fire_engine.core.rng import set_world_seed;"
-        "from fire_engine.sky.cloud_noise import bake_shape_noise;"
+        "from fire_engine.world.sky.cloud_noise import bake_shape_noise;"
         "set_world_seed(2024);"
         "v=bake_shape_noise(32);"
         "print(int(v.astype(np.int64).sum()))"

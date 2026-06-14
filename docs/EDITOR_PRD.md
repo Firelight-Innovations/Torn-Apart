@@ -19,7 +19,7 @@ keywords: editor, fire editor, vscode, cursor, viewport, scene view, hierarchy, 
 This turns Cursor into the complete development environment for the engine: code + the one missing piece, the visual editor.
 
 ### Why this architecture is cheap here
-Fire Engine is headless-by-design: only `fire_engine/world/` and `fire_engine/lighting/` may import panda3d (CLAUDE.md hard rule 1). Terrain generation, meshing (vertex positions/normals/colors), the Unity-clone object model (`Transform`, `GameObject`, `Component`), procedural textures, RNG, and saves are all pure Python/numpy. The editor therefore **does not need Panda3D at all** — it runs the headless engine in a Python daemon and renders the resulting mesh/texture arrays in a WebGL viewport.
+Fire Engine is headless-by-design: only `fire_engine/render/` and `fire_engine/lighting/` may import panda3d (CLAUDE.md hard rule 1). Terrain generation, meshing (vertex positions/normals/colors), the Unity-clone object model (`Transform`, `GameObject`, `Component`), procedural textures, RNG, and saves are all pure Python/numpy. The editor therefore **does not need Panda3D at all** — it runs the headless engine in a Python daemon and renders the resulting mesh/texture arrays in a WebGL viewport.
 
 ### Non-goals (v1)
 - **No live attach to a running game.** Designed for (versioned protocol, daemon embeddable later), built later.
@@ -123,7 +123,7 @@ Core methods (sketch — final list defined in Phase E0):
 
 These are engine changes, in the game repo, following all CLAUDE.md rules (docs/systems updates in the same commit, headless tests, type hints, docstrings-as-product).
 
-### 5.1 Introspection API — `fire_engine/world/introspect.py` (headless)
+### 5.1 Introspection API — `fire_engine/render/introspect.py` (headless)
 The inspector needs to enumerate component types and properties without hardcoding.
 - `component_types() -> list[type[Component]]` — from the registry's type buckets + an import-scan registration hook.
 - `describe(obj: GameObject | Component) -> ObjectDescription` — fields with name, type, value, units, readonly flag, and UI hints. Source of truth: type hints on public attributes + an optional class-level `__editor_fields__` override for hints (range, step, enum choices). Same mechanism reused for `ProceduralDef` params (texture lab) — put the shared core in `core/introspect.py` if cleaner.
@@ -177,7 +177,7 @@ Phased like DEVELOPMENT_PLAN.md; one commit per phase minimum, prefixed `editor 
 - **Commit:** `editor phase 1: scene view + chunk streaming + save loading`
 
 ### Phase E2 — Hierarchy + Inspector + Gizmos
-- Engine prereq §5.1 (introspection API) with its own headless tests + `docs/systems/world.md` update.
+- Engine prereq §5.1 (introspection API) with its own headless tests + `docs/systems/render.md` update.
 - Daemon: `SceneService` — hierarchy snapshots (incremental: changed-subtree notifications), selection, `object.*`/`component.*` ops.
 - Extension: Hierarchy TreeView (search, drag-reparent, context menu), Inspector webview (generated forms incl. Vec3/Quat-as-euler widgets), `TransformControls` gizmos bound to selection, selection sync both directions (click in viewport ↔ tree).
 - **Acceptance:** select object in viewport → tree + inspector follow; edit position in inspector → object moves in viewport; drag gizmo → inspector updates; add/remove a component; lifecycle hooks fire correctly on editor-driven create/destroy (test against the registry's recorded call order). Round-trip test: `set_property` then `introspect.object` returns the new value.

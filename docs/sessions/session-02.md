@@ -20,14 +20,14 @@ Verification renders: `tools/out/sky/*.png` (noon/dawn/midnight/rain/fog/overcas
 ## Architecture (two halves, one frozen contract)
 
 ```
-fire_engine/sky/            headless, panda3d-free (Layer 1 — Services, peer of lighting/)
+fire_engine/world/sky/            headless, panda3d-free (Layer 1 — Services, peer of lighting/)
   celestial.py             sun/moon great-circle arcs from clock.game_time_of_day, daylight factor
   weather.py               WeatherType, WeatherParams, WeatherSystem (Saveable "weather",
                            2-game-hour Markov segments via for_domain("weather", day, segment),
                            20-game-minute blends, force_weather override, WeatherChangedEvent)
   sky_state.py             SkyState (frozen per-frame snapshot) + SkySystem aggregator
 
-fire_engine/world/          the only panda3d zone
+fire_engine/render/          the only panda3d zone
   sky_shaders.py           GLSL: dome (gradient, sun, moon, equirect night sky + twinkle,
                            shooting-star streak) + clouds (2-D DDA slab raymarch, ≤48 steps)
   sky_renderer.py          SkyRendererComponent on the "Sky" GameObject — builds dome/cloud

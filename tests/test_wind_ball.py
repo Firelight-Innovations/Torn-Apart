@@ -3,8 +3,8 @@ tests/test_wind_ball.py — Headless tests for the wind-debug-ball physics (WP5)
 
 The rendered ``WindBallDebugComponent`` lives in ``world/`` (panda3d), so it is
 excluded from the headless suite by the import rule.  Its *physics* is the pure,
-panda3d-free :func:`fire_engine.wind.debug_ball_step`, which we step here with a
-real (synthetic-weather) :class:`~fire_engine.wind.WindField` to prove the seam:
+panda3d-free :func:`fire_engine.world.wind.debug_ball_step`, which we step here with a
+real (synthetic-weather) :class:`~fire_engine.world.wind.WindField` to prove the seam:
 a ball resting on flat ground accelerates and travels **downwind**, settles in
 calm air, and stays clamped to the ground plane.
 
@@ -18,8 +18,8 @@ import numpy as np
 
 from fire_engine.core.config import Config
 from fire_engine.core.rng import set_world_seed
-from fire_engine.wind import BallParams, WindField, debug_ball_step
-from fire_engine.wind.debug import debug_ball_step as _direct_import  # name check
+from fire_engine.world.wind import BallParams, WindField, debug_ball_step
+from fire_engine.world.wind.debug import debug_ball_step as _direct_import  # name check
 
 
 SEED = 1337

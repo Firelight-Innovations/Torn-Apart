@@ -15,7 +15,7 @@ Coverage
 - Schedule respects thinning (more strikes near the cell's intensity plateau)
   and only THUNDERSTORM cells strike.
 - WeatherSystem emits LightningStrikeEvents (deferred) for active storms.
-- No panda3d import leaks into fire_engine/weather/.
+- No panda3d import leaks into fire_engine/world/weather/.
 """
 
 from __future__ import annotations
@@ -28,9 +28,9 @@ import pytest
 
 from fire_engine.core import EventBus, LightningStrikeEvent, load_config
 from fire_engine.core.rng import set_world_seed
-from fire_engine.weather.bolt import BoltGeometry, generate_bolt
-from fire_engine.weather.cells import CellKind, StormCell, natural_cells
-from fire_engine.weather.lightning import (
+from fire_engine.world.weather.bolt import BoltGeometry, generate_bolt
+from fire_engine.world.weather.cells import CellKind, StormCell, natural_cells
+from fire_engine.world.weather.lightning import (
     StrikeParams,
     cell_id_int,
     scheduled_strikes,
@@ -208,7 +208,7 @@ def test_cell_id_int_stable(cfg):
 def test_system_emits_strike_events(cfg):
     """Find a day with a thunderstorm, advance the system over it, expect events."""
     set_world_seed(1337)
-    from fire_engine.weather import WeatherSystem
+    from fire_engine.world.weather import WeatherSystem
 
     # Locate a (day) that spawns at least one thunderstorm cell.
     storm_day = None
@@ -252,7 +252,7 @@ def test_system_emits_strike_events(cfg):
 def test_system_no_events_without_bus(cfg):
     """No bus → the hook is a silent no-op (and update still works)."""
     set_world_seed(1337)
-    from fire_engine.weather import WeatherSystem
+    from fire_engine.world.weather import WeatherSystem
     ws = WeatherSystem(cfg, bus=None)
     lw = ws.update(0, 3600.0, player_pos=(0.0, 0.0))
     lw2 = ws.update(0, 3660.0, player_pos=(0.0, 0.0))
@@ -266,7 +266,7 @@ def test_system_no_events_without_bus(cfg):
 def test_no_panda3d_in_weather_lightning():
     """weather/lightning.py + weather/bolt.py never import panda3d (Hard Rule 1)."""
     import ast
-    root = Path(__file__).resolve().parents[1] / "fire_engine" / "weather"
+    root = Path(__file__).resolve().parents[1] / "fire_engine" / "world" / "weather"
     for name in ("lightning.py", "bolt.py"):
         tree = ast.parse((root / name).read_text(encoding="utf-8"))
         for node in ast.walk(tree):

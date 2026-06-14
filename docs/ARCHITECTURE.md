@@ -55,7 +55,7 @@
 | Distribution | Deferred. (v1 said "Cython → C binary"; realistic path is PyInstaller/Nuitka. Decide much later.) |
 
 ### Panda3D Role
-Rendering SDK only: scene graph, shader pipeline, window/input, low-level asset formats. All game logic, simulation, world management is ours. **Only `world/` and `lighting/` may import panda3d.** Everything else is engine-agnostic Python — this keeps the simulation testable headless (critical: most automated tests run without a window).
+Rendering SDK only: scene graph, shader pipeline, window/input, low-level asset formats. All game logic, simulation, world management is ours. **Only `render/` and `lighting/` may import panda3d.** Everything else is engine-agnostic Python — this keeps the simulation testable headless (critical: most automated tests run without a window).
 
 ---
 
@@ -65,7 +65,7 @@ Rendering SDK only: scene graph, shader pipeline, window/input, low-level asset 
 1. **Downward calls are direct.** A layer may call any layer *below* it through that layer's public API (its `__init__.py` exports). Layer skipping downward is allowed (e.g., Terrain → Procedural directly). This replaces v1's "event bus for everything."
 2. **Upward and sideways communication uses the Event Bus.** Terrain never calls AI; it publishes `TerrainEditedEvent` and whoever cares subscribes.
 3. **The Event Bus is banned from per-frame hot paths.** Per-voxel, per-vertex, per-light-cell work uses direct calls and numpy arrays. Events are for *state changes* (an NPC died, a price moved, a chunk finished loading), not data plumbing.
-4. **Only the World API issues render commands to Panda3D.** The Lighting API is the one exception (it owns light-grid GPU upload).
+4. **Only the Render API issues render commands to Panda3D.** The Lighting API is the one exception (it owns light-grid GPU upload).
 5. **Foundation layers (Core, Procedural) are callable from anywhere.** v1 said both "each layer talks only to the layer directly below" *and* "Procedural is called by all" — contradiction resolved in favor of the latter.
 6. **Everything is a Python object.** Content (textures, biomes, buildings, NPC archetypes, factions) is authored as Python classes, never opaque data files. The whole game is scriptable by AI agents.
 
@@ -84,8 +84,8 @@ flowchart TD
     subgraph L4["Layer 4 — Agency"]
         PLY["Player API (thin — same interface as an NPC agent)"]
     end
-    subgraph L3["Layer 3 — World"]
-        WLD["World API — sole Panda3D render caller"]
+    subgraph L3["Layer 3 — Render / Scene"]
+        WLD["Render API (render/) — Unity-style object model + sole Panda3D render caller"]
     end
     subgraph L2["Layer 2 — Structure"]
         TER["Terrain API"]
@@ -106,16 +106,16 @@ flowchart TD
     SAV --> CORE
 ```
 
-**Reading the stack:** solid arrows = "may call directly downward." Any layer may additionally call the Foundation row directly, and any layer may publish/subscribe on the Event Bus for upward/sideways communication. Lighting is the only non-World layer allowed to touch the GPU.
+**Reading the stack:** solid arrows = "may call directly downward." Any layer may additionally call the Foundation row directly, and any layer may publish/subscribe on the Event Bus for upward/sideways communication. Lighting is the only non-Render layer allowed to touch the GPU.
 
-**Layer-1 service peers — `weather` / `wind` / `sky` import map:** these three are Layer-1 services (peers of Lighting/Resources). `sky` imports `weather` (it owns a `WeatherSystem`); `weather` imports `wind` (one-way, from M8 — only the modifier seam: `GustFront` / `add_modifier` / `remove_modifier`, lazily, so importing `weather` doesn't drag in `wind`); `wind` imports **neither** `sky` nor `weather` (its weather input is duck-typed). No cycle. All three are headless (numpy + `core` only); their panda3d upload/render bridges live in `world/` (`weather_renderer.py`, `wind_renderer.py`, `rain_renderer.py`, `devtools_overlay.py`). The `weather` summoned-cell delta + `wind` field are both seed/time pure → ~0 save bytes.
+**Layer-1 service peers — `world.weather` / `world.wind` / `world.sky` import map:** these three are Layer-1 services (peers of Lighting/Resources), grouped with `world.terrain` under the `world/` package since the 2026-06-13 reorg (grouping is folder-only; their roles and individual imports are unchanged). `sky` imports `weather` (it owns a `WeatherSystem`); `weather` imports `wind` (one-way, from M8 — only the modifier seam: `GustFront` / `add_modifier` / `remove_modifier`, lazily, so importing `weather` doesn't drag in `wind`); `wind` imports **neither** `sky` nor `weather` (its weather input is duck-typed). No cycle. All three are headless (numpy + `core` only); their panda3d upload/render bridges live in `render/` (`weather_renderer.py`, `wind_renderer.py`, `rain_renderer.py`, `devtools_overlay.py`). The `weather` summoned-cell delta + `wind` field are both seed/time pure → ~0 save bytes.
 
 ---
 
 ## 4a. System Diagrams
 
 ### 4a.1 Startup Sequence
-Boot order matters: RNG before anything procedural, content registration before world/terrain init, SaveManager registration after every `Saveable` exists, window last-but-one so failures fail fast and headless tools can reuse the same boot path minus `world.App`.
+Boot order matters: RNG before anything procedural, content registration before world/terrain init, SaveManager registration after every `Saveable` exists, window last-but-one so failures fail fast and headless tools can reuse the same boot path minus `render.App`.
 
 ```mermaid
 flowchart TD
@@ -153,14 +153,19 @@ Arrow = "imports / calls directly." Anything not shown communicates via Event Bu
 
 ```mermaid
 flowchart LR
-    subgraph SIM["Simulation"]
-        ai["ai/"]
-        economy["economy/"]
-        politics["politics/"]
+    subgraph SIM["Simulation (simulation/)"]
+        ai["simulation/ai/"]
+        economy["simulation/economy/"]
+        politics["simulation/politics/"]
+        player["simulation/player/"]
     end
-    player["player/"]
-    world["world/  🟥 may import panda3d"]
-    terrain["terrain/"]
+    subgraph WORLD["World env group (world/) — all headless"]
+        terrain["world/terrain/"]
+        weather["world/weather/"]
+        wind["world/wind/"]
+        sky["world/sky/"]
+    end
+    render["render/  🟥 may import panda3d (was world/)"]
     buildings["buildings/"]
     lighting["lighting/  🟥 may import panda3d"]
     resources["resources/"]
@@ -170,20 +175,28 @@ flowchart LR
     panda3d[["panda3d (external)"]]
     numpy[["numpy (external)"]]
 
-    ai --> world
+    ai --> render
     ai --> procedural
     economy --> procedural
     politics --> procedural
-    player --> world
-    world --> resources
-    world --> terrain
-    world --> lighting
-    world --> procedural
-    world --> panda3d
+    player --> render
+    render --> resources
+    render --> terrain
+    render --> sky
+    render --> weather
+    render --> wind
+    render --> lighting
+    render --> procedural
+    render --> panda3d
     buildings --> procedural
     buildings --> terrain
     terrain --> procedural
     terrain --> numpy
+    sky --> weather
+    weather --> wind
+    sky --> numpy
+    weather --> numpy
+    wind --> numpy
     lighting --> terrain
     lighting --> panda3d
     lighting --> numpy
@@ -194,15 +207,18 @@ flowchart LR
     ai --> core
     economy --> core
     politics --> core
-    world --> core
+    render --> core
     terrain --> core
+    sky --> core
+    weather --> core
+    wind --> core
     lighting --> core
     buildings --> core
     resources --> core
     player --> core
 ```
 
-Notes: `save/` deliberately depends on nothing above `core` — systems register *into* it as `Saveable`s at boot (inversion of control), so adding a new system never touches save code. `terrain → world` mesh handoff is data-only (numpy arrays returned to `world`'s geometry bridge), not an import of `world`.
+Notes: `save/` deliberately depends on nothing above `core` — systems register *into* it as `Saveable`s at boot (inversion of control), so adding a new system never touches save code. `terrain → render` mesh handoff is data-only (numpy arrays returned to `render`'s geometry bridge), not an import of `render`. The `render/` group (terrain/weather/wind/sky) is a packaging convenience — its members keep their distinct Layer-1/Layer-2 roles and may be imported individually; grouping them under one folder does **not** make them one module.
 
 ### 4a.3 Whole-System View
 How the four halves of the software — authoring, simulation, render path, persistence — fit together at runtime.
@@ -223,7 +239,7 @@ flowchart TB
             polq["Politics"]
         end
         playerq["Player API<br/>(human → same agent interface)"]
-        worldq["World API<br/>GameObjects · Components · LODPolicy"]
+        worldq["Render API<br/>GameObjects · Components · LODPolicy"]
         terrainq["Terrain<br/>chunks · mesher · octree"]
         lightq["Lighting<br/>voxel light grid"]
         resq["Resource Manager<br/>(hand-crafted assets only)"]
@@ -330,7 +346,9 @@ AI agents add content by subclassing `ProceduralDef` in plain Python and registe
 ### 5.3 Resource Manager API
 The only place raw asset file I/O occurs. Loads hand-crafted assets (models `.egg`/`.bam`/`.gltf`, sounds, landmark buildings, player hands) from disk; sources environment textures from the Procedural API. In-memory cache with reference-counted unload.
 
-### 5.4 World API
+### 5.4 Render API
+*(Package `fire_engine/render/` — renamed from `world/` in the 2026-06-13 package reorg. It hosts the Unity-style scene/object model **and** is the sole Panda3D render caller; "Render" names the folder, not a reduction in scope.)*
+
 Scene-graph wrapper; sole render caller. **The object model deliberately copies the Unity API** (owner decision 2026-06-09) — same names, same semantics, snake_case — so anyone (human or AI agent) who knows Unity can author here with zero relearning.
 
 ```python
@@ -394,11 +412,11 @@ class Transform:
     def inverse_transform_point(self, p: Vec3) -> Vec3: ...
 ```
 
-`Vec3` and `Quat` live in **`core/math3d.py`** (pure numpy — float32, array-backed) so the entire object model is headless-testable; `world/` converts to Panda3D types only at the scene-graph boundary. `Quat` API: `identity()`, `from_axis_angle(axis, radians)`, `from_euler(h, p, r)`, `as_euler()`, `slerp(a, b, t)`, `q1 * q2`, `q.rotate(vec3)`, `normalized()`. Axis convention is **Z-up** (Panda3D native), not Unity's Y-up — the API shape is Unity's; the coordinate system is ours, stated once here and never converted ad hoc.
+`Vec3` and `Quat` live in **`core/math3d.py`** (pure numpy — float32, array-backed) so the entire object model is headless-testable; `render/` converts to Panda3D types only at the scene-graph boundary. `Quat` API: `identity()`, `from_axis_angle(axis, radians)`, `from_euler(h, p, r)`, `as_euler()`, `slerp(a, b, t)`, `q1 * q2`, `q.rotate(vec3)`, `normalized()`. Axis convention is **Z-up** (Panda3D native), not Unity's Y-up — the API shape is Unity's; the coordinate system is ours, stated once here and never converted ad hoc.
 
-**Deliberate deviations from Unity** (documented so nobody "fixes" them): no coroutines (use components + the Clock); no reflection-based message passing (`SendMessage`) — use the Event Bus; prefab role is played by `ProceduralDef` templates; and **execution is batched by component type** (Changelog #4): the World API runs `awake → on_enable → start` queues then `update/late_update/fixed_update` per *type bucket*, not per object. Unity semantics, batched mechanics — with 10k+ NPCs, per-object Python dispatch is not survivable, and type buckets leave the door open to array-backed component storage later without changing this authoring API.
+**Deliberate deviations from Unity** (documented so nobody "fixes" them): no coroutines (use components + the Clock); no reflection-based message passing (`SendMessage`) — use the Event Bus; prefab role is played by `ProceduralDef` templates; and **execution is batched by component type** (Changelog #4): the Render API runs `awake → on_enable → start` queues then `update/late_update/fixed_update` per *type bucket*, not per object. Unity semantics, batched mechanics — with 10k+ NPCs, per-object Python dispatch is not survivable, and type buckets leave the door open to array-backed component storage later without changing this authoring API.
 
-**LOD:** a single shared `LODPolicy` object in `core` defines distance bands. World API (objects) and Terrain API (chunks) both read the *same* policy so geometry, placement density, and shadow detail transition together.
+**LOD:** a single shared `LODPolicy` object in `core` defines distance bands. Render API (objects) and Terrain API (chunks) both read the *same* policy so geometry, placement density, and shadow detail transition together.
 
 ### 5.5 Terrain API
 Voxel terrain: 0.5 m voxels, 32³-voxel chunks (16 m cubes), chunk storage as numpy `uint8`/`uint16` material arrays. Octree over chunks for queries; LOD via merged/simplified distant meshes.
@@ -492,5 +510,6 @@ Internal documentation (docstrings, type hints, per-API README) is the prompt co
 5. **SaveManager added** (owner discussion 2026-06-09): delta saves from day one via `Saveable` protocol; pickle considered and rejected (refactor-fragile, not inspectable, abandons the delta idea).
 6. **Lighting v0 is CPU** (sunlight column pass baked to vertex colors); GPU compute is an upgrade, not a prerequisite.
 7. **Open questions locked** (§2): 0.5 m voxels, 32³ chunks, light scale 2, save approach.
-8. **Headless-testability rule added:** only `world/` and `lighting/` may import panda3d.
+8. **Headless-testability rule added:** only `render/` and `lighting/` may import panda3d.
 9. **Object model re-specced as a Unity API clone** (owner decision 2026-06-09): Unity lifecycle (`awake/start/update/late_update/fixed_update/on_enable/on_disable/on_destroy`), `instantiate/destroy/find_with_tag`, tag/layer/active. Transform stores rotation as **quaternion only** (`core/math3d.Quat`, numpy-backed, Z-up); Euler is a view, never state. Deviations from Unity (no coroutines, no SendMessage, batched execution) documented in §5.4.
+10. **Package reorg (2026-06-13):** top-level `fire_engine/` subpackages regrouped to cut folder sprawl. The render bridge `world/` → **`render/`** (the panda3d caller; "World API" → "Render API"). New grouping packages: **`world/`** now holds `terrain` / `weather` / `wind` / `sky` (the simulated environment, all headless), and **`simulation/`** holds `ai` / `economy` / `politics` / `player`. Foundation/service packages (`core` `procedural` `save` `resources` `lighting`) and `buildings` / `zones` / `scene` / `devtools` are unchanged. Grouping is folder-only — layer roles and import seams are identical; `docs/systems/` filenames now mirror the full dotted path (`world.terrain.md`, `simulation.player.md`, `render.md`).

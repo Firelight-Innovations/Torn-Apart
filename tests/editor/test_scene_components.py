@@ -244,7 +244,7 @@ class _RecordingFactory:
 class TestRuntimeComponents:
     def test_light_params_reach_factory(self):
         from fire_engine.scene import SceneRuntime
-        from fire_engine.world.registry import ComponentRegistry
+        from fire_engine.render.registry import ComponentRegistry
 
         ComponentRegistry.clear()
         store = SceneObjectStore()
@@ -262,7 +262,7 @@ class TestRuntimeComponents:
 
     def test_runtime_migrates_old_delta(self):
         from fire_engine.scene import SceneRuntime
-        from fire_engine.world.registry import ComponentRegistry
+        from fire_engine.render.registry import ComponentRegistry
 
         ComponentRegistry.clear()
         old_delta = {

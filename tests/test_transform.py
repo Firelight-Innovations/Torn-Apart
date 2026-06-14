@@ -16,7 +16,7 @@ import math
 
 import pytest
 
-from fire_engine.world.transform import Transform, Space
+from fire_engine.render.transform import Transform, Space
 from fire_engine.core.math3d import Vec3, Quat
 
 

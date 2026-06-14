@@ -239,7 +239,7 @@ class TestInstancePlacement:
 
 def _flat_chunks(cfg, coords):
     """Dict chunk provider with baseline flat terrain (like test_brush.py)."""
-    from fire_engine.terrain.generation import generate_chunk
+    from fire_engine.world.terrain.generation import generate_chunk
 
     class _Chunk:
         def __init__(self, materials):

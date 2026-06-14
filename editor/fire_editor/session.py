@@ -19,7 +19,7 @@ from fire_engine.core.math3d import Vec3
 from fire_engine.core.rng import for_domain, set_world_seed
 from fire_engine.lighting import LightGrid, SunlightComputer, make_light_sampler
 from fire_engine.save import SaveManager
-from fire_engine.terrain import (
+from fire_engine.world.terrain import (
     BoxBrush,
     BrushMode,
     ChunkManager,
@@ -33,7 +33,7 @@ from fire_engine.terrain import (
 from .scene_objects import SceneObjectStore
 
 # Z band of streamed chunks relative to the camera chunk. Mirrors the private
-# band in fire_engine.terrain.chunk_manager (_Z_MIN/_Z_MAX); guarded against
+# band in fire_engine.world.terrain.chunk_manager (_Z_MIN/_Z_MAX); guarded against
 # drift by tests/editor/test_session.py::test_region_matches_engine_desired_set.
 _Z_MIN: int = -2
 _Z_MAX: int = 4
@@ -90,7 +90,7 @@ class EditorSession:
             from fire_engine.procedural.textures.grass_ground import (
                 GRASS_PALETTE, GRASS_THRESHOLDS)
             from fire_engine.procedural.textures.ground_lut import build_ground_lut
-            from fire_engine.terrain import MATERIAL_DIRT, MATERIAL_GRASS
+            from fire_engine.world.terrain import MATERIAL_DIRT, MATERIAL_GRASS
 
             self._ground_lut = build_ground_lut({
                 MATERIAL_DIRT: (DIRT_PALETTE, DIRT_THRESHOLDS),

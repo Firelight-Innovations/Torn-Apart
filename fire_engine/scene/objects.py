@@ -17,7 +17,7 @@ has exactly one definition: the editor daemon imports it via the
 The baseline (procedural) scene is empty, so an untouched world saves ~0 bytes;
 every object the user creates is a deviation captured in :meth:`get_delta`.
 
-These authoring objects map onto runtime ``fire_engine.world.GameObject`` instances
+These authoring objects map onto runtime ``fire_engine.render.GameObject`` instances
 when a world is built for play (see ``fire_engine.scene.runtime``); here they are
 plain data the editor manipulates.
 

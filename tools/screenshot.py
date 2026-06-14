@@ -19,7 +19,7 @@ Usage
     python tools/screenshot.py --time-of-day 0 --weather clear --pitch 30 \
         --out sky/midnight.png
     python tools/screenshot.py --stub-sky --time-of-day 12 --weather rain \
-        --out sky/stub_rain.png    # renderer-only debug (bypasses fire_engine.sky)
+        --out sky/stub_rain.png    # renderer-only debug (bypasses fire_engine.world.sky)
 
 Notes
 -----
@@ -73,7 +73,7 @@ _STUB_WEATHER = {
 
 def _make_stub_sky(clock, weather_name: str | None):
     """
-    Build a duck-typed stand-in for ``fire_engine.sky.SkySystem``.
+    Build a duck-typed stand-in for ``fire_engine.world.sky.SkySystem``.
 
     Returns an object with ``update() -> SimpleNamespace``, ``state``, and a
     ``weather`` namespace whose ``force_weather`` is a no-op (the stub's
@@ -155,7 +155,7 @@ def _apply_sky_settings(app, time_of_day_h: float | None,
         if time_of_day_h is not None else float(clock.game_time_of_day)
 
     if weather and sky is not None:
-        from fire_engine.sky import WeatherType
+        from fire_engine.world.sky import WeatherType
         anchor_s = target_s - _WEATHER_BLEND_LEAD_S
         wrapped = anchor_s < 0.0
         clock.game_time_of_day = anchor_s + _GAME_DAY_S if wrapped else anchor_s
@@ -208,7 +208,7 @@ def capture(frames: int, out_name: str, explode: bool,
         use ~110 to fly above the cloud layer (96–104 m).
     stub_sky : bool
         Swap a SimpleNamespace SkyState stub into the SkyRendererComponent
-        (renderer-only debugging; bypasses fire_engine.sky entirely).
+        (renderer-only debugging; bypasses fire_engine.world.sky entirely).
 
     Returns
     -------
@@ -217,7 +217,7 @@ def capture(frames: int, out_name: str, explode: bool,
     """
     import main as demo
     from fire_engine.core.math3d import Vec3, Quat
-    from fire_engine.terrain import SphereBrush, BrushMode, apply_brush
+    from fire_engine.world.terrain import SphereBrush, BrushMode, apply_brush
 
     app = demo.build_demo()
 
@@ -241,7 +241,7 @@ def capture(frames: int, out_name: str, explode: bool,
 
     if stub_sky:
         # Renderer-only path: swap the stub into the live SkyRendererComponent.
-        from fire_engine.world.sky_renderer import SkyRendererComponent
+        from fire_engine.render.sky_renderer import SkyRendererComponent
         if time_of_day is not None:
             app._clock.game_time_of_day = (float(time_of_day) * 3600.0) % _GAME_DAY_S
         stub = _make_stub_sky(app._clock, weather)
@@ -257,7 +257,7 @@ def capture(frames: int, out_name: str, explode: bool,
         # relit interior shows.  Raycast down for the surface — a fixed
         # camera-relative offset misses it entirely at some spawn heights
         # (the sphere ends up fully in air or fully buried → no visible edit).
-        from fire_engine.terrain import raycast_voxel
+        from fire_engine.world.terrain import raycast_voxel
         cam = app.camera_go.transform.position
         fwd = app.camera_go.transform.forward
         # 10 m ahead along the camera's horizontal facing (not a fixed axis).
@@ -313,7 +313,7 @@ def capture(frames: int, out_name: str, explode: bool,
         # torch below ground at some spawn heights (same failure the
         # --explode path had), which reads as "point lights are broken".
         from fire_engine.lighting.lights import PointLight
-        from fire_engine.terrain import raycast_voxel as _rc_t
+        from fire_engine.world.terrain import raycast_voxel as _rc_t
         cam = app.camera_go.transform.position
         t_hit = _rc_t(Vec3(cam.x, cam.y + 8.0, cam.z + 40.0),
                       Vec3(0.0, 0.0, -1.0),
@@ -331,7 +331,7 @@ def capture(frames: int, out_name: str, explode: bool,
         # the lighting pipeline as a dynamic occluder, so the sun's boxVis test
         # in inject.comp must carve a shadow beneath it — the exact path the
         # user's "every object casts shadows" request exercises.
-        from fire_engine.terrain import raycast_voxel as _rc
+        from fire_engine.world.terrain import raycast_voxel as _rc
         cam = app.camera_go.transform.position
         fwd = app.camera_go.transform.forward
         gx, gy = cam.x + fwd.x * 6.0, cam.y + fwd.y * 6.0
@@ -365,7 +365,7 @@ def capture(frames: int, out_name: str, explode: bool,
         # so hide it now and render one more frame before capturing.
         grass_go = getattr(app, "grass_go", None)
         if grass_go is not None:
-            from fire_engine.world.grass_renderer import GrassRendererComponent
+            from fire_engine.render.grass_renderer import GrassRendererComponent
             gc = grass_go.get_component(GrassRendererComponent)
             if gc is not None and getattr(gc, "_root", None) is not None:
                 gc._root.hide()

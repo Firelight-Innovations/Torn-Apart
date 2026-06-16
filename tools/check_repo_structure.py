@@ -55,11 +55,20 @@ def _iter_dirs(root: Path, cfg: StandardsConfig) -> list[Path]:
 
 
 def _subdirs(directory: Path, cfg: StandardsConfig) -> list[Path]:
-    """Immediate non-excluded child directories of ``directory``."""
+    """Immediate non-excluded child *sub-packages* of ``directory``.
+
+    The deep-&-narrow rule governs nesting of Python PACKAGES, so only child
+    directories that are packages (contain ``__init__.py``) count toward the
+    sub-folder cap. Sibling *data* directories — e.g. a ``shaders/`` folder of
+    ``.vert``/``.frag``/``.glsl`` files, or ``__pycache__`` — are not
+    sub-packages and are not counted (they hold no importable modules).
+    """
     return [
         child
         for child in directory.iterdir()
-        if child.is_dir() and not cfg.is_excluded(child.relative_to(REPO_ROOT))
+        if child.is_dir()
+        and (child / "__init__.py").exists()
+        and not cfg.is_excluded(child.relative_to(REPO_ROOT))
     ]
 
 

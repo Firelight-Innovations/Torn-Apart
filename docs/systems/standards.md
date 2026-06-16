@@ -132,6 +132,10 @@ standards (both implemented as guards in `check_repo_structure.py`, not as
   ARCHITECTURE/CLAUDE.md, not a leaf package the deep-&-narrow cap targets;
   `check_docs.py` already exempts the root the same way. Every real sub-package
   still enforces ≤5 sub-folders and ≤10 modules.
+- **Sub-folder cap (`[6]`/`[7]`)** counts only **sub-packages** (directories with
+  an `__init__.py`). Sibling *data* directories — a `shaders/` folder of GLSL
+  source, `__pycache__`, etc. — are not importable packages and do not count
+  toward the nesting limit.
 - **Test mirror (`[17]`)** does not apply to a module that **imports panda3d**.
   Hard Rule 1 confines panda3d to `render/`/`lighting/`, and the headless suite
   excludes anything importing it — so such a module cannot have a headless

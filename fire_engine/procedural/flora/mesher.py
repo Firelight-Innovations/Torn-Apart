@@ -175,6 +175,43 @@ def _metadata(positions: np.ndarray) -> tuple[float, float]:
     return height, radius
 
 
+def _segment_frames(sk: TreeSkeleton, axis: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """
+    One cross-section frame ``(u, v)`` per segment via parallel transport.
+
+    Returns two ``float32 (S, 3)`` basis arrays, perpendicular to each
+    segment's *axis*, propagated parent→child by the **minimal** rotation
+    that carries a parent's axis onto its child's axis.  This rotation-
+    minimizing (no arbitrary twist) frame is what lets adjacent rings line
+    up corner-for-corner, so a continuation joint welds with zero twist
+    instead of the per-segment ``_frames`` look (each ring rotated
+    independently → visible notches at every joint).
+
+    Root segments (``parent == -1``) seed from :func:`_frames`.  Segments
+    are processed in ascending id order; children always have larger ids
+    than their parents, so every parent frame is ready first (tens of
+    segments — a plain Python loop is allowed by the module contract).
+    """
+    u, v = (a.copy() for a in _frames(axis))  # seed frames (used for roots)
+    parent = sk.parent
+    for i in range(sk.n_segments):
+        p = int(parent[i])
+        if p < 0:
+            continue  # root: keep the seed frame
+        # Minimal rotation carrying the parent's axis onto the child's.
+        rot_axis = np.cross(axis[p], axis[i])
+        rl = float(np.linalg.norm(rot_axis))
+        cos_a = float(np.clip(np.dot(axis[p], axis[i]), -1.0, 1.0))
+        if rl < 1e-8:  # axes (anti)parallel — carry the in-plane basis straight
+            sgn = 1.0 if cos_a > 0.0 else -1.0
+            u[i], v[i] = sgn * u[p], v[p]
+            continue
+        k = rot_axis / rl  # unit rotation axis; sin(angle) == rl
+        for dst, src in ((u, u[p]), (v, v[p])):  # Rodrigues per basis vector
+            dst[i] = src * cos_a + np.cross(k, src) * rl + k * float(np.dot(k, src)) * (1.0 - cos_a)
+    return _normalize(u), _normalize(v)
+
+
 def mesh_branches(
     sk: TreeSkeleton,
     *,
@@ -182,13 +219,23 @@ def mesh_branches(
     uv_rect: tuple[float, float, float, float] = (0.0, 0.0, 0.5, 1.0),
     tint: tuple[float, float, float] = (1.0, 1.0, 1.0),
     cap_tips: bool = True,
+    weld_tol_m: float = 1e-4,
 ) -> TreeMesh:
     """
-    Mesh every skeleton segment as a tapered ``sides``-gon prism.
+    Mesh every skeleton segment as a tapered ``sides``-gon prism — joints
+    weld into one **continuous tube** (no gaps or twists at segment seams).
 
     Each segment becomes ``sides`` independent flat-shaded quads (plus an
-    end-cap fan when *cap_tips*), fully vectorized over all segments at
-    once.  ``radius`` is the prism's half-width (apothem), so a trunk of
+    end-cap fan when *cap_tips*) — every quad keeps its own four vertices and
+    face normal for the chunky pixel read.  Continuity comes from the ring
+    *positions*, not index sharing: every segment gets ONE cross-section
+    frame propagated parent→child by the minimal (twist-free) rotation
+    (:func:`_segment_frames`); a continuation (``start ≈ parent.end`` within
+    *weld_tol_m*) reuses its parent's end-ring positions (zero gap down a
+    whole trunk); a fork (start partway along the parent) pulls its base ring
+    back into the parent by ~the attachment radius so it sockets in.
+
+    ``radius`` is the prism's half-width (apothem), so a trunk of
     ``radius_start=0.25`` renders 0.5 m thick — corner vertices sit at
     ``radius / cos(π/sides)``.
 
@@ -206,13 +253,19 @@ def mesh_branches(
         RGB multiplier baked into vertex colors (the species' per-variant
         hue drift).
     cap_tips : bool
-        Add an end-cap polygon at every segment's end ring so cut branch
-        ends never look hollow.  Default True.
+        Add an end-cap polygon at every TIP segment's end ring (childless
+        segments only — interior caps are hidden inside the next ring and
+        are skipped to save verts) so cut branch ends never look hollow.
+        Default True.
+    weld_tol_m : float
+        Distance (m) under which a child's start counts as a true
+        continuation of its parent's end and the two rings are welded.
+        Default 1e-4.
 
     Returns
     -------
     TreeMesh
-        ``S × sides`` quads (+ caps); ``colors[:, 3]`` carries sway.
+        ``S × sides`` quads (+ tip caps); ``colors[:, 3]`` carries sway.
 
     Docs: docs/systems/procedural.flora.md
     """
@@ -222,7 +275,7 @@ def mesh_branches(
     u0, v0, u1, v1 = (float(c) for c in uv_rect)
 
     axis = _normalize(sk.end - sk.start)  # (S, 3)
-    fu, fv = _frames(axis)  # (S, 3) each
+    fu, fv = _segment_frames(sk, axis)  # (S, 3) each — twist-free propagation
     theta = (np.arange(sides, dtype=np.float32) + 0.5) * (2.0 * math.pi / sides)  # (sides,)
     corner_mult = 1.0 / math.cos(math.pi / sides)
     # Corner directions per segment: (S, sides, 3).
@@ -230,13 +283,33 @@ def mesh_branches(
         fu[:, None, :] * np.cos(theta)[None, :, None]
         + fv[:, None, :] * np.sin(theta)[None, :, None]
     )
-    ring0 = sk.start[:, None, :] + cd * (sk.radius_start * corner_mult)[:, None, None]
+
+    # Ring centers: forks pull the start-ring back INTO the parent so the
+    # branch base overlaps the trunk surface (no floating stub).  A "fork"
+    # is a child whose start is NOT at its parent's end (np.allclose fails).
+    start_ctr = sk.start.copy()
+    parent = sk.parent
+    has_parent = parent >= 0
+    p_safe = np.maximum(parent, 0)
+    is_continuation = has_parent & np.all(np.abs(sk.start - sk.end[p_safe]) <= weld_tol_m, axis=1)
+    is_fork = has_parent & ~is_continuation
+    if is_fork.any():
+        # Push the fork base back along its own axis by ~the parent's radius
+        # so the square base buries into the trunk instead of floating.
+        start_ctr[is_fork] -= axis[is_fork] * sk.radius_start[p_safe][is_fork, None]
+
+    ring0 = start_ctr[:, None, :] + cd * (sk.radius_start * corner_mult)[:, None, None]
     ring1 = sk.end[:, None, :] + cd * (sk.radius_end * corner_mult)[:, None, None]
 
+    # Weld continuations: copy the parent's end-ring positions into the
+    # child's start ring (frames+radii already match) → exact zero-gap joint.
+    if is_continuation.any():
+        for i in np.nonzero(is_continuation)[0]:
+            ring0[i] = ring1[int(parent[i])]
+
     nxt = (np.arange(sides) + 1) % sides
-    # Side-face quads (S, sides, 4, 3): start_k, start_k+1, end_k+1, end_k —
-    # CCW seen from outside (right-handed frames; tree node is two-sided
-    # anyway and tree.frag flips back faces).
+    # Side-face quads (S, sides, 4, 3): start_k, start_k+1, end_k+1, end_k — CCW
+    # seen from outside (tree node is two-sided; tree.frag flips back faces).
     p0, p1 = ring0, ring0[:, nxt]
     p2, p3 = ring1[:, nxt], ring1
     quads = np.stack([p0, p1, p2, p3], axis=2).astype(np.float32)
@@ -260,26 +333,32 @@ def mesh_branches(
     indices = _quad_indices(S * sides)
 
     if cap_tips:
-        # End-cap fan per segment over its `sides` end-ring corners; normal
-        # along the segment axis; bark-rect center UV (caps are tiny).
-        cap_verts = ring1.reshape(-1, 3).astype(np.float32)  # (S*sides, 3)
-        cap_norms = np.repeat(axis, sides, axis=0).astype(np.float32)
-        cap_uv = np.full((S * sides, 2), ((u0 + u1) * 0.5, (v0 + v1) * 0.5), dtype=np.float32)
-        cap_col = np.empty((S * sides, 4), dtype=np.float32)
-        cap_col[:, 0:3] = np.asarray(tint, dtype=np.float32)
-        cap_col[:, 3] = np.repeat(sk.sway, sides)
-        # Fan indices: (0, k, k+1) per cap, offset past the side-face verts.
-        offset = positions.shape[0]
-        base = (np.arange(S, dtype=np.uint32) * sides)[:, None] + offset
-        k = np.arange(1, sides - 1, dtype=np.uint32)
-        fan = np.stack([np.zeros_like(k), k, k + 1], axis=1).reshape(-1)
-        cap_idx = (base + fan[None, :]).reshape(-1)
+        # Cap ONLY true tips (childless segments) — interior caps sit inside
+        # the next welded ring and are never seen, so emitting them just
+        # wastes verts.  One end-cap fan per tip over its `sides` end-ring
+        # corners; normal along the segment axis; bark-rect center UV.
+        tip_ids = sk.tip_ids().astype(np.int64)
+        if tip_ids.size:
+            cap_verts = ring1[tip_ids].reshape(-1, 3).astype(np.float32)  # (T*sides, 3)
+            cap_norms = np.repeat(axis[tip_ids], sides, axis=0).astype(np.float32)
+            cap_uv = np.full(
+                (tip_ids.size * sides, 2), ((u0 + u1) * 0.5, (v0 + v1) * 0.5), dtype=np.float32
+            )
+            cap_col = np.empty((tip_ids.size * sides, 4), dtype=np.float32)
+            cap_col[:, 0:3] = np.asarray(tint, dtype=np.float32)
+            cap_col[:, 3] = np.repeat(sk.sway[tip_ids], sides)
+            # Fan indices: (0, k, k+1) per cap, offset past the side-face verts.
+            offset = positions.shape[0]
+            base = (np.arange(tip_ids.size, dtype=np.uint32) * sides)[:, None] + offset
+            k = np.arange(1, sides - 1, dtype=np.uint32)
+            fan = np.stack([np.zeros_like(k), k, k + 1], axis=1).reshape(-1)
+            cap_idx = (base + fan[None, :]).reshape(-1)
 
-        positions = np.concatenate([positions, cap_verts])
-        normals = np.concatenate([normals, cap_norms])
-        uvs = np.concatenate([uvs, cap_uv])
-        colors = np.concatenate([colors, cap_col])
-        indices = np.concatenate([indices, cap_idx.astype(np.uint32)])
+            positions = np.concatenate([positions, cap_verts])
+            normals = np.concatenate([normals, cap_norms])
+            uvs = np.concatenate([uvs, cap_uv])
+            colors = np.concatenate([colors, cap_col])
+            indices = np.concatenate([indices, cap_idx.astype(np.uint32)])
 
     height, radius = _metadata(positions)
     return TreeMesh(

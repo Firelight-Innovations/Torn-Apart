@@ -1,5 +1,5 @@
 ﻿# procedural.flora.species -- System Doc
-keywords: flora species, built-in species, tree species, bush species, GnarledOakDef, DeadTreeDef, ScrubBushDef, BerryBushDef, tree_gnarled_oak, tree_dead, bush_scrub, bush_berry, gnarled oak, dead tree, scrub bush, berry bush, species script, grow, palettes, BARK_PALETTE, LEAF_PALETTE, BERRY_COLOR, BERRY_DENSITY, register_def, variant, trunk, limbs, twigs, stems, SkeletonBuilder, leaves_at_tips, stub trunk, bush path, leafless, near-leafless, wasteland, post-apocalyptic, pixel art species, species authoring, reference species
+keywords: flora species, built-in species, tree species, bush species, GnarledOakDef, DeadTreeDef, ScrubBushDef, BerryBushDef, tree_gnarled_oak, tree_dead, bush_scrub, bush_berry, gnarled oak, dead tree, scrub bush, berry bush, species script, grow, palettes, BARK_PALETTE, LEAF_PALETTE, BERRY_COLOR, BERRY_DENSITY, register_def, variant, trunk, limbs, twigs, stems, SkeletonBuilder, leaves_at_tips, along-wood leaves, leaves_per_m, max_leaves, twiglet, sub-stem, twig level, stub trunk, bush path, leafless, near-leafless, see-through foliage, wasteland, post-apocalyptic, pixel art species, species authoring, reference species
 
 > One doc per code package; filename matches the package exactly (`docs/systems/procedural.flora.species.md` -- `fire_engine/procedural/flora/species/`).
 
@@ -11,10 +11,10 @@ Importing this package (which `fire_engine.procedural.flora.__init__` does autom
 
 | Registered name | Class | Description |
 |---|---|---|
-| `"tree_gnarled_oak"` | `GnarledOakDef` | 5-7 m crooked oak, blocky tiered limbs, ragged olive canopy.  8 variants per world. |
-| `"tree_dead"` | `DeadTreeDef` | 6-9 m bare snag, sparse drooping limbs, at most two dry leaf tufts.  6 variants per world. |
-| `"bush_scrub"` | `ScrubBushDef` | ~1 m dry scrub with 4-7 splayed stems and dusty olive foliage.  6 variants per world. |
-| `"bush_berry"` | `BerryBushDef` | Compact dome of dense living-green leaves speckled with washed-red berries.  6 variants per world. |
+| `"tree_gnarled_oak"` | `GnarledOakDef` | 5-7 m crooked oak, blocky tiered limbs (limbs → twigs → fine twiglets), full dense olive crown (~1.3-1.4 k leaf cards/variant).  8 variants per world. |
+| `"tree_dead"` | `DeadTreeDef` | 6-9 m bare snag, sparse drooping limbs, at most two small dry leaf tufts.  6 variants per world. |
+| `"bush_scrub"` | `ScrubBushDef` | ~1 m dry scrub with 4-7 splayed stems + short sub-stems and dusty, deliberately see-through olive foliage.  6 variants per world. |
+| `"bush_berry"` | `BerryBushDef` | Full living-green dome (stems + fine sub-stems) speckled with washed-red berries.  6 variants per world. |
 
 These files also serve as **reference examples** for authoring new species (see `gnarled_oak.py` -- every knob is annotated; full guide: `docs/content/tree_species_authoring.md`).
 
@@ -24,10 +24,10 @@ This package does NOT: grow any meshes or textures at import time (generation is
 
 | Symbol | File | Description |
 |---|---|---|
-| `GnarledOakDef` | `gnarled_oak.py` | Wasteland oak -- crooked trunk + near-90-degree limbs (`pitch_set=(80, 95) degrees`) + upturned twigs + CA leaf dome.  The annotated reference species for authoring. |
-| `DeadTreeDef` | `dead_tree.py` | Bare snag -- tall lean trunk + sparse drooping/bent limbs + optional 0-2 dry leaf tufts (`rounds=2, density=0.7`).  Demonstrates the near-leafless path. |
-| `ScrubBushDef` | `scrub_bush.py` | Scrub bush -- stub trunk (`height_m=0.15`) + splayed stems using `length_m` (absolute, not ratio).  Demonstrates the bush path. |
-| `BerryBushDef` | `berry_bush.py` | Berry bush -- dome of upcurled stems + dense foliage + `BERRY_COLOR` / `BERRY_DENSITY` leaf speckles + per-world `palettes()` hue drift. |
+| `GnarledOakDef` | `gnarled_oak.py` | Wasteland oak -- crooked trunk + near-90-degree limbs (`pitch_set=(80, 95) degrees`) + upturned twigs + a 3rd fine **twiglet** level, all foliated along the wood into a dense crown (`leaves_per_m=90, max_leaves=1200`).  The annotated reference species for authoring. |
+| `DeadTreeDef` | `dead_tree.py` | Bare snag -- tall lean trunk + sparse drooping/bent limbs + optional 0-2 small dry leaf tufts (`max_leaves=36`; `rounds=2, density=0.7` is a legacy-compatible call -- those CA knobs are accepted but ignored).  Demonstrates the near-leafless path. |
+| `ScrubBushDef` | `scrub_bush.py` | Scrub bush -- stub trunk (`height_m=0.15`) + splayed stems using `length_m` (absolute, not ratio) + short sub-stems; foliage kept see-through.  Demonstrates the bush path. |
+| `BerryBushDef` | `berry_bush.py` | Berry bush -- dome of upcurled stems + fine sub-stems foliated into a full dome + `BERRY_COLOR` / `BERRY_DENSITY` leaf speckles + per-world `palettes()` hue drift. |
 
 ## Imports Allowed
 
@@ -104,9 +104,15 @@ class MyPineDef(TreeSpeciesDef):
                              yaw_mode="spiral",
                              length_ratio=(0.4, 0.6),
                              length_scale_by_height=(1.0, 0.3))
+        twigs = sb.branches(limbs, count=(2, 3),
+                             pitch_set=(math.radians(80),),
+                             length_ratio=(0.4, 0.6))         # more leaf-bearing wood
         sk = sb.skeleton()
-        leaves = leaves_at_tips(sk, limbs, rng,
-                                cell_m=0.22, rounds=2, density=0.65, max_leaves=300)
+        # Leaves grow ALONG the branch wood; count = density · leaves_per_m ·
+        # Σ length, capped at max_leaves.  Denser = more twigs + higher caps,
+        # NOT bigger leaves.
+        leaves = leaves_at_tips(sk, np.concatenate([limbs, twigs]), rng,
+                                density=0.65, leaves_per_m=70, max_leaves=600)
         return sk, leaves
 
 # 2. Import it in fire_engine/procedural/flora/species/__init__.py:
@@ -121,6 +127,6 @@ class MyPineDef(TreeSpeciesDef):
 1. **`@register_def` fires at import.** Adding a new species file is not enough -- you must import the class in `fire_engine/procedural/flora/species/__init__.py`; otherwise `get("tree_my_species")` raises `KeyError`.
 2. **`grow()` is required.** The base `TreeSpeciesDef.grow()` raises `NotImplementedError`.  Copy `gnarled_oak.py` (the annotated reference) -- do not start from a blank file.
 3. **Bush path uses `length_m`, not `length_ratio`.** For a stub trunk (~0.12-0.15 m), `length_ratio` would produce stems of only a few centimetres.  Pass `length_m=(min_m, max_m)` as absolute stem lengths instead (see `scrub_bush.py`, `berry_bush.py`).
-4. **Dead-tree / near-leafless path.** When `n_tufted == 0`, return `Leaves.empty()` directly -- do not call `leaves_at_tips` with `density=0` as that still runs the CA grid allocation.  See `dead_tree.py` for the correct pattern.
+4. **Dead-tree / near-leafless path.** When `n_tufted == 0`, return `Leaves.empty()` directly rather than relying on `leaves_at_tips` with `density=0`.  (`density <= 0` or `rounds <= 0` does return empty, but skipping the call is clearer.)  See `dead_tree.py` for the correct pattern.
 5. **`palettes(rng)` override for per-world hue drift.** If you want the species foliage colour to vary per world, override `palettes(rng)` returning `{"bark": ..., "leaf": ...}`.  Consume `rng` inside this method -- see `berry_bush.py` for the drift pattern.
 6. **`name` is the registry key.** Convention: `"tree_<species>"` or `"bush_<species>"`.  A mismatch between the `name` attribute and the import in `__init__.py` is a silent failure -- `get()` raises `KeyError` at runtime.

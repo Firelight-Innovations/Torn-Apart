@@ -71,7 +71,7 @@ class BerryBushDef(TreeSpeciesDef):
         return {"bark": self.BARK_PALETTE, "leaf": leaf.astype(np.uint8)}
 
     def grow(self, rng: np.random.Generator, variant: int) -> tuple[TreeSkeleton, Leaves]:
-        """Stub trunk → upcurled stems → dense overlapping foliage dome.
+        """Stub trunk → upcurled stems → fine sub-stems → full foliage dome.
 
         Docs: docs/systems/procedural.flora.species.md
         """
@@ -79,7 +79,7 @@ class BerryBushDef(TreeSpeciesDef):
         stub = sb.trunk(height_m=0.12, base_radius_m=0.05, segments=1, wobble_m=0.0)
         stems = sb.branches(
             stub,
-            count=(5, 8),
+            count=(6, 9),
             t_range=(0.5, 1.0),
             pitch_set=(_D(35), _D(55)),  # rounder dome
             pitch_jitter_rad=_D(8),
@@ -91,18 +91,32 @@ class BerryBushDef(TreeSpeciesDef):
             bend_rad=0.2,
             segments=2,
         )
+        # Fine sub-stems fork off every stem so the dome carries more twig
+        # wood — a fuller berry thicket built from more, smaller branches that
+        # the leaves cling to (leaf size unchanged).
+        sub = sb.branches(
+            stems,
+            count=(2, 3),
+            pitch_set=(_D(40), _D(60)),
+            pitch_jitter_rad=_D(10),
+            length_m=(0.12, 0.24),
+            radius_ratio=0.6,
+            min_radius_m=0.01,
+            upturn_rad=_D(25),
+            bend_rad=0.2,
+        )
         sk = sb.skeleton()
-        # Dense dome: high density + 2 leaves per cell close ranks.
+        # Full living-green dome: leaves cling along stems + the fine
+        # sub-stems, closing ranks into a berry-flecked canopy — full but not
+        # an opaque ball (the rounded silhouette still reads).
         leaves = leaves_at_tips(
             sk,
-            stems,
+            np.concatenate([stems, sub]),
             rng,
-            cell_m=0.15,
-            rounds=2,
             density=0.9,
-            per_cell=(1, 2),
             leaf_size_m=(0.06, 0.10),
             sway_min=0.75,
-            max_leaves=280,
+            leaves_per_m=50.0,
+            max_leaves=300,
         )
         return sk, leaves

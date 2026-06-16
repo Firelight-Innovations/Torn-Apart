@@ -12,14 +12,13 @@ Construction pattern mirrors tests/editor/test_scene_roundtrip.py exactly:
   - SceneRuntime(visual_factory=None)
   - drive the store directly (no Daemon / EditorSession needed)
 """
+
 from __future__ import annotations
 
-import pytest
-
-from fire_engine.core.math3d import Vec3, Quat
+from fire_engine.core.math3d import Vec3
+from fire_engine.render.registry import ComponentRegistry
 from fire_engine.scene import SceneRuntime
 from fire_engine.scene.objects import SceneObjectStore
-from fire_engine.render.registry import ComponentRegistry
 
 _EPS = 1e-6
 
@@ -27,6 +26,7 @@ _EPS = 1e-6
 # ---------------------------------------------------------------------------
 # Helpers shared across test cases
 # ---------------------------------------------------------------------------
+
 
 def _make_runtime() -> SceneRuntime:
     """Fresh runtime with registry cleared; visual_factory=None."""
@@ -37,8 +37,7 @@ def _make_runtime() -> SceneRuntime:
 def _populate_store(store: SceneObjectStore):
     """Create cube + child empty + spawn in *store*; returns (cube_id, child_id, spawn_id)."""
     cube = store.create("cube", name="Crate", position=(4.0, 2.0, 8.0))
-    child = store.create("empty", name="Pivot", parent=cube["id"],
-                         position=(1.0, 0.0, 0.0))
+    child = store.create("empty", name="Pivot", parent=cube["id"], position=(1.0, 0.0, 0.0))
     spawn = store.create("spawn", name="Start", position=(5.0, 5.0, 1.0))
     return cube["id"], child["id"], spawn["id"]
 
@@ -46,6 +45,7 @@ def _populate_store(store: SceneObjectStore):
 # ---------------------------------------------------------------------------
 # 1. Headless construction
 # ---------------------------------------------------------------------------
+
 
 class TestHeadlessConstruction:
     def test_construct_no_factory(self):
@@ -89,6 +89,7 @@ class TestHeadlessConstruction:
     def test_rebuild_stamps_scene_tag(self):
         """Every built GameObject carries the SCENE_TAG ('editor_scene')."""
         from fire_engine.scene.runtime import SCENE_TAG
+
         rt = _make_runtime()
         _populate_store(rt.store)
         rt.rebuild()
@@ -99,6 +100,7 @@ class TestHeadlessConstruction:
 # ---------------------------------------------------------------------------
 # 2. rebuild() idempotency — no leaks, stable count
 # ---------------------------------------------------------------------------
+
 
 class TestRebuildIdempotency:
     def test_double_rebuild_object_count_stable(self):
@@ -149,6 +151,7 @@ class TestRebuildIdempotency:
 # 3. on_rebuilt callback
 # ---------------------------------------------------------------------------
 
+
 class TestOnRebuiltCallback:
     def test_callback_fires_on_rebuild(self):
         """on_rebuilt is called exactly once per rebuild() invocation."""
@@ -187,6 +190,7 @@ class TestOnRebuiltCallback:
 # 4. spawn_position
 # ---------------------------------------------------------------------------
 
+
 class TestSpawnPosition:
     def test_no_spawn_returns_none(self):
         """spawn_position is None when the store has no spawn object."""
@@ -220,8 +224,7 @@ class TestSpawnPosition:
         """A spawn parented under a translated parent composes world position correctly."""
         rt = _make_runtime()
         parent = rt.store.create("empty", name="Group", position=(10.0, 0.0, 0.0))
-        rt.store.create("spawn", name="S", parent=parent["id"],
-                        position=(1.0, 0.0, 0.0))
+        rt.store.create("spawn", name="S", parent=parent["id"], position=(1.0, 0.0, 0.0))
         rt.rebuild()
         sp = rt.spawn_position
         assert sp is not None
@@ -243,6 +246,7 @@ class TestSpawnPosition:
 # ---------------------------------------------------------------------------
 # 5. apply_delta / get_delta round-trip
 # ---------------------------------------------------------------------------
+
 
 class TestDeltaRoundTrip:
     def test_empty_store_get_delta_is_empty_dict(self):
@@ -310,6 +314,7 @@ class TestDeltaRoundTrip:
 # ---------------------------------------------------------------------------
 # 6. Parent / child wiring in headless rebuild
 # ---------------------------------------------------------------------------
+
 
 class TestParentChildWiring:
     def test_child_transform_parent_matches_parent_go(self):

@@ -27,18 +27,18 @@ from fire_engine.core import EventBus, load_config
 from fire_engine.core.math3d import Vec3
 from fire_engine.core.rng import set_world_seed
 from fire_engine.save import Saveable
-from fire_engine.world.terrain import ChunkManager, apply_brush, SphereBrush, BrushMode
+from fire_engine.world.terrain import BrushMode, ChunkManager, SphereBrush, apply_brush
 from fire_engine.world.terrain.chunk import Chunk
 from fire_engine.world.terrain.chunk_manager import (
     _MAX_LOADS_PER_FRAME,
-    _Z_MIN,
     _Z_MAX,
+    _Z_MIN,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def cfg():
@@ -65,7 +65,7 @@ def _carve(cm: ChunkManager) -> set[tuple[int, int, int]]:
     """Carve a small crater at a corner-spanning position and return touched set."""
     return apply_brush(
         SphereBrush(2.5),
-        Vec3(16.0, 16.0, 8.0),   # on a chunk corner → spans multiple chunks
+        Vec3(16.0, 16.0, 8.0),  # on a chunk corner → spans multiple chunks
         BrushMode.REMOVE,
         chunk_provider=cm.get_or_create,
     )
@@ -74,6 +74,7 @@ def _carve(cm: ChunkManager) -> set[tuple[int, int, int]]:
 # ---------------------------------------------------------------------------
 # Module-level constant sanity (pins the values we rely on throughout)
 # ---------------------------------------------------------------------------
+
 
 class TestModuleConstants:
     def test_max_loads_per_frame_is_two(self):
@@ -90,6 +91,7 @@ class TestModuleConstants:
 # ---------------------------------------------------------------------------
 # desired_set — pure function
 # ---------------------------------------------------------------------------
+
 
 class TestDesiredSet:
     def test_count_at_origin(self, cfg):
@@ -156,7 +158,7 @@ class TestDesiredSet:
         """Desired set is symmetric: (cx, cy, cz) ↔ (-cx, -cy, cz) at origin."""
         cm = _make_cm(cfg)
         ds = cm.desired_set(Vec3(0.0, 0.0, 0.0))
-        for (cx, cy, cz) in ds:
+        for cx, cy, cz in ds:
             assert (-cx, -cy, cz) in ds
 
     def test_pure_function_no_side_effects(self, cfg):
@@ -188,6 +190,7 @@ class TestDesiredSet:
 # ---------------------------------------------------------------------------
 # get_or_create — provider contract
 # ---------------------------------------------------------------------------
+
 
 class TestGetOrCreate:
     def test_creates_and_caches(self, cfg):
@@ -237,6 +240,7 @@ class TestGetOrCreate:
 # ---------------------------------------------------------------------------
 # stream_frame — load cap + convergence + unload hysteresis
 # ---------------------------------------------------------------------------
+
 
 class TestStreamFrame:
     def test_loads_at_most_cap_chunks_first_frame(self, small_cfg):
@@ -334,6 +338,7 @@ class TestStreamFrame:
 # ---------------------------------------------------------------------------
 # Delta round-trip (Saveable contract)
 # ---------------------------------------------------------------------------
+
 
 class TestDeltaRoundTrip:
     def test_unedited_world_empty_delta(self, cfg):
@@ -452,6 +457,7 @@ class TestDeltaRoundTrip:
     def test_reset_restores_baseline_materials(self, cfg):
         """After reset_to_baseline, materials match the pure generate_chunk output."""
         from fire_engine.world.terrain.generation import generate_chunk
+
         cm = _make_cm(cfg)
         _carve(cm)
         edited_coords = [c for c, ch in cm.chunks.items() if ch.edited]
@@ -466,6 +472,7 @@ class TestDeltaRoundTrip:
 # ---------------------------------------------------------------------------
 # Saveable protocol
 # ---------------------------------------------------------------------------
+
 
 class TestSaveableProtocol:
     def test_save_key_is_terrain(self, cfg):
@@ -492,6 +499,7 @@ class TestSaveableProtocol:
 # ---------------------------------------------------------------------------
 # Determinism
 # ---------------------------------------------------------------------------
+
 
 class TestDeterminism:
     def test_same_seed_same_chunk_contents(self, cfg):
@@ -531,6 +539,7 @@ class TestDeterminism:
 
     def test_stream_convergence_same_chunk_contents(self, small_cfg):
         """After converging two managers to the desired set, materials are identical."""
+
         def converge(cm, pos):
             desired = cm.desired_set(pos)
             for _ in range(len(desired) + 10):

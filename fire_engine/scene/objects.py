@@ -30,6 +30,7 @@ Example::
     store.reparent(child["id"], parent=None)   # promote to a root
     tree = store.tree()                          # flat, DFS-ordered list of dicts
 """
+
 from __future__ import annotations
 
 import copy
@@ -101,15 +102,12 @@ class SceneObject:
         }
 
     @staticmethod
-    def from_dict(d: dict) -> "SceneObject":
+    def from_dict(d: dict) -> SceneObject:
         kind = str(d["kind"])
         # Migration seam (the ONLY one): pre-component saves lack "components",
         # so synthesise the kind's defaults. New saves carry them verbatim.
         raw = d.get("components")
-        components = (
-            default_components_for_kind(kind) if raw is None
-            else copy.deepcopy(list(raw))
-        )
+        components = default_components_for_kind(kind) if raw is None else copy.deepcopy(list(raw))
         return SceneObject(
             id=int(d["id"]),
             name=str(d["name"]),
@@ -259,11 +257,9 @@ class SceneObjectStore:
         t = str(type_name)
         if not is_known(t):
             raise SceneError(
-                f"unknown component type {type_name!r}; expected one of "
-                f"{sorted(COMPONENT_CATALOG)}"
+                f"unknown component type {type_name!r}; expected one of {sorted(COMPONENT_CATALOG)}"
             )
-        if not COMPONENT_CATALOG[t].multiple and any(
-                c.get("type") == t for c in obj.components):
+        if not COMPONENT_CATALOG[t].multiple and any(c.get("type") == t for c in obj.components):
             raise SceneError(f"object {obj_id} already has a {t} component")
         obj.components.append(make_component(t))
         return obj.to_dict()
@@ -273,8 +269,7 @@ class SceneObjectStore:
         obj = self.get(obj_id)
         i = int(index)
         if i < 0 or i >= len(obj.components):
-            raise SceneError(
-                f"object {obj_id} has no component at index {index}")
+            raise SceneError(f"object {obj_id} has no component at index {index}")
         obj.components.pop(i)
         return obj.to_dict()
 
@@ -292,8 +287,7 @@ class SceneObjectStore:
         obj = self.get(obj_id)
         i = int(index)
         if i < 0 or i >= len(obj.components):
-            raise SceneError(
-                f"object {obj_id} has no component at index {index}")
+            raise SceneError(f"object {obj_id} has no component at index {index}")
         comp = obj.components[i]
         if enabled is not None:
             comp["enabled"] = bool(enabled)

@@ -46,8 +46,8 @@ from fire_engine.core.math3d import Vec3
 from fire_engine.world.terrain.chunk import Chunk
 from fire_engine.world.terrain.generation import generate_chunk
 from fire_engine.world.terrain.meshing import (
-    MeshArrays,
     WORLD_FLOOR_SOLID,
+    MeshArrays,
     build_mesh,
 )
 from fire_engine.world.terrain.surface_nets import (
@@ -66,9 +66,12 @@ _WORLD_FLOOR_CZ: int = _Z_MIN
 _MAX_LOADS_PER_FRAME: int = 2
 
 _FACE_DIRS: tuple[tuple[int, int, int], ...] = (
-    (1, 0, 0), (-1, 0, 0),
-    (0, 1, 0), (0, -1, 0),
-    (0, 0, 1), (0, 0, -1),
+    (1, 0, 0),
+    (-1, 0, 0),
+    (0, 1, 0),
+    (0, -1, 0),
+    (0, 0, 1),
+    (0, 0, -1),
 )
 
 
@@ -253,9 +256,7 @@ class ChunkManager:
                 chunk,
                 self._neighbor_materials(coord),
                 light_sampler,
-                shade_strength=float(
-                    getattr(self.config, "facet_shade_strength", 0.25)
-                ),
+                shade_strength=float(getattr(self.config, "facet_shade_strength", 0.25)),
             )
         self.pending_meshes[coord] = mesh
         chunk.dirty = False
@@ -441,9 +442,7 @@ class ChunkManager:
         dict[tuple[int,int,int], numpy.ndarray]
         """
         return {
-            coord: chunk.materials.copy()
-            for coord, chunk in self.chunks.items()
-            if chunk.edited
+            coord: chunk.materials.copy() for coord, chunk in self.chunks.items() if chunk.edited
         }
 
     def apply_delta(self, delta: dict) -> None:

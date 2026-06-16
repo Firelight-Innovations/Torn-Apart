@@ -74,8 +74,8 @@ from panda3d.core import (  # type: ignore[import]
 
 from fire_engine.core import get_logger
 from fire_engine.core.rng import for_domain
-from fire_engine.render.component import Component
 from fire_engine.render import mote_shaders
+from fire_engine.render.component import Component
 from fire_engine.zones import leaf_hash_seed, leaf_instance_count
 
 __all__ = ["DustMoteComponent", "LeafLitterComponent"]
@@ -92,6 +92,7 @@ _LEAF_CARRY_PAD_M = 6.0
 # Shared billboard quad (built once per component, drawn N times via instancing)
 # ---------------------------------------------------------------------------
 
+
 def _build_quad_geom() -> Geom:
     """
     Build the shared unit billboard quad: corners at xy ∈ {-1,+1}, z=0, UV 0–1.
@@ -107,8 +108,12 @@ def _build_quad_geom() -> Geom:
     vw = GeomVertexWriter(vdata, "vertex")
     tw = GeomVertexWriter(vdata, "texcoord")
     # (-1,-1) (1,-1) (1,1) (-1,1)
-    corners = ((-1.0, -1.0, 0.0, 0.0), (1.0, -1.0, 1.0, 0.0),
-               (1.0, 1.0, 1.0, 1.0), (-1.0, 1.0, 0.0, 1.0))
+    corners = (
+        (-1.0, -1.0, 0.0, 0.0),
+        (1.0, -1.0, 1.0, 0.0),
+        (1.0, 1.0, 1.0, 1.0),
+        (-1.0, 1.0, 0.0, 1.0),
+    )
     for x, y, u, v in corners:
         vw.add_data3(x, y, 0.0)
         tw.add_data2(u, v)
@@ -123,9 +128,11 @@ def _build_quad_geom() -> Geom:
 def _mote_texture(name: str):
     """The procedural ``name`` texture as a Panda3D texture (linear-filtered
     so the soft dust falloff / leaf edges don't look chunky billboarded)."""
+    from panda3d.core import SamplerState  # type: ignore[import]
+
     from fire_engine.procedural import get as get_procedural
     from fire_engine.render.texture_bridge import to_panda_texture
-    from panda3d.core import SamplerState  # type: ignore[import]
+
     tex = to_panda_texture(get_procedural(name))
     tex.set_minfilter(SamplerState.FT_linear)
     tex.set_magfilter(SamplerState.FT_linear)
@@ -135,6 +142,7 @@ def _mote_texture(name: str):
 # ---------------------------------------------------------------------------
 # Dust motes
 # ---------------------------------------------------------------------------
+
 
 class DustMoteComponent(Component):
     """
@@ -165,8 +173,10 @@ class DustMoteComponent(Component):
             self.enabled = False
             return
         if self.lighting_pipeline is None:
-            _log.warning("DustMoteComponent: GPU lighting pipeline required "
-                         "(lighting_backend = \"gpu\") — disabled")
+            _log.warning(
+                "DustMoteComponent: GPU lighting pipeline required "
+                '(lighting_backend = "gpu") — disabled'
+            )
             self.enabled = False
             return
 
@@ -177,9 +187,9 @@ class DustMoteComponent(Component):
             self.enabled = False
             return
 
-        shader = Shader.make(Shader.SL_GLSL,
-                             vertex=mote_shaders.DUST_VERTEX,
-                             fragment=mote_shaders.DUST_FRAGMENT)
+        shader = Shader.make(
+            Shader.SL_GLSL, vertex=mote_shaders.DUST_VERTEX, fragment=mote_shaders.DUST_FRAGMENT
+        )
 
         geom_node = GeomNode("dust_motes")
         geom_node.add_geom(_build_quad_geom())
@@ -204,10 +214,11 @@ class DustMoteComponent(Component):
         # Additive glow: depth-test ON (motes hide behind terrain) but
         # depth-write OFF (no sorting needed — additive is order-independent).
         node.set_transparency(TransparencyAttrib.M_none)
-        node.set_attrib(ColorBlendAttrib.make(
-            ColorBlendAttrib.M_add,
-            ColorBlendAttrib.O_incoming_alpha,
-            ColorBlendAttrib.O_one))
+        node.set_attrib(
+            ColorBlendAttrib.make(
+                ColorBlendAttrib.M_add, ColorBlendAttrib.O_incoming_alpha, ColorBlendAttrib.O_one
+            )
+        )
         node.set_depth_write(False)
         node.set_bin("fixed", 0)
         node.set_two_sided(True)
@@ -217,13 +228,13 @@ class DustMoteComponent(Component):
         # origin bounds.  Give it an effectively-infinite box + set_final so it
         # never culls the whole node.  (Per-mote off-screen specks cost ~nothing.)
         big = 1.0e9
-        geom_node.set_bounds(BoundingBox(LPoint3(-big, -big, -big),
-                                         LPoint3(big, big, big)))
+        geom_node.set_bounds(BoundingBox(LPoint3(-big, -big, -big), LPoint3(big, big, big)))
         geom_node.set_final(True)
         self._node = node
 
-        _log.info("Dust motes online: %d instances, %.1f m lattice box",
-                  count, float(cfg.wind_mote_box_m))
+        _log.info(
+            "Dust motes online: %d instances, %.1f m lattice box", count, float(cfg.wind_mote_box_m)
+        )
 
     def late_update(self, dt: float) -> None:
         """Advance the shared animation clock (the wind advection rides on it)."""
@@ -242,6 +253,7 @@ class DustMoteComponent(Component):
 # ---------------------------------------------------------------------------
 # Leaf litter
 # ---------------------------------------------------------------------------
+
 
 class LeafLitterComponent(Component):
     """
@@ -265,8 +277,9 @@ class LeafLitterComponent(Component):
     Units: meters, seconds.  World-space Z-up.
     """
 
-    def __init__(self, base: Any = None, zone_store: Any = None,
-                 lighting_pipeline: Any = None) -> None:
+    def __init__(
+        self, base: Any = None, zone_store: Any = None, lighting_pipeline: Any = None
+    ) -> None:
         super().__init__()
         self.base = base
         self.zone_store = zone_store
@@ -286,17 +299,19 @@ class LeafLitterComponent(Component):
             self.enabled = False
             return
         if self.lighting_pipeline is None:
-            _log.warning("LeafLitterComponent: GPU lighting pipeline required "
-                         "(lighting_backend = \"gpu\") — disabled")
+            _log.warning(
+                "LeafLitterComponent: GPU lighting pipeline required "
+                '(lighting_backend = "gpu") — disabled'
+            )
             self.enabled = False
             return
 
         self._quad_geom = _build_quad_geom()
         self._leaf_tex = _mote_texture("leaf_sprite")
         self._root = self.base.terrain_root.attach_new_node("leaf_litter_root")
-        self._shader = Shader.make(Shader.SL_GLSL,
-                                   vertex=mote_shaders.LEAF_VERTEX,
-                                   fragment=mote_shaders.LEAF_FRAGMENT)
+        self._shader = Shader.make(
+            Shader.SL_GLSL, vertex=mote_shaders.LEAF_VERTEX, fragment=mote_shaders.LEAF_FRAGMENT
+        )
         # Leaves are opaque-ish billboards drawn with an alpha-test discard; use
         # dual transparency so the fragment discard works and depth stays sane.
         self._root.set_transparency(TransparencyAttrib.M_binary)
@@ -358,26 +373,33 @@ class LeafLitterComponent(Component):
             # the node the volume box padded by the carry reach + leaf size, and
             # stop bounds recomputation (grass culling caveat).
             pad = _LEAF_CARRY_PAD_M + float(cfg.wind_leaf_size_m)
-            geom_node.set_bounds(BoundingBox(
-                LPoint3(vol.min_corner[0] - pad, vol.min_corner[1] - pad,
-                        vol.min_corner[2] - pad),
-                LPoint3(vol.max_corner[0] + pad, vol.max_corner[1] + pad,
-                        vol.max_corner[2] + pad)))
+            geom_node.set_bounds(
+                BoundingBox(
+                    LPoint3(
+                        vol.min_corner[0] - pad, vol.min_corner[1] - pad, vol.min_corner[2] - pad
+                    ),
+                    LPoint3(
+                        vol.max_corner[0] + pad, vol.max_corner[1] + pad, vol.max_corner[2] + pad
+                    ),
+                )
+            )
             geom_node.set_final(True)
             self._volume_nodes[vol.id] = node
             total += count
 
         self._store_version_built = self.zone_store.version
-        _log.info("Leaf litter built: %d volume(s), %d instances total",
-                  len(self._volume_nodes), total)
+        _log.info(
+            "Leaf litter built: %d volume(s), %d instances total", len(self._volume_nodes), total
+        )
 
 
 # ---------------------------------------------------------------------------
 # Hash seeds (Hard Rule 2 — all randomness via for_domain)
 # ---------------------------------------------------------------------------
 
+
 def _dust_hash_seed() -> int:
     """Deterministic dust-mote instance-chain seed via
     ``for_domain("wind", "motes")``.  Bounded to ``[0, 2**31)`` (Panda3D passes
     shader-input ints as signed)."""
-    return int(for_domain("wind", "motes").integers(0, 2 ** 31))
+    return int(for_domain("wind", "motes").integers(0, 2**31))

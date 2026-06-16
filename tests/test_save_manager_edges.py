@@ -9,27 +9,25 @@ Complements tests/test_save.py without duplicating its exact cases.
 from __future__ import annotations
 
 import dataclasses
-import os
-from pathlib import Path
 
 import numpy as np
 import pytest
 
-from fire_engine.core import load_config, Clock, EventBus
+from fire_engine.core import Clock, EventBus, load_config
 from fire_engine.core.rng import set_world_seed
-from fire_engine.save import SaveManager, Saveable, SaveIncompatibleError
+from fire_engine.save import Saveable, SaveIncompatibleError, SaveManager
 from fire_engine.save.save_manager import (
     _compute_config_digest,
-    _encode_delta,
     _decode_delta,
-    _encode_value,
     _decode_value,
+    _encode_delta,
+    _encode_value,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers (mirror _make_world pattern from test_save.py)
 # ---------------------------------------------------------------------------
+
 
 def _make_world(seed: int = 1337):
     """Return (cfg, clock, sm) for a lightweight headless world at ``seed``.
@@ -77,8 +75,8 @@ class _ExplodingApply:
 # register() — TypeError on non-Saveable
 # ---------------------------------------------------------------------------
 
-class TestRegisterTypeError:
 
+class TestRegisterTypeError:
     def test_plain_object_raises_type_error(self):
         """Registering a plain object (no protocol) raises TypeError."""
         _, _, sm = _make_world()
@@ -95,7 +93,9 @@ class TestRegisterTypeError:
 
         class Partial:
             save_key = "p"
-            def get_delta(self): return {}
+
+            def get_delta(self):
+                return {}
 
         with pytest.raises(TypeError):
             sm.register(Partial())
@@ -106,7 +106,9 @@ class TestRegisterTypeError:
 
         class Partial:
             save_key = "p"
-            def apply_delta(self, d): pass
+
+            def apply_delta(self, d):
+                pass
 
         with pytest.raises(TypeError):
             sm.register(Partial())
@@ -116,8 +118,11 @@ class TestRegisterTypeError:
         _, _, sm = _make_world()
 
         class Partial:
-            def get_delta(self): return {}
-            def apply_delta(self, d): pass
+            def get_delta(self):
+                return {}
+
+            def apply_delta(self, d):
+                pass
 
         with pytest.raises(TypeError):
             sm.register(Partial())
@@ -127,8 +132,8 @@ class TestRegisterTypeError:
 # register() — valid Saveable is accepted
 # ---------------------------------------------------------------------------
 
-class TestRegisterValid:
 
+class TestRegisterValid:
     def test_fake_saveable_accepted(self):
         """A minimal _FakeSaveable satisfies isinstance(x, Saveable)."""
         _, _, sm = _make_world()
@@ -170,7 +175,10 @@ class TestRegisterValid:
             def __init__(self, key):
                 self.save_key = key
                 self.applied: list[dict] = []
-            def get_delta(self): return {"v": 0}
+
+            def get_delta(self):
+                return {"v": 0}
+
             def apply_delta(self, d):
                 self.applied.append(d)
                 call_order.append(self.save_key)
@@ -191,8 +199,8 @@ class TestRegisterValid:
 # Atomic write — no leftover .tmp file
 # ---------------------------------------------------------------------------
 
-class TestAtomicWrite:
 
+class TestAtomicWrite:
     def test_no_tmp_file_after_successful_save(self, tmp_path):
         """After save(), no *.tmp file remains in tmp_path."""
         save_file = tmp_path / "world.ta"
@@ -201,9 +209,7 @@ class TestAtomicWrite:
         sm.save(save_file)
 
         tmp_files = list(tmp_path.glob("*.tmp"))
-        assert tmp_files == [], (
-            f"Leftover .tmp files after save: {tmp_files}"
-        )
+        assert tmp_files == [], f"Leftover .tmp files after save: {tmp_files}"
 
     def test_save_file_exists_and_nonempty(self, tmp_path):
         """After save(), the destination file exists and has non-zero length."""
@@ -220,8 +226,8 @@ class TestAtomicWrite:
 # Backward compat — absent save_key keeps baseline (apply_delta NOT called)
 # ---------------------------------------------------------------------------
 
-class TestAbsentSaveKey:
 
+class TestAbsentSaveKey:
     def test_newly_registered_system_not_called_when_key_absent(self, tmp_path):
         """
         A system registered after a save was created (so its key is absent from
@@ -269,8 +275,8 @@ class TestAbsentSaveKey:
 # apply_delta error propagation — pin current behavior
 # ---------------------------------------------------------------------------
 
-class TestApplyDeltaError:
 
+class TestApplyDeltaError:
     def test_exploding_apply_delta_propagates_runtime_error(self, tmp_path):
         """
         If a Saveable.apply_delta raises, pin that load() lets the exception
@@ -330,8 +336,8 @@ class TestApplyDeltaError:
 # config_digest mismatch → SaveIncompatibleError
 # ---------------------------------------------------------------------------
 
-class TestConfigDigestMismatch:
 
+class TestConfigDigestMismatch:
     def test_changed_chunk_size_raises(self, tmp_path):
         """Changing chunk_size (affects digest) → SaveIncompatibleError on load."""
         save_file = tmp_path / "digest.ta"
@@ -406,8 +412,8 @@ class TestConfigDigestMismatch:
         A save file with format_version > _FORMAT_VERSION raises
         SaveIncompatibleError (engine too old).
         """
+
         import msgpack
-        import zlib
 
         save_file = tmp_path / "future.ta"
 
@@ -432,8 +438,8 @@ class TestConfigDigestMismatch:
 # Encoder / decoder edge cases
 # ---------------------------------------------------------------------------
 
-class TestEncoderEdges:
 
+class TestEncoderEdges:
     def test_nan_array_round_trips_bit_identical(self):
         """
         float32 array containing NaN round-trips bit-identical via encode/decode.
@@ -547,8 +553,8 @@ class TestEncoderEdges:
 # SaveIncompatibleError construction and typing
 # ---------------------------------------------------------------------------
 
-class TestSaveIncompatibleError:
 
+class TestSaveIncompatibleError:
     def test_is_exception_subclass(self):
         """SaveIncompatibleError is a subclass of Exception."""
         exc = SaveIncompatibleError("something went wrong")
@@ -575,38 +581,53 @@ class TestSaveIncompatibleError:
 # Saveable protocol structural checks
 # ---------------------------------------------------------------------------
 
-class TestSaveableProtocolStructural:
 
+class TestSaveableProtocolStructural:
     def test_full_impl_is_saveable(self):
         """A class implementing all three members passes isinstance(x, Saveable)."""
+
         class FullImpl:
             save_key = "full"
-            def get_delta(self): return {}
-            def apply_delta(self, d): pass
+
+            def get_delta(self):
+                return {}
+
+            def apply_delta(self, d):
+                pass
 
         assert isinstance(FullImpl(), Saveable)
 
     def test_missing_apply_delta_fails_isinstance(self):
         """A class missing apply_delta fails isinstance(x, Saveable)."""
+
         class Incomplete:
             save_key = "x"
-            def get_delta(self): return {}
+
+            def get_delta(self):
+                return {}
 
         assert not isinstance(Incomplete(), Saveable)
 
     def test_missing_get_delta_fails_isinstance(self):
         """A class missing get_delta fails isinstance(x, Saveable)."""
+
         class Incomplete:
             save_key = "x"
-            def apply_delta(self, d): pass
+
+            def apply_delta(self, d):
+                pass
 
         assert not isinstance(Incomplete(), Saveable)
 
     def test_missing_save_key_fails_isinstance(self):
         """A class missing save_key fails isinstance(x, Saveable)."""
+
         class Incomplete:
-            def get_delta(self): return {}
-            def apply_delta(self, d): pass
+            def get_delta(self):
+                return {}
+
+            def apply_delta(self, d):
+                pass
 
         assert not isinstance(Incomplete(), Saveable)
 
@@ -615,8 +636,8 @@ class TestSaveableProtocolStructural:
 # _compute_config_digest — stability and sensitivity
 # ---------------------------------------------------------------------------
 
-class TestConfigDigest:
 
+class TestConfigDigest:
     def test_same_config_produces_same_digest(self):
         """Same config always produces the same digest (determinism)."""
         cfg = load_config()

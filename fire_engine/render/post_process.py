@@ -36,15 +36,16 @@ Example
     # ... each frame, after the lighting pipeline updates:
     post.update(app.lighting_pipeline)
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
 from panda3d.core import (  # type: ignore[import]
     FrameBufferProperties,
-    LVecBase2f,
     LPoint2f,
     LPoint3f,
+    LVecBase2f,
     Shader,
     Texture,
 )
@@ -83,7 +84,7 @@ class PostProcessPipeline:
         sun is occluded by terrain.
     """
 
-    def __init__(self, base: Any, config: "Config") -> None:
+    def __init__(self, base: Any, config: Config) -> None:
         self.base = base
         self.config = config
         self.enabled: bool = bool(getattr(config, "gfx_post_process", True))
@@ -105,15 +106,18 @@ class PostProcessPipeline:
         self._godray_quad = None
 
         if not self.enabled:
-            _log.info("Post-processing disabled (gfx_post_process=false) — "
-                      "surface shaders tonemap internally (legacy path).")
+            _log.info(
+                "Post-processing disabled (gfx_post_process=false) — "
+                "surface shaders tonemap internally (legacy path)."
+            )
             return
 
         try:
             self._build()
-        except Exception as exc:  # noqa: BLE001 — never fatal; fall back to legacy
-            _log.warning("Post-processing setup failed (%s); falling back to "
-                         "in-shader tonemapping.", exc)
+        except Exception as exc:
+            _log.warning(
+                "Post-processing setup failed (%s); falling back to in-shader tonemapping.", exc
+            )
             self.enabled = False
             self._set_hdr_output(False)
 
@@ -143,8 +147,7 @@ class PostProcessPipeline:
         if msaa > 0:
             fbp.set_multisamples(msaa)
 
-        quad = manager.renderSceneInto(colortex=color_tex, depthtex=depth_tex,
-                                       fbprops=fbp)
+        quad = manager.renderSceneInto(colortex=color_tex, depthtex=depth_tex, fbprops=fbp)
         if quad is None:
             raise RuntimeError("FilterManager.renderSceneInto returned no quad")
 
@@ -191,12 +194,16 @@ class PostProcessPipeline:
         fbp = FrameBufferProperties()
         fbp.set_float_color(True)
         fbp.set_rgba_bits(16, 16, 16, 16)
-        down_sh = Shader.make(Shader.SL_GLSL,
-                              vertex=post_shaders.POST_FULLSCREEN_VERTEX,
-                              fragment=post_shaders.BLOOM_DOWN_FRAGMENT)
-        up_sh = Shader.make(Shader.SL_GLSL,
-                            vertex=post_shaders.POST_FULLSCREEN_VERTEX,
-                            fragment=post_shaders.BLOOM_UP_FRAGMENT)
+        down_sh = Shader.make(
+            Shader.SL_GLSL,
+            vertex=post_shaders.POST_FULLSCREEN_VERTEX,
+            fragment=post_shaders.BLOOM_DOWN_FRAGMENT,
+        )
+        up_sh = Shader.make(
+            Shader.SL_GLSL,
+            vertex=post_shaders.POST_FULLSCREEN_VERTEX,
+            fragment=post_shaders.BLOOM_UP_FRAGMENT,
+        )
         threshold = float(getattr(cfg, "gfx_bloom_threshold", 1.0))
         knee = float(getattr(cfg, "gfx_bloom_knee", 0.5))
 
@@ -205,9 +212,9 @@ class PostProcessPipeline:
         src = hdr_tex
         for i in range(mips):
             tex = Texture(f"bloom_down_{i}")
-            quad = self._manager.renderQuadInto(f"bloom_down_{i}",
-                                                div=2 ** (i + 1),
-                                                colortex=tex, fbprops=fbp)
+            quad = self._manager.renderQuadInto(
+                f"bloom_down_{i}", div=2 ** (i + 1), colortex=tex, fbprops=fbp
+            )
             if quad is None:
                 break
             quad.set_shader(down_sh)
@@ -227,9 +234,9 @@ class PostProcessPipeline:
         up_src = down_tex[-1]
         for i in range(len(down_tex) - 2, -1, -1):
             tex = Texture(f"bloom_up_{i}")
-            quad = self._manager.renderQuadInto(f"bloom_up_{i}",
-                                                div=2 ** (i + 1),
-                                                colortex=tex, fbprops=fbp)
+            quad = self._manager.renderQuadInto(
+                f"bloom_up_{i}", div=2 ** (i + 1), colortex=tex, fbprops=fbp
+            )
             if quad is None:
                 break
             quad.set_shader(up_sh)
@@ -238,14 +245,14 @@ class PostProcessPipeline:
             self._bloom_textures.append(tex)
             up_src = tex
 
-        self.bloom_tex = up_src      # composite binds this in _build_composite
+        self.bloom_tex = up_src  # composite binds this in _build_composite
 
     # Lens-flare geometry tuning (aesthetic constants; strength + threshold are
     # config-exposed via gfx_lens_flare_strength / gfx_lens_flare_threshold).
-    _FLARE_GHOSTS = 5          # ghost reflections along the centre axis
-    _FLARE_DISPERSAL = 0.32    # ghost spacing
-    _FLARE_HALO_WIDTH = 0.45   # halo ring radius (UV)
-    _FLARE_CHROMA = 0.012      # chromatic-aberration spread (UV)
+    _FLARE_GHOSTS = 5  # ghost reflections along the centre axis
+    _FLARE_DISPERSAL = 0.32  # ghost spacing
+    _FLARE_HALO_WIDTH = 0.45  # halo ring radius (UV)
+    _FLARE_CHROMA = 0.012  # chromatic-aberration spread (UV)
 
     def _build_flare(self, hdr_tex: Texture) -> None:
         """
@@ -264,26 +271,26 @@ class PostProcessPipeline:
         quad = self._manager.renderQuadInto("lens_flare", div=4, colortex=tex)
         if quad is None:
             return
-        shader = Shader.make(Shader.SL_GLSL,
-                             vertex=post_shaders.POST_FULLSCREEN_VERTEX,
-                             fragment=post_shaders.LENS_FLARE_FRAGMENT)
+        shader = Shader.make(
+            Shader.SL_GLSL,
+            vertex=post_shaders.POST_FULLSCREEN_VERTEX,
+            fragment=post_shaders.LENS_FLARE_FRAGMENT,
+        )
         quad.set_shader(shader)
         quad.set_shader_input("u_tex", hdr_tex)
-        quad.set_shader_input("u_threshold",
-                              float(getattr(cfg, "gfx_lens_flare_threshold",
-                                            4.0)))
+        quad.set_shader_input("u_threshold", float(getattr(cfg, "gfx_lens_flare_threshold", 4.0)))
         quad.set_shader_input("u_ghosts", self._FLARE_GHOSTS)
         quad.set_shader_input("u_dispersal", self._FLARE_DISPERSAL)
         quad.set_shader_input("u_halo_width", self._FLARE_HALO_WIDTH)
         quad.set_shader_input("u_chroma", self._FLARE_CHROMA)
-        self._bloom_textures.append(tex)   # keep ref alive
-        self.flare_tex = tex               # composite binds this
+        self._bloom_textures.append(tex)  # keep ref alive
+        self.flare_tex = tex  # composite binds this
 
     # God-ray geometry tuning (aesthetic constants; strength is config-exposed
     # via gfx_god_ray_strength, sample count via gfx_god_ray_samples).
-    _GODRAY_DENSITY = 0.9      # ray length toward the sun (fraction of screen)
-    _GODRAY_DECAY = 0.95       # per-step attenuation
-    _GODRAY_THRESHOLD = 3.0    # isolate the sun from bright sky
+    _GODRAY_DENSITY = 0.9  # ray length toward the sun (fraction of screen)
+    _GODRAY_DECAY = 0.95  # per-step attenuation
+    _GODRAY_THRESHOLD = 3.0  # isolate the sun from bright sky
 
     def _build_godrays(self, hdr_tex: Texture) -> None:
         """
@@ -301,13 +308,14 @@ class PostProcessPipeline:
         quad = self._manager.renderQuadInto("god_rays", div=2, colortex=tex)
         if quad is None:
             return
-        shader = Shader.make(Shader.SL_GLSL,
-                             vertex=post_shaders.POST_FULLSCREEN_VERTEX,
-                             fragment=post_shaders.GOD_RAYS_FRAGMENT)
+        shader = Shader.make(
+            Shader.SL_GLSL,
+            vertex=post_shaders.POST_FULLSCREEN_VERTEX,
+            fragment=post_shaders.GOD_RAYS_FRAGMENT,
+        )
         quad.set_shader(shader)
         quad.set_shader_input("u_tex", hdr_tex)
-        quad.set_shader_input("u_samples",
-                              int(getattr(cfg, "gfx_god_ray_samples", 32)))
+        quad.set_shader_input("u_samples", int(getattr(cfg, "gfx_god_ray_samples", 32)))
         quad.set_shader_input("u_density", self._GODRAY_DENSITY)
         quad.set_shader_input("u_decay", self._GODRAY_DECAY)
         quad.set_shader_input("u_threshold", self._GODRAY_THRESHOLD)
@@ -329,18 +337,22 @@ class PostProcessPipeline:
         quad.
         """
         cfg = self.config
-        comp_sh = Shader.make(Shader.SL_GLSL,
-                              vertex=post_shaders.POST_FULLSCREEN_VERTEX,
-                              fragment=post_shaders.COMPOSITE_FRAGMENT)
+        comp_sh = Shader.make(
+            Shader.SL_GLSL,
+            vertex=post_shaders.POST_FULLSCREEN_VERTEX,
+            fragment=post_shaders.COMPOSITE_FRAGMENT,
+        )
         comp_quad = screen_quad
         if bool(getattr(cfg, "gfx_fxaa", True)):
             ldr = Texture("composite_ldr")
             cq = self._manager.renderQuadInto("composite", colortex=ldr)
             if cq is not None:
                 comp_quad = cq
-                fxaa_sh = Shader.make(Shader.SL_GLSL,
-                                      vertex=post_shaders.POST_FULLSCREEN_VERTEX,
-                                      fragment=post_shaders.FXAA_FRAGMENT)
+                fxaa_sh = Shader.make(
+                    Shader.SL_GLSL,
+                    vertex=post_shaders.POST_FULLSCREEN_VERTEX,
+                    fragment=post_shaders.FXAA_FRAGMENT,
+                )
                 screen_quad.set_shader(fxaa_sh)
                 screen_quad.set_shader_input("u_tex", ldr)
                 self._bloom_textures.append(ldr)
@@ -350,22 +362,25 @@ class PostProcessPipeline:
         comp_quad.set_shader_input("u_bloom", self.bloom_tex or self._bloom_dummy)
         comp_quad.set_shader_input(
             "u_bloom_strength",
-            float(getattr(cfg, "gfx_bloom_strength", 0.06))
-            if self.bloom_tex is not None else 0.0)
+            float(getattr(cfg, "gfx_bloom_strength", 0.06)) if self.bloom_tex is not None else 0.0,
+        )
         comp_quad.set_shader_input("u_flare", self.flare_tex or self._bloom_dummy)
         comp_quad.set_shader_input(
             "u_flare_strength",
             float(getattr(cfg, "gfx_lens_flare_strength", 0.055))
-            if self.flare_tex is not None else 0.0)
-        comp_quad.set_shader_input("u_godray",
-                                   self.godray_tex or self._bloom_dummy)
+            if self.flare_tex is not None
+            else 0.0,
+        )
+        comp_quad.set_shader_input("u_godray", self.godray_tex or self._bloom_dummy)
         comp_quad.set_shader_input(
             "u_godray_strength",
             float(getattr(cfg, "gfx_god_ray_strength", 0.4))
-            if self.godray_tex is not None else 0.0)
+            if self.godray_tex is not None
+            else 0.0,
+        )
         comp_quad.set_shader_input(
-            "u_hue_preserve",
-            float(getattr(cfg, "gfx_tonemap_hue_preserve", 0.8)))
+            "u_hue_preserve", float(getattr(cfg, "gfx_tonemap_hue_preserve", 0.8))
+        )
         self._composite_quad = comp_quad
 
     def _log_buffer_props(self, manager: Any) -> None:
@@ -374,16 +389,23 @@ class PostProcessPipeline:
             buf = manager.buffers[-1] if manager.buffers else None
             props = buf.get_fb_properties() if buf is not None else None
             if props is not None:
-                _log.info("HDR scene buffer: %s (float_color=%s, samples=%d)",
-                          props, props.get_float_color(),
-                          props.get_multisamples())
-                if (str(getattr(self.config, "gfx_hdr_format", "rgba16f"))
-                        == "rgba16f" and not props.get_float_color()):
-                    _log.warning("Requested an RGBA16F float buffer but the GPU "
-                                 "gave a fixed-point one — HDR range will clip. "
-                                 "Set [graphics] gfx_hdr_format = \"rgba8\" to "
-                                 "silence this, or use a different GPU.")
-        except Exception as exc:  # noqa: BLE001 — diagnostics only
+                _log.info(
+                    "HDR scene buffer: %s (float_color=%s, samples=%d)",
+                    props,
+                    props.get_float_color(),
+                    props.get_multisamples(),
+                )
+                if (
+                    str(getattr(self.config, "gfx_hdr_format", "rgba16f")) == "rgba16f"
+                    and not props.get_float_color()
+                ):
+                    _log.warning(
+                        "Requested an RGBA16F float buffer but the GPU "
+                        "gave a fixed-point one — HDR range will clip. "
+                        'Set [graphics] gfx_hdr_format = "rgba8" to '
+                        "silence this, or use a different GPU."
+                    )
+        except Exception as exc:
             _log.debug("Buffer property query failed: %s", exc)
 
     def _set_hdr_output(self, on: bool) -> None:
@@ -437,14 +459,16 @@ class PostProcessPipeline:
         sky = getattr(base, "sky_system", None)
         st = getattr(sky, "state", None) if sky is not None else None
         quad = self._godray_quad
-        if st is None or float(st.sun_dir.z) <= 0.02:    # below horizon → off
+        if st is None or float(st.sun_dir.z) <= 0.02:  # below horizon → off
             quad.set_shader_input("u_active", 0.0)
             return
         sun = st.sun_dir
         cam_pos = base.camera.get_pos(base.render)
-        far_pt = LPoint3f(cam_pos.x + float(sun.x) * 1.0e6,
-                          cam_pos.y + float(sun.y) * 1.0e6,
-                          cam_pos.z + float(sun.z) * 1.0e6)
+        far_pt = LPoint3f(
+            cam_pos.x + float(sun.x) * 1.0e6,
+            cam_pos.y + float(sun.y) * 1.0e6,
+            cam_pos.z + float(sun.z) * 1.0e6,
+        )
         rel = base.cam.get_relative_point(base.render, far_pt)
         ndc = LPoint2f()
         if not base.camLens.project(rel, ndc):

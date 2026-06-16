@@ -28,43 +28,44 @@ camera.py, per the world-layer boundary.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
+
+from direct.gui import DirectGuiGlobals as DGG  # type: ignore[import]
 
 # Panda3D imports are allowed in world/ per ARCHITECTURE §3.
 from direct.gui.DirectGui import (  # type: ignore[import]
-    DirectFrame,
-    DirectLabel,
     DirectButton,
     DirectEntry,
+    DirectFrame,
+    DirectLabel,
 )
-from direct.gui import DirectGuiGlobals as DGG  # type: ignore[import]
 from panda3d.core import (  # type: ignore[import]
     LineSegs,
-    Point3,
     LQuaternionf,
-    TextNode,
     NodePath,
+    Point3,
+    TextNode,
 )
 
 from fire_engine.core.math3d import Vec3
-from fire_engine.world.terrain import raycast_voxel
-from fire_engine.render.registry import instantiate
 from fire_engine.devtools import (
-    DevToolsManager,
-    PerformanceTool,
-    InspectorTool,
     ActionsTool,
-    ClockTool,
-    CallbackTool,
-    FieldKind,
-    Field,
-    Section,
     Button,
+    CallbackTool,
+    ClockTool,
+    DevToolsManager,
+    Field,
+    FieldKind,
     Gizmo,
     GizmoMode,
-    update_drag,
+    InspectorTool,
+    PerformanceTool,
+    Section,
     is_chunk,
+    update_drag,
 )
+from fire_engine.render.registry import instantiate
+from fire_engine.world.terrain import raycast_voxel
 
 if TYPE_CHECKING:
     from fire_engine.render.app import App
@@ -74,14 +75,14 @@ if TYPE_CHECKING:
 # --- Layout constants (aspect2d units) -------------------------------------
 _TEXT_SCALE = 0.040
 _ROW_H = 0.052
-_PANEL_W = 0.64          # left column panel width
-_INSPECTOR_W = 0.74      # right column panel width
+_PANEL_W = 0.64  # left column panel width
+_INSPECTOR_W = 0.74  # right column panel width
 _MARGIN_X = 0.04
 _TOP_Z = -0.06
-_LABEL_COL = 0.30        # x offset where the value/control begins within a panel
+_LABEL_COL = 0.30  # x offset where the value/control begins within a panel
 _ENTRY_SCALE = 0.038
 
-_TERRAIN_RAY_MAX_M = 200.0   # how far a dev click probes for a terrain chunk
+_TERRAIN_RAY_MAX_M = 200.0  # how far a dev click probes for a terrain chunk
 
 _OUTLINE_COLOR = (0.40, 1.0, 0.35, 1.0)
 _PANEL_BG = (0.05, 0.06, 0.08, 0.74)
@@ -125,7 +126,7 @@ class DevOverlay:
         overlay.actions.add_action("Fire Explosion", explode_at_camera)
     """
 
-    def __init__(self, app: "App", manager: "Optional[DevToolsManager]" = None) -> None:
+    def __init__(self, app: App, manager: DevToolsManager | None = None) -> None:
         self._app = app
         self._base = app
         self.manager = manager if manager is not None else DevToolsManager()
@@ -140,19 +141,21 @@ class DevOverlay:
         sky = getattr(app, "sky_system", None)
         if sky is not None:
             self.manager.register_tool(
-                CallbackTool("environment", "Environment",
-                             lambda s=sky: self._build_environment(s, app._clock))
+                CallbackTool(
+                    "environment",
+                    "Environment",
+                    lambda s=sky: self._build_environment(s, app._clock),
+                )
             )
 
         # --- M8: Environment summon panel (weather control) + debug keys. ----
         # Reads sky_system.weather (the spatial WeatherSystem). Built defensively
         # so a concurrent weather-API shift degrades to blanks, never a crash.
         self._weather = getattr(sky, "weather", None) if sky is not None else None
-        self._rain_cover_np: Optional[NodePath] = None   # toggle overlay quad
+        self._rain_cover_np: NodePath | None = None  # toggle overlay quad
         if self._weather is not None and hasattr(self._weather, "summon_cell"):
             self.manager.register_tool(
-                CallbackTool("env_summon", "Weather Control",
-                             self._build_weather_control)
+                CallbackTool("env_summon", "Weather Control", self._build_weather_control)
             )
             # Debug keys (gated on a weather system being present):
             #   K — stamp a synthetic cell at the camera,
@@ -162,47 +165,49 @@ class DevOverlay:
                 app.accept("k", self._summon_cell_at_camera)
                 app.accept("l", self._fire_lightning_at_crosshair)
                 app.accept("j", self._toggle_rain_cover_overlay)
-            except Exception:  # noqa: BLE001 — input map may differ in tooling
+            except Exception:
                 pass
         self.manager.register_tool(InspectorTool(self.manager.selection))
         # Transform gizmo panel (Move / Rotate / Scale / Off) — switches the
         # active manipulator for the selected object.
-        self.manager.register_tool(
-            CallbackTool("gizmo", "Gizmo", self._build_gizmo_panel)
+        self.manager.register_tool(CallbackTool("gizmo", "Gizmo", self._build_gizmo_panel))
+        self.actions = ActionsTool(
+            "World",
+            {
+                "Spawn Cube": self.spawn_cube,
+                "Toggle Emissive": self.toggle_emissive,
+            },
         )
-        self.actions = ActionsTool("World", {
-            "Spawn Cube": self.spawn_cube,
-            "Toggle Emissive": self.toggle_emissive,
-        })
         self.manager.register_tool(self.actions)
 
         # Widget bookkeeping ------------------------------------------------
-        self._widgets: list[object] = []           # DirectGui items to destroy on rebuild
-        self._updaters: list = []                  # per-frame value refreshers
-        self._last_sig: tuple | None = None        # (tool_id, revision) signature
-        self._outline_np: Optional[NodePath] = None
+        self._widgets: list[object] = []  # DirectGui items to destroy on rebuild
+        self._updaters: list = []  # per-frame value refreshers
+        self._last_sig: tuple | None = None  # (tool_id, revision) signature
+        self._outline_np: NodePath | None = None
 
         # Transform gizmo state -------------------------------------------
-        self._gizmo_mode: "Optional[GizmoMode]" = GizmoMode.TRANSLATE
-        self._gizmo_drag = None                     # DragState | None (active drag)
-        self._gizmo_go: "Optional[GameObject]" = None
-        self._gizmo_np: Optional[NodePath] = None
+        self._gizmo_mode: GizmoMode | None = GizmoMode.TRANSLATE
+        self._gizmo_drag = None  # DragState | None (active drag)
+        self._gizmo_go: GameObject | None = None
+        self._gizmo_np: NodePath | None = None
 
         # Spawned prop visuals: GameObject -> NodePath
-        self._spawned: "dict[GameObject, NodePath]" = {}
+        self._spawned: dict[GameObject, NodePath] = {}
         self._spawn_count = 0
         # Emissive props: GameObject -> (light_id, AreaLight) registered on
         # the GPU lighting pipeline (the cube becomes an emissive box light).
-        self._emissive: "dict[GameObject, tuple[int, object]]" = {}
+        self._emissive: dict[GameObject, tuple[int, object]] = {}
 
         # Weather-cycle state for the Environment panel (None = natural schedule).
         self._weather_types: list = []
         self._wx = 0
         try:
             from fire_engine.world.sky import WeatherType
+
             self._weather_types = list(WeatherType) + [None]
             self._wx = len(self._weather_types) - 1
-        except Exception:  # noqa: BLE001 — sky feature may be absent
+        except Exception:
             pass
 
         # Default selection so the inspector shows something on first open.
@@ -231,6 +236,7 @@ class DevOverlay:
 
         def objects() -> object:
             from fire_engine.render.registry import _STATE
+
             return len(_STATE.objects)
 
         def selected() -> str:
@@ -240,7 +246,7 @@ class DevOverlay:
             name = getattr(go, "name", None)
             if name is not None:
                 return name
-            coord = getattr(go, "coord", None)   # a picked terrain chunk
+            coord = getattr(go, "coord", None)  # a picked terrain chunk
             return f"Chunk {tuple(coord)}" if coord is not None else repr(go)
 
         return {
@@ -264,19 +270,20 @@ class DevOverlay:
         All engine access is guarded (``getattr`` / ``try``) so a change in the
         concurrent sky API degrades to blanks rather than crashing the overlay.
         """
+
         def get_tod_hours() -> float:
             return float(getattr(clock, "game_time_of_day", 0.0)) / 3600.0
 
         def set_tod_hours(h) -> None:
             try:
                 clock.game_time_of_day = (float(h) % 24.0) * 3600.0
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
 
         def set_scale(v) -> None:
             try:
                 clock.game_time_scale = float(v)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
 
         def state_attr(name):
@@ -290,20 +297,38 @@ class DevOverlay:
             return getattr(cur, "value", "?") if cur is not None else "?"
 
         sections = [
-            Section("Time", [
-                Field("time of day", FieldKind.FLOAT, get_tod_hours, set_tod_hours,
-                      step=1.0, units="h"),
-                Field("time scale", FieldKind.FLOAT,
-                      lambda: float(getattr(clock, "game_time_scale", 60.0)),
-                      set_scale, step=60.0),
-                Field("day", FieldKind.LABEL, lambda: getattr(clock, "game_day", 0)),
-            ]),
-            Section("Sky", [
-                Field("weather", FieldKind.LABEL, weather_name),
-                Field("cloud cover", FieldKind.LABEL, lambda: _fmt(state_attr("cloud_coverage"))),
-                Field("fog /m", FieldKind.LABEL, lambda: _fmt(state_attr("fog_density"))),
-                Field("rain", FieldKind.LABEL, lambda: _fmt(state_attr("rain_intensity"))),
-            ]),
+            Section(
+                "Time",
+                [
+                    Field(
+                        "time of day",
+                        FieldKind.FLOAT,
+                        get_tod_hours,
+                        set_tod_hours,
+                        step=1.0,
+                        units="h",
+                    ),
+                    Field(
+                        "time scale",
+                        FieldKind.FLOAT,
+                        lambda: float(getattr(clock, "game_time_scale", 60.0)),
+                        set_scale,
+                        step=60.0,
+                    ),
+                    Field("day", FieldKind.LABEL, lambda: getattr(clock, "game_day", 0)),
+                ],
+            ),
+            Section(
+                "Sky",
+                [
+                    Field("weather", FieldKind.LABEL, weather_name),
+                    Field(
+                        "cloud cover", FieldKind.LABEL, lambda: _fmt(state_attr("cloud_coverage"))
+                    ),
+                    Field("fog /m", FieldKind.LABEL, lambda: _fmt(state_attr("fog_density"))),
+                    Field("rain", FieldKind.LABEL, lambda: _fmt(state_attr("rain_intensity"))),
+                ],
+            ),
         ]
         buttons = []
         if weather is not None and hasattr(weather, "force_weather"):
@@ -317,7 +342,7 @@ class DevOverlay:
         self._wx = (self._wx + 1) % len(self._weather_types)
         try:
             weather.force_weather(self._weather_types[self._wx])
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
     # ------------------------------------------------------------------
@@ -348,13 +373,13 @@ class DevOverlay:
         def local_class() -> str:
             try:
                 return getattr(w.current, "value", "?")
-            except Exception:  # noqa: BLE001
+            except Exception:
                 return "?"
 
         def _local_sample():
             try:
                 return w.sample_local(self._camera_xy(), self._time_abs())
-            except Exception:  # noqa: BLE001
+            except Exception:
                 return None
 
         def humidity() -> str:
@@ -374,14 +399,15 @@ class DevOverlay:
                 t = self._time_abs()
                 px, py = self._camera_xy()
                 import numpy as _np
-                cell = cells[0]                       # already nearest-first
+
+                cell = cells[0]  # already nearest-first
                 c = cell.center(t, w.synoptic)
                 dx, dy = float(c[0]) - px, float(c[1]) - py
                 dist = float(_np.hypot(dx, dy))
                 bearing = (math.degrees(math.atan2(dx, dy))) % 360.0  # 0=+Y(N)
                 eta = float(w.cell_eta_s(cell, t, (px, py)))
                 return cell, dist, bearing, eta
-            except Exception:  # noqa: BLE001
+            except Exception:
                 return None
 
         def near_kind() -> str:
@@ -406,25 +432,28 @@ class DevOverlay:
             return f"{eta / 60.0:.1f} min"
 
         sections = [
-            Section("Local", [
-                Field("class", FieldKind.LABEL, local_class),
-                Field("humidity", FieldKind.LABEL, humidity),
-                Field("wetness", FieldKind.LABEL, wetness),
-            ]),
-            Section("Nearest cell", [
-                Field("kind", FieldKind.LABEL, near_kind),
-                Field("distance", FieldKind.LABEL, near_dist),
-                Field("bearing", FieldKind.LABEL, near_bearing),
-                Field("ETA", FieldKind.LABEL, near_eta),
-            ]),
+            Section(
+                "Local",
+                [
+                    Field("class", FieldKind.LABEL, local_class),
+                    Field("humidity", FieldKind.LABEL, humidity),
+                    Field("wetness", FieldKind.LABEL, wetness),
+                ],
+            ),
+            Section(
+                "Nearest cell",
+                [
+                    Field("kind", FieldKind.LABEL, near_kind),
+                    Field("distance", FieldKind.LABEL, near_dist),
+                    Field("bearing", FieldKind.LABEL, near_bearing),
+                    Field("ETA", FieldKind.LABEL, near_eta),
+                ],
+            ),
         ]
         buttons = [
-            Button("Summon Rainstorm",
-                   lambda: self._summon("summon_rainstorm")),
-            Button("Summon Thunderstorm",
-                   lambda: self._summon("summon_thunderstorm")),
-            Button("Summon Fog Bank",
-                   lambda: self._summon("summon_fog_bank")),
+            Button("Summon Rainstorm", lambda: self._summon("summon_rainstorm")),
+            Button("Summon Thunderstorm", lambda: self._summon("summon_thunderstorm")),
+            Button("Summon Fog Bank", lambda: self._summon("summon_fog_bank")),
             Button("Clear Skies", self._clear_skies),
         ]
         return sections, buttons
@@ -435,17 +464,15 @@ class DevOverlay:
         if w is None:
             return
         try:
-            getattr(w, method_name)(
-                time_abs=self._time_abs(), player_pos=self._camera_xy()
-            )
-        except Exception:  # noqa: BLE001
+            getattr(w, method_name)(time_abs=self._time_abs(), player_pos=self._camera_xy())
+        except Exception:
             pass
 
     def _clear_skies(self) -> None:
         """Clear summoned cells + suppress the current natural weather."""
         try:
             self._weather.clear_all()
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
     def _summon_cell_at_camera(self) -> None:
@@ -455,9 +482,14 @@ class DevOverlay:
             return
         try:
             from fire_engine.world.weather import CellKind
-            w.summon_cell(CellKind.THUNDERSTORM, time_abs=self._time_abs(),
-                          player_pos=self._camera_xy(), upwind_m=0.0)
-        except Exception:  # noqa: BLE001
+
+            w.summon_cell(
+                CellKind.THUNDERSTORM,
+                time_abs=self._time_abs(),
+                player_pos=self._camera_xy(),
+                upwind_m=0.0,
+            )
+        except Exception:
             pass
 
     def _fire_lightning_at_crosshair(self) -> None:
@@ -470,13 +502,12 @@ class DevOverlay:
         merged into ``core/event_bus`` — this file is excluded from the headless
         suite, so it never needs the event to exist at test time.
         """
-        bus = getattr(self._app, "_event_bus", None) or getattr(
-            self._app, "event_bus", None)
+        bus = getattr(self._app, "_event_bus", None) or getattr(self._app, "event_bus", None)
         if bus is None:
             return
         try:
             from fire_engine.core.event_bus import LightningStrikeEvent
-        except Exception:  # noqa: BLE001 — M7 not merged into this worktree yet
+        except Exception:
             return
 
         cam_tf = self._app.camera_go.transform
@@ -490,16 +521,18 @@ class DevOverlay:
         ground_pos = (float(ground.x), float(ground.y), float(ground.z))
         try:
             ev = LightningStrikeEvent(
-                pos=pos, ground_pos=ground_pos,
+                pos=pos,
+                ground_pos=ground_pos,
                 seed=int(self._time_abs()) & 0x7FFFFFFF,
-                time_abs=self._time_abs(), cell_id=-1, intensity=1.0,
+                time_abs=self._time_abs(),
+                cell_id=-1,
+                intensity=1.0,
             )
             # Publish immediately if available, else defer.
-            publish = getattr(bus, "publish", None) or getattr(
-                bus, "publish_deferred", None)
+            publish = getattr(bus, "publish", None) or getattr(bus, "publish_deferred", None)
             if publish is not None:
                 publish(ev)
-        except Exception:  # noqa: BLE001 — defensive: contract may shift
+        except Exception:
             pass
 
     def _raycast_ground(self, origin, direction):
@@ -507,8 +540,7 @@ class DevOverlay:
         cm = getattr(self._app, "chunk_manager", None)
         if cm is None:
             return None
-        hit = raycast_voxel(origin, direction, cm.get_or_create,
-                            max_distance_m=_TERRAIN_RAY_MAX_M)
+        hit = raycast_voxel(origin, direction, cm.get_or_create, max_distance_m=_TERRAIN_RAY_MAX_M)
         if hit is None:
             return None
         return getattr(hit, "world_point", None) or getattr(hit, "point", None)
@@ -531,19 +563,20 @@ class DevOverlay:
             return
         try:
             from panda3d.core import CardMaker
+
             ox, oy = cover.origin_m
             span = float(cover.cells) * float(cover.cell_m)
             cm = CardMaker("rain_cover_overlay")
             cm.set_frame(0.0, span, 0.0, span)
             node = self._base.render.attach_new_node(cm.generate())
-            node.set_pos(float(ox), float(oy), 0.05)   # just above ground
-            node.set_p(-90)                            # lay flat (XY plane)
+            node.set_pos(float(ox), float(oy), 0.05)  # just above ground
+            node.set_p(-90)  # lay flat (XY plane)
             node.set_transparency(True)
             node.set_color(0.2, 0.55, 1.0, 0.28)
             node.set_light_off()
             node.set_two_sided(True)
             self._rain_cover_np = node
-        except Exception:  # noqa: BLE001
+        except Exception:
             self._rain_cover_np = None
 
     def _rain_cover_field(self):
@@ -553,9 +586,10 @@ class DevOverlay:
             return None
         try:
             from fire_engine.render.rain_renderer import RainRendererComponent
+
             comp = rain_go.get_component(RainRendererComponent)
             return getattr(comp, "_cover", None) if comp is not None else None
-        except Exception:  # noqa: BLE001
+        except Exception:
             return None
 
     # ------------------------------------------------------------------
@@ -669,9 +703,7 @@ class DevOverlay:
         cm = getattr(self._app, "chunk_manager", None)
         if cm is None:
             return None
-        hit = raycast_voxel(
-            origin, direction, cm.get_or_create, max_distance_m=_TERRAIN_RAY_MAX_M
-        )
+        hit = raycast_voxel(origin, direction, cm.get_or_create, max_distance_m=_TERRAIN_RAY_MAX_M)
         if hit is None:
             return None
         return cm.get_or_create(hit.chunk_coord)
@@ -682,6 +714,7 @@ class DevOverlay:
 
     def _build_gizmo_panel(self):
         """Build the Gizmo panel: a current-mode read-out + tool buttons."""
+
         def mode_label() -> str:
             return self._gizmo_mode.value if self._gizmo_mode is not None else "off"
 
@@ -694,12 +727,12 @@ class DevOverlay:
         ]
         return sections, buttons
 
-    def _set_gizmo_mode(self, mode: "Optional[GizmoMode]") -> None:
+    def _set_gizmo_mode(self, mode: GizmoMode | None) -> None:
         """Switch the active gizmo tool (``None`` hides the gizmo)."""
         self._gizmo_mode = mode
-        self._gizmo_drag = None   # cancel any in-flight drag on a mode switch
+        self._gizmo_drag = None  # cancel any in-flight drag on a mode switch
 
-    def _gizmo_target(self) -> "Optional[GameObject]":
+    def _gizmo_target(self) -> GameObject | None:
         """
         The object the gizmo currently manipulates, or ``None``.
 
@@ -716,7 +749,7 @@ class DevOverlay:
             return None
         return go
 
-    def _gizmo_pivot_size(self, go) -> "tuple[Vec3, float]":
+    def _gizmo_pivot_size(self, go) -> tuple[Vec3, float]:
         """Gizmo pivot (object origin) + a camera-distance-scaled world size."""
         pivot = go.transform.local_position
         cam = self._app.camera_go.transform.position
@@ -740,8 +773,12 @@ class DevOverlay:
             return False
         tf = go.transform
         self._gizmo_drag = giz.begin(
-            handle, origin, direction,
-            tf.local_position, tf.local_rotation, tf.local_scale,
+            handle,
+            origin,
+            direction,
+            tf.local_position,
+            tf.local_rotation,
+            tf.local_scale,
         )
         self._gizmo_go = go
         return True
@@ -795,8 +832,11 @@ class DevOverlay:
         px, py, pz = pivot.x, pivot.y, pivot.z
 
         def is_hot(htype, axis) -> bool:
-            return (hovered is not None and hovered.type == htype
-                    and (htype == HandleType.UNIFORM or hovered.axis == axis))
+            return (
+                hovered is not None
+                and hovered.type == htype
+                and (htype == HandleType.UNIFORM or hovered.axis == axis)
+            )
 
         def axis_col(i, htype):
             return self._HL_COL if is_hot(htype, i) else self._AXIS_COL[i]
@@ -821,8 +861,7 @@ class DevOverlay:
         if mode == GizmoMode.TRANSLATE:
             lo, hi = size * 0.2, size * 0.45
             for i in range(3):
-                ls.set_color(*(self._HL_COL if is_hot(HandleType.PLANE, i)
-                               else self._AXIS_COL[i]))
+                ls.set_color(*(self._HL_COL if is_hot(HandleType.PLANE, i) else self._AXIS_COL[i]))
                 j, k = self._OTHER_AXES[i]
                 jd, kd = self._AXIS_DIR[j], self._AXIS_DIR[k]
                 corners = [(lo, lo), (hi, lo), (hi, hi), (lo, hi), (lo, lo)]
@@ -833,9 +872,13 @@ class DevOverlay:
                     (ls.move_to if n == 0 else ls.draw_to)(x, y, z)
 
         if mode == GizmoMode.SCALE:
-            ls.set_color(*(self._HL_COL if (hovered is not None
-                           and hovered.type == HandleType.UNIFORM)
-                           else (0.9, 0.9, 0.9, 1.0)))
+            ls.set_color(
+                *(
+                    self._HL_COL
+                    if (hovered is not None and hovered.type == HandleType.UNIFORM)
+                    else (0.9, 0.9, 0.9, 1.0)
+                )
+            )
             c = size * 0.1
             box = [(-c, -c), (c, -c), (c, c), (-c, c), (-c, -c)]
             for n, (dx, dz) in enumerate(box):
@@ -843,10 +886,10 @@ class DevOverlay:
 
         if mode == GizmoMode.ROTATE:
             import math as _math
+
             seg = 48
             for i in range(3):
-                ls.set_color(*(self._HL_COL if is_hot(HandleType.RING, i)
-                               else self._AXIS_COL[i]))
+                ls.set_color(*(self._HL_COL if is_hot(HandleType.RING, i) else self._AXIS_COL[i]))
                 j, k = self._OTHER_AXES[i]
                 jd, kd = self._AXIS_DIR[j], self._AXIS_DIR[k]
                 for n in range(seg + 1):
@@ -859,16 +902,16 @@ class DevOverlay:
 
         node = self._base.render.attach_new_node(ls.create())
         node.set_light_off()
-        node.set_depth_test(False)   # always visible through geometry
+        node.set_depth_test(False)  # always visible through geometry
         node.set_depth_write(False)
-        node.set_bin("fixed", 110)   # above the selection outline (bin 100)
+        node.set_bin("fixed", 110)  # above the selection outline (bin 100)
         self._gizmo_np = node
 
     # ------------------------------------------------------------------
     # Spawning dev props
     # ------------------------------------------------------------------
 
-    def spawn_cube(self) -> "GameObject":
+    def spawn_cube(self) -> GameObject:
         """
         Spawn a 1 m cube 5 m in front of the camera, select it, and make it
         pickable.  The cube has no components — it's a transform you can move and
@@ -921,22 +964,24 @@ class DevOverlay:
             np_.clear_color_scale()
             return
         from fire_engine.lighting.lights import AreaLight
+
         bounds = np_.get_tight_bounds()
         p = go.transform.position
         center = (p.x, p.y, p.z)
         half = (0.5, 0.5, 0.5)
         if bounds is not None:
             mn, mx = bounds
-            center = ((mn.x + mx.x) * 0.5, (mn.y + mx.y) * 0.5,
-                      (mn.z + mx.z) * 0.5)
-            half = (max((mx.x - mn.x) * 0.5, 0.05),
-                    max((mx.y - mn.y) * 0.5, 0.05),
-                    max((mx.z - mn.z) * 0.5, 0.05))
-        light = AreaLight(center=center, half_extents=half,
-                          color=(1.0, 0.78, 0.45), intensity=10.0,
-                          radius=14.0)
+            center = ((mn.x + mx.x) * 0.5, (mn.y + mx.y) * 0.5, (mn.z + mx.z) * 0.5)
+            half = (
+                max((mx.x - mn.x) * 0.5, 0.05),
+                max((mx.y - mn.y) * 0.5, 0.05),
+                max((mx.z - mn.z) * 0.5, 0.05),
+            )
+        light = AreaLight(
+            center=center, half_extents=half, color=(1.0, 0.78, 0.45), intensity=10.0, radius=14.0
+        )
         self._emissive[go] = (pipeline.lights.add(light), light)
-        np_.set_color_scale(2.2, 1.8, 1.1, 1.0)   # the prop visibly glows
+        np_.set_color_scale(2.2, 1.8, 1.1, 1.0)  # the prop visibly glows
 
     def _sync_spawned(self) -> None:
         """
@@ -958,7 +1003,7 @@ class DevOverlay:
             np_.set_scale(0.5 * s.x, 0.5 * s.y, 0.5 * s.z)
             if pipeline is None:
                 continue
-            bounds = np_.get_tight_bounds()   # world AABB (includes rotation)
+            bounds = np_.get_tight_bounds()  # world AABB (includes rotation)
             if bounds is None:
                 continue
             mn, mx = bounds
@@ -966,15 +1011,14 @@ class DevOverlay:
             em = self._emissive.get(go)
             if em is not None:
                 light = em[1]
-                center = ((mn.x + mx.x) * 0.5, (mn.y + mx.y) * 0.5,
-                          (mn.z + mx.z) * 0.5)
-                if any(abs(a - b) > 0.01
-                       for a, b in zip(center, light.center)):
+                center = ((mn.x + mx.x) * 0.5, (mn.y + mx.y) * 0.5, (mn.z + mx.z) * 0.5)
+                if any(abs(a - b) > 0.01 for a, b in zip(center, light.center)):
                     light.center = center
                     light.half_extents = (
                         max((mx.x - mn.x) * 0.5, 0.05),
                         max((mx.y - mn.y) * 0.5, 0.05),
-                        max((mx.z - mn.z) * 0.5, 0.05))
+                        max((mx.z - mn.z) * 0.5, 0.05),
+                    )
                     lights_dirty = True
         if pipeline is not None:
             pipeline.occluders.set_boxes(boxes)
@@ -1049,13 +1093,28 @@ class DevOverlay:
         x0, y0, z0 = float(bmin[0]), float(bmin[1]), float(bmin[2])
         x1, y1, z1 = float(bmax[0]), float(bmax[1]), float(bmax[2])
         corners = [
-            (x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0),
-            (x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1),
+            (x0, y0, z0),
+            (x1, y0, z0),
+            (x1, y1, z0),
+            (x0, y1, z0),
+            (x0, y0, z1),
+            (x1, y0, z1),
+            (x1, y1, z1),
+            (x0, y1, z1),
         ]
         edges = [
-            (0, 1), (1, 2), (2, 3), (3, 0),   # bottom
-            (4, 5), (5, 6), (6, 7), (7, 4),   # top
-            (0, 4), (1, 5), (2, 6), (3, 7),   # verticals
+            (0, 1),
+            (1, 2),
+            (2, 3),
+            (3, 0),  # bottom
+            (4, 5),
+            (5, 6),
+            (6, 7),
+            (7, 4),  # top
+            (0, 4),
+            (1, 5),
+            (2, 6),
+            (3, 7),  # verticals
         ]
         ls = LineSegs("selection_outline")
         ls.set_color(*_OUTLINE_COLOR)
@@ -1079,7 +1138,7 @@ class DevOverlay:
         for w in self._widgets:
             try:
                 w.destroy()
-            except Exception:  # noqa: BLE001 — defensive teardown
+            except Exception:
                 pass
         self._widgets.clear()
         self._updaters.clear()
@@ -1105,7 +1164,7 @@ class DevOverlay:
     def _build_panel(self, panel, parent, x: float, z: float, width: float) -> float:
         """Render one panel starting at ``z``; return the z below the panel."""
         top = z
-        rows: list = []   # deferred widget creation so the bg frame sits behind
+        rows: list = []  # deferred widget creation so the bg frame sits behind
 
         # Title
         rows.append(("title", panel.title))
@@ -1147,8 +1206,13 @@ class DevOverlay:
 
     def _mk_label(self, parent, x: float, z: float, text: str, fg, scale: float):
         lbl = DirectLabel(
-            parent=parent, text=str(text), text_fg=fg, text_scale=scale,
-            text_align=TextNode.ALeft, relief=None, pos=(x + 0.02, 0, z),
+            parent=parent,
+            text=str(text),
+            text_fg=fg,
+            text_scale=scale,
+            text_align=TextNode.ALeft,
+            relief=None,
+            pos=(x + 0.02, 0, z),
         )
         self._widgets.append(lbl)
         return lbl
@@ -1159,16 +1223,22 @@ class DevOverlay:
         vx = x + _LABEL_COL
 
         if fld.kind == FieldKind.LABEL or fld.read_only:
-            val_lbl = self._mk_label(parent, vx, z, _fmt(fld.get()), (0.7, 0.9, 0.7, 1.0),
-                                     _TEXT_SCALE * 0.9)
+            val_lbl = self._mk_label(
+                parent, vx, z, _fmt(fld.get()), (0.7, 0.9, 0.7, 1.0), _TEXT_SCALE * 0.9
+            )
             self._updaters.append(lambda l=val_lbl, f=fld: l.__setitem__("text", _fmt(f.get())))
             return
 
         if fld.kind == FieldKind.BOOL:
             btn = DirectButton(
-                parent=parent, text=self._checkbox(fld.get()), text_scale=_TEXT_SCALE,
-                text_align=TextNode.ALeft, relief=None, text_fg=(0.8, 1.0, 0.8, 1.0),
-                pos=(vx, 0, z), command=lambda f=fld: f.set(not f.get()),
+                parent=parent,
+                text=self._checkbox(fld.get()),
+                text_scale=_TEXT_SCALE,
+                text_align=TextNode.ALeft,
+                relief=None,
+                text_fg=(0.8, 1.0, 0.8, 1.0),
+                pos=(vx, 0, z),
+                command=lambda f=fld: f.set(not f.get()),
             )
             self._widgets.append(btn)
             self._updaters.append(
@@ -1194,9 +1264,7 @@ class DevOverlay:
                 # never silently discarded by leaving the box.
                 e["command"] = submit
                 e["focusOutCommand"] = submit
-            self._updaters.append(
-                lambda es=entries, f=fld: self._refresh_vec3(es, f)
-            )
+            self._updaters.append(lambda es=entries, f=fld: self._refresh_vec3(es, f))
             return
 
         # FLOAT / INT / STRING — single entry
@@ -1221,9 +1289,15 @@ class DevOverlay:
 
     def _mk_entry(self, parent, x: float, z: float, width: int) -> DirectEntry:
         e = DirectEntry(
-            parent=parent, scale=_ENTRY_SCALE, pos=(x, 0, z), width=width,
-            numLines=1, initialText="", text_align=TextNode.ALeft,
-            frameColor=(0.15, 0.17, 0.2, 0.9), text_fg=(1, 1, 1, 1),
+            parent=parent,
+            scale=_ENTRY_SCALE,
+            pos=(x, 0, z),
+            width=width,
+            numLines=1,
+            initialText="",
+            text_align=TextNode.ALeft,
+            frameColor=(0.15, 0.17, 0.2, 0.9),
+            text_fg=(1, 1, 1, 1),
         )
         self._widgets.append(e)
         return e
@@ -1232,15 +1306,21 @@ class DevOverlay:
         bx = x + 0.02
         for b in buttons:
             btn = DirectButton(
-                parent=parent, text=b.label, text_scale=_TEXT_SCALE * 0.9,
-                text_align=TextNode.ALeft, pos=(bx, 0, z),
-                frameColor=(0.2, 0.35, 0.5, 0.95), text_fg=(1, 1, 1, 1),
+                parent=parent,
+                text=b.label,
+                text_scale=_TEXT_SCALE * 0.9,
+                text_align=TextNode.ALeft,
+                pos=(bx, 0, z),
+                frameColor=(0.2, 0.35, 0.5, 0.95),
+                text_fg=(1, 1, 1, 1),
                 # FLAT + a thin border: the DirectGui default is a 0.1-unit
                 # raised bevel, which on an unscaled button dwarfs the 0.036-tall
                 # text and swallows the label. A flat fill sized snugly to the
                 # text reads as a clean button.
-                relief=DGG.FLAT, borderWidth=(0.01, 0.01),
-                command=b.on_click, pad=(0.02, 0.01),
+                relief=DGG.FLAT,
+                borderWidth=(0.01, 0.01),
+                command=b.on_click,
+                pad=(0.02, 0.01),
             )
             self._widgets.append(btn)
             bx += 0.02 + len(b.label) * _TEXT_SCALE * 0.62
@@ -1261,7 +1341,7 @@ class DevOverlay:
         # a focused entry is left untouched until Enter / click-off commits it.
         try:
             return bool(entry.guiItem.get_focus())
-        except Exception:  # noqa: BLE001
+        except Exception:
             return False
 
     def _refresh_scalar(self, entry: DirectEntry, fld) -> None:

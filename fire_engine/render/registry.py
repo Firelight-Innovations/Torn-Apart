@@ -58,9 +58,9 @@ Example
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import TYPE_CHECKING, Type, TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
-from fire_engine.core.math3d import Vec3, Quat
+from fire_engine.core.math3d import Quat, Vec3
 from fire_engine.core.profiler import get_profiler
 
 # Cache of (phase, component_type) -> compound scope name, so the per-frame hot
@@ -77,10 +77,11 @@ def _scope_name(phase: str, t: type) -> str:
         name = _SCOPE_NAME_CACHE[key] = f"{phase}:{t.__name__}"
     return name
 
+
 if TYPE_CHECKING:
-    from fire_engine.render.component  import Component
-    from fire_engine.render.gameobject import GameObject
     from fire_engine.core.clock import Clock
+    from fire_engine.render.component import Component
+    from fire_engine.render.gameobject import GameObject
 
 T = TypeVar("T")
 
@@ -89,24 +90,25 @@ T = TypeVar("T")
 # _RegistryState — all mutable singleton state in one object (easy to clear)
 # ---------------------------------------------------------------------------
 
+
 class _RegistryState:
     """Internal mutable state bag for ComponentRegistry."""
 
     def __init__(self) -> None:
         # All live GameObjects (for tag lookups)
-        self.objects: list["GameObject"] = []
+        self.objects: list[GameObject] = []
 
         # Per-type buckets: {component_type: [component, ...]}
         # Ordering within a bucket mirrors insertion order.
-        self.buckets: dict[type, list["Component"]] = defaultdict(list)
+        self.buckets: dict[type, list[Component]] = defaultdict(list)
 
         # Pending lifecycle queues
-        self.pending_awake:   list["Component"] = []
-        self.pending_start:   list["Component"] = []
+        self.pending_awake: list[Component] = []
+        self.pending_start: list[Component] = []
 
         # Deferred destroy queues (flushed at end of frame)
-        self.pending_destroy_components: list["Component"] = []
-        self.pending_destroy_objects:    list["GameObject"] = []
+        self.pending_destroy_components: list[Component] = []
+        self.pending_destroy_objects: list[GameObject] = []
 
 
 _STATE: _RegistryState = _RegistryState()
@@ -115,6 +117,7 @@ _STATE: _RegistryState = _RegistryState()
 # ---------------------------------------------------------------------------
 # ComponentRegistry — public singleton facade
 # ---------------------------------------------------------------------------
+
 
 class _ComponentRegistry:
     """
@@ -130,7 +133,7 @@ class _ComponentRegistry:
     # Internal scheduling (called by GameObject)
     # ------------------------------------------------------------------
 
-    def _schedule_awake(self, component: "Component") -> None:
+    def _schedule_awake(self, component: Component) -> None:
         """Add a newly created component to the pending-awake queue."""
         _STATE.pending_awake.append(component)
         # Register in the appropriate type bucket
@@ -141,7 +144,7 @@ class _ComponentRegistry:
         if go is not None and go not in _STATE.objects:
             _STATE.objects.append(go)
 
-    def _schedule_destroy_component(self, component: "Component") -> None:
+    def _schedule_destroy_component(self, component: Component) -> None:
         """Schedule a component for end-of-frame teardown."""
         _STATE.pending_destroy_components.append(component)
 
@@ -149,7 +152,7 @@ class _ComponentRegistry:
     # Main run_frame
     # ------------------------------------------------------------------
 
-    def run_frame(self, clock: "Clock") -> None:
+    def run_frame(self, clock: Clock) -> None:
         """
         Drive one full frame of component lifecycle dispatch.
 
@@ -225,7 +228,7 @@ class _ComponentRegistry:
         # -- 6. Deferred destroy -------------------------------------------
         self._flush_destroy()
 
-    def _is_active(self, comp: "Component") -> bool:
+    def _is_active(self, comp: Component) -> bool:
         """Return True if the component should tick this frame."""
         if not comp.enabled:
             return False
@@ -271,11 +274,11 @@ class _ComponentRegistry:
 
     def instantiate(
         self,
-        template: "GameObject | None" = None,
+        template: GameObject | None = None,
         position: Vec3 = None,
         rotation: Quat = None,
-        parent:   "object | None" = None,
-    ) -> "GameObject":
+        parent: object | None = None,
+    ) -> GameObject:
         """
         Create (and register) a new GameObject, optionally copying a template.
 
@@ -299,7 +302,6 @@ class _ComponentRegistry:
             bullet = instantiate(position=Vec3(0, 10, 0))
         """
         from fire_engine.render.gameobject import GameObject
-        from fire_engine.render.transform  import Transform
 
         if position is None:
             position = Vec3(0.0, 0.0, 0.0)
@@ -325,7 +327,7 @@ class _ComponentRegistry:
 
     def destroy(
         self,
-        obj_or_component: "GameObject | Component",
+        obj_or_component: GameObject | Component,
         delay: float = 0.0,
     ) -> None:
         """
@@ -350,8 +352,8 @@ class _ComponentRegistry:
             destroy(bullet_go)           # destroyed at end of this frame
             destroy(old_component)       # component torn down at end of frame
         """
+        from fire_engine.render.component import Component
         from fire_engine.render.gameobject import GameObject
-        from fire_engine.render.component  import Component
 
         if isinstance(obj_or_component, GameObject):
             if obj_or_component not in _STATE.pending_destroy_objects:
@@ -364,7 +366,7 @@ class _ComponentRegistry:
                 f"destroy() expects a GameObject or Component, got {type(obj_or_component)}"
             )
 
-    def find_with_tag(self, tag: str) -> "GameObject | None":
+    def find_with_tag(self, tag: str) -> GameObject | None:
         """
         Return the first registered GameObject whose tag matches *tag*, or None.
 
@@ -385,7 +387,7 @@ class _ComponentRegistry:
                 return go
         return None
 
-    def find_objects_with_tag(self, tag: str) -> "list[GameObject]":
+    def find_objects_with_tag(self, tag: str) -> list[GameObject]:
         """
         Return all registered GameObjects whose tag matches *tag*.
 
@@ -429,12 +431,13 @@ ComponentRegistry: _ComponentRegistry = _ComponentRegistry()
 
 # Convenience module-level functions (mirrors Unity statics and ARCHITECTURE §5.4)
 
+
 def instantiate(
-    template: "GameObject | None" = None,
+    template: GameObject | None = None,
     position: Vec3 = None,
     rotation: Quat = None,
     parent=None,
-) -> "GameObject":
+) -> GameObject:
     """
     Create a new GameObject at *position* with *rotation*.
 
@@ -462,11 +465,11 @@ def destroy(obj_or_component, delay: float = 0.0) -> None:
     ComponentRegistry.destroy(obj_or_component, delay=delay)
 
 
-def find_with_tag(tag: str) -> "GameObject | None":
+def find_with_tag(tag: str) -> GameObject | None:
     """Return the first registered GameObject with the given tag, or None."""
     return ComponentRegistry.find_with_tag(tag)
 
 
-def find_objects_with_tag(tag: str) -> "list[GameObject]":
+def find_objects_with_tag(tag: str) -> list[GameObject]:
     """Return all registered GameObjects with the given tag."""
     return ComponentRegistry.find_objects_with_tag(tag)

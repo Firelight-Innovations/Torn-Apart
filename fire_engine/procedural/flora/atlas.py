@@ -25,7 +25,7 @@ import numpy as np
 
 from fire_engine.procedural.textures.base import pixel_noise
 
-__all__ = ["AtlasLayout", "bark_texture", "leaf_texture", "compose_atlas"]
+__all__ = ["AtlasLayout", "bark_texture", "compose_atlas", "leaf_texture"]
 
 
 @dataclass(frozen=True)
@@ -90,10 +90,9 @@ def bark_texture(
     """
     palette = np.asarray(palette, dtype=np.uint8)
     rows = max(1, height // max(1, streak_px))
-    small = pixel_noise(rng, (rows, width), octaves=2,
-                        base_freq=striation_freq)
+    small = pixel_noise(rng, (rows, width), octaves=2, base_freq=striation_freq)
     grain = np.repeat(small, streak_px, axis=0)[:height]
-    if grain.shape[0] < height:                       # streak_px remainder
+    if grain.shape[0] < height:  # streak_px remainder
         grain = np.vstack([grain, grain[: height - grain.shape[0]]])
 
     tier = np.clip((grain * len(palette)), 0, len(palette) - 1).astype(np.intp)
@@ -158,18 +157,17 @@ def leaf_texture(
     # to a point at the tip and a narrow stem foot.  Slight per-leaf
     # asymmetry so the species' leaf isn't perfectly mirrored.
     wmax = width * float(rng.uniform(0.36, 0.46))
-    bulge = float(rng.uniform(0.30, 0.42))            # widest point (t)
+    bulge = float(rng.uniform(0.30, 0.42))  # widest point (t)
     prof = np.where(
         t < bulge,
         0.18 + 0.82 * (t / max(bulge, 1e-3)) ** 0.7,
-        np.clip(1.0 - (t - bulge) / max(1.0 - bulge, 1e-3),
-                0.0, 1.0) ** 1.15)
-    half_w = wmax * prof                              # (H, W) via t
+        np.clip(1.0 - (t - bulge) / max(1.0 - bulge, 1e-3), 0.0, 1.0) ** 1.15,
+    )
+    half_w = wmax * prof  # (H, W) via t
     skew = (t - 0.5) * width * float(rng.uniform(-0.08, 0.08))
     dx = xx - (cx + skew)
 
-    noise = pixel_noise(rng, (height, width), octaves=3,
-                        base_freq=clump_freq)
+    noise = pixel_noise(rng, (height, width), octaves=3, base_freq=clump_freq)
     # Edge nibble: noise shrinks the silhouette locally; hole_thresh sets
     # how deep the bites go.
     edge = 1.0 - np.clip(noise - (1.0 - hole_thresh * 1.6), 0.0, 1.0) * 2.2
@@ -198,14 +196,12 @@ def leaf_texture(
 
     if berry_color is not None and berry_density > 0.0:
         # Berries cluster near the leaf base (they hang at the stem).
-        berries = (rng.random((height, width)) < berry_density * 3.0) \
-            & alpha & (t < 0.45)
+        berries = (rng.random((height, width)) < berry_density * 3.0) & alpha & (t < 0.45)
         rgba[..., :3][berries] = np.asarray(berry_color, dtype=np.uint8)
     return rgba
 
 
-def compose_atlas(layout: AtlasLayout, bark_rgba: np.ndarray,
-                  leaf_rgba: np.ndarray) -> np.ndarray:
+def compose_atlas(layout: AtlasLayout, bark_rgba: np.ndarray, leaf_rgba: np.ndarray) -> np.ndarray:
     """
     Assemble the species atlas: bark left half, leaves right half.
 
@@ -225,9 +221,9 @@ def compose_atlas(layout: AtlasLayout, bark_rgba: np.ndarray,
     for name, arr in (("bark", bark_rgba), ("leaf", leaf_rgba)):
         if arr.shape != (hh, hw, 4) or arr.dtype != np.uint8:
             raise ValueError(
-                f"compose_atlas: {name} must be ({hh}, {hw}, 4) uint8, "
-                f"got {arr.shape} {arr.dtype}")
+                f"compose_atlas: {name} must be ({hh}, {hw}, 4) uint8, got {arr.shape} {arr.dtype}"
+            )
     atlas = np.zeros((layout.height, layout.width, 4), dtype=np.uint8)
     atlas[:, :hw] = bark_rgba
-    atlas[:, hw:hw * 2] = leaf_rgba
+    atlas[:, hw : hw * 2] = leaf_rgba
     return atlas

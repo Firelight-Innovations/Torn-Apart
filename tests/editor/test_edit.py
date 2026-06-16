@@ -4,22 +4,21 @@ The headline integration (EDITOR_PRD E3): carve in the editor -> save -> the
 *engine* (the game's own load path) sees the crater. Plus undo restores exact
 voxel content (byte-compare) and redo re-applies it.
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
 
 import numpy as np
-import pytest
 import websockets
+from fire_editor import Daemon, EditorSession, decode_frame, decode_mesh_payload
+from fire_editor._generated import PROTOCOL_VERSION, SchemaId
 
 from fire_engine.core import Clock, EventBus, load_config
 from fire_engine.core.rng import set_world_seed
 from fire_engine.save import SaveManager
 from fire_engine.world.terrain import ChunkManager, generate_chunk
-
-from fire_editor import Daemon, EditorSession, decode_frame, decode_mesh_payload
-from fire_editor._generated import PROTOCOL_VERSION, SchemaId
 
 SURFACE = (0, 0, 0)
 BRUSH = {"shape": "sphere", "x": 0.0, "y": 0.0, "z": 7.5, "mode": "remove", "radius": 2.0}
@@ -49,11 +48,15 @@ class TestUndoRedo:
 
         u = _run(daemon.chunks.undo({}))
         assert u["ok"] is True
-        assert np.array_equal(s.cm.chunks[SURFACE].materials, baseline), "undo must restore exact voxels"
+        assert np.array_equal(s.cm.chunks[SURFACE].materials, baseline), (
+            "undo must restore exact voxels"
+        )
 
         r = _run(daemon.chunks.redo({}))
         assert r["ok"] is True
-        assert np.array_equal(s.cm.chunks[SURFACE].materials, after_edit), "redo must re-apply exact voxels"
+        assert np.array_equal(s.cm.chunks[SURFACE].materials, after_edit), (
+            "redo must re-apply exact voxels"
+        )
 
     def test_undo_empty_stack(self):
         daemon, _ = _daemon_with_world()
@@ -102,9 +105,13 @@ class TestLiveBrush:
             port = await daemon.server.start(0)
             try:
                 async with websockets.connect(f"ws://127.0.0.1:{port}") as ws:
+
                     async def call(mid, method, params):
-                        await ws.send(json.dumps({"jsonrpc": "2.0", "id": mid,
-                                                  "method": method, "params": params}))
+                        await ws.send(
+                            json.dumps(
+                                {"jsonrpc": "2.0", "id": mid, "method": method, "params": params}
+                            )
+                        )
 
                     await call(1, "hello", {"protocol_version": PROTOCOL_VERSION, "client": "t"})
                     await call(2, "world.open", {"seed": load_config().world_seed})
@@ -117,11 +124,16 @@ class TestLiveBrush:
                     got_edit_state = False
                     brush_ok = False
                     deadline = asyncio.get_event_loop().time() + 10
-                    while asyncio.get_event_loop().time() < deadline and not (got_mesh and brush_ok and got_edit_state):
+                    while asyncio.get_event_loop().time() < deadline and not (
+                        got_mesh and brush_ok and got_edit_state
+                    ):
                         msg = await asyncio.wait_for(ws.recv(), timeout=10)
                         if isinstance(msg, bytes):
                             sid, _pid, body = decode_frame(msg)
-                            if sid == SchemaId.MESH and decode_mesh_payload(body)["vertex_count"] > 0:
+                            if (
+                                sid == SchemaId.MESH
+                                and decode_mesh_payload(body)["vertex_count"] > 0
+                            ):
                                 got_mesh = True
                         else:
                             obj = json.loads(msg)

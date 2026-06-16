@@ -94,8 +94,7 @@ class BoltGeometry:
         return int(self.a.shape[0])
 
 
-def _lattice_hash_vec(ix: np.ndarray, iy: np.ndarray, iz: np.ndarray,
-                      salt: int) -> np.ndarray:
+def _lattice_hash_vec(ix: np.ndarray, iy: np.ndarray, iz: np.ndarray, salt: int) -> np.ndarray:
     """
     Deterministic integer hash of lattice corners → [0, 1), vectorised.
 
@@ -106,10 +105,12 @@ def _lattice_hash_vec(ix: np.ndarray, iy: np.ndarray, iz: np.ndarray,
     (Hard Rule 2: the salt is the sole entropy source for the field).
     """
     # uint64 arithmetic wraps modulo 2**64 (silently, like a C hash mix).
-    h = (np.uint64(salt)
-         ^ (ix.astype(np.uint64) * np.uint64(0x9E3779B97F4A7C15))
-         ^ (iy.astype(np.uint64) * np.uint64(0xC2B2AE3D27D4EB4F))
-         ^ (iz.astype(np.uint64) * np.uint64(0x165667B19E3779F9)))
+    h = (
+        np.uint64(salt)
+        ^ (ix.astype(np.uint64) * np.uint64(0x9E3779B97F4A7C15))
+        ^ (iy.astype(np.uint64) * np.uint64(0xC2B2AE3D27D4EB4F))
+        ^ (iz.astype(np.uint64) * np.uint64(0x165667B19E3779F9))
+    )
     h ^= h >> np.uint64(30)
     h *= np.uint64(0xBF58476D1CE4E5B9)
     h ^= h >> np.uint64(27)
@@ -135,13 +136,13 @@ def _value_noise_3d_vec(pts: np.ndarray, salt: int) -> np.ndarray:
     fx, fy, fz = fi[:, 0], fi[:, 1], fi[:, 2]
     one = np.int64(1)
 
-    c000 = _lattice_hash_vec(fx,       fy,       fz,       salt)
-    c100 = _lattice_hash_vec(fx + one, fy,       fz,       salt)
-    c010 = _lattice_hash_vec(fx,       fy + one, fz,       salt)
-    c110 = _lattice_hash_vec(fx + one, fy + one, fz,       salt)
-    c001 = _lattice_hash_vec(fx,       fy,       fz + one, salt)
-    c101 = _lattice_hash_vec(fx + one, fy,       fz + one, salt)
-    c011 = _lattice_hash_vec(fx,       fy + one, fz + one, salt)
+    c000 = _lattice_hash_vec(fx, fy, fz, salt)
+    c100 = _lattice_hash_vec(fx + one, fy, fz, salt)
+    c010 = _lattice_hash_vec(fx, fy + one, fz, salt)
+    c110 = _lattice_hash_vec(fx + one, fy + one, fz, salt)
+    c001 = _lattice_hash_vec(fx, fy, fz + one, salt)
+    c101 = _lattice_hash_vec(fx + one, fy, fz + one, salt)
+    c011 = _lattice_hash_vec(fx, fy + one, fz + one, salt)
     c111 = _lattice_hash_vec(fx + one, fy + one, fz + one, salt)
 
     wx, wy, wz = w[:, 0], w[:, 1], w[:, 2]
@@ -188,15 +189,17 @@ def _fan_directions(
     cos_t = rng.uniform(cos_min, 1.0, size=n_rand)
     sin_t = np.sqrt(np.maximum(0.0, 1.0 - cos_t * cos_t))
     phi = rng.uniform(0.0, 2.0 * math.pi, size=n_rand)
-    dirs_rand = (cos_t[:, None] * fwd[None, :]
-                 + (sin_t * np.cos(phi))[:, None] * u[None, :]
-                 + (sin_t * np.sin(phi))[:, None] * v[None, :])
+    dirs_rand = (
+        cos_t[:, None] * fwd[None, :]
+        + (sin_t * np.cos(phi))[:, None] * u[None, :]
+        + (sin_t * np.sin(phi))[:, None] * v[None, :]
+    )
     out = np.empty((k, 3), dtype=np.float64)
     out[0] = fwd
     if n_rand:
         out[1:] = dirs_rand
     # Normalise defensively.
-    out /= (np.linalg.norm(out, axis=1, keepdims=True) + 1e-9)
+    out /= np.linalg.norm(out, axis=1, keepdims=True) + 1e-9
     return out
 
 
@@ -245,8 +248,8 @@ def _grow_channel(
     fwd = forward.astype(np.float64).copy()
 
     # Width / brightness decay with branch depth (the main stroke is the boldest).
-    base_w = 0.9 if is_main else 0.45 * (0.6 ** depth)
-    base_br = 1.6 if is_main else 0.55 * (0.6 ** depth)
+    base_w = 0.9 if is_main else 0.45 * (0.6**depth)
+    base_br = 1.6 if is_main else 0.55 * (0.6**depth)
 
     # Branches terminate after covering a random fraction of the remaining drop.
     branch_rng = for_domain("weather", "bolt", int(seed), "branch", int(branch_id))
@@ -263,27 +266,26 @@ def _grow_channel(
                 reached[0] = True
             break
         budget[0] -= 1
-        rng = for_domain("weather", "bolt", int(seed), "step",
-                         int(branch_id), int(step_i))
+        rng = for_domain("weather", "bolt", int(seed), "step", int(branch_id), int(step_i))
 
         # Bias forward toward "down" so the leader trends to ground.
         biased = fwd + np.array([0.0, 0.0, -1.0]) * 0.6
         biased /= np.linalg.norm(biased) + 1e-9
-        cand = _fan_directions(biased, k, cone, rng)        # (k, 3)
+        cand = _fan_directions(biased, k, cone, rng)  # (k, 3)
         step_len = float(rng.uniform(step_lo, step_hi))
-        next_pts = pos[None, :] + cand * step_len           # (k, 3)
+        next_pts = pos[None, :] + cand * step_len  # (k, 3)
 
         # Score each candidate: downward progress − air resistance − repulsion.
-        down = -(next_pts[:, 2] - pos[2])                   # +ve = descends
+        down = -(next_pts[:, 2] - pos[2])  # +ve = descends
         # Seeded value-noise "air resistance" at each candidate endpoint (one
         # vectorised pass over all K candidates — no per-candidate Python loop).
         resist = _value_noise_3d_vec(next_pts, noise_salt)
         # Repulsion from the channel grown so far (cheap inverse-distance to the
         # nearest few recorded points) — keeps branches from overlapping.
         if channel_pts:
-            recent = np.asarray(channel_pts[-24:])          # (M, 3)
+            recent = np.asarray(channel_pts[-24:])  # (M, 3)
             d2 = ((next_pts[:, None, :] - recent[None, :, :]) ** 2).sum(axis=2)
-            repel = (1.0 / (d2.min(axis=1) + 1.0))          # (k,)
+            repel = 1.0 / (d2.min(axis=1) + 1.0)  # (k,)
         else:
             repel = np.zeros(k)
 
@@ -306,14 +308,25 @@ def _grow_channel(
 
         # Maybe spawn a side branch from the new vertex (not from branches past
         # the max depth — keeps the recursion + step budget bounded).
-        if depth < max_depth and budget[0] > 0 \
-                and float(rng.random()) < branch_p:
+        if depth < max_depth and budget[0] > 0 and float(rng.random()) < branch_p:
             # Branch heads off at an angle from the parent forward direction.
             boff = _fan_directions(chosen_dir, 2, math.radians(55.0), rng)[1]
             _grow_channel(
-                new_pos, boff, ground_z, seed, noise_salt,
-                branch_id * 97 + step_i + 1, depth + 1, cfg,
-                channel_pts, budget, out_a, out_b, out_w, out_br, out_main,
+                new_pos,
+                boff,
+                ground_z,
+                seed,
+                noise_salt,
+                branch_id * 97 + step_i + 1,
+                depth + 1,
+                cfg,
+                channel_pts,
+                budget,
+                out_a,
+                out_b,
+                out_w,
+                out_br,
+                out_main,
                 reached,
             )
 
@@ -376,18 +389,28 @@ def generate_bolt(
     # seed + bolt seed cross-process-stably); the per-corner lattice hash is then
     # pure arithmetic — fast enough for the growth loop (Hard Rule 2 satisfied:
     # the salt is the sole entropy source for the field).
-    noise_salt = int(for_domain("weather", "bolt", int(seed), "noise_salt")
-                     .integers(0, 1 << 63))
+    noise_salt = int(for_domain("weather", "bolt", int(seed), "noise_salt").integers(0, 1 << 63))
 
     _grow_channel(
-        start_arr, np.array([0.0, 0.0, -1.0]), gz, int(seed), noise_salt,
-        branch_id=0, depth=0, cfg=config,
-        channel_pts=channel_pts, budget=budget,
-        out_a=out_a, out_b=out_b, out_w=out_w, out_br=out_br,
-        out_main=out_main, reached=reached,
+        start_arr,
+        np.array([0.0, 0.0, -1.0]),
+        gz,
+        int(seed),
+        noise_salt,
+        branch_id=0,
+        depth=0,
+        cfg=config,
+        channel_pts=channel_pts,
+        budget=budget,
+        out_a=out_a,
+        out_b=out_b,
+        out_w=out_w,
+        out_br=out_br,
+        out_main=out_main,
+        reached=reached,
     )
 
-    if not out_a:                      # degenerate (start already at/below ground)
+    if not out_a:  # degenerate (start already at/below ground)
         z = np.zeros((0, 3), dtype=np.float32)
         e = np.zeros((0,), dtype=np.float32)
         return BoltGeometry(z, z.copy(), e, e.copy(), e.astype(bool))
@@ -405,5 +428,4 @@ def generate_bolt(
         if main_idx.size:
             b[main_idx[-1], 2] = np.float32(gz)
 
-    return BoltGeometry(a=a, b=b, width=width, brightness=brightness,
-                        is_main=is_main)
+    return BoltGeometry(a=a, b=b, width=width, brightness=brightness, is_main=is_main)

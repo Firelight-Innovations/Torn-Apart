@@ -17,7 +17,6 @@ import pytest
 from fire_engine.core.config import Config, load_config
 from fire_engine.core.rng import set_world_seed
 from fire_engine.zones import (
-    HEIGHT_SENTINEL,
     ZoneVolume,
     bake_tree_instances,
     instances_data_block,
@@ -42,10 +41,8 @@ def _flat_chunks(cfg, coords):
 def setup():
     set_world_seed(1337)
     cfg = load_config()
-    vol = ZoneVolume(1, "trees", (14.0, -5.0, 6.0), (34.0, 15.0, 14.0),
-                     params={"density": 0.05})
-    chunks = _flat_chunks(cfg, [(cx, cy, 0)
-                                for cx in (0, 1, 2) for cy in (-1, 0)])
+    vol = ZoneVolume(1, "trees", (14.0, -5.0, 6.0), (34.0, 15.0, 14.0), params={"density": 0.05})
+    chunks = _flat_chunks(cfg, [(cx, cy, 0) for cx in (0, 1, 2) for cy in (-1, 0)])
     return cfg, vol, chunks
 
 
@@ -54,18 +51,15 @@ class TestPlacement:
         cfg, vol, chunks = setup
         a = bake_tree_instances(vol, cfg, chunks, MIX, POOLS, "trees")
         b = bake_tree_instances(vol, cfg, chunks, MIX, POOLS, "trees")
-        for f in ("x", "y", "z", "yaw", "scale", "phase", "tint",
-                  "species_idx", "variant"):
+        for f in ("x", "y", "z", "yaw", "scale", "phase", "tint", "species_idx", "variant"):
             assert np.array_equal(getattr(a, f), getattr(b, f))
 
     def test_positions_in_bounds(self, setup):
         cfg, vol, chunks = setup
         inst = bake_tree_instances(vol, cfg, chunks, MIX, POOLS, "trees")
         assert inst.count > 0
-        assert (inst.x >= vol.min_corner[0]).all() \
-            and (inst.x < vol.max_corner[0]).all()
-        assert (inst.y >= vol.min_corner[1]).all() \
-            and (inst.y < vol.max_corner[1]).all()
+        assert (inst.x >= vol.min_corner[0]).all() and (inst.x < vol.max_corner[0]).all()
+        assert (inst.y >= vol.min_corner[1]).all() and (inst.y < vol.max_corner[1]).all()
 
     def test_minimum_spacing(self, setup):
         """The no-overlap invariant: pairwise distance ≥ 0.3 × cell edge."""
@@ -88,7 +82,7 @@ class TestPlacement:
     def test_sentinel_drops_instances(self, setup):
         cfg, vol, chunks = setup
         inst = bake_tree_instances(vol, cfg, {}, MIX, POOLS, "trees")
-        assert inst.count == 0                  # nothing loaded → no ground
+        assert inst.count == 0  # nothing loaded → no ground
 
     def test_density_and_cap(self, setup):
         cfg, vol, chunks = setup
@@ -97,10 +91,8 @@ class TestPlacement:
         expect = 0.05 * vol.area_xy_m2
         assert 0.5 * expect <= inst.count <= 1.6 * expect
         # Zero density → empty.
-        v0 = ZoneVolume(2, "trees", vol.min_corner, vol.max_corner,
-                        params={"density": 0.0})
-        assert bake_tree_instances(v0, cfg, chunks, MIX, POOLS,
-                                   "trees").count == 0
+        v0 = ZoneVolume(2, "trees", vol.min_corner, vol.max_corner, params={"density": 0.0})
+        assert bake_tree_instances(v0, cfg, chunks, MIX, POOLS, "trees").count == 0
         # A tiny cap truncates deterministically.
         small = Config(tree_max_instances=5)
         capped = bake_tree_instances(vol, small, chunks, MIX, POOLS, "trees")
@@ -108,11 +100,8 @@ class TestPlacement:
 
     def test_species_and_variant_assignment(self, setup):
         cfg, vol, chunks = setup
-        big = ZoneVolume(3, "trees", (0.0, 0.0, 6.0), (64.0, 32.0, 14.0),
-                         params={"density": 0.3})
-        chunks = _flat_chunks(cfg, [(cx, cy, 0)
-                                    for cx in range(0, 4)
-                                    for cy in range(0, 2)])
+        big = ZoneVolume(3, "trees", (0.0, 0.0, 6.0), (64.0, 32.0, 14.0), params={"density": 0.3})
+        chunks = _flat_chunks(cfg, [(cx, cy, 0) for cx in range(0, 4) for cy in range(0, 2)])
         inst = bake_tree_instances(big, cfg, chunks, MIX, POOLS, "trees")
         assert inst.count > 100
         assert inst.species_names == ("tree_gnarled_oak", "tree_dead")
@@ -129,9 +118,9 @@ class TestPlacement:
     def test_bush_kind_uses_bush_config(self, setup):
         cfg, _, chunks = setup
         vol = ZoneVolume(4, "bushes", (14.0, -5.0, 6.0), (34.0, 15.0, 11.0))
-        inst = bake_tree_instances(vol, cfg, chunks,
-                                   [("bush_scrub", 1.0)], {"bush_scrub": 6},
-                                   "bushes")
+        inst = bake_tree_instances(
+            vol, cfg, chunks, [("bush_scrub", 1.0)], {"bush_scrub": 6}, "bushes"
+        )
         # config bush density 0.08 × 400 m² ≈ 32 (jitter tolerance).
         assert 10 <= inst.count <= 60
         # Bush scale jitter range [0.7, 1.3).
@@ -140,21 +129,17 @@ class TestPlacement:
 
 class TestSpeciesMix:
     def test_default(self):
-        assert species_mix_from_params({}, "tree_gnarled_oak") \
-            == [("tree_gnarled_oak", 1.0)]
+        assert species_mix_from_params({}, "tree_gnarled_oak") == [("tree_gnarled_oak", 1.0)]
 
     def test_single_species_param(self):
-        assert species_mix_from_params({"species": "tree_dead"}, "x") \
-            == [("tree_dead", 1.0)]
+        assert species_mix_from_params({"species": "tree_dead"}, "x") == [("tree_dead", 1.0)]
 
     def test_weighted_mix(self):
-        mix = species_mix_from_params(
-            {"species_mix": "tree_gnarled_oak:3, tree_dead:1"}, "x")
+        mix = species_mix_from_params({"species_mix": "tree_gnarled_oak:3, tree_dead:1"}, "x")
         assert mix == [("tree_gnarled_oak", 3.0), ("tree_dead", 1.0)]
 
     def test_weightless_entry_defaults_to_one(self):
-        assert species_mix_from_params({"species_mix": "a:2,b"}, "x") \
-            == [("a", 2.0), ("b", 1.0)]
+        assert species_mix_from_params({"species_mix": "a:2,b"}, "x") == [("a", 2.0), ("b", 1.0)]
 
     def test_garbage_raises(self):
         with pytest.raises(ValueError):
@@ -180,8 +165,7 @@ class TestDataBlock:
         assert np.array_equal(block[:, 1, 0], inst.scale)
         assert np.array_equal(block[:, 1, 1], inst.phase)
         assert np.array_equal(block[:, 1, 2], inst.tint)
-        assert np.array_equal(block[:, 1, 3],
-                              inst.variant.astype(np.float32))
+        assert np.array_equal(block[:, 1, 3], inst.variant.astype(np.float32))
 
     def test_mask_selects(self, setup):
         cfg, vol, chunks = setup

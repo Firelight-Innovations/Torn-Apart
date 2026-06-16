@@ -97,7 +97,7 @@ class ProfilerOverlay:
         self._visible = False
         self._last_refresh = -1.0e9
         self._last_hitch_count = 0
-        self._flash_ticks = 0          # refresh ticks left to keep the flash on
+        self._flash_ticks = 0  # refresh ticks left to keep the flash on
 
         # Root under aspect2d; hidden until toggled on.
         self._root: NodePath = base.aspect2d.attach_new_node("profiler_overlay")
@@ -109,9 +109,15 @@ class ProfilerOverlay:
 
         def _text(y: float, scale: float = 0.05) -> OnscreenText:
             return OnscreenText(
-                text="", parent=self._root, scale=scale,
-                pos=(left, y), align=TextNode.ALeft, fg=_WHITE,
-                shadow=(0, 0, 0, 0.85), mayChange=True)
+                text="",
+                parent=self._root,
+                scale=scale,
+                pos=(left, y),
+                align=TextNode.ALeft,
+                fg=_WHITE,
+                shadow=(0, 0, 0, 0.85),
+                mayChange=True,
+            )
 
         self._t_frame = _text(top, 0.060)
         self._t_lows = _text(top - 0.075)
@@ -135,7 +141,7 @@ class ProfilerOverlay:
         self._visible = not self._visible
         if self._visible:
             self._root.show()
-            self._last_refresh = -1.0e9      # force an immediate refresh
+            self._last_refresh = -1.0e9  # force an immediate refresh
             self.update()
         else:
             self._root.hide()
@@ -156,6 +162,7 @@ class ProfilerOverlay:
         if not self._visible or not self._prof.enabled:
             return
         import time as _time
+
         now = _time.perf_counter()
         if now - self._last_refresh < self._refresh_period:
             return
@@ -176,14 +183,15 @@ class ProfilerOverlay:
 
         # Line 1: frame ms / FPS / budget headroom.
         self._t_frame.setText(
-            f"{frame_ms:5.2f} ms   {fps:4.0f} FPS   "
-            f"budget {budget:.1f} ms ({ratio * 100:3.0f}%)")
+            f"{frame_ms:5.2f} ms   {fps:4.0f} FPS   budget {budget:.1f} ms ({ratio * 100:3.0f}%)"
+        )
         self._t_frame.setFg(_budget_color(ratio))
 
         # Line 2: 1% / 0.1% lows + over-budget %.
         self._t_lows.setText(
             f"1% low {fm['p99']:5.1f} ms   0.1% low {fm['p999']:5.1f} ms   "
-            f"over-budget {snap['over_budget_pct']:3.0f}%")
+            f"over-budget {snap['over_budget_pct']:3.0f}%"
+        )
         self._t_lows.setFg(_DIM)
 
         # Line 3: hitch counter (flashes red on a new hitch, names the suspect).
@@ -197,7 +205,8 @@ class ProfilerOverlay:
             suspect = f"  last: {r['prime_suspect']} @ {r['ms']:.1f} ms"
         self._t_hitch.setText(
             f"HITCHES {h['count']} ({h['per_second']:.1f}/s)  "
-            f"thr {h['threshold_ms']:.1f} ms{suspect}")
+            f"thr {h['threshold_ms']:.1f} ms{suspect}"
+        )
         if self._flash_ticks > 0:
             self._t_hitch.setFg(_FLASH)
             self._flash_ticks -= 1
@@ -209,7 +218,8 @@ class ProfilerOverlay:
         for s in snap["scopes"][:_TOP_N_SCOPES]:
             lines.append(
                 f"{s['name']:<28} {s['mean_ms']:6.2f} ms "
-                f"({s['pct_of_frame']:3.0f}%)  x{s['calls_per_frame']:.0f}")
+                f"({s['pct_of_frame']:3.0f}%)  x{s['calls_per_frame']:.0f}"
+            )
         self._t_scopes.setText("\n".join(lines) if lines else "(no scopes yet)")
         self._t_scopes.setFg(_WHITE)
 

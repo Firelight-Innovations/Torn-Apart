@@ -42,16 +42,17 @@ def _tex_to_numpy(app, tex):
         raise RuntimeError(f"extract_texture_data failed for {tex.get_name()}")
     n = tex.get_z_size()
     raw = tex.get_ram_image()
-    if tex.get_component_type() == 2:        # T_float
+    if tex.get_component_type() == 2:  # T_float
         arr = np.frombuffer(raw, dtype=np.float32).copy()
-    else:                                     # T_unsigned_byte
+    else:  # T_unsigned_byte
         arr = np.frombuffer(raw, dtype=np.uint8).astype(np.float32) / 255.0
     arr = arr.reshape(n, n, n, 4)
-    return arr[..., [2, 1, 0, 3]]            # panda ram order is BGRA -> RGBA
+    return arr[..., [2, 1, 0, 3]]  # panda ram order is BGRA -> RGBA
 
 
 def _save_gray(img01: np.ndarray, path: Path, scale: int = 6) -> None:
     from PIL import Image
+
     a = np.clip(img01, 0.0, 1.0)
     a = np.kron(a, np.ones((scale, scale)))
     Image.fromarray((a * 255).astype(np.uint8), "L").save(path)
@@ -64,7 +65,7 @@ def main() -> None:
     args = ap.parse_args()
 
     import main as demo
-    from fire_engine.core.math3d import Vec3, Quat
+    from fire_engine.core.math3d import Quat, Vec3
     from fire_engine.world.terrain import raycast_voxel
 
     sys.path.insert(0, str(_REPO_ROOT / "tools"))
@@ -74,15 +75,20 @@ def main() -> None:
     app.input_state.mouse_captured = False
     app._set_mouse_capture(False)
     app.camera_go.transform.local_rotation = Quat.from_axis_angle(
-        Vec3.RIGHT, math.radians(-30.0)).normalized()
+        Vec3.RIGHT, math.radians(-30.0)
+    ).normalized()
     _apply_sky_settings(app, args.time_of_day, "clear")
 
     # 3 m occluder cube ~6 m ahead (same path as screenshot.py --occluder).
     cam = app.camera_go.transform.position
     fwd = app.camera_go.transform.forward
     gx, gy = cam.x + fwd.x * 6.0, cam.y + fwd.y * 6.0
-    hit = raycast_voxel(Vec3(gx, gy, cam.z + 40.0), Vec3(0.0, 0.0, -1.0),
-                        app.chunk_manager.get_or_create, max_distance_m=90.0)
+    hit = raycast_voxel(
+        Vec3(gx, gy, cam.z + 40.0),
+        Vec3(0.0, 0.0, -1.0),
+        app.chunk_manager.get_or_create,
+        max_distance_m=90.0,
+    )
     gz = hit.point.z if hit is not None else 8.0
     go = app.dev_overlay.spawn_cube()
     go.transform.position = Vec3(gx, gy, gz + 1.5)
@@ -111,12 +117,13 @@ def main() -> None:
         # Horizontal slice one cell above the ground under the occluder.
         kz = int((gz + 0.6 * cell - oz) / cell)
         kz = max(0, min(casc.cells - 1, kz))
-        sun = vis[kz, :, :, 0]                       # [y, x] sun visibility
-        _save_gray(sun, _OUT / f"probe_c{i}_sunvis.png",
-                   scale=max(2, int(12 * cell)))
-        print(f"\n=== cascade {i} (cell {cell} m, origin "
-              f"({ox:.1f},{oy:.1f},{oz:.1f}), slice z-index {kz} "
-              f"= world z {oz + (kz + 0.5) * cell:.2f}) ===")
+        sun = vis[kz, :, :, 0]  # [y, x] sun visibility
+        _save_gray(sun, _OUT / f"probe_c{i}_sunvis.png", scale=max(2, int(12 * cell)))
+        print(
+            f"\n=== cascade {i} (cell {cell} m, origin "
+            f"({ox:.1f},{oy:.1f},{oz:.1f}), slice z-index {kz} "
+            f"= world z {oz + (kz + 0.5) * cell:.2f}) ==="
+        )
 
         # Sun-vis profile along x through the occluder centre line.
         jy = int((gy - oy) / cell)
@@ -133,16 +140,20 @@ def main() -> None:
         air = occ < 0.5
         if air.any():
             r = rad[band][air]
-            print(f"radiance in ground air band: mean rgb "
-                  f"({r[:, 0].mean():.4f}, {r[:, 1].mean():.4f}, "
-                  f"{r[:, 2].mean():.4f})  max {r[:, :3].max():.4f}")
+            print(
+                f"radiance in ground air band: mean rgb "
+                f"({r[:, 0].mean():.4f}, {r[:, 1].mean():.4f}, "
+                f"{r[:, 2].mean():.4f})  max {r[:, :3].max():.4f}"
+            )
         solid_band = slice(max(0, gz0 - 2), max(1, gz0))
         socc = geom[solid_band, :, :, 3] > 0.5
         if socc.any():
             alb = geom[solid_band][socc]
-            print(f"ground albedo in geom: mean rgb "
-                  f"({alb[:, 0].mean():.3f}, {alb[:, 1].mean():.3f}, "
-                  f"{alb[:, 2].mean():.3f})")
+            print(
+                f"ground albedo in geom: mean rgb "
+                f"({alb[:, 0].mean():.3f}, {alb[:, 1].mean():.3f}, "
+                f"{alb[:, 2].mean():.3f})"
+            )
 
     print("\nslice PNGs in", _OUT)
 

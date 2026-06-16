@@ -15,35 +15,34 @@ import math
 import numpy as np
 import pytest
 
-from fire_engine.core.math3d import Vec3, Quat
-from fire_engine.render.gameobject import GameObject
-from fire_engine.render.component import Component
-from fire_engine.render.registry import ComponentRegistry
-
+from fire_engine.core.math3d import Quat, Vec3
 from fire_engine.devtools import (
-    Selection,
-    Selectable,
-    ray_aabb,
-    pick,
-    describe_object,
-    describe_chunk,
-    is_chunk,
-    FieldKind,
-    PerformanceTool,
-    InspectorTool,
     ActionsTool,
-    ClockTool,
-    CallbackTool,
-    DevToolsManager,
-    Section,
-    Field,
     Button,
+    CallbackTool,
+    ClockTool,
+    DevToolsManager,
+    Field,
+    FieldKind,
     Gizmo,
     GizmoMode,
     HandleType,
+    InspectorTool,
+    PerformanceTool,
+    Section,
+    Selectable,
+    Selection,
+    describe_chunk,
+    describe_object,
+    is_chunk,
+    pick,
+    ray_aabb,
     update_drag,
 )
-from fire_engine.devtools.gizmo import ray_plane_intersect, closest_on_axis
+from fire_engine.devtools.gizmo import closest_on_axis, ray_plane_intersect
+from fire_engine.render.component import Component
+from fire_engine.render.gameobject import GameObject
+from fire_engine.render.registry import ComponentRegistry
 
 
 @pytest.fixture(autouse=True)
@@ -56,7 +55,7 @@ def _clean_registry():
 
 # A component with a tunable of every reflected kind.
 class TunableComponent(Component):
-    __slots__ = ("speed", "label", "flag", "offset")
+    __slots__ = ("flag", "label", "offset", "speed")
 
     def __init__(self) -> None:
         super().__init__()
@@ -69,6 +68,7 @@ class TunableComponent(Component):
 # ---------------------------------------------------------------------------
 # Selection
 # ---------------------------------------------------------------------------
+
 
 def test_selection_revision_only_moves_on_change():
     sel = Selection()
@@ -98,6 +98,7 @@ def test_selection_listener_fires():
 # ---------------------------------------------------------------------------
 # Ray / AABB picking
 # ---------------------------------------------------------------------------
+
 
 def test_ray_aabb_hit_miss_and_inside():
     bmin = np.array([-1.0, -1.0, -1.0])
@@ -149,6 +150,7 @@ def test_selectable_world_aabb_follows_transform_and_scale():
 # Introspection + edit round-trip
 # ---------------------------------------------------------------------------
 
+
 def test_describe_object_sections_layout():
     go = GameObject(name="Hero", tag="player")
     go.add_component(TunableComponent)
@@ -196,8 +198,9 @@ def test_inspector_edit_roundtrip_transform_and_component():
 def test_inspector_rotation_is_euler_degrees_view():
     go = GameObject(name="Hero")
     sections = describe_object(go)
-    rot = next(f for s in sections if s.title == "Transform"
-               for f in s.fields if f.label == "rotation")
+    rot = next(
+        f for s in sections if s.title == "Transform" for f in s.fields if f.label == "rotation"
+    )
     # Set 90° heading (about +Z); stored as a quaternion, read back ~90.
     rot.set((90.0, 0.0, 0.0))
     h, p, r = rot.get()
@@ -208,8 +211,13 @@ def test_inspector_rotation_is_euler_degrees_view():
 
 def test_identity_section_active_toggle():
     go = GameObject(name="Hero")
-    active = next(f for s in describe_object(go) if s.title == "GameObject"
-                  for f in s.fields if f.label == "active")
+    active = next(
+        f
+        for s in describe_object(go)
+        if s.title == "GameObject"
+        for f in s.fields
+        if f.label == "active"
+    )
     assert active.get() is True
     active.set(False)
     assert go.active_self is False
@@ -218,6 +226,7 @@ def test_identity_section_active_toggle():
 # ---------------------------------------------------------------------------
 # Tools + manager
 # ---------------------------------------------------------------------------
+
 
 def test_performance_tool_reads_providers_live():
     counter = {"n": 0}
@@ -256,9 +265,9 @@ def test_is_chunk_distinguishes_chunk_from_gameobject():
 def test_describe_chunk_reports_voxel_stats():
     from fire_engine.world.terrain.chunk import Chunk
 
-    chunk = Chunk((1, 0, -1))                 # all-air baseline
-    chunk.materials[0, 0, 0] = 1             # one solid voxel
-    chunk.materials[1, 0, 0] = 2             # a second material id
+    chunk = Chunk((1, 0, -1))  # all-air baseline
+    chunk.materials[0, 0, 0] = 1  # one solid voxel
+    chunk.materials[1, 0, 0] = 2  # a second material id
     sections = describe_chunk(chunk)
     titles = [s.title for s in sections]
     assert titles == ["Chunk", "Voxels"]
@@ -312,8 +321,7 @@ def test_callback_tool_delegates_build_and_revision():
     rev = {"n": 0}
     sec = Section("S", [Field("a", FieldKind.LABEL, lambda: 1)])
     btn = Button("go", lambda: None)
-    tool = CallbackTool("env", "Env", lambda: ([sec], [btn]),
-                        revision_fn=lambda: rev["n"])
+    tool = CallbackTool("env", "Env", lambda: ([sec], [btn]), revision_fn=lambda: rev["n"])
     panel = tool.build()
     assert panel.tool_id == "env" and panel.title == "Env"
     assert panel.sections == [sec] and panel.buttons == [btn]
@@ -340,15 +348,19 @@ def test_manager_pick_and_select_and_remove():
 # Transform gizmo math
 # ---------------------------------------------------------------------------
 
+
 def test_gizmo_ray_geometry_primitives():
     # Ray straight down onto z=0 hits the expected point.
-    o = np.array([1.0, 2.0, 5.0]); d = np.array([0.0, 0.0, -1.0])
+    o = np.array([1.0, 2.0, 5.0])
+    d = np.array([0.0, 0.0, -1.0])
     hit = ray_plane_intersect(o, d, np.array([0.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0]))
     assert np.allclose(hit, [1.0, 2.0, 0.0])
     # A ray crossing the X axis at x=3 has axis param 3 and ~zero distance.
     axis_t, _, dist = closest_on_axis(
-        np.array([3.0, 0.0, 5.0]), np.array([0.0, 0.0, -1.0]),
-        np.array([0.0, 0.0, 0.0]), np.array([1.0, 0.0, 0.0]),
+        np.array([3.0, 0.0, 5.0]),
+        np.array([0.0, 0.0, -1.0]),
+        np.array([0.0, 0.0, 0.0]),
+        np.array([1.0, 0.0, 0.0]),
     )
     assert abs(axis_t - 3.0) < 1e-9 and dist < 1e-9
 
@@ -366,10 +378,16 @@ def test_gizmo_pick_axis_vs_plane():
 def test_gizmo_translate_axis_drag_moves_along_axis():
     giz = Gizmo(Vec3(0, 0, 0), 1.0, GizmoMode.TRANSLATE)
     handle = giz.pick(Vec3(0.5, 0.0, 5.0), Vec3(0.0, 0.0, -1.0))
-    drag = giz.begin(handle, Vec3(2.0, 0.0, 5.0), Vec3(0.0, 0.0, -1.0),
-                     Vec3(0, 0, 0), Quat.identity(), Vec3(1, 1, 1))
+    drag = giz.begin(
+        handle,
+        Vec3(2.0, 0.0, 5.0),
+        Vec3(0.0, 0.0, -1.0),
+        Vec3(0, 0, 0),
+        Quat.identity(),
+        Vec3(1, 1, 1),
+    )
     pos, rot, scl = update_drag(drag, Vec3(5.0, 0.0, 5.0), Vec3(0.0, 0.0, -1.0))
-    assert pos.approx_eq(Vec3(3.0, 0.0, 0.0), eps=1e-5)   # dragged +3 along X
+    assert pos.approx_eq(Vec3(3.0, 0.0, 0.0), eps=1e-5)  # dragged +3 along X
     assert rot.approx_eq(Quat.identity()) and scl.approx_eq(Vec3(1, 1, 1))
 
 
@@ -377,8 +395,14 @@ def test_gizmo_rotate_ring_drag_spins_about_axis():
     giz = Gizmo(Vec3(0, 0, 0), 1.0, GizmoMode.ROTATE)
     handle = giz.pick(Vec3(1.0, 0.0, 5.0), Vec3(0.0, 0.0, -1.0))  # Z ring at (1,0,0)
     assert handle.type == HandleType.RING and handle.axis == 2
-    drag = giz.begin(handle, Vec3(1.0, 0.0, 5.0), Vec3(0.0, 0.0, -1.0),
-                     Vec3(0, 0, 0), Quat.identity(), Vec3(1, 1, 1))
+    drag = giz.begin(
+        handle,
+        Vec3(1.0, 0.0, 5.0),
+        Vec3(0.0, 0.0, -1.0),
+        Vec3(0, 0, 0),
+        Quat.identity(),
+        Vec3(1, 1, 1),
+    )
     # Grab moved from (1,0,0) angle 0 to (0,1,0) angle +90° about Z.
     _, rot, _ = update_drag(drag, Vec3(0.0, 1.0, 5.0), Vec3(0.0, 0.0, -1.0))
     assert rot.approx_eq(Quat.from_axis_angle(Vec3.UP, math.pi / 2), eps=1e-4)
@@ -388,8 +412,14 @@ def test_gizmo_scale_axis_drag_scales_one_axis():
     giz = Gizmo(Vec3(0, 0, 0), 1.0, GizmoMode.SCALE)
     handle = giz.pick(Vec3(0.5, 0.0, 5.0), Vec3(0.0, 0.0, -1.0))
     assert handle.type == HandleType.AXIS and handle.axis == 0
-    drag = giz.begin(handle, Vec3(0.5, 0.0, 5.0), Vec3(0.0, 0.0, -1.0),
-                     Vec3(0, 0, 0), Quat.identity(), Vec3(1, 1, 1))
+    drag = giz.begin(
+        handle,
+        Vec3(0.5, 0.0, 5.0),
+        Vec3(0.0, 0.0, -1.0),
+        Vec3(0, 0, 0),
+        Quat.identity(),
+        Vec3(1, 1, 1),
+    )
     # Drag the X stalk out by one `size` (0.5 → 1.5): factor 1 + 1.0 = 2× on X only.
     _, _, scl = update_drag(drag, Vec3(1.5, 0.0, 5.0), Vec3(0.0, 0.0, -1.0))
     assert scl.approx_eq(Vec3(2.0, 1.0, 1.0), eps=1e-5)

@@ -24,32 +24,34 @@ Additional textures can be added by creating a new module in this package and
 importing it here.  See ``docs/systems/procedural.md`` for the authoring guide.
 """
 
-from fire_engine.procedural.textures.base import ProceduralTextureDef, value_noise, pixel_noise
-from fire_engine.procedural.textures import wasteland_ground  # registers "wasteland_ground"
-from fire_engine.procedural.textures import night_sky         # registers "night_sky"
-from fire_engine.procedural.textures import rain_streak       # registers "rain_streak"
-from fire_engine.procedural.textures import grass_ground      # registers "grass_ground"
-from fire_engine.procedural.textures import dirt_ground       # registers "dirt_ground"
-from fire_engine.procedural.textures import moon_surface      # registers "moon_surface"
-from fire_engine.procedural.textures import grass_tuft        # registers "grass_tuft"
-from fire_engine.procedural.textures import dust_mote         # registers "dust_mote"
-from fire_engine.procedural.textures import leaf_sprite       # registers "leaf_sprite"
-from fire_engine.procedural.textures import flower_sprite     # registers "flower_sprite"
-from fire_engine.procedural.textures import plaster_wall      # registers "plaster_wall"
+from fire_engine.procedural.textures import (
+    dirt_ground,  # registers "dirt_ground"
+    dust_mote,  # registers "dust_mote"
+    flower_sprite,  # registers "flower_sprite"
+    grass_ground,  # registers "grass_ground"
+    grass_tuft,  # registers "grass_tuft"
+    leaf_sprite,  # registers "leaf_sprite"
+    moon_surface,  # registers "moon_surface"
+    night_sky,  # registers "night_sky"
+    plaster_wall,  # registers "plaster_wall"
+    rain_streak,  # registers "rain_streak"
+    wasteland_ground,  # registers "wasteland_ground"
+)
+from fire_engine.procedural.textures.base import ProceduralTextureDef, pixel_noise, value_noise
 
 __all__ = [
     "ProceduralTextureDef",
-    "value_noise",
-    "pixel_noise",
-    "wasteland_ground",
-    "night_sky",
-    "rain_streak",
-    "grass_ground",
     "dirt_ground",
-    "moon_surface",
-    "grass_tuft",
     "dust_mote",
-    "leaf_sprite",
     "flower_sprite",
+    "grass_ground",
+    "grass_tuft",
+    "leaf_sprite",
+    "moon_surface",
+    "night_sky",
+    "pixel_noise",
     "plaster_wall",
+    "rain_streak",
+    "value_noise",
+    "wasteland_ground",
 ]

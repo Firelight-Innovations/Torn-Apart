@@ -65,9 +65,14 @@ from dataclasses import dataclass
 
 import numpy as np
 
-__all__ = ["TreeOccluderSet", "splat_tree_occluders",
-           "TRUNK_TOP_FRAC", "TRUNK_SIDE_M",
-           "CANOPY_CENTER_FRAC", "CANOPY_HALF_HEIGHT_FRAC"]
+__all__ = [
+    "CANOPY_CENTER_FRAC",
+    "CANOPY_HALF_HEIGHT_FRAC",
+    "TRUNK_SIDE_M",
+    "TRUNK_TOP_FRAC",
+    "TreeOccluderSet",
+    "splat_tree_occluders",
+]
 
 # Trunk column reaches this fraction of the tree height (the rest is canopy).
 TRUNK_TOP_FRAC: float = 0.45
@@ -136,22 +141,32 @@ class TreeOccluderSet:
         return int(self.x.shape[0])
 
     @classmethod
-    def single(cls, x: float, y: float, z: float, height_m: float,
-               canopy_r_m: float, canopy_sigma: float = 0.25,
-               bark_rgb: tuple = _DEFAULT_BARK_RGB,
-               leaf_rgb: tuple = _DEFAULT_LEAF_RGB) -> "TreeOccluderSet":
+    def single(
+        cls,
+        x: float,
+        y: float,
+        z: float,
+        height_m: float,
+        canopy_r_m: float,
+        canopy_sigma: float = 0.25,
+        bark_rgb: tuple = _DEFAULT_BARK_RGB,
+        leaf_rgb: tuple = _DEFAULT_LEAF_RGB,
+    ) -> TreeOccluderSet:
         """One-instance set (tests / tools)."""
         f = np.float32
         return cls(
-            x=np.asarray([x], f), y=np.asarray([y], f), z=np.asarray([z], f),
+            x=np.asarray([x], f),
+            y=np.asarray([y], f),
+            z=np.asarray([z], f),
             height_m=np.asarray([height_m], f),
             canopy_r_m=np.asarray([canopy_r_m], f),
             canopy_sigma=np.asarray([canopy_sigma], f),
             bark_rgb=np.asarray([bark_rgb], f),
-            leaf_rgb=np.asarray([leaf_rgb], f))
+            leaf_rgb=np.asarray([leaf_rgb], f),
+        )
 
     @classmethod
-    def merge(cls, sets: "list[TreeOccluderSet]") -> "TreeOccluderSet":
+    def merge(cls, sets: list[TreeOccluderSet]) -> TreeOccluderSet:
         """Concatenate several sets (one per zone volume) into one."""
         if not sets:
             return cls.empty()
@@ -163,20 +178,29 @@ class TreeOccluderSet:
             canopy_r_m=np.concatenate([s.canopy_r_m for s in sets]),
             canopy_sigma=np.concatenate([s.canopy_sigma for s in sets]),
             bark_rgb=np.concatenate([s.bark_rgb for s in sets]),
-            leaf_rgb=np.concatenate([s.leaf_rgb for s in sets]))
+            leaf_rgb=np.concatenate([s.leaf_rgb for s in sets]),
+        )
 
     @classmethod
-    def empty(cls) -> "TreeOccluderSet":
+    def empty(cls) -> TreeOccluderSet:
         """Zero-instance set."""
         f = np.empty(0, dtype=np.float32)
         c = np.empty((0, 3), dtype=np.float32)
-        return cls(x=f, y=f.copy(), z=f.copy(), height_m=f.copy(),
-                   canopy_r_m=f.copy(), canopy_sigma=f.copy(),
-                   bark_rgb=c, leaf_rgb=c.copy())
+        return cls(
+            x=f,
+            y=f.copy(),
+            z=f.copy(),
+            height_m=f.copy(),
+            canopy_r_m=f.copy(),
+            canopy_sigma=f.copy(),
+            bark_rgb=c,
+            leaf_rgb=c.copy(),
+        )
 
 
-def _cell_range(lo_m: float, hi_m: float, origin_cell: int, cell_m: float,
-                n: int) -> tuple[int, int]:
+def _cell_range(
+    lo_m: float, hi_m: float, origin_cell: int, cell_m: float, n: int
+) -> tuple[int, int]:
     """Clamped half-open cell-index range covering world meters [lo, hi)."""
     a = int(np.floor(lo_m / cell_m)) - origin_cell
     b = int(np.floor(hi_m / cell_m)) - origin_cell + 1
@@ -229,7 +253,7 @@ def splat_tree_occluders(
     ox, oy, oz = origin_cell
     win_lo = (ox * cell_m, oy * cell_m, oz * cell_m)
     win_hi = tuple(win_lo[i] + n * cell_m for i in range(3))
-    cell_vol = cell_m ** 3
+    cell_vol = cell_m**3
     # Trunk opacity scaled by its cross-section share of a cell (clamped 1).
     trunk_eff = trunk_occ * min(1.0, (TRUNK_SIDE_M / cell_m) ** 2)
     trunk_byte = np.uint8(round(255.0 * min(1.0, trunk_eff)))
@@ -240,27 +264,30 @@ def splat_tree_occluders(
         tz = float(occluders.z[i])
         h = float(occluders.height_m[i])
         cr = float(occluders.canopy_r_m[i])
-        cv = CANOPY_HALF_HEIGHT_FRAC * h          # canopy vertical semi-axis
+        cv = CANOPY_HALF_HEIGHT_FRAC * h  # canopy vertical semi-axis
         reach = max(cr, TRUNK_SIDE_M)
         # Cheap whole-instance rejection against the window box.
-        if (tx + reach <= win_lo[0] or tx - reach >= win_hi[0]
-                or ty + reach <= win_lo[1] or ty - reach >= win_hi[1]
-                or tz + h <= win_lo[2] or tz >= win_hi[2]):
+        if (
+            tx + reach <= win_lo[0]
+            or tx - reach >= win_hi[0]
+            or ty + reach <= win_lo[1]
+            or ty - reach >= win_hi[1]
+            or tz + h <= win_lo[2]
+            or tz >= win_hi[2]
+        ):
             continue
 
         # --- trunk column -------------------------------------------------
         if trunk_byte > 0 and h > 0.0:
-            ax0, ax1 = _cell_range(tx - TRUNK_SIDE_M * 0.5,
-                                   tx + TRUNK_SIDE_M * 0.5, ox, cell_m, n)
-            ay0, ay1 = _cell_range(ty - TRUNK_SIDE_M * 0.5,
-                                   ty + TRUNK_SIDE_M * 0.5, oy, cell_m, n)
+            ax0, ax1 = _cell_range(tx - TRUNK_SIDE_M * 0.5, tx + TRUNK_SIDE_M * 0.5, ox, cell_m, n)
+            ay0, ay1 = _cell_range(ty - TRUNK_SIDE_M * 0.5, ty + TRUNK_SIDE_M * 0.5, oy, cell_m, n)
             az0, az1 = _cell_range(tz, tz + TRUNK_TOP_FRAC * h, oz, cell_m, n)
             if ax0 < ax1 and ay0 < ay1 and az0 < az1:
                 box = albedo_occ[ax0:ax1, ay0:ay1, az0:az1]
                 raised = box[..., 3] < trunk_byte
-                box[..., :3][raised] = np.clip(
-                    occluders.bark_rgb[i] * 255.0, 0.0, 255.0
-                ).astype(np.uint8)
+                box[..., :3][raised] = np.clip(occluders.bark_rgb[i] * 255.0, 0.0, 255.0).astype(
+                    np.uint8
+                )
                 box[..., 3][raised] = trunk_byte
 
         # --- canopy ellipsoid (translucent leaf medium) ----------------------
@@ -278,26 +305,28 @@ def splat_tree_occluders(
                 xs = (ox + np.arange(ax0, ax1) + 0.5) * cell_m
                 ys = (oy + np.arange(ay0, ay1) + 0.5) * cell_m
                 zs = (oz + np.arange(az0, az1) + 0.5) * cell_m
-                d2 = ((xs[:, None, None] - tx) / cr) ** 2 \
-                   + ((ys[None, :, None] - ty) / cr) ** 2 \
-                   + ((zs[None, None, :] - cz) / cv) ** 2
+                d2 = (
+                    ((xs[:, None, None] - tx) / cr) ** 2
+                    + ((ys[None, :, None] - ty) / cr) ** 2
+                    + ((zs[None, None, :] - cz) / cv) ** 2
+                )
                 inside = d2 < 1.0
                 if not inside.any():
                     # Sub-cell canopy: the centre-containing cell takes the
                     # whole crown's opacity (vertical diameter of medium),
                     # scaled by how little of the cell the crown fills.
-                    occ_byte = np.uint8(round(255.0 * vol_ratio * (
-                        1.0 - np.exp(-sigma * 2.0 * cv))))
+                    occ_byte = np.uint8(
+                        round(255.0 * vol_ratio * (1.0 - np.exp(-sigma * 2.0 * cv)))
+                    )
                     cxi = int(np.floor(tx / cell_m)) - ox
                     cyi = int(np.floor(ty / cell_m)) - oy
                     czi = int(np.floor(cz / cell_m)) - oz
-                    if occ_byte > 0 and 0 <= cxi < n and 0 <= cyi < n \
-                            and 0 <= czi < n:
+                    if occ_byte > 0 and 0 <= cxi < n and 0 <= cyi < n and 0 <= czi < n:
                         cell = albedo_occ[cxi, cyi, czi]
                         if cell[3] < occ_byte:
-                            cell[:3] = np.clip(
-                                occluders.leaf_rgb[i] * 255.0,
-                                0.0, 255.0).astype(np.uint8)
+                            cell[:3] = np.clip(occluders.leaf_rgb[i] * 255.0, 0.0, 255.0).astype(
+                                np.uint8
+                            )
                             cell[3] = occ_byte
                     continue
                 # Beer–Lambert opacity over ONE cell of leaf medium, thinning
@@ -308,7 +337,7 @@ def splat_tree_occluders(
                 occ_bytes = np.rint(occ_f * 255.0).astype(np.uint8)
                 box = albedo_occ[ax0:ax1, ay0:ay1, az0:az1]
                 raised = inside & (box[..., 3] < occ_bytes)
-                box[..., :3][raised] = np.clip(
-                    occluders.leaf_rgb[i] * 255.0, 0.0, 255.0
-                ).astype(np.uint8)
+                box[..., :3][raised] = np.clip(occluders.leaf_rgb[i] * 255.0, 0.0, 255.0).astype(
+                    np.uint8
+                )
                 box[..., 3][raised] = occ_bytes[raised]

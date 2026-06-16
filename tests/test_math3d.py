@@ -14,12 +14,12 @@ import math
 import numpy as np
 import pytest
 
-from fire_engine.core.math3d import Vec3, Quat
-
+from fire_engine.core.math3d import Quat, Vec3
 
 # ===========================================================================
 # Vec3 tests
 # ===========================================================================
+
 
 class TestVec3Constants:
     def test_zero(self):
@@ -141,7 +141,7 @@ class TestVec3Iteration:
         v = Vec3(1, 2, 3)
         arr = v.to_numpy()
         assert arr.dtype == np.float32
-        arr[0] = 99.0           # mutating copy should not affect v
+        arr[0] = 99.0  # mutating copy should not affect v
         assert v.x == pytest.approx(1.0)
 
     def test_from_numpy(self):
@@ -153,6 +153,7 @@ class TestVec3Iteration:
 # ===========================================================================
 # Quat tests
 # ===========================================================================
+
 
 class TestQuatHandedness:
     """
@@ -249,13 +250,16 @@ class TestQuatEulerRoundTrip:
     rotations (i.e. rotate the same test vectors to the same places).
     """
 
-    @pytest.mark.parametrize("h,p,r", [
-        (0.5, 0.3, 0.1),
-        (1.0, -0.4, 0.2),
-        (-0.8, 0.6, -0.3),
-        (0.0, 0.0, 0.0),
-        (math.pi / 4, math.pi / 6, math.pi / 8),
-    ])
+    @pytest.mark.parametrize(
+        "h,p,r",
+        [
+            (0.5, 0.3, 0.1),
+            (1.0, -0.4, 0.2),
+            (-0.8, 0.6, -0.3),
+            (0.0, 0.0, 0.0),
+            (math.pi / 4, math.pi / 6, math.pi / 8),
+        ],
+    )
     def test_euler_round_trip(self, h: float, p: float, r: float):
         q1 = Quat.from_euler(h, p, r)
         h2, p2, r2 = q1.as_euler()
@@ -265,8 +269,7 @@ class TestQuatEulerRoundTrip:
             r1 = q1.rotate(v)
             r2 = q2.rotate(v)
             assert r1.approx_eq(r2, eps=1e-4), (
-                f"Round-trip failed for H={h},P={p},R={r}: "
-                f"v={v} → q1 gave {r1}, q2 gave {r2}"
+                f"Round-trip failed for H={h},P={p},R={r}: v={v} → q1 gave {r1}, q2 gave {r2}"
             )
 
 

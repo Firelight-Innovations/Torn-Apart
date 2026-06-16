@@ -15,6 +15,7 @@ schema ids, JSON-RPC error codes), method/notification name constants, and
 typed param/result shapes (TypedDict on Python, interface on TS). They are the
 ONLY place the two languages agree on the wire format; never hand-edit them.
 """
+
 from __future__ import annotations
 
 import json
@@ -60,7 +61,7 @@ def gen_python(schema: dict) -> str:
     w("")
     w("from typing import NotRequired, TypedDict")
     w("")
-    w(f'PROTOCOL_VERSION = {schema["protocol_version"]}')
+    w(f"PROTOCOL_VERSION = {schema['protocol_version']}")
     w(f'DAEMON_VERSION = "{schema["daemon_version"]}"')
     w("")
     w("# Binary framing: [u32 magic][u32 schema_id][u32 payload_id][payload], little-endian.")

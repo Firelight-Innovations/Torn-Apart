@@ -40,7 +40,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
-import numpy as np  # noqa: F401  (re-exported for subclass convenience)
+import numpy as np
 
 if TYPE_CHECKING:
     pass
@@ -141,7 +141,7 @@ def register_def(cls: type[ProceduralDef]) -> type[ProceduralDef]:
     """
     # Defer the import to avoid a circular import at module load time
     # (registry imports defs; defs should not import registry at the top level).
-    from fire_engine.procedural import registry as _reg  # noqa: PLC0415
+    from fire_engine.procedural import registry as _reg
 
     _reg.register(cls())
     return cls

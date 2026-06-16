@@ -156,9 +156,7 @@ class BuildingManager:
         snap = self._snapshot()
         if self._baseline is not None and snap == self._baseline:
             return {}
-        return {"version": _DELTA_VERSION,
-                "next_id": int(self._next_id),
-                "buildings": snap}
+        return {"version": _DELTA_VERSION, "next_id": int(self._next_id), "buildings": snap}
 
     def apply_delta(self, delta: dict) -> None:
         """
@@ -170,15 +168,17 @@ class BuildingManager:
             return
         version = int(delta.get("version", 0))
         if version > _DELTA_VERSION:
-            _log.warning("buildings delta version %d newer than supported %d "
-                         "— ignoring", version, _DELTA_VERSION)
+            _log.warning(
+                "buildings delta version %d newer than supported %d — ignoring",
+                version,
+                _DELTA_VERSION,
+            )
             return
         self._buildings = {}
         for d in delta.get("buildings", ()):
             b = Building.from_dict(d)
             self._buildings[b.id] = b
-        self._next_id = int(delta.get("next_id",
-                                      max(self._buildings, default=0) + 1))
+        self._next_id = int(delta.get("next_id", max(self._buildings, default=0) + 1))
         self.version += 1
         for b in self.buildings():
             self._publish(b, "added")
@@ -193,6 +193,8 @@ class BuildingManager:
         if self._bus is None:
             return
         mn, mx = building.world_aabb()
-        self._bus.publish(BuildingChangedEvent(
-            building_id=building.id, change=change,
-            bounds_min=mn, bounds_max=mx))
+        self._bus.publish(
+            BuildingChangedEvent(
+                building_id=building.id, change=change, bounds_min=mn, bounds_max=mx
+            )
+        )

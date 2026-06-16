@@ -15,14 +15,13 @@ import subprocess
 import sys
 
 import numpy as np
-import pytest
 
-from fire_engine.core.rng import set_world_seed, for_domain
-
+from fire_engine.core.rng import for_domain, set_world_seed
 
 # ---------------------------------------------------------------------------
 # In-process determinism
 # ---------------------------------------------------------------------------
+
 
 class TestInProcessDeterminism:
     def setup_method(self):
@@ -99,9 +98,7 @@ def _run_rng_subprocess(seed: int) -> list[int]:
     is used, since hash() would produce different values on each process run.
     """
     # Locate the project root (two directories up from this test file)
-    project_root = str(
-        __import__("pathlib").Path(__file__).parent.parent.resolve()
-    )
+    project_root = str(__import__("pathlib").Path(__file__).parent.parent.resolve())
     script = _SUBPROCESS_SCRIPT.format(seed=seed)
 
     # Write the script inline; use sys.executable so we use the same venv
@@ -113,9 +110,7 @@ def _run_rng_subprocess(seed: int) -> list[int]:
         timeout=30,
     )
     if result.returncode != 0:
-        raise RuntimeError(
-            f"Subprocess failed:\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}"
-        )
+        raise RuntimeError(f"Subprocess failed:\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}")
     return eval(result.stdout.strip())
 
 

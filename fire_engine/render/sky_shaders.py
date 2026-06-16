@@ -89,10 +89,10 @@ from __future__ import annotations
 from fire_engine.core.shader_source import load_glsl
 
 __all__ = [
-    "SKY_DOME_VERTEX",
-    "SKY_DOME_FRAGMENT",
-    "CLOUD_VOLUMETRIC_VERTEX",
     "CLOUD_VOLUMETRIC_FRAGMENT",
+    "CLOUD_VOLUMETRIC_VERTEX",
+    "SKY_DOME_FRAGMENT",
+    "SKY_DOME_VERTEX",
 ]
 
 

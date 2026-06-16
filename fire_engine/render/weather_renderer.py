@@ -98,9 +98,9 @@ from panda3d.core import (  # type: ignore[import]
 )
 
 from fire_engine.core import get_logger
+from fire_engine.render.component import Component
 from fire_engine.world.sky import pack_weather_map
 from fire_engine.world.weather import WeatherMap
-from fire_engine.render.component import Component
 
 __all__ = ["WeatherMapComponent"]
 
@@ -136,26 +136,24 @@ class WeatherMapComponent(Component):
     Units: meters, game seconds.  World-space Z-up.
     """
 
-    def __init__(self, base: Any = None, sky_system: Any = None,
-                 clock: Any = None) -> None:
+    def __init__(self, base: Any = None, sky_system: Any = None, clock: Any = None) -> None:
         super().__init__()
         self.base = base
         self.sky_system = sky_system
         self.clock = clock
         if self.clock is None and sky_system is not None:
-            self.clock = getattr(sky_system, "clock", None) or \
-                getattr(sky_system, "_clock", None)
+            self.clock = getattr(sky_system, "clock", None) or getattr(sky_system, "_clock", None)
 
         self._map: WeatherMap | None = None
         self._tex: Texture | None = None
-        self._enabled_feature: bool = False     # gfx_weather_map
-        self._virga: bool = False               # gfx_cloud_virga
+        self._enabled_feature: bool = False  # gfx_weather_map
+        self._virga: bool = False  # gfx_cloud_virga
         self._uploaded_once: bool = False
         # Committed center the current texels were rastered around (None until
         # the first upload); recenter only when the player leaves half a span.
         self._center: tuple[float, float] | None = None
         self._half_span_m: float = 0.0
-        self._frame: int = 0                    # for the few-Hz re-raster cadence
+        self._frame: int = 0  # for the few-Hz re-raster cadence
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -164,8 +162,10 @@ class WeatherMapComponent(Component):
     def start(self) -> None:
         """Allocate the weather texture and bind the uniform contract (once)."""
         if self.base is None or self.sky_system is None:
-            _log.warning("WeatherMapComponent: missing base/sky_system — "
-                         "disabled (clouds use flat ambient weather)")
+            _log.warning(
+                "WeatherMapComponent: missing base/sky_system — "
+                "disabled (clouds use flat ambient weather)"
+            )
             self.enabled = False
             return
 
@@ -181,8 +181,9 @@ class WeatherMapComponent(Component):
         self._half_span_m = 0.5 * self._map.span_m
 
         tex = Texture("weather_map")
-        tex.setup_2d_texture(self._map.cells, self._map.cells,
-                             Texture.T_half_float, Texture.F_rgba16)
+        tex.setup_2d_texture(
+            self._map.cells, self._map.cells, Texture.T_half_float, Texture.F_rgba16
+        )
         tex.set_minfilter(SamplerState.FT_linear)
         tex.set_magfilter(SamplerState.FT_linear)
         tex.set_wrap_u(SamplerState.WM_clamp)
@@ -200,15 +201,21 @@ class WeatherMapComponent(Component):
         root.set_shader_input("u_virga_enabled", 1 if self._virga else 0)
 
         if not self._enabled_feature:
-            _log.info("Weather map disabled (gfx_weather_map=false) — clouds "
-                      "use flat ambient weather (pre-M4 look)")
+            _log.info(
+                "Weather map disabled (gfx_weather_map=false) — clouds "
+                "use flat ambient weather (pre-M4 look)"
+            )
             return
 
-        _log.info("Weather map online: %dx%d raster, %.0f m texels (%.0f m / "
-                  "%.1f km span), virga=%s",
-                  self._map.cells, self._map.cells, self._map.cell_m,
-                  self._map.span_m, self._map.span_m / 1000.0,
-                  "on" if self._virga else "off")
+        _log.info(
+            "Weather map online: %dx%d raster, %.0f m texels (%.0f m / %.1f km span), virga=%s",
+            self._map.cells,
+            self._map.cells,
+            self._map.cell_m,
+            self._map.span_m,
+            self._map.span_m / 1000.0,
+            "on" if self._virga else "off",
+        )
 
     def late_update(self, dt: float) -> None:
         """Re-raster around the player (on recenter), upload, refresh origin."""
@@ -219,9 +226,11 @@ class WeatherMapComponent(Component):
 
         # Recenter only when the player has left half a span from the committed
         # center (committed-origin discipline) — the first frame always rasters.
-        if self._center is None or \
-                abs(cam_x - self._center[0]) > self._half_span_m or \
-                abs(cam_y - self._center[1]) > self._half_span_m:
+        if (
+            self._center is None
+            or abs(cam_x - self._center[0]) > self._half_span_m
+            or abs(cam_y - self._center[1]) > self._half_span_m
+        ):
             self._reraster(cam_x, cam_y)
             return
 
@@ -262,8 +271,7 @@ class WeatherMapComponent(Component):
         st = getattr(self.sky_system, "state", None)
         amb_cov = float(getattr(st, "cloud_coverage", 0.0)) if st else 0.0
         amb_den = float(getattr(st, "cloud_density", 0.0)) if st else 0.0
-        root.set_shader_input("u_weather_ambient",
-                              LVecBase2f(amb_cov, amb_den))
+        root.set_shader_input("u_weather_ambient", LVecBase2f(amb_cov, amb_den))
 
         self._center = (center_x, center_y)
         if not self._uploaded_once:
@@ -283,5 +291,6 @@ class WeatherMapComponent(Component):
         """Absolute game seconds for the raster (day·86400 + time-of-day)."""
         if self.clock is None:
             return 0.0
-        return (float(self.clock.game_day) * _GAME_SECONDS_PER_DAY
-                + float(self.clock.game_time_of_day))
+        return float(self.clock.game_day) * _GAME_SECONDS_PER_DAY + float(
+            self.clock.game_time_of_day
+        )

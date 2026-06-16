@@ -5,6 +5,7 @@ closed; panda3d in the daemon is a regression. We assert this in a *fresh*
 subprocess so the result is independent of whatever other tests imported in the
 shared pytest process.
 """
+
 from __future__ import annotations
 
 import subprocess

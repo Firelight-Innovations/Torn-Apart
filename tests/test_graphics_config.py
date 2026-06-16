@@ -6,6 +6,7 @@ overrides, deterministic resolution, invalid-preset fallback, end-to-end
 ``load_config`` flattening, and the hard rule that ``core.config`` stays
 headless (no panda3d).
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -63,18 +64,17 @@ def test_low_preset_uses_half_res_clouds():
 
 def test_foliage_refine_preset_wiring():
     """Foliage shadow refinement: off on iGPU-relief presets, on above."""
-    assert resolve_graphics_preset({"preset": "off"})[
-        "gfx_foliage_shadow_refine"] is False
-    assert resolve_graphics_preset({"preset": "low"})[
-        "gfx_foliage_shadow_refine"] is False
-    assert resolve_graphics_preset({"preset": "medium"})[
-        "gfx_foliage_shadow_refine"] is True
-    assert resolve_graphics_preset({"preset": "high"})[
-        "gfx_foliage_shadow_refine"] is True
+    assert resolve_graphics_preset({"preset": "off"})["gfx_foliage_shadow_refine"] is False
+    assert resolve_graphics_preset({"preset": "low"})["gfx_foliage_shadow_refine"] is False
+    assert resolve_graphics_preset({"preset": "medium"})["gfx_foliage_shadow_refine"] is True
+    assert resolve_graphics_preset({"preset": "high"})["gfx_foliage_shadow_refine"] is True
     # Explicit override still wins.
-    assert resolve_graphics_preset(
-        {"preset": "low", "gfx_foliage_shadow_refine": True}
-    )["gfx_foliage_shadow_refine"] is True
+    assert (
+        resolve_graphics_preset({"preset": "low", "gfx_foliage_shadow_refine": True})[
+            "gfx_foliage_shadow_refine"
+        ]
+        is True
+    )
 
 
 def test_no_table_defaults_to_high():
@@ -84,8 +84,7 @@ def test_no_table_defaults_to_high():
 
 def test_explicit_override_beats_preset():
     """A gfx_* key in the table wins over the preset's value."""
-    resolved = resolve_graphics_preset({"preset": "low", "gfx_fxaa": True,
-                                        "gfx_cloud_steps": 99})
+    resolved = resolve_graphics_preset({"preset": "low", "gfx_fxaa": True, "gfx_cloud_steps": 99})
     assert resolved["gfx_fxaa"] is True
     assert resolved["gfx_cloud_steps"] == 99
     # untouched preset values still apply
@@ -103,17 +102,12 @@ def test_invalid_preset_falls_back_with_warning():
 def test_load_config_end_to_end(tmp_path):
     """A [graphics] table in a real TOML file flows through load_config."""
     toml = tmp_path / "config.toml"
-    toml.write_text(
-        "world_seed = 7\n"
-        "[graphics]\n"
-        'preset = "low"\n'
-        "gfx_cloud_steps = 40\n"
-    )
+    toml.write_text('world_seed = 7\n[graphics]\npreset = "low"\ngfx_cloud_steps = 40\n')
     cfg = load_config(str(toml))
-    assert cfg.world_seed == 7              # other tables still load
+    assert cfg.world_seed == 7  # other tables still load
     assert cfg.gfx_preset == "low"
-    assert cfg.gfx_cloud_resolution_scale == 0.5   # from the preset
-    assert cfg.gfx_cloud_steps == 40               # explicit override
+    assert cfg.gfx_cloud_resolution_scale == 0.5  # from the preset
+    assert cfg.gfx_cloud_steps == 40  # explicit override
     assert cfg.gfx_post_process is True
 
 

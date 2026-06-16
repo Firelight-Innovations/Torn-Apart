@@ -21,14 +21,14 @@ Usage example:
 from __future__ import annotations
 
 import math
-from typing import Iterator
+from collections.abc import Iterator
 
 import numpy as np
-
 
 # ---------------------------------------------------------------------------
 # Vec3
 # ---------------------------------------------------------------------------
+
 
 class Vec3:
     """
@@ -70,7 +70,7 @@ class Vec3:
         self._data: np.ndarray = np.array([x, y, z], dtype=np.float32)
 
     @classmethod
-    def from_numpy(cls, arr: np.ndarray) -> "Vec3":
+    def from_numpy(cls, arr: np.ndarray) -> Vec3:
         """
         Create a Vec3 from a length-3 numpy array (copied to float32).
 
@@ -121,24 +121,24 @@ class Vec3:
     # Arithmetic operators
     # ------------------------------------------------------------------
 
-    def __add__(self, other: "Vec3") -> "Vec3":
+    def __add__(self, other: Vec3) -> Vec3:
         return Vec3.from_numpy(self._data + other._data)
 
-    def __sub__(self, other: "Vec3") -> "Vec3":
+    def __sub__(self, other: Vec3) -> Vec3:
         return Vec3.from_numpy(self._data - other._data)
 
-    def __mul__(self, scalar: float) -> "Vec3":
+    def __mul__(self, scalar: float) -> Vec3:
         """Component-wise multiply by scalar."""
         return Vec3.from_numpy(self._data * float(scalar))
 
-    def __rmul__(self, scalar: float) -> "Vec3":
+    def __rmul__(self, scalar: float) -> Vec3:
         """Scalar * Vec3 — commutative convenience."""
         return Vec3.from_numpy(self._data * float(scalar))
 
-    def __neg__(self) -> "Vec3":
+    def __neg__(self) -> Vec3:
         return Vec3.from_numpy(-self._data)
 
-    def __truediv__(self, scalar: float) -> "Vec3":
+    def __truediv__(self, scalar: float) -> Vec3:
         return Vec3.from_numpy(self._data / float(scalar))
 
     # ------------------------------------------------------------------
@@ -151,7 +151,7 @@ class Vec3:
             return NotImplemented
         return bool(np.array_equal(self._data, other._data))
 
-    def approx_eq(self, other: "Vec3", eps: float = 1e-6) -> bool:
+    def approx_eq(self, other: Vec3, eps: float = 1e-6) -> bool:
         """
         Component-wise approximate equality within absolute tolerance eps.
 
@@ -171,7 +171,7 @@ class Vec3:
     # Vector math
     # ------------------------------------------------------------------
 
-    def dot(self, other: "Vec3") -> float:
+    def dot(self, other: Vec3) -> float:
         """
         Dot product: self · other.
 
@@ -184,7 +184,7 @@ class Vec3:
         """
         return float(np.dot(self._data, other._data))
 
-    def cross(self, other: "Vec3") -> "Vec3":
+    def cross(self, other: Vec3) -> Vec3:
         """
         Cross product: self × other (right-handed, Z-up).
 
@@ -195,7 +195,7 @@ class Vec3:
         """
         return Vec3.from_numpy(np.cross(self._data, other._data))
 
-    def normalized(self) -> "Vec3":
+    def normalized(self) -> Vec3:
         """
         Return a unit-length copy. Raises ValueError if the vector is zero-length.
 
@@ -209,7 +209,7 @@ class Vec3:
             raise ValueError("Cannot normalize a zero-length Vec3.")
         return Vec3.from_numpy(self._data / n)
 
-    def lerp(self, other: "Vec3", t: float) -> "Vec3":
+    def lerp(self, other: Vec3, t: float) -> Vec3:
         """
         Linear interpolation: self + t * (other - self).
 
@@ -249,16 +249,17 @@ class Vec3:
 
 
 # Class constants (defined after class body so Vec3 is in scope)
-Vec3.ZERO    = Vec3(0.0, 0.0, 0.0)
-Vec3.ONE     = Vec3(1.0, 1.0, 1.0)
-Vec3.UP      = Vec3(0.0, 0.0, 1.0)   # +Z
-Vec3.FORWARD = Vec3(0.0, 1.0, 0.0)   # +Y
-Vec3.RIGHT   = Vec3(1.0, 0.0, 0.0)   # +X
+Vec3.ZERO = Vec3(0.0, 0.0, 0.0)
+Vec3.ONE = Vec3(1.0, 1.0, 1.0)
+Vec3.UP = Vec3(0.0, 0.0, 1.0)  # +Z
+Vec3.FORWARD = Vec3(0.0, 1.0, 0.0)  # +Y
+Vec3.RIGHT = Vec3(1.0, 0.0, 0.0)  # +X
 
 
 # ---------------------------------------------------------------------------
 # Quat
 # ---------------------------------------------------------------------------
+
 
 class Quat:
     """
@@ -305,8 +306,7 @@ class Quat:
     # Construction
     # ------------------------------------------------------------------
 
-    def __init__(self, w: float = 1.0, x: float = 0.0,
-                 y: float = 0.0, z: float = 0.0) -> None:
+    def __init__(self, w: float = 1.0, x: float = 0.0, y: float = 0.0, z: float = 0.0) -> None:
         """
         Construct from scalar-first components (w, x, y, z).
 
@@ -316,7 +316,7 @@ class Quat:
         self._data: np.ndarray = np.array([w, x, y, z], dtype=np.float32)
 
     @classmethod
-    def identity(cls) -> "Quat":
+    def identity(cls) -> Quat:
         """
         Return the identity quaternion (no rotation).
 
@@ -330,7 +330,7 @@ class Quat:
         return q
 
     @classmethod
-    def from_axis_angle(cls, axis: Vec3, radians: float) -> "Quat":
+    def from_axis_angle(cls, axis: Vec3, radians: float) -> Quat:
         """
         Create a quaternion representing a right-handed rotation about *axis*
         by *radians*.
@@ -365,7 +365,7 @@ class Quat:
         return q
 
     @classmethod
-    def from_euler(cls, h: float, p: float, r: float) -> "Quat":
+    def from_euler(cls, h: float, p: float, r: float) -> Quat:
         """
         Build a quaternion from Panda3D HPR Euler angles (all in **radians**).
 
@@ -393,9 +393,9 @@ class Quat:
         >>> q.rotate(Vec3.FORWARD).approx_eq(Vec3(-1, 0, 0), eps=1e-5)
         True
         """
-        q_h = cls.from_axis_angle(Vec3.UP, h)       # yaw  about +Z
-        q_p = cls.from_axis_angle(Vec3.RIGHT, p)    # pitch about +X
-        q_r = cls.from_axis_angle(Vec3(0, 1, 0), r) # roll  about +Y
+        q_h = cls.from_axis_angle(Vec3.UP, h)  # yaw  about +Z
+        q_p = cls.from_axis_angle(Vec3.RIGHT, p)  # pitch about +X
+        q_r = cls.from_axis_angle(Vec3(0, 1, 0), r)  # roll  about +Y
         return q_h * q_p * q_r
 
     # ------------------------------------------------------------------
@@ -422,7 +422,7 @@ class Quat:
     # Operations
     # ------------------------------------------------------------------
 
-    def __mul__(self, other: "Quat") -> "Quat":
+    def __mul__(self, other: Quat) -> Quat:
         """
         Hamilton product: ``self * other`` applies *other* first, then *self*.
 
@@ -439,12 +439,15 @@ class Quat:
         w1, x1, y1, z1 = self._data
         w2, x2, y2, z2 = other._data
         q = Quat.__new__(Quat)
-        q._data = np.array([
-            w1*w2 - x1*x2 - y1*y2 - z1*z2,
-            w1*x2 + x1*w2 + y1*z2 - z1*y2,
-            w1*y2 - x1*z2 + y1*w2 + z1*x2,
-            w1*z2 + x1*y2 - y1*x2 + z1*w2,
-        ], dtype=np.float32)
+        q._data = np.array(
+            [
+                w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+                w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+                w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+                w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+            ],
+            dtype=np.float32,
+        )
         return q
 
     def rotate(self, v: Vec3) -> Vec3:
@@ -470,13 +473,13 @@ class Quat:
         # v' = v + 2w(q × v) + 2(q × (q × v))
         # where q = (x, y, z) part of the quaternion
         w = float(self._data[0])
-        qv = self._data[1:]          # (x, y, z) as float32 array
-        vv = v._data                 # float32 array
+        qv = self._data[1:]  # (x, y, z) as float32 array
+        vv = v._data  # float32 array
         t = 2.0 * np.cross(qv, vv)
         result = vv + w * t + np.cross(qv, t)
         return Vec3.from_numpy(result.astype(np.float32))
 
-    def normalized(self) -> "Quat":
+    def normalized(self) -> Quat:
         """
         Return a unit-norm copy of this quaternion.
 
@@ -489,7 +492,7 @@ class Quat:
         q._data = (self._data / n).astype(np.float32)
         return q
 
-    def inverse(self) -> "Quat":
+    def inverse(self) -> Quat:
         """
         Return the inverse (conjugate for unit quaternions) of this quaternion.
 
@@ -564,26 +567,17 @@ class Quat:
         if abs(cos_p) > 1e-6:
             # h = atan2(-R[0,1], R[1,1]) = atan2(-(2(xy-wz)), 1-2(x²+z²))
             # r = atan2(-R[2,0], R[2,2]) = atan2(-(2(xz-wy)), 1-2(x²+y²))
-            h_angle = math.atan2(
-                -2.0 * (x * y - w * z),
-                1.0 - 2.0 * (x * x + z * z)
-            )
-            r_angle = math.atan2(
-                -2.0 * (x * z - w * y),
-                1.0 - 2.0 * (x * x + y * y)
-            )
+            h_angle = math.atan2(-2.0 * (x * y - w * z), 1.0 - 2.0 * (x * x + z * z))
+            r_angle = math.atan2(-2.0 * (x * z - w * y), 1.0 - 2.0 * (x * x + y * y))
         else:
             # Gimbal lock: pitch ≈ ±90°, distribute between h and r
-            h_angle = math.atan2(
-                2.0 * (x * y + w * z),
-                1.0 - 2.0 * (y * y + z * z)
-            )
+            h_angle = math.atan2(2.0 * (x * y + w * z), 1.0 - 2.0 * (y * y + z * z))
             r_angle = 0.0
 
         return (h_angle, p_angle, r_angle)
 
     @staticmethod
-    def slerp(a: "Quat", b: "Quat", t: float) -> "Quat":
+    def slerp(a: Quat, b: Quat, t: float) -> Quat:
         """
         Spherical linear interpolation between quaternions *a* and *b*.
 
@@ -632,7 +626,7 @@ class Quat:
 
         theta_0 = math.acos(dot)
         theta = theta_0 * float(t)
-        sin_theta   = math.sin(theta)
+        sin_theta = math.sin(theta)
         sin_theta_0 = math.sin(theta_0)
 
         s0 = math.cos(theta) - dot * sin_theta / sin_theta_0
@@ -648,7 +642,7 @@ class Quat:
     # Comparison / display
     # ------------------------------------------------------------------
 
-    def approx_eq(self, other: "Quat", eps: float = 1e-6) -> bool:
+    def approx_eq(self, other: Quat, eps: float = 1e-6) -> bool:
         """
         Approximate equality, accounting for the q ≡ -q double-cover of SO(3).
 

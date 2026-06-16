@@ -37,14 +37,15 @@ import numpy as np
 import pytest
 
 from fire_engine.core.config import Config
-from fire_engine.lighting.exposure import ExposureMeter, _RAY_DIRS, _RAY_WEIGHTS
+from fire_engine.lighting.exposure import _RAY_DIRS, _RAY_WEIGHTS, ExposureMeter
 
-CHUNK = 32   # voxels per chunk edge, matches engine default
+CHUNK = 32  # voxels per chunk edge, matches engine default
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _cfg(**overrides):
     """Default Config, optionally patched with extra attributes."""
@@ -72,7 +73,7 @@ def _night_sky_no_moon() -> SimpleNamespace:
         sun_radiance=(0.0, 0.0, 0.0),
         sky_ambient=(0.005, 0.005, 0.008),
         moon_radiance=(0.0, 0.0, 0.0),
-        sun_dir=SimpleNamespace(x=0.0, y=0.0, z=-1.0),   # sun below horizon
+        sun_dir=SimpleNamespace(x=0.0, y=0.0, z=-1.0),  # sun below horizon
     )
 
 
@@ -82,7 +83,7 @@ def _night_sky_full_moon() -> SimpleNamespace:
         sun_radiance=(0.0, 0.0, 0.0),
         sky_ambient=(0.005, 0.005, 0.008),
         moon_radiance=(0.06, 0.07, 0.10),
-        sun_dir=SimpleNamespace(x=0.0, y=0.0, z=-1.0),   # sun below horizon
+        sun_dir=SimpleNamespace(x=0.0, y=0.0, z=-1.0),  # sun below horizon
     )
 
 
@@ -106,8 +107,7 @@ OPEN_CAM = (8.0, 8.0, 30.0)
 NO_LIGHTS: tuple[np.ndarray, int] = (np.zeros((4, 12), dtype=np.float32), 0)
 
 
-def _run(meter: ExposureMeter, cam, sky, chunks, lights, n_steps: int,
-         dt: float = 0.1) -> float:
+def _run(meter: ExposureMeter, cam, sky, chunks, lights, n_steps: int, dt: float = 0.1) -> float:
     val = meter.exposure
     for _ in range(n_steps):
         val = meter.update(cam, sky, chunks, lights, dt)
@@ -117,6 +117,7 @@ def _run(meter: ExposureMeter, cam, sky, chunks, lights, n_steps: int,
 # ---------------------------------------------------------------------------
 # 1. Initial state
 # ---------------------------------------------------------------------------
+
 
 class TestInitialState:
     def test_initial_exposure_is_one(self):
@@ -135,6 +136,7 @@ class TestInitialState:
 # 2. Ray set geometry (fixed constant, no RNG)
 # ---------------------------------------------------------------------------
 
+
 class TestRaySet:
     def test_exactly_13_rays(self):
         """The probe set is exactly 13 rays."""
@@ -144,13 +146,11 @@ class TestRaySet:
     def test_all_rays_unit_length(self):
         """Every direction vector is unit length (to within float64 eps)."""
         norms = np.linalg.norm(_RAY_DIRS, axis=1)
-        np.testing.assert_allclose(norms, 1.0, atol=1e-12,
-                                   err_msg="ray direction not unit length")
+        np.testing.assert_allclose(norms, 1.0, atol=1e-12, err_msg="ray direction not unit length")
 
     def test_all_rays_upward_hemisphere(self):
         """Every ray has a positive Z component (upward hemisphere only)."""
-        assert (_RAY_DIRS[:, 2] > 0).all(), \
-            "found a ray pointing into the lower hemisphere"
+        assert (_RAY_DIRS[:, 2] > 0).all(), "found a ray pointing into the lower hemisphere"
 
     def test_first_ray_straight_up(self):
         """First ray is (0, 0, 1) — straight up."""
@@ -174,6 +174,7 @@ class TestRaySet:
 # ---------------------------------------------------------------------------
 # 3. Config defaults
 # ---------------------------------------------------------------------------
+
 
 class TestConfigDefaults:
     """Verify the documented default values are honoured when not in config."""
@@ -210,6 +211,7 @@ class TestConfigDefaults:
 # 4. Output bounds (clamping)
 # ---------------------------------------------------------------------------
 
+
 class TestOutputBounds:
     def test_exposure_never_below_min_in_bright_scene(self):
         """Noon open sky converges to ~1.000673 (luminance slightly < key 0.18).
@@ -237,10 +239,10 @@ class TestOutputBounds:
         meter = ExposureMeter(_cfg())
         sky = _night_sky_no_moon()
         sealed = _sealed_chunk()
-        for _ in range(600):   # 60 s simulated (tau_dark=4 → saturated)
+        for _ in range(600):  # 60 s simulated (tau_dark=4 → saturated)
             val = meter.update(SEALED_CAM, sky, sealed, NO_LIGHTS, 0.1)
         assert val <= meter._max + 1e-9
-        assert val > 4.5   # well-adapted
+        assert val > 4.5  # well-adapted
 
     def test_single_update_returns_finite_positive(self):
         """A single update from initial state always returns a finite positive."""
@@ -265,12 +267,12 @@ class TestOutputBounds:
 # 5. Adaptation direction
 # ---------------------------------------------------------------------------
 
+
 class TestAdaptationDirection:
     def test_dark_scene_drives_exposure_up(self):
         """After one update in a dark scene the multiplier must be >= 1.0."""
         meter = ExposureMeter(_cfg())
-        val = meter.update(SEALED_CAM, _night_sky_no_moon(),
-                           _sealed_chunk(), NO_LIGHTS, 0.5)
+        val = meter.update(SEALED_CAM, _night_sky_no_moon(), _sealed_chunk(), NO_LIGHTS, 0.5)
         assert val >= 1.0
 
     def test_bright_scene_drives_exposure_up_slightly(self):
@@ -284,7 +286,7 @@ class TestAdaptationDirection:
         """
         meter = ExposureMeter(_cfg())
         sky = _noon_sky()
-        for _ in range(30):   # 3 s
+        for _ in range(30):  # 3 s
             val = meter.update(OPEN_CAM, sky, {}, NO_LIGHTS, 0.1)
         # Current behaviour: rises from 1.0 toward ~1.0007 (dark adaptation).
         assert val > 1.0
@@ -319,13 +321,14 @@ class TestAdaptationDirection:
 # 6. Bright adapts faster than dark (tau asymmetry)
 # ---------------------------------------------------------------------------
 
+
 class TestTauAsymmetry:
     def test_bright_adapts_faster_than_dark(self):
         """tau_bright (0.7 s) << tau_dark (4.0 s): after N equal steps the
         bright direction moves more (in log-stops) than the dark direction."""
         cfg = _cfg()
         dt = 0.1
-        n = 10   # 1 s of simulation
+        n = 10  # 1 s of simulation
 
         # Start dark-adapted (exposure high), then step into bright.
         meter_bright = ExposureMeter(cfg)
@@ -333,18 +336,15 @@ class TestTauAsymmetry:
         bright_start = meter_bright.exposure
         for _ in range(n):
             meter_bright.update(OPEN_CAM, _noon_sky(), {}, NO_LIGHTS, dt)
-        bright_delta = abs(math.log(meter_bright.exposure) -
-                           math.log(bright_start))
+        bright_delta = abs(math.log(meter_bright.exposure) - math.log(bright_start))
 
         # Start bright-adapted (exposure low), then step into dark.
         meter_dark = ExposureMeter(cfg)
         meter_dark._exposure = 0.6
         dark_start = meter_dark.exposure
         for _ in range(n):
-            meter_dark.update(SEALED_CAM, _night_sky_no_moon(),
-                              _sealed_chunk(), NO_LIGHTS, dt)
-        dark_delta = abs(math.log(meter_dark.exposure) -
-                         math.log(dark_start))
+            meter_dark.update(SEALED_CAM, _night_sky_no_moon(), _sealed_chunk(), NO_LIGHTS, dt)
+        dark_delta = abs(math.log(meter_dark.exposure) - math.log(dark_start))
 
         assert bright_delta > dark_delta, (
             f"bright adapted by {bright_delta:.4f} stops, "
@@ -355,6 +355,7 @@ class TestTauAsymmetry:
 # ---------------------------------------------------------------------------
 # 7. Convergence
 # ---------------------------------------------------------------------------
+
 
 class TestConvergence:
     def test_repeated_bright_updates_converge(self):
@@ -389,6 +390,7 @@ class TestConvergence:
 # 8. Moon contribution
 # ---------------------------------------------------------------------------
 
+
 class TestMoonContribution:
     def test_full_moon_lowers_exposure_vs_no_moon(self):
         """Full moon open sky → more luminance → lower (or equal) exposure than
@@ -416,6 +418,7 @@ class TestMoonContribution:
 # 9. Sun-cone directional term: sun below horizon → no sun contribution
 # ---------------------------------------------------------------------------
 
+
 class TestSunCone:
     def test_sun_below_horizon_no_extra_luminance(self):
         """When sun_dir.z <= 0, the sun cone contributes zero. Two skies
@@ -424,13 +427,13 @@ class TestSunCone:
         cfg = _cfg()
 
         sky_with_sun_up = SimpleNamespace(
-            sun_radiance=(50.0, 50.0, 50.0),   # extreme sun
+            sun_radiance=(50.0, 50.0, 50.0),  # extreme sun
             sky_ambient=(0.1, 0.1, 0.1),
             moon_radiance=(0.0, 0.0, 0.0),
             sun_dir=SimpleNamespace(x=0.0, y=0.0, z=0.8),  # sun UP
         )
         sky_sun_below = SimpleNamespace(
-            sun_radiance=(50.0, 50.0, 50.0),   # same extreme sun
+            sun_radiance=(50.0, 50.0, 50.0),  # same extreme sun
             sky_ambient=(0.1, 0.1, 0.1),
             moon_radiance=(0.0, 0.0, 0.0),
             sun_dir=SimpleNamespace(x=0.0, y=0.0, z=-0.5),  # sun BELOW horizon
@@ -450,6 +453,7 @@ class TestSunCone:
 # ---------------------------------------------------------------------------
 # 10. Light luminance: window + distance falloff
 # ---------------------------------------------------------------------------
+
 
 class TestLightLuminance:
     def _pack_one_light(self, pos, color_intensity, radius) -> tuple[np.ndarray, int]:
@@ -537,6 +541,7 @@ class TestLightLuminance:
 # 11. Ray occlusion
 # ---------------------------------------------------------------------------
 
+
 class TestRayOcclusion:
     def test_fully_sealed_chunk_blocks_all_rays(self):
         """Inside a fully solid chunk all rays are blocked → openness ≈ 0.
@@ -579,6 +584,7 @@ class TestRayOcclusion:
 # 12. camera_pos as SimpleNamespace(.x/.y/.z)
 # ---------------------------------------------------------------------------
 
+
 class TestCameraPosForms:
     def test_dot_xyz_same_as_tuple(self):
         """camera_pos as SimpleNamespace(.x/.y/.z) == tuple (3,)."""
@@ -600,6 +606,7 @@ class TestCameraPosForms:
 # ---------------------------------------------------------------------------
 # 13. Determinism across instances (pin the 13-ray result is fixed)
 # ---------------------------------------------------------------------------
+
 
 class TestDeterminism:
     def test_two_instances_same_inputs_identical_sequence(self):

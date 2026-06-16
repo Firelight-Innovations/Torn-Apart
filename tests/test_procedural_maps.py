@@ -10,7 +10,6 @@ No panda3d imports.  Pure numpy assertions, no per-element Python loops.
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from fire_engine.procedural.maps import (
     black_emission_map,
@@ -18,10 +17,10 @@ from fire_engine.procedural.maps import (
     flat_normal_map,
 )
 
-
 # ---------------------------------------------------------------------------
 # flat_normal_map
 # ---------------------------------------------------------------------------
+
 
 class TestFlatNormalMap:
     """Pin the constant (128, 128, 255, 255) neutral tangent-space normal."""
@@ -92,6 +91,7 @@ class TestFlatNormalMap:
 # black_emission_map
 # ---------------------------------------------------------------------------
 
+
 class TestBlackEmissionMap:
     """Pin the constant (0, 0, 0, 255) non-emissive map."""
 
@@ -133,6 +133,7 @@ class TestBlackEmissionMap:
 # ---------------------------------------------------------------------------
 # derive_normal_map
 # ---------------------------------------------------------------------------
+
 
 class TestDeriveNormalMapShapeAndDtype:
     """Output shape/dtype invariants."""
@@ -198,7 +199,7 @@ class TestDeriveNormalMapFlatInput:
         """B channel (Z) must be high — predominantly upward normal."""
         out = derive_normal_map(self._flat_rgba(8, 8))
         assert (out[..., 2] >= 200).all(), (
-            f"Flat input: B channel (Z) should be close to 255; min={out[...,2].min()}"
+            f"Flat input: B channel (Z) should be close to 255; min={out[..., 2].min()}"
         )
 
     def test_flat_black_neutral_normal(self):
@@ -276,7 +277,7 @@ class TestDeriveNormalMapGradient:
         """Even on a steep ramp, B (Z normal) must dominate (> 128)."""
         out = derive_normal_map(self._ramp_h(16, 16))
         assert (out[..., 2] > 128).all(), (
-            f"B channel must stay > 128 on a gradient; min={out[...,2].min()}"
+            f"B channel must stay > 128 on a gradient; min={out[..., 2].min()}"
         )
 
     def test_step_edge_tilts_normal(self):
@@ -286,14 +287,14 @@ class TestDeriveNormalMapGradient:
         """
         h, w = 16, 16
         rgba = np.zeros((h, w, 4), dtype=np.uint8)
-        rgba[:, w // 2:, :3] = 200
+        rgba[:, w // 2 :, :3] = 200
         rgba[..., 3] = 255
         out = derive_normal_map(rgba)
         # Normals in the interior far from the step should remain near 128.
-        flat_zone = out[:, 2:w // 2 - 1, 0]
+        flat_zone = out[:, 2 : w // 2 - 1, 0]
         # Near the step edge, R deviates.
         edge_col = w // 2
-        edge_zone = out[:, edge_col - 1:edge_col + 2, 0].astype(np.int16)
+        edge_zone = out[:, edge_col - 1 : edge_col + 2, 0].astype(np.int16)
         assert (np.abs(edge_zone - 128) > 0).any(), (
             "Step edge should produce non-neutral R values near the transition"
         )
@@ -344,7 +345,7 @@ class TestDeriveNormalMapStrength:
         rgba = self._ramp_rgba()
         out = derive_normal_map(rgba, strength=5.0)
         assert (out[..., 2] > 128).all(), (
-            f"B channel must stay > 128 even at high strength; min={out[...,2].min()}"
+            f"B channel must stay > 128 even at high strength; min={out[..., 2].min()}"
         )
 
 

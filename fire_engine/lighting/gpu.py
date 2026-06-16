@@ -57,15 +57,15 @@ from fire_engine.core import (
     get_logger,
 )
 from fire_engine.lighting import glsl
-from fire_engine.lighting.exposure import ExposureMeter
-from fire_engine.lighting.lights import LightSet, OccluderSet, MAX_OCCLUDERS
-from fire_engine.lighting.occluders import TreeOccluderSet
-from fire_engine.lighting.palette import MaterialPalette, build_default_palette
 from fire_engine.lighting.assembly_worker import (
     AssemblyJob,
     CascadeAssemblyWorker,
     assemble_packed,
 )
+from fire_engine.lighting.exposure import ExposureMeter
+from fire_engine.lighting.lights import MAX_OCCLUDERS, LightSet, OccluderSet
+from fire_engine.lighting.occluders import TreeOccluderSet
+from fire_engine.lighting.palette import MaterialPalette, build_default_palette
 from fire_engine.lighting.volume import (
     EMISSION_SCALE,
     VolumeWindow,
@@ -89,8 +89,7 @@ _LOAD_REASSEMBLE_INTERVAL_S = 0.25
 _FOG_DENSITY_BOOST = 2.0
 
 
-def _make_volume_texture(name: str, cells: int, *, hdr: bool,
-                         linear: bool) -> Texture:
+def _make_volume_texture(name: str, cells: int, *, hdr: bool, linear: bool) -> Texture:
     """
     Allocate one cascade 3-D texture.
 
@@ -108,12 +107,10 @@ def _make_volume_texture(name: str, cells: int, *, hdr: bool,
     """
     tex = Texture(name)
     if hdr:
-        tex.setup_3d_texture(cells, cells, cells,
-                             Texture.T_float, Texture.F_rgba16)
+        tex.setup_3d_texture(cells, cells, cells, Texture.T_float, Texture.F_rgba16)
         tex.set_keep_ram_image(False)
     else:
-        tex.setup_3d_texture(cells, cells, cells,
-                             Texture.T_unsigned_byte, Texture.F_rgba8)
+        tex.setup_3d_texture(cells, cells, cells, Texture.T_unsigned_byte, Texture.F_rgba8)
     tex.set_clear_color((0.0, 0.0, 0.0, 0.0))
     filt = SamplerState.FT_linear if linear else SamplerState.FT_nearest
     tex.set_minfilter(filt)
@@ -140,40 +137,42 @@ def _upload_volume(tex: Texture, arr: np.ndarray) -> None:
 class _Cascade:
     """One radiance cascade: window + textures + compute node paths."""
 
-    def __init__(self, index: int, cells: int, cell_m: float,
-                 inject_shader: Shader, gather_shader: Shader,
-                 smooth_shader: Shader, shift_shader: Shader, bounce: float,
-                 gi_rays: int, gi_steps: int,
-                 *, margin_cells: int = 8) -> None:
+    def __init__(
+        self,
+        index: int,
+        cells: int,
+        cell_m: float,
+        inject_shader: Shader,
+        gather_shader: Shader,
+        smooth_shader: Shader,
+        shift_shader: Shader,
+        bounce: float,
+        gi_rays: int,
+        gi_steps: int,
+        *,
+        margin_cells: int = 8,
+    ) -> None:
         self.index = index
-        self.window = VolumeWindow(cells=cells, cell_m=cell_m,
-                                   margin_cells=margin_cells)
+        self.window = VolumeWindow(cells=cells, cell_m=cell_m, margin_cells=margin_cells)
         self.cells = cells
         self.cell_m = cell_m
 
-        self.geom = _make_volume_texture(f"lit_geom_{index}", cells,
-                                         hdr=False, linear=True)
-        self.emis = _make_volume_texture(f"lit_emis_{index}", cells,
-                                         hdr=False, linear=True)
-        self.vis = _make_volume_texture(f"lit_vis_{index}", cells,
-                                        hdr=True, linear=True)
+        self.geom = _make_volume_texture(f"lit_geom_{index}", cells, hdr=False, linear=True)
+        self.emis = _make_volume_texture(f"lit_emis_{index}", cells, hdr=False, linear=True)
+        self.vis = _make_volume_texture(f"lit_vis_{index}", cells, hdr=True, linear=True)
         # Surface-radiosity proxies (celestial first bounce + emissive leak —
         # no skylight, no dynamic lights), written by INJECT, gathered off
         # surfaces by GATHER.
-        self.source = _make_volume_texture(
-            f"lit_source_{index}", cells, hdr=True, linear=True)
+        self.source = _make_volume_texture(f"lit_source_{index}", cells, hdr=True, linear=True)
         # Dynamic-light direct radiance in air; added once per cell by GATHER
         # (own-cell term), never re-gathered off surfaces.
-        self.lit = _make_volume_texture(
-            f"lit_dyn_{index}", cells, hdr=True, linear=True)
+        self.lit = _make_volume_texture(f"lit_dyn_{index}", cells, hdr=True, linear=True)
         self.radiance = [
-            _make_volume_texture(f"lit_rad_{index}_a", cells,
-                                 hdr=True, linear=True),
-            _make_volume_texture(f"lit_rad_{index}_b", cells,
-                                 hdr=True, linear=True),
+            _make_volume_texture(f"lit_rad_{index}_a", cells, hdr=True, linear=True),
+            _make_volume_texture(f"lit_rad_{index}_b", cells, hdr=True, linear=True),
         ]
-        self.ping = 0   # index of the radiance texture holding current light
-        self.needs_inject = True   # re-run the injection pass next update
+        self.ping = 0  # index of the radiance texture holding current light
+        self.needs_inject = True  # re-run the injection pass next update
         # Async assembly bookkeeping (main thread only): one job in flight per
         # cascade at a time; ``window.origin_cell`` is the COMMITTED origin (the
         # one the uploaded geom + shader uniforms use) and only advances when a
@@ -190,8 +189,7 @@ class _Cascade:
         self.inject_np.set_shader_input("u_source", self.source)
         self.inject_np.set_shader_input("u_lit", self.lit)
         self.inject_np.set_shader_input("u_cells", cells)
-        self.inject_np.set_shader_input("u_emission_scale",
-                                        float(EMISSION_SCALE))
+        self.inject_np.set_shader_input("u_emission_scale", float(EMISSION_SCALE))
 
         # Two pre-bound gather nodes: a→b and b→a (the previous gather feeds
         # the multi-bounce feedback term).  Per-dispatch inputs (sky ambient,
@@ -304,15 +302,13 @@ class GpuLightingPipeline:
         self._config = config
         self._base = base
         self._provider = chunk_provider
-        self._palette = palette if palette is not None \
-            else build_default_palette()
+        self._palette = palette if palette is not None else build_default_palette()
         # Background cascade-volume assembly: the CPU gather+pack (~90 ms p99 on
         # a fly-around) runs off the main thread so flying stays smooth.  Set
         # ``threaded=False`` for deterministic tooling/tests (assembles inline).
         self._threaded = bool(threaded)
         self._assembly_seq = 0
-        self._assembly_worker = CascadeAssemblyWorker() if self._threaded \
-            else None
+        self._assembly_worker = CascadeAssemblyWorker() if self._threaded else None
         if self._assembly_worker is not None:
             self._assembly_worker.start()
         self.lights = LightSet()
@@ -322,27 +318,23 @@ class GpuLightingPipeline:
         # Static tree/bush occluders (lighting/occluders.py): splatted into
         # every assembled geometry volume so the light marches see trees.
         # Set by the tree renderer via :meth:`set_static_occluders`.
-        self._tree_occluders: "TreeOccluderSet | None" = None
+        self._tree_occluders: TreeOccluderSet | None = None
         # Cascade indices whose GPU volume predates the current occluder set.
         self._tree_occ_stale: set[int] = set()
         # Non-terrain geometry occupancy providers (buildings, future props).
         # Store-only in v1 — see :meth:`register_geometry_provider`.
         self._geometry_providers: list = []
-        self._box_uniforms: tuple | None = None   # cached LVecBase4f lists
+        self._box_uniforms: tuple | None = None  # cached LVecBase4f lists
         # Auto-exposure (eye adaptation): headless meter; `exposure` is the
         # final tonemap exposure consumed by the terrain + sky shaders.
         self.exposure_meter = ExposureMeter(config)
         self.exposure = float(config.light_exposure)
         self.exposure_sky = float(config.light_exposure)
 
-        inject_shader = Shader.make_compute(
-            Shader.SL_GLSL, glsl.INJECT_COMPUTE)
-        gather_shader = Shader.make_compute(
-            Shader.SL_GLSL, glsl.GATHER_COMPUTE)
-        smooth_shader = Shader.make_compute(
-            Shader.SL_GLSL, glsl.SMOOTH_COMPUTE)
-        shift_shader = Shader.make_compute(
-            Shader.SL_GLSL, glsl.SHIFT_COMPUTE)
+        inject_shader = Shader.make_compute(Shader.SL_GLSL, glsl.INJECT_COMPUTE)
+        gather_shader = Shader.make_compute(Shader.SL_GLSL, glsl.GATHER_COMPUTE)
+        smooth_shader = Shader.make_compute(Shader.SL_GLSL, glsl.SMOOTH_COMPUTE)
+        shift_shader = Shader.make_compute(Shader.SL_GLSL, glsl.SHIFT_COMPUTE)
 
         # Cascade 2 is the coarse FAR cascade (8 m cells, 512 m box): it keeps
         # distant terrain lit with low-resolution shadows + GI once a surface
@@ -363,32 +355,56 @@ class GpuLightingPipeline:
         self._gi_iters = max(1, int(config.light_gi_iters))
         self._gi_smooth = max(0, int(config.light_gi_smooth_passes))
         self.cascades = [
-            _Cascade(0, config.light_c0_cells, config.light_c0_cell_m,
-                     inject_shader, gather_shader, smooth_shader,
-                     shift_shader, bounce, gi_rays, gi_steps),
-            _Cascade(1, config.light_c1_cells, config.light_c1_cell_m,
-                     inject_shader, gather_shader, smooth_shader,
-                     shift_shader, bounce, gi_rays, gi_steps),
-            _Cascade(2, config.light_c2_cells, config.light_c2_cell_m,
-                     inject_shader, gather_shader, smooth_shader,
-                     shift_shader, bounce, gi_rays, gi_steps,
-                     margin_cells=16),
+            _Cascade(
+                0,
+                config.light_c0_cells,
+                config.light_c0_cell_m,
+                inject_shader,
+                gather_shader,
+                smooth_shader,
+                shift_shader,
+                bounce,
+                gi_rays,
+                gi_steps,
+            ),
+            _Cascade(
+                1,
+                config.light_c1_cells,
+                config.light_c1_cell_m,
+                inject_shader,
+                gather_shader,
+                smooth_shader,
+                shift_shader,
+                bounce,
+                gi_rays,
+                gi_steps,
+            ),
+            _Cascade(
+                2,
+                config.light_c2_cells,
+                config.light_c2_cell_m,
+                inject_shader,
+                gather_shader,
+                smooth_shader,
+                shift_shader,
+                bounce,
+                gi_rays,
+                gi_steps,
+                margin_cells=16,
+            ),
         ]
 
         # --- froxel fog -------------------------------------------------
         self.fog_enabled = bool(config.fog_enabled)
-        self._fog_dim = (config.fog_froxels_x, config.fog_froxels_y,
-                         config.fog_froxels_z)
+        self._fog_dim = (config.fog_froxels_x, config.fog_froxels_y, config.fog_froxels_z)
         self._fog_near = 0.5
         self._fog_far = float(config.fog_far_m)
         if self.fog_enabled:
             w, h, z = self._fog_dim
             self.fog_scatter_tex = Texture("fog_scatter")
-            self.fog_scatter_tex.setup_3d_texture(
-                w, h, z, Texture.T_float, Texture.F_rgba16)
+            self.fog_scatter_tex.setup_3d_texture(w, h, z, Texture.T_float, Texture.F_rgba16)
             self.fog_integrated_tex = Texture("fog_integrated")
-            self.fog_integrated_tex.setup_3d_texture(
-                w, h, z, Texture.T_float, Texture.F_rgba16)
+            self.fog_integrated_tex.setup_3d_texture(w, h, z, Texture.T_float, Texture.F_rgba16)
             for t in (self.fog_scatter_tex, self.fog_integrated_tex):
                 t.set_clear_color((0, 0, 0, 1))
                 t.set_keep_ram_image(False)
@@ -399,25 +415,25 @@ class GpuLightingPipeline:
                 t.set_wrap_w(SamplerState.WM_clamp)
 
             self._fog_scatter_np = NodePath("fog_scatter")
-            self._fog_scatter_np.set_shader(Shader.make_compute(
-                Shader.SL_GLSL, glsl.FOG_SCATTER_COMPUTE))
+            self._fog_scatter_np.set_shader(
+                Shader.make_compute(Shader.SL_GLSL, glsl.FOG_SCATTER_COMPUTE)
+            )
             sn = self._fog_scatter_np
             sn.set_shader_input("u_froxels", self.fog_scatter_tex)
             sn.set_shader_input("u_froxel_dim", LVecBase3i(w, h, z))
             sn.set_shader_input("u_fog_near", self._fog_near)
             sn.set_shader_input("u_fog_far", self._fog_far)
-            sn.set_shader_input("u_ground_z",
-                                float(config.ground_height_m))
-            sn.set_shader_input("u_anisotropy",
-                                float(config.fog_anisotropy))
+            sn.set_shader_input("u_ground_z", float(config.ground_height_m))
+            sn.set_shader_input("u_anisotropy", float(config.fog_anisotropy))
             c1 = self.cascades[1]
             sn.set_shader_input("u_c1_vis", c1.vis)
             sn.set_shader_input("u_c1_cells", float(c1.cells))
             sn.set_shader_input("u_c1_cell_m", float(c1.cell_m))
 
             self._fog_integrate_np = NodePath("fog_integrate")
-            self._fog_integrate_np.set_shader(Shader.make_compute(
-                Shader.SL_GLSL, glsl.FOG_INTEGRATE_COMPUTE))
+            self._fog_integrate_np.set_shader(
+                Shader.make_compute(Shader.SL_GLSL, glsl.FOG_INTEGRATE_COMPUTE)
+            )
             fi = self._fog_integrate_np
             fi.set_shader_input("u_froxels", self.fog_scatter_tex)
             fi.set_shader_input("u_integrated", self.fog_integrated_tex)
@@ -434,7 +450,7 @@ class GpuLightingPipeline:
         # by a synchronous reassembly so the crater lights immediately instead
         # of flashing black for the 1-2 frames an async reassembly lags.
         self._edited_coords: set[tuple[int, int, int]] = set()
-        self._force_all_dirty = True         # first frame: build everything
+        self._force_all_dirty = True  # first frame: build everything
         self._load_dirty_timer = 0.0
         self._last_sun: tuple | None = None  # (sun_dir, sun_rad, moon, sky)
         bus.subscribe(TerrainEditedEvent, self._on_terrain_edited)
@@ -443,10 +459,14 @@ class GpuLightingPipeline:
         _log.info(
             "GPU lighting: cascade0 %d^3 @ %.2f m, cascade1 %d^3 @ %.2f m, "
             "cascade2 %d^3 @ %.2f m, fog %s",
-            config.light_c0_cells, config.light_c0_cell_m,
-            config.light_c1_cells, config.light_c1_cell_m,
-            config.light_c2_cells, config.light_c2_cell_m,
-            "x".join(map(str, self._fog_dim)) if self.fog_enabled else "off")
+            config.light_c0_cells,
+            config.light_c0_cell_m,
+            config.light_c1_cells,
+            config.light_c1_cell_m,
+            config.light_c2_cells,
+            config.light_c2_cell_m,
+            "x".join(map(str, self._fog_dim)) if self.fog_enabled else "off",
+        )
 
     # ------------------------------------------------------------------
     # Event handlers
@@ -455,8 +475,7 @@ class GpuLightingPipeline:
     def _on_terrain_edited(self, event: TerrainEditedEvent) -> None:
         """Brush edit → reassemble the affected cascades immediately."""
         coords = event.chunk_coords
-        if isinstance(coords, tuple) and len(coords) == 3 \
-                and isinstance(coords[0], int):
+        if isinstance(coords, tuple) and len(coords) == 3 and isinstance(coords[0], int):
             edited = (coords,)
         else:
             edited = tuple(coords)
@@ -487,8 +506,9 @@ class GpuLightingPipeline:
         lo = window.world_origin_m
         size = window.size_m
         for c in coords:
-            if all(c[i] * chunk_m < lo[i] + size
-                   and (c[i] + 1) * chunk_m > lo[i] for i in range(3)):
+            if all(
+                c[i] * chunk_m < lo[i] + size and (c[i] + 1) * chunk_m > lo[i] for i in range(3)
+            ):
                 return True
         return False
 
@@ -496,8 +516,7 @@ class GpuLightingPipeline:
     # Per-frame driver
     # ------------------------------------------------------------------
 
-    def update(self, camera_pos, sky_state: "SkyState | None",
-               dt: float) -> None:
+    def update(self, camera_pos, sky_state: SkyState | None, dt: float) -> None:
         """
         Advance the GPU lighting one frame.
 
@@ -522,10 +541,11 @@ class GpuLightingPipeline:
         #    lights) and smooth toward the target — slow when entering the
         #    dark (caves, nightfall), fast when stepping into bright light.
         mult = self.exposure_meter.update(
-            camera_pos, sky_state, self._provider.chunks, (packed, count), dt)
+            camera_pos, sky_state, self._provider.chunks, (packed, count), dt
+        )
         base = float(self._config.light_exposure)
         self.exposure = base * mult
-        self.exposure_sky = base * (mult ** 0.35)
+        self.exposure_sky = base * (mult**0.35)
 
         # 1. Window follow + geometry reassembly — the heavy CPU gather + pack
         #    runs OFF the main thread (CascadeAssemblyWorker).  The main thread
@@ -550,8 +570,7 @@ class GpuLightingPipeline:
             self._drain_assembly_results()
 
         # 2. Celestial / sky change detection (affects every cascade).
-        if self._last_sun is None or any(
-                _changed(a, b) for a, b in zip(sun, self._last_sun)):
+        if self._last_sun is None or any(_changed(a, b) for a, b in zip(sun, self._last_sun)):
             for casc in self.cascades:
                 casc.needs_inject = True
             self._last_sun = sun
@@ -565,7 +584,7 @@ class GpuLightingPipeline:
             for casc in self.cascades:
                 casc.needs_inject = True
             self._occluders_version_seen = self.occluders.version
-            self._box_uniforms = None          # repack the uniform lists
+            self._box_uniforms = None  # repack the uniform lists
 
         gsg = self._base.win.get_gsg()
         engine = self._base.graphicsEngine
@@ -573,10 +592,8 @@ class GpuLightingPipeline:
         if self._box_uniforms is None:
             mins, maxs, n_boxes = self.occluders.pack()
             self._box_uniforms = (
-                [LVecBase4f(mins[i, 0], mins[i, 1], mins[i, 2], 0.0)
-                 for i in range(mins.shape[0])],
-                [LVecBase4f(maxs[i, 0], maxs[i, 1], maxs[i, 2], 0.0)
-                 for i in range(maxs.shape[0])],
+                [LVecBase4f(mins[i, 0], mins[i, 1], mins[i, 2], 0.0) for i in range(mins.shape[0])],
+                [LVecBase4f(maxs[i, 0], maxs[i, 1], maxs[i, 2], 0.0) for i in range(maxs.shape[0])],
                 int(n_boxes),
             )
         box_min, box_max, n_boxes = self._box_uniforms
@@ -600,8 +617,7 @@ class GpuLightingPipeline:
                 n.set_shader_input("u_moon_dir", LVecBase3f(*moon_dir))
                 n.set_shader_input("u_moon_radiance", LVecBase3f(*moon_rad))
                 n.set_shader_input("u_sky_ambient", LVecBase3f(*sky_amb))
-                n.set_shader_input(
-                    "u_bounce", float(self._config.light_bounce_strength))
+                n.set_shader_input("u_bounce", float(self._config.light_bounce_strength))
                 n.set_shader_input("u_num_lights", int(count))
                 n.set_shader_input("u_light_pos_r", pos_r)
                 n.set_shader_input("u_light_col_t", col_t)
@@ -612,29 +628,24 @@ class GpuLightingPipeline:
                 n.set_shader_input("u_origin_m", LVecBase3f(*casc.origin_m()))
                 n.set_shader_input("u_cell_m", float(casc.cell_m))
                 groups = (_groups(casc.cells, 4),) * 3
-                engine.dispatch_compute(
-                    groups, n.get_attrib(ShaderAttrib), gsg)
+                engine.dispatch_compute(groups, n.get_attrib(ShaderAttrib), gsg)
                 # 5. Gather (ray-marched GI) over the fresh source field.
                 #    Iteration 1 carries sky + first bounce; iteration 2 lets
                 #    the feedback term add sky→wall→floor and second-bounce
                 #    colour (it reads iteration 1's output).
                 for _ in range(self._gi_iters):
-                    gn = casc.gather_np[casc.ping]      # ping → pong
-                    gn.set_shader_input("u_sky_ambient",
-                                        LVecBase3f(*sky_amb))
-                    gn.set_shader_input("u_origin_m",
-                                        LVecBase3f(*casc.origin_m()))
-                    engine.dispatch_compute(
-                        groups, gn.get_attrib(ShaderAttrib), gsg)
+                    gn = casc.gather_np[casc.ping]  # ping → pong
+                    gn.set_shader_input("u_sky_ambient", LVecBase3f(*sky_amb))
+                    gn.set_shader_input("u_origin_m", LVecBase3f(*casc.origin_m()))
+                    engine.dispatch_compute(groups, gn.get_attrib(ShaderAttrib), gsg)
                     casc.ping ^= 1
                 # 5b. Smooth (air-masked de-noise of the ray component) —
                 #     completes the gather's 8-phase ray-fan tile so the
                 #     blotch/confetti noise of disagreeing neighbour fans
                 #     averages out; contact GI stays voxel-crisp.
                 for _ in range(self._gi_smooth):
-                    sm = casc.smooth_np[casc.ping]      # ping → pong
-                    engine.dispatch_compute(
-                        groups, sm.get_attrib(ShaderAttrib), gsg)
+                    sm = casc.smooth_np[casc.ping]  # ping → pong
+                    engine.dispatch_compute(groups, sm.get_attrib(ShaderAttrib), gsg)
                     casc.ping ^= 1
 
         # 6. Froxel fog.
@@ -645,7 +656,7 @@ class GpuLightingPipeline:
     # Cascade volume assembly (off-thread; see assembly_worker.py)
     # ------------------------------------------------------------------
 
-    def _assemble_and_upload_sync(self, casc: "_Cascade") -> None:
+    def _assemble_and_upload_sync(self, casc: _Cascade) -> None:
         """
         Gather + upload one cascade volume inline on the main thread.
 
@@ -657,22 +668,24 @@ class GpuLightingPipeline:
         — the coarse cascades skip re-downsampling already-seen chunks.  The
         cache is lock-guarded, so a concurrent worker read is safe.
         """
-        cache = (self._assembly_worker.block_cache
-                 if self._assembly_worker is not None else None)
+        cache = self._assembly_worker.block_cache if self._assembly_worker is not None else None
         vol = assemble_geometry(
-            casc.window, self._provider.chunks, self._palette,
+            casc.window,
+            self._provider.chunks,
+            self._palette,
             chunk_size=self._config.chunk_size,
-            voxel_size=self._config.voxel_size, cache=cache,
+            voxel_size=self._config.voxel_size,
+            cache=cache,
             occluders=self._tree_occluders,
             trunk_occ=float(self._config.light_tree_trunk_occ),
-            canopy_gain=float(self._config.light_tree_canopy_extinction_gain))
+            canopy_gain=float(self._config.light_tree_canopy_extinction_gain),
+        )
         _upload_volume(casc.geom, vol.albedo_occ)
         _upload_volume(casc.emis, vol.emission)
         casc.needs_inject = True
         self._tree_occ_stale.discard(casc.index)
 
-    def set_static_occluders(
-            self, occluders: "TreeOccluderSet | None") -> None:
+    def set_static_occluders(self, occluders: TreeOccluderSet | None) -> None:
         """
         Replace the static tree/bush occluder set the cascades are lit with.
 
@@ -700,8 +713,7 @@ class GpuLightingPipeline:
         # Re-splat every already-assembled cascade (async, at the committed
         # origin).  Cascades not yet placed (boot) pick the set up on their
         # first assembly automatically.
-        self._tree_occ_stale = {c.index for c in self.cascades
-                                if c.window.origin_cell is not None}
+        self._tree_occ_stale = {c.index for c in self.cascades if c.window.origin_cell is not None}
 
     def register_geometry_provider(self, provider) -> None:
         """
@@ -766,7 +778,7 @@ class GpuLightingPipeline:
                 continue
             if not self._any_coord_hits(self._edited_coords, casc.window):
                 continue
-            self._assemble_and_upload_sync(casc)   # sets needs_inject = True
+            self._assemble_and_upload_sync(casc)  # sets needs_inject = True
         self._edited_coords.clear()
 
     def _schedule_assembly(self, camera_pos) -> None:
@@ -780,9 +792,8 @@ class GpuLightingPipeline:
         At most one job per cascade is in flight at a time.
         """
         have_pending = bool(self._pending_coords)
-        batch_ready = have_pending and \
-            self._load_dirty_timer >= _LOAD_REASSEMBLE_INTERVAL_S
-        deferred = False   # a cascade still owes pending edits but is busy
+        batch_ready = have_pending and self._load_dirty_timer >= _LOAD_REASSEMBLE_INTERVAL_S
+        deferred = False  # a cascade still owes pending edits but is busy
         for casc in self.cascades:
             moved = casc.window.needs_recenter(camera_pos)
             # Cascade 0 (the small 48 m near box) reassembles the instant a
@@ -808,8 +819,7 @@ class GpuLightingPipeline:
             # committed origin.  Either way the snapshot reads live materials
             # and the current occluder set, so a submit also satisfies any
             # pending 'hit' and clears occluder staleness.
-            origin = (casc.window._desired_origin(camera_pos)
-                      if moved else casc.window.origin_cell)
+            origin = casc.window._desired_origin(camera_pos) if moved else casc.window.origin_cell
             self._submit_assembly(casc, origin)
             self._tree_occ_stale.discard(casc.index)
         # Clear pending edits only once every cascade they touch has an
@@ -821,11 +831,15 @@ class GpuLightingPipeline:
             self._pending_coords.clear()
             self._load_dirty_timer = 0.0
 
-    def _submit_assembly(self, casc: "_Cascade", origin_cell) -> None:
+    def _submit_assembly(self, casc: _Cascade, origin_cell) -> None:
         """Snapshot the chunks a reassembly will read and enqueue the job."""
         coords = window_chunk_span(
-            origin_cell, casc.cells, casc.cell_m,
-            int(self._config.chunk_size), float(self._config.voxel_size))
+            origin_cell,
+            casc.cells,
+            casc.cell_m,
+            int(self._config.chunk_size),
+            float(self._config.voxel_size),
+        )
         live = self._provider.chunks
         # Snapshot *references* to the material arrays (not copies): cheap, and
         # safe against streaming (dict membership changes don't affect captured
@@ -834,15 +848,19 @@ class GpuLightingPipeline:
         materials = {c: live[c].materials for c in coords if c in live}
         self._assembly_seq += 1
         job = AssemblyJob(
-            cascade_index=casc.index, origin_cell=tuple(origin_cell),
-            cells=casc.cells, cell_m=casc.cell_m,
+            cascade_index=casc.index,
+            origin_cell=tuple(origin_cell),
+            cells=casc.cells,
+            cell_m=casc.cell_m,
             chunk_size=int(self._config.chunk_size),
             voxel_size=float(self._config.voxel_size),
-            materials=materials, palette=self._palette,
+            materials=materials,
+            palette=self._palette,
             seq=self._assembly_seq,
             occluders=self._tree_occluders,
             trunk_occ=float(self._config.light_tree_trunk_occ),
-            canopy_gain=float(self._config.light_tree_canopy_extinction_gain))
+            canopy_gain=float(self._config.light_tree_canopy_extinction_gain),
+        )
         if self._threaded:
             casc._assembly_inflight = True
             casc._pending_seq = self._assembly_seq
@@ -863,10 +881,10 @@ class GpuLightingPipeline:
         casc = self.cascades[res.cascade_index]
         if self._threaded and res.seq != casc._pending_seq:
             casc._assembly_inflight = False
-            return   # superseded (single-inflight makes this rare)
+            return  # superseded (single-inflight makes this rare)
         casc._assembly_inflight = False
         if not res.albedo_bytes:
-            return   # assembly failed → flag cleared, retry next frame
+            return  # assembly failed → flag cleared, retry next frame
         casc.geom.set_ram_image(res.albedo_bytes)
         casc.emis.set_ram_image(res.emis_bytes)
         # Radiance continuity: the two ping-pong textures still hold the OLD
@@ -883,9 +901,9 @@ class GpuLightingPipeline:
         casc.window.origin_cell = new_origin
         casc.needs_inject = True
 
-    def _shift_radiance(self, casc: "_Cascade",
-                        old_origin: tuple[int, int, int],
-                        new_origin: tuple[int, int, int]) -> None:
+    def _shift_radiance(
+        self, casc: _Cascade, old_origin: tuple[int, int, int], new_origin: tuple[int, int, int]
+    ) -> None:
         """
         Copy ``casc``'s current radiance into its other ping-pong texture,
         offset by the recenter cell delta, then swap so the next gather reads
@@ -897,13 +915,13 @@ class GpuLightingPipeline:
         ``vec4(0)`` (the newly-exposed border band).
         """
         shift = tuple(int(new_origin[i] - old_origin[i]) for i in range(3))
-        node = casc.shift_np[casc.ping]       # reads radiance[ping] → other
+        node = casc.shift_np[casc.ping]  # reads radiance[ping] → other
         node.set_shader_input("u_shift", LVecBase3i(*shift))
         gsg = self._base.win.get_gsg()
         engine = self._base.graphicsEngine
         groups = (_groups(casc.cells, 4),) * 3
         engine.dispatch_compute(groups, node.get_attrib(ShaderAttrib), gsg)
-        casc.ping ^= 1                        # the shifted texture is now current
+        casc.ping ^= 1  # the shifted texture is now current
 
     def shutdown(self) -> None:
         """
@@ -917,8 +935,7 @@ class GpuLightingPipeline:
 
     # ------------------------------------------------------------------
 
-    def _dispatch_fog(self, camera_pos, sun, sky_state,
-                      engine, gsg) -> None:
+    def _dispatch_fog(self, camera_pos, sun, sky_state, engine, gsg) -> None:
         """Fill + integrate the froxel volume for this frame's camera."""
         sun_dir, sun_rad, moon_dir, moon_rad, sky_amb = sun
         cam = self._base.camera
@@ -927,7 +944,7 @@ class GpuLightingPipeline:
         right = quat.get_right()
         up = quat.get_up()
         lens = self._base.camLens
-        fov = lens.get_fov()    # degrees (h, v)
+        fov = lens.get_fov()  # degrees (h, v)
         tan_h = math.tan(math.radians(float(fov[0]) * 0.5))
         tan_v = math.tan(math.radians(float(fov[1]) * 0.5))
 
@@ -937,11 +954,9 @@ class GpuLightingPipeline:
 
         c1 = self.cascades[1]
         sn = self._fog_scatter_np
-        sn.set_shader_input("u_cam_pos", LVecBase3f(*[float(camera_pos[i])
-                                                      for i in range(3)]))
+        sn.set_shader_input("u_cam_pos", LVecBase3f(*[float(camera_pos[i]) for i in range(3)]))
         sn.set_shader_input("u_cam_fwd", LVecBase3f(fwd[0], fwd[1], fwd[2]))
-        sn.set_shader_input("u_cam_right",
-                            LVecBase3f(right[0], right[1], right[2]))
+        sn.set_shader_input("u_cam_right", LVecBase3f(right[0], right[1], right[2]))
         sn.set_shader_input("u_cam_up", LVecBase3f(up[0], up[1], up[2]))
         sn.set_shader_input("u_tan_half_fov", LVecBase2f(tan_h, tan_v))
         sn.set_shader_input("u_fog_density", float(density))
@@ -958,12 +973,10 @@ class GpuLightingPipeline:
         sn.set_shader_input("u_box_max", box_max)
 
         w, h, z = self._fog_dim
+        engine.dispatch_compute((_groups(w, 8), _groups(h, 8), z), sn.get_attrib(ShaderAttrib), gsg)
         engine.dispatch_compute(
-            (_groups(w, 8), _groups(h, 8), z),
-            sn.get_attrib(ShaderAttrib), gsg)
-        engine.dispatch_compute(
-            (_groups(w, 8), _groups(h, 8), 1),
-            self._fog_integrate_np.get_attrib(ShaderAttrib), gsg)
+            (_groups(w, 8), _groups(h, 8), 1), self._fog_integrate_np.get_attrib(ShaderAttrib), gsg
+        )
 
     # ------------------------------------------------------------------
     # Surface-shader contract (lit_surface.glsl — every lit-surface shader)
@@ -992,20 +1005,17 @@ class GpuLightingPipeline:
         node.set_shader_input("u_c2_vis", c2.vis)
         node.set_shader_input("u_c2_cells", float(c2.cells))
         node.set_shader_input("u_c2_cell_m", float(c2.cell_m))
-        node.set_shader_input("u_quant_m",
-                              float(self._config.light_quant_m))
+        node.set_shader_input("u_quant_m", float(self._config.light_quant_m))
         # Celestial penumbra cone half-angle, as a tangent (the refinement
         # march jitters its rays inside this cone for smooth soft edges).
         node.set_shader_input(
-            "u_penumbra_tan",
-            float(math.tan(math.radians(self._config.light_penumbra_deg))))
-        node.set_shader_input("u_ao_strength",
-                              float(self._config.light_ao_strength))
+            "u_penumbra_tan", float(math.tan(math.radians(self._config.light_penumbra_deg)))
+        )
+        node.set_shader_input("u_ao_strength", float(self._config.light_ao_strength))
         node.set_shader_input("u_emission_scale", float(EMISSION_SCALE))
         node.set_shader_input("u_fog_near", self._fog_near)
         node.set_shader_input("u_fog_far", self._fog_far)
-        node.set_shader_input("u_fog_enabled",
-                              1.0 if self.fog_enabled else 0.0)
+        node.set_shader_input("u_fog_enabled", 1.0 if self.fog_enabled else 0.0)
         if self.fog_enabled:
             node.set_shader_input("u_fog_integrated", self.fog_integrated_tex)
         else:
@@ -1014,8 +1024,7 @@ class GpuLightingPipeline:
         # Radiance/origins are per-frame (ping-pong + window scroll).
         self.update_surface_inputs(node, None)
 
-    def update_surface_inputs(self, node: NodePath,
-                              sky_state: "SkyState | None") -> None:
+    def update_surface_inputs(self, node: NodePath, sky_state: SkyState | None) -> None:
         """
         Refresh the per-frame lighting uniforms on a render NodePath.
 
@@ -1039,8 +1048,7 @@ class GpuLightingPipeline:
             node.set_shader_input("u_c1_origin_m", LVecBase3f(*c1.origin_m()))
         if c2.window.origin_cell is not None:
             node.set_shader_input("u_c2_origin_m", LVecBase3f(*c2.origin_m()))
-        sun_dir, sun_rad, moon_dir, moon_rad, sky_amb = \
-            self._sky_inputs(sky_state)
+        sun_dir, sun_rad, moon_dir, moon_rad, sky_amb = self._sky_inputs(sky_state)
         node.set_shader_input("u_sun_dir", LVecBase3f(*sun_dir))
         node.set_shader_input("u_sun_radiance", LVecBase3f(*sun_rad))
         node.set_shader_input("u_moon_dir", LVecBase3f(*moon_dir))
@@ -1052,7 +1060,7 @@ class GpuLightingPipeline:
             box_min, box_max, n_boxes = self._box_uniforms
         else:
             box_min, box_max, n_boxes = [], [], 0
-        if not box_min:   # GLSL arrays must always be bound (Panda asserts)
+        if not box_min:  # GLSL arrays must always be bound (Panda asserts)
             box_min = [LVecBase4f(0.0)] * MAX_OCCLUDERS
             box_max = [LVecBase4f(0.0)] * MAX_OCCLUDERS
         node.set_shader_input("u_num_boxes", int(n_boxes))
@@ -1060,8 +1068,8 @@ class GpuLightingPipeline:
         node.set_shader_input("u_box_max", box_max)
         win = self._base.win
         node.set_shader_input(
-            "u_viewport", LVecBase2f(float(win.get_x_size()),
-                                     float(win.get_y_size())))
+            "u_viewport", LVecBase2f(float(win.get_x_size()), float(win.get_y_size()))
+        )
         # Radians of view angle per screen pixel — lets the surface shader
         # compute its texel footprint ANALYTICALLY (dist * u_px_rad / cos i)
         # instead of with fwidth().  Screen-space derivatives are evaluated on
@@ -1070,31 +1078,37 @@ class GpuLightingPipeline:
         # derivatives explode, which made every facet edge of a crater/cliff
         # sparkle as the camera moved (see world.md gotcha 22).
         node.set_shader_input(
-            "u_px_rad", float(math.radians(self._base.camLens.get_fov()[0])
-                              / max(1.0, float(win.get_x_size()))))
+            "u_px_rad",
+            float(
+                math.radians(self._base.camLens.get_fov()[0]) / max(1.0, float(win.get_x_size()))
+            ),
+        )
         cam_pos = self._base.camera.get_pos(self._base.render)
-        node.set_shader_input(
-            "u_cam_pos", LVecBase3f(cam_pos[0], cam_pos[1], cam_pos[2]))
+        node.set_shader_input("u_cam_pos", LVecBase3f(cam_pos[0], cam_pos[1], cam_pos[2]))
 
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _sky_inputs(sky_state: "SkyState | None") -> tuple:
+    def _sky_inputs(sky_state: SkyState | None) -> tuple:
         """
         Extract (sun_dir, sun_radiance, moon_dir, moon_radiance, sky_ambient)
         from a SkyState, with graceful fallbacks for older SkyState versions
         (radiance derived from sun_color × intensity) and for ``None``.
         """
         if sky_state is None:
-            return ((0.3, 0.2, 0.93), (3.0, 2.9, 2.6),
-                    (0.0, 0.0, -1.0), (0.0, 0.0, 0.0),
-                    (0.35, 0.45, 0.70))
-        sun_dir = tuple(float(v) for v in
-                        (sky_state.sun_dir.x, sky_state.sun_dir.y,
-                         sky_state.sun_dir.z))
-        moon_dir = tuple(float(v) for v in
-                         (sky_state.moon_dir.x, sky_state.moon_dir.y,
-                          sky_state.moon_dir.z))
+            return (
+                (0.3, 0.2, 0.93),
+                (3.0, 2.9, 2.6),
+                (0.0, 0.0, -1.0),
+                (0.0, 0.0, 0.0),
+                (0.35, 0.45, 0.70),
+            )
+        sun_dir = tuple(
+            float(v) for v in (sky_state.sun_dir.x, sky_state.sun_dir.y, sky_state.sun_dir.z)
+        )
+        moon_dir = tuple(
+            float(v) for v in (sky_state.moon_dir.x, sky_state.moon_dir.y, sky_state.moon_dir.z)
+        )
         sun_rad = getattr(sky_state, "sun_radiance", None)
         if sun_rad is None:
             s = float(sky_state.sun_intensity) * 3.2
@@ -1108,10 +1122,14 @@ class GpuLightingPipeline:
         if sky_amb is None:
             d = float(sky_state.daylight)
             z = sky_state.zenith_color
-            sky_amb = (0.02 + z[0] * 0.55 * d, 0.02 + z[1] * 0.6 * d,
-                       0.03 + z[2] * 0.75 * d)
-        return (sun_dir, tuple(map(float, sun_rad)), moon_dir,
-                tuple(map(float, moon_rad)), tuple(map(float, sky_amb)))
+            sky_amb = (0.02 + z[0] * 0.55 * d, 0.02 + z[1] * 0.6 * d, 0.03 + z[2] * 0.75 * d)
+        return (
+            sun_dir,
+            tuple(map(float, sun_rad)),
+            moon_dir,
+            tuple(map(float, moon_rad)),
+            tuple(map(float, sky_amb)),
+        )
 
 
 def _groups(n: int, local: int) -> int:

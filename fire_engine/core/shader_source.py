@@ -72,9 +72,7 @@ def _expand_includes(text: str, shader_dir: Path, includer: str) -> str:
         name = match.group(1)
         path = shader_dir / name
         if not path.is_file():
-            raise FileNotFoundError(
-                f'{includer}: //#include "{name}" not found at {path}'
-            )
+            raise FileNotFoundError(f'{includer}: //#include "{name}" not found at {path}')
         included = path.read_text(encoding="utf-8")
         if any(_INCLUDE_RE.match(inner) for inner in included.splitlines()):
             raise ValueError(

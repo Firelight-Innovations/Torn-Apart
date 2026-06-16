@@ -13,6 +13,7 @@ the daemon's single undo stack (shared with terrain brushes), so Ctrl+Z walks
 scene and terrain edits chronologically. Rapid same-object ``set_transform``
 calls coalesce into one command — a throttled gizmo drag undoes in one step.
 """
+
 from __future__ import annotations
 
 import logging
@@ -117,8 +118,7 @@ class SceneService:
             )
         except SceneError as e:
             raise RpcError(ErrorCode.INVALID_PARAMS, str(e))
-        self._push_history(f"transform {obj['id']}", before, store.get_delta(),
-                           coalesce=True)
+        self._push_history(f"transform {obj['id']}", before, store.get_delta(), coalesce=True)
         await self._broadcast_changed(store)
         return {"ok": True, "object": obj}
 
@@ -179,7 +179,9 @@ class SceneService:
         # Per-(object,index) label so a slider drag coalesces but editing a
         # different component starts a new undo step.
         self._push_history(
-            f"component {obj['id']}.{index}", before, store.get_delta(),
+            f"component {obj['id']}.{index}",
+            before,
+            store.get_delta(),
             coalesce=True,
         )
         await self._broadcast_changed(store)
@@ -188,8 +190,7 @@ class SceneService:
     # ------------------------------------------------------------------ #
     # Internals
     # ------------------------------------------------------------------ #
-    def _push_history(self, label: str, before: dict, after: dict,
-                      coalesce: bool = False) -> None:
+    def _push_history(self, label: str, before: dict, after: dict, coalesce: bool = False) -> None:
         """Record a scene mutation on the daemon's shared undo stack.
 
         With ``coalesce=True`` a command whose label matches the stack top
@@ -201,8 +202,11 @@ class SceneService:
         now = time.monotonic()
         if coalesce:
             top = history.peek()
-            if (isinstance(top, SceneCommand) and top.label == label
-                    and now - top.timestamp <= _COALESCE_WINDOW_S):
+            if (
+                isinstance(top, SceneCommand)
+                and top.label == label
+                and now - top.timestamp <= _COALESCE_WINDOW_S
+            ):
                 history.replace_top(SceneCommand(label, top.before_delta, after, now))
                 return
         history.push(SceneCommand(label, before, after, now))

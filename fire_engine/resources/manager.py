@@ -48,14 +48,14 @@ before cache lookup, so ``assets\\models\\foo.egg`` and
 from __future__ import annotations
 
 import os
-from typing import Any, Optional, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 import fire_engine.resources.loaders as _default_loaders_module
-
 
 # ---------------------------------------------------------------------------
 # Handle
 # ---------------------------------------------------------------------------
+
 
 class Handle:
     """
@@ -81,12 +81,12 @@ class Handle:
         manager.release(handle)
     """
 
-    __slots__ = ("resource", "path", "refcount")
+    __slots__ = ("path", "refcount", "resource")
 
     def __init__(self, resource: Any, path: str) -> None:
-        self.resource: Any  = resource
-        self.path:     str  = path
-        self.refcount: int  = 0
+        self.resource: Any = resource
+        self.path: str = path
+        self.refcount: int = 0
 
     def __repr__(self) -> str:
         return (
@@ -99,6 +99,7 @@ class Handle:
 # LoadersModule protocol — for type-safe injection in tests
 # ---------------------------------------------------------------------------
 
+
 @runtime_checkable
 class _LoadersModule(Protocol):
     """Structural type that the loaders module and test fakes must satisfy."""
@@ -110,6 +111,7 @@ class _LoadersModule(Protocol):
 # ---------------------------------------------------------------------------
 # ResourceManager
 # ---------------------------------------------------------------------------
+
 
 class ResourceManager:
     """
@@ -152,7 +154,7 @@ class ResourceManager:
 
     def __init__(
         self,
-        loaders_module: Optional[Any] = None,
+        loaders_module: Any | None = None,
     ) -> None:
         # If no loaders module is injected, use the real module-level one.
         self._loaders = loaders_module if loaders_module is not None else _default_loaders_module
@@ -204,8 +206,8 @@ class ResourceManager:
         # case-insensitive de-duplication on Windows), but the actual file
         # I/O uses a path whose separators are normalised yet case is preserved.
         load_path = os.path.normpath(path)
-        resource  = self._loaders.dispatch(load_path)
-        handle    = Handle(resource=resource, path=key)
+        resource = self._loaders.dispatch(load_path)
+        handle = Handle(resource=resource, path=key)
         self._cache[key] = handle
         return handle
 
@@ -290,7 +292,7 @@ class ResourceManager:
             if callable(cleanup):
                 try:
                     cleanup()
-                except Exception:  # noqa: BLE001
+                except Exception:
                     pass
         return len(to_remove)
 
@@ -321,11 +323,11 @@ class ResourceManager:
         handles = list(self._cache.values())
         refcounts = [h.refcount for h in handles]
         return {
-            "cache_size":     len(handles),
-            "total_handles":  len(handles),
-            "zero_ref":       sum(1 for r in refcounts if r == 0),
-            "nonzero_ref":    sum(1 for r in refcounts if r > 0),
-            "max_refcount":   max(refcounts) if refcounts else 0,
+            "cache_size": len(handles),
+            "total_handles": len(handles),
+            "zero_ref": sum(1 for r in refcounts if r == 0),
+            "nonzero_ref": sum(1 for r in refcounts if r > 0),
+            "max_refcount": max(refcounts) if refcounts else 0,
             "total_refcount": sum(refcounts),
         }
 

@@ -32,16 +32,16 @@ Quick start
 from fire_engine.resources.loaders import (
     LoaderCallable,
     UnknownResourceFormatError,
-    register_loader,
     dispatch,
+    register_loader,
     registered_suffixes,
 )
 from fire_engine.resources.manager import (
     Handle,
     ResourceManager,
+    acquire,
     default_manager,
     load,
-    acquire,
     release,
     unload_unreferenced,
 )

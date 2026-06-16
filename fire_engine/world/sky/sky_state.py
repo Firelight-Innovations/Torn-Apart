@@ -58,7 +58,7 @@ from fire_engine.world.sky.celestial import (
 )
 from fire_engine.world.weather import LocalWeather, WeatherSystem
 
-__all__ = ["SkyState", "SkySystem", "MOON_CYCLE_DAYS"]
+__all__ = ["MOON_CYCLE_DAYS", "SkyState", "SkySystem"]
 
 
 # ---------------------------------------------------------------------------
@@ -72,8 +72,8 @@ __all__ = ["SkyState", "SkySystem", "MOON_CYCLE_DAYS"]
 # we np.interp three scalars per channel — cheap and smooth.
 
 _LUT_SUN_Z = np.linspace(-0.35, 1.0, 56)
-_NIGHT_AMBIENT = (0.010, 0.012, 0.022)     # clear moonless-night skylight
-_NIGHT_ZENITH = (0.012, 0.016, 0.035)      # display floor for the gradient
+_NIGHT_AMBIENT = (0.010, 0.012, 0.022)  # clear moonless-night skylight
+_NIGHT_ZENITH = (0.012, 0.016, 0.035)  # display floor for the gradient
 _NIGHT_HORIZON = (0.020, 0.026, 0.046)
 _MOON_BASE_RADIANCE = (0.060, 0.070, 0.100)  # full moon at the zenith
 
@@ -83,35 +83,36 @@ class _AtmosphereLUT:
 
     def __init__(self) -> None:
         from fire_engine.world.sky import atmosphere as atmo
+
         zs = _LUT_SUN_Z
-        self.sun = atmo.sun_radiance(zs)                       # (56, 3)
+        self.sun = atmo.sun_radiance(zs)  # (56, 3)
         # One sky_radiance call per elevation: 48 ambient hemisphere dirs +
         # 1 zenith + 8 just-above-horizon dirs, split afterwards.
         hemi = atmo._hemisphere_dirs(48)
         az = np.radians(np.arange(8) * 45.0)
-        horizon_dirs = np.stack(
-            [np.cos(az) * 0.998, np.sin(az) * 0.998,
-             np.full(8, 0.06)], axis=1)
+        horizon_dirs = np.stack([np.cos(az) * 0.998, np.sin(az) * 0.998, np.full(8, 0.06)], axis=1)
         dirs = np.vstack([hemi, [[0.0, 0.0, 1.0]], horizon_dirs])
         amb_rows, zen_rows, hor_rows = [], [], []
         for z in zs:
-            sun_dir = np.array(
-                [math.sqrt(max(1.0 - z * z, 0.0)), 0.0, float(z)])
-            L = atmo.sky_radiance(dirs, sun_dir)               # (57, 3)
-            amb = (2.0 * math.pi / 48.0) * np.sum(
-                L[:48] * hemi[:, 2:3], axis=0) * atmo.AMBIENT_SCALE
+            sun_dir = np.array([math.sqrt(max(1.0 - z * z, 0.0)), 0.0, float(z)])
+            L = atmo.sky_radiance(dirs, sun_dir)  # (57, 3)
+            amb = (
+                (2.0 * math.pi / 48.0) * np.sum(L[:48] * hemi[:, 2:3], axis=0) * atmo.AMBIENT_SCALE
+            )
             amb_rows.append(amb)
             zen_rows.append(L[48])
             hor_rows.append(L[49:].mean(axis=0))
-        self.ambient = np.asarray(amb_rows)                    # (56, 3)
+        self.ambient = np.asarray(amb_rows)  # (56, 3)
         self.zenith = np.asarray(zen_rows)
         self.horizon = np.asarray(hor_rows)
 
     def sample(self, table: np.ndarray, z: float) -> tuple[float, float, float]:
         """Linear interpolation of one (56, 3) table at sun elevation ``z``."""
-        return (float(np.interp(z, _LUT_SUN_Z, table[:, 0])),
-                float(np.interp(z, _LUT_SUN_Z, table[:, 1])),
-                float(np.interp(z, _LUT_SUN_Z, table[:, 2])))
+        return (
+            float(np.interp(z, _LUT_SUN_Z, table[:, 0])),
+            float(np.interp(z, _LUT_SUN_Z, table[:, 1])),
+            float(np.interp(z, _LUT_SUN_Z, table[:, 2])),
+        )
 
 
 _ATMOSPHERE_LUT: _AtmosphereLUT | None = None
@@ -123,6 +124,7 @@ def _get_atmosphere_lut() -> _AtmosphereLUT:
     if _ATMOSPHERE_LUT is None:
         _ATMOSPHERE_LUT = _AtmosphereLUT()
     return _ATMOSPHERE_LUT
+
 
 # ---------------------------------------------------------------------------
 # Tuning constants (documented; palette keyframes key on sun_dir.z)
@@ -216,9 +218,7 @@ def _luminance_gray(c: tuple[float, float, float]) -> tuple[float, float, float]
     return (lum, lum, lum)
 
 
-def _weathered(
-    c: tuple[float, float, float], w: float
-) -> tuple[float, float, float]:
+def _weathered(c: tuple[float, float, float], w: float) -> tuple[float, float, float]:
     """
     Desaturate + darken a sky color by weather grayness *w* in [0, 1].
 
@@ -233,6 +233,7 @@ def _weathered(
 # ---------------------------------------------------------------------------
 # SkyState
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class SkyState:
@@ -325,6 +326,7 @@ class SkyState:
 # ---------------------------------------------------------------------------
 # SkySystem
 # ---------------------------------------------------------------------------
+
 
 class SkySystem:
     """
@@ -419,33 +421,32 @@ class SkySystem:
         night = 1.0 - daylight
         atmo_zen = self._lut.sample(self._lut.zenith, z)
         atmo_hor = self._lut.sample(self._lut.horizon, z)
-        zenith = _weathered(tuple(
-            min(1.0, atmo_zen[i] + _NIGHT_ZENITH[i] * night)
-            for i in range(3)), w)
-        horizon = _weathered(tuple(
-            min(1.0, atmo_hor[i] + _NIGHT_HORIZON[i] * night)
-            for i in range(3)), w)
+        zenith = _weathered(
+            tuple(min(1.0, atmo_zen[i] + _NIGHT_ZENITH[i] * night) for i in range(3)), w
+        )
+        horizon = _weathered(
+            tuple(min(1.0, atmo_hor[i] + _NIGHT_HORIZON[i] * night) for i in range(3)), w
+        )
 
         # --- HDR radiance contract for the GPU lighting pipeline ---------
         cloud_block = wp.cloud_coverage * wp.cloud_density
         sun_clear = self._lut.sample(self._lut.sun, z)
-        sun_atten = 1.0 - 0.92 * cloud_block      # overcast ⇒ diffuse, no disc
+        sun_atten = 1.0 - 0.92 * cloud_block  # overcast ⇒ diffuse, no disc
         sun_radiance = tuple(c * sun_atten for c in sun_clear)
 
         moon_z = float(moon.z)
         illum = 0.5 * (1.0 - math.cos(2.0 * math.pi * moon_phase))
         moon_up = smoothstep(moon_z, 0.0, 0.25)
         moon_atten = 1.0 - 0.90 * cloud_block
-        moon_radiance = tuple(
-            b * illum * moon_up * moon_atten for b in _MOON_BASE_RADIANCE)
+        moon_radiance = tuple(b * illum * moon_up * moon_atten for b in _MOON_BASE_RADIANCE)
 
         # Skylight: physical ambient, desaturated (not darkened) by overcast,
         # plus the night floor and a small moonlit-sky bump.
         amb = self._lut.sample(self._lut.ambient, z)
         amb = lerp_color(amb, _luminance_gray(amb), 0.8 * w)
         sky_ambient = tuple(
-            amb[i] + _NIGHT_AMBIENT[i] * night + moon_radiance[i] * 0.18
-            for i in range(3))
+            amb[i] + _NIGHT_AMBIENT[i] * night + moon_radiance[i] * 0.18 for i in range(3)
+        )
 
         # Fog color: horizon hue pulled toward a neutral gray that itself
         # dims at night (fog should never glow in the dark).
@@ -460,9 +461,7 @@ class SkySystem:
         # Terrain light: elevation ramp × weather dim factor
         # (clear ≈ 1.00, overcast ≈ 0.75, storm ≈ 0.55 — see _TERRAIN_DIM_*).
         base_scale = color_ramp(z, _TERRAIN_LIGHT_RAMP)
-        dim = 1.0 - _TERRAIN_DIM_A * (
-            (wp.cloud_coverage * wp.cloud_density) ** _TERRAIN_DIM_B
-        )
+        dim = 1.0 - _TERRAIN_DIM_A * ((wp.cloud_coverage * wp.cloud_density) ** _TERRAIN_DIM_B)
         terrain_light_scale = (
             base_scale[0] * dim,
             base_scale[1] * dim,

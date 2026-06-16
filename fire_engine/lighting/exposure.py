@@ -42,7 +42,8 @@ Example
 from __future__ import annotations
 
 import math
-from typing import Any, Mapping, Sequence
+from collections.abc import Mapping
+from typing import Any
 
 import numpy as np
 
@@ -63,9 +64,9 @@ _LUMA = np.array([0.2126, 0.7152, 0.0722], dtype=np.float64)
 # exposure_max, and a full moon (luma ~ 0.070) lands the open-field night
 # target around 4 (just under max).
 # ----------------------------------------------------------------------
-_A_SKY: float = 0.25    # weight on sky-ambient luma * sky openness
-_B_SUN: float = 0.028   # weight on direct-sun luma * sun-cone openness
-_C_MOON: float = 0.60   # weight on moon luma * sky openness
+_A_SKY: float = 0.25  # weight on sky-ambient luma * sky openness
+_B_SUN: float = 0.028  # weight on direct-sun luma * sun-cone openness
+_C_MOON: float = 0.60  # weight on moon luma * sky openness
 
 #: Sharpness of the sun-direction cone used to weight rays for the direct
 #: sun term (``max(0, dot(ray, sun_dir)) ** _SUN_CONE_POW``).
@@ -92,16 +93,14 @@ def _build_ray_set() -> tuple[np.ndarray, np.ndarray]:
     """
     dirs: list[tuple[float, float, float]] = [(0.0, 0.0, 1.0)]
     weights: list[float] = [2.0]
-    for elev_deg, count, az_off, w in ((50.0, 6, 0.0, 1.0),
-                                       (15.0, 6, 30.0, 0.5)):
+    for elev_deg, count, az_off, w in ((50.0, 6, 0.0, 1.0), (15.0, 6, 30.0, 0.5)):
         z = math.sin(math.radians(elev_deg))
         r = math.cos(math.radians(elev_deg))
         for i in range(count):
             az = math.radians(az_off + 360.0 * i / count)
             dirs.append((r * math.cos(az), r * math.sin(az), z))
             weights.append(w)
-    return (np.asarray(dirs, dtype=np.float64),
-            np.asarray(weights, dtype=np.float64))
+    return (np.asarray(dirs, dtype=np.float64), np.asarray(weights, dtype=np.float64))
 
 
 _RAY_DIRS, _RAY_WEIGHTS = _build_ray_set()
@@ -116,8 +115,7 @@ def _as_vec3(v: Any) -> np.ndarray:
     ``SimpleNamespace``) or any 3-sequence / array.  World meters, Z-up.
     """
     if hasattr(v, "x") and hasattr(v, "y") and hasattr(v, "z"):
-        return np.array([float(v.x), float(v.y), float(v.z)],
-                        dtype=np.float64)
+        return np.array([float(v.x), float(v.y), float(v.z)], dtype=np.float64)
     arr = np.asarray(v, dtype=np.float64).reshape(3)
     return arr
 
@@ -173,15 +171,12 @@ class ExposureMeter:
             any object exposing the keys documented on the class.  Missing
             keys fall back to the documented defaults.
         """
-        self._enabled: bool = bool(
-            getattr(config, "exposure_adapt_enabled", True))
+        self._enabled: bool = bool(getattr(config, "exposure_adapt_enabled", True))
         self._min: float = float(getattr(config, "exposure_min", 0.55))
         self._max: float = float(getattr(config, "exposure_max", 5.0))
         self._key: float = float(getattr(config, "exposure_key", 0.18))
-        self._tau_dark: float = float(
-            getattr(config, "exposure_tau_dark_s", 4.0))
-        self._tau_bright: float = float(
-            getattr(config, "exposure_tau_bright_s", 0.7))
+        self._tau_dark: float = float(getattr(config, "exposure_tau_dark_s", 4.0))
+        self._tau_bright: float = float(getattr(config, "exposure_tau_bright_s", 0.7))
         self._chunk_size: int = int(getattr(config, "chunk_size", 32))
         self._voxel_size: float = float(getattr(config, "voxel_size", 0.5))
         self._exposure: float = 1.0
@@ -197,12 +192,14 @@ class ExposureMeter:
         return self._exposure
 
     # ------------------------------------------------------------------
-    def update(self,
-               camera_pos: Any,
-               sky_state: Any,
-               chunks: Mapping[tuple[int, int, int], Any] | None,
-               lights_packed: tuple[np.ndarray, int] | None,
-               dt: float) -> float:
+    def update(
+        self,
+        camera_pos: Any,
+        sky_state: Any,
+        chunks: Mapping[tuple[int, int, int], Any] | None,
+        lights_packed: tuple[np.ndarray, int] | None,
+        dt: float,
+    ) -> float:
         """
         Advance the meter by ``dt`` seconds and return the new multiplier.
 
@@ -248,13 +245,12 @@ class ExposureMeter:
         else:
             cam = _as_vec3(camera_pos)
             luminance = self._estimate_luminance(
-                cam, sky_state, chunks if chunks is not None else {},
-                lights_packed)
+                cam, sky_state, chunks if chunks is not None else {}, lights_packed
+            )
             target = self._key / max(luminance, 1e-4)
             target = min(max(target, self._min), self._max)
             # Rising multiplier == adapting to darkness == slow.
-            tau = self._tau_dark if target > self._exposure \
-                else self._tau_bright
+            tau = self._tau_dark if target > self._exposure else self._tau_bright
 
         dt = float(dt)
         if dt > 0.0 and target != self._exposure:
@@ -272,12 +268,13 @@ class ExposureMeter:
     # Internals
     # ------------------------------------------------------------------
 
-    def _estimate_luminance(self,
-                            cam: np.ndarray,
-                            sky_state: Any,
-                            chunks: Mapping[tuple[int, int, int], Any],
-                            lights_packed: tuple[np.ndarray, int] | None
-                            ) -> float:
+    def _estimate_luminance(
+        self,
+        cam: np.ndarray,
+        sky_state: Any,
+        chunks: Mapping[tuple[int, int, int], Any],
+        lights_packed: tuple[np.ndarray, int] | None,
+    ) -> float:
         """Estimate incident luminance (Rec.709, linear HDR) at ``cam``.
 
         ``L = openness * luma(sky_ambient) * A
@@ -304,16 +301,17 @@ class ExposureMeter:
                 if w_total > 1e-6:
                     sun_vis = float((open_per_ray * w).sum()) / w_total
 
-        lum = (openness * sky_l * _A_SKY
-               + sun_vis * sun_l * _B_SUN
-               + openness * moon_l * _C_MOON
-               + self._light_luminance(cam, lights_packed))
+        lum = (
+            openness * sky_l * _A_SKY
+            + sun_vis * sun_l * _B_SUN
+            + openness * moon_l * _C_MOON
+            + self._light_luminance(cam, lights_packed)
+        )
         return lum
 
-    def _ray_openness(self,
-                      cam: np.ndarray,
-                      chunks: Mapping[tuple[int, int, int], Any]
-                      ) -> np.ndarray:
+    def _ray_openness(
+        self, cam: np.ndarray, chunks: Mapping[tuple[int, int, int], Any]
+    ) -> np.ndarray:
         """Per-ray sky openness: 1.0 if a probe ray reaches 28 m without
         hitting a solid voxel, else 0.0.  Returns float64 ``(13,)``.
 
@@ -323,8 +321,7 @@ class ExposureMeter:
         (missing chunks count as air).
         """
         # (R, S, 3) world-space sample positions.
-        pos = cam[None, None, :] \
-            + _RAY_DIRS[:, None, :] * _RAY_DISTS[None, :, None]
+        pos = cam[None, None, :] + _RAY_DIRS[:, None, :] * _RAY_DISTS[None, :, None]
         vox = np.floor(pos / self._voxel_size).astype(np.int64)
         cnk = np.floor_divide(vox, self._chunk_size)
         loc = vox - cnk * self._chunk_size
@@ -335,11 +332,11 @@ class ExposureMeter:
 
         uniq, inv = np.unique(flat_cnk, axis=0, return_inverse=True)
         inv = inv.reshape(-1)
-        for i in range(uniq.shape[0]):          # ~a dozen chunks max
+        for i in range(uniq.shape[0]):  # ~a dozen chunks max
             key = (int(uniq[i, 0]), int(uniq[i, 1]), int(uniq[i, 2]))
             chunk = chunks.get(key)
             if chunk is None:
-                continue                         # unloaded == air
+                continue  # unloaded == air
             mask = inv == i
             l = flat_loc[mask]
             solid[mask] = chunk.materials[l[:, 0], l[:, 1], l[:, 2]] != 0
@@ -348,9 +345,7 @@ class ExposureMeter:
         return (~blocked).astype(np.float64)
 
     @staticmethod
-    def _light_luminance(cam: np.ndarray,
-                         lights_packed: tuple[np.ndarray, int] | None
-                         ) -> float:
+    def _light_luminance(cam: np.ndarray, lights_packed: tuple[np.ndarray, int] | None) -> float:
         """Summed luminance contribution of packed point/area lights.
 
         Per light: ``luma(color*intensity) * window / (d^2 + 1)`` where

@@ -30,11 +30,10 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 import numpy as np
 
-from fire_engine.core.math3d import Vec3, Quat
+from fire_engine.core.math3d import Quat, Vec3
 
 
 class GizmoMode(Enum):
@@ -96,7 +95,7 @@ class DragState:
     start_rotation: Quat
     start_scale: Vec3
     ref_scalar: float = 0.0
-    ref_point: Optional[np.ndarray] = None
+    ref_point: np.ndarray | None = None
     ref_angle: float = 0.0
     ref_dist: float = 0.0
 
@@ -127,9 +126,10 @@ def _axis_vec(i: int) -> Vec3:
 # Ray geometry primitives (numpy float64, pure functions)
 # ---------------------------------------------------------------------------
 
+
 def ray_plane_intersect(
     o: np.ndarray, d: np.ndarray, p: np.ndarray, n: np.ndarray
-) -> Optional[np.ndarray]:
+) -> np.ndarray | None:
     """
     Intersect ray ``o + s·d`` (s ≥ 0) with the plane through ``p`` normal ``n``.
 
@@ -183,6 +183,7 @@ def _ring_angle(point: np.ndarray, pivot: np.ndarray, axis: int) -> float:
 # Gizmo: picking + drag begin
 # ---------------------------------------------------------------------------
 
+
 class Gizmo:
     """
     A transform manipulator anchored at ``pivot`` with on-screen radius ``size``.
@@ -207,7 +208,7 @@ class Gizmo:
 
     # -- picking --------------------------------------------------------
 
-    def pick(self, ray_o: Vec3, ray_d: Vec3) -> Optional[Handle]:
+    def pick(self, ray_o: Vec3, ray_d: Vec3) -> Handle | None:
         """
         Return the handle under the cursor ray (nearest to camera), or ``None``.
 
@@ -219,7 +220,7 @@ class Gizmo:
         o, d, p = _np(ray_o), _np(ray_d), _np(self.pivot)
         R = self.size
         axis_r = R * 0.18
-        best: Optional[tuple[float, Handle]] = None
+        best: tuple[float, Handle] | None = None
 
         def consider(depth: float, handle: Handle) -> None:
             nonlocal best
@@ -290,8 +291,13 @@ class Gizmo:
         """
         o, d, p = _np(ray_o), _np(ray_d), _np(self.pivot)
         st = DragState(
-            mode=self.mode, handle=handle, pivot=self.pivot, size=self.size,
-            start_position=position, start_rotation=rotation, start_scale=scale,
+            mode=self.mode,
+            handle=handle,
+            pivot=self.pivot,
+            size=self.size,
+            start_position=position,
+            start_rotation=rotation,
+            start_scale=scale,
         )
         if handle.type == HandleType.AXIS:
             st.ref_scalar = closest_on_axis(o, d, p, _AXIS_NP[handle.axis])[0]
@@ -315,6 +321,7 @@ def _ray_s_of(o: np.ndarray, d: np.ndarray, point: np.ndarray) -> float:
 # ---------------------------------------------------------------------------
 # Drag resolution (absolute from the captured reference)
 # ---------------------------------------------------------------------------
+
 
 def update_drag(state: DragState, ray_o: Vec3, ray_d: Vec3) -> tuple[Vec3, Quat, Vec3]:
     """

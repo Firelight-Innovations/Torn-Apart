@@ -26,8 +26,6 @@ Example
 
 from __future__ import annotations
 
-from typing import Any
-
 from fire_engine.core import get_logger
 from fire_engine.zones.volume import ZoneVolume
 
@@ -95,9 +93,13 @@ class ZoneStore:
             Per-volume tuning (e.g. grass ``"density"`` blades/m²).
         """
         vol = ZoneVolume(
-            id=self._next_id, tag=tag,
-            min_corner=min_corner, max_corner=max_corner,
-            biome=biome, params=dict(params or {}))
+            id=self._next_id,
+            tag=tag,
+            min_corner=min_corner,
+            max_corner=max_corner,
+            biome=biome,
+            params=dict(params or {}),
+        )
         self._volumes[vol.id] = vol
         self._next_id += 1
         self.version += 1
@@ -159,9 +161,7 @@ class ZoneStore:
         snap = self._snapshot()
         if self._baseline is not None and snap == self._baseline:
             return {}
-        return {"version": _DELTA_VERSION,
-                "volumes": snap,
-                "next_id": int(self._next_id)}
+        return {"version": _DELTA_VERSION, "volumes": snap, "next_id": int(self._next_id)}
 
     def apply_delta(self, delta: dict) -> None:
         """
@@ -174,15 +174,12 @@ class ZoneStore:
             return
         version = int(delta.get("version", 0))
         if version > _DELTA_VERSION:
-            _log.warning("zones delta version %d newer than supported %d — "
-                         "ignoring", version, _DELTA_VERSION)
+            _log.warning(
+                "zones delta version %d newer than supported %d — ignoring", version, _DELTA_VERSION
+            )
             return
-        self._volumes = {
-            int(d["id"]): ZoneVolume.from_dict(d)
-            for d in delta.get("volumes", ())
-        }
-        self._next_id = int(delta.get("next_id",
-                                      max(self._volumes, default=0) + 1))
+        self._volumes = {int(d["id"]): ZoneVolume.from_dict(d) for d in delta.get("volumes", ())}
+        self._next_id = int(delta.get("next_id", max(self._volumes, default=0) + 1))
         self.version += 1
 
     # ------------------------------------------------------------------

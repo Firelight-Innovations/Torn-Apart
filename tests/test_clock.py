@@ -22,22 +22,19 @@ All tests are headless: no panda3d, no fire_engine.world, no fire_engine.lightin
 
 from __future__ import annotations
 
-import pytest
-
 from fire_engine.core.clock import (
-    Clock,
-    MAX_FIXED_STEPS,
-    DEFAULT_GAME_TIME_SCALE,
     _GAME_SECONDS_PER_DAY,
+    DEFAULT_GAME_TIME_SCALE,
+    MAX_FIXED_STEPS,
+    Clock,
 )
 from fire_engine.core.config import load_config
 from fire_engine.core.event_bus import EventBus, GameDayTickEvent
-from fire_engine.core.rng import set_world_seed
-
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
 # ---------------------------------------------------------------------------
+
 
 def _make_clock(scale: float = DEFAULT_GAME_TIME_SCALE, bus: EventBus | None = None) -> Clock:
     """Return a fresh Clock using fixed_dt from the real config."""
@@ -55,6 +52,7 @@ def _make_bus_and_clock(scale: float = DEFAULT_GAME_TIME_SCALE):
 # ---------------------------------------------------------------------------
 # fixed_steps() accumulator
 # ---------------------------------------------------------------------------
+
 
 class TestFixedStepsAccumulator:
     def test_no_steps_below_fixed_dt(self):
@@ -132,6 +130,7 @@ class TestFixedStepsAccumulator:
 # Spiral-of-death guard
 # ---------------------------------------------------------------------------
 
+
 class TestSpiralOfDeathGuard:
     def test_large_dt_capped_at_max_fixed_steps(self):
         """Very large real_dt must yield at most MAX_FIXED_STEPS steps."""
@@ -154,9 +153,7 @@ class TestSpiralOfDeathGuard:
         # A follow-up tiny update should not suddenly emit many steps
         clock.update(clock.fixed_dt * 0.1)
         steps = list(clock.fixed_steps())
-        assert len(steps) == 0, (
-            "After spiral-guard reset, accumulator should be near zero"
-        )
+        assert len(steps) == 0, "After spiral-guard reset, accumulator should be near zero"
 
     def test_exactly_max_steps_at_float_boundary(self):
         """
@@ -186,6 +183,7 @@ class TestSpiralOfDeathGuard:
 # ---------------------------------------------------------------------------
 # Calendar advancement
 # ---------------------------------------------------------------------------
+
 
 class TestCalendar:
     def test_game_time_advances_with_scale(self):
@@ -242,6 +240,7 @@ class TestCalendar:
 # Boundary cases: real_dt = 0, negative, fractional, scale = 0
 # ---------------------------------------------------------------------------
 
+
 class TestBoundaryInputs:
     def test_zero_dt_no_steps_no_advance(self):
         """real_dt = 0 produces no fixed steps and no game-time change."""
@@ -297,6 +296,7 @@ class TestBoundaryInputs:
 # Total real time and dt tracking
 # ---------------------------------------------------------------------------
 
+
 class TestRealTimeTracking:
     def test_total_real_time_accumulates(self):
         """total_real_time accumulates across multiple updates."""
@@ -319,6 +319,7 @@ class TestRealTimeTracking:
 # get_state() / set_state() round-trip
 # ---------------------------------------------------------------------------
 
+
 class TestStateRoundTrip:
     def test_state_keys_present(self):
         """get_state() returns all expected keys."""
@@ -333,9 +334,7 @@ class TestStateRoundTrip:
         clock.update(123.456)
         state = clock.get_state()
         for k, v in state.items():
-            assert isinstance(v, (int, float)), (
-                f"State key '{k}' has non-primitive type {type(v)}"
-            )
+            assert isinstance(v, (int, float)), f"State key '{k}' has non-primitive type {type(v)}"
 
     def test_set_state_restores_game_day(self):
         """set_state() restores game_day from saved state."""
@@ -400,6 +399,7 @@ class TestStateRoundTrip:
 # game_time_scale read/write property
 # ---------------------------------------------------------------------------
 
+
 class TestGameTimeScaleProperty:
     def test_default_scale_is_constant(self):
         """Clock initialised without explicit scale uses DEFAULT_GAME_TIME_SCALE."""
@@ -431,6 +431,7 @@ class TestGameTimeScaleProperty:
 # ---------------------------------------------------------------------------
 # GameDayTickEvent via EventBus
 # ---------------------------------------------------------------------------
+
 
 class TestGameDayTickEvent:
     def test_day_tick_event_not_fired_before_rollover(self):

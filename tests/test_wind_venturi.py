@@ -28,7 +28,6 @@ from fire_engine.core.config import Config
 from fire_engine.core.rng import set_world_seed
 from fire_engine.world.wind import (
     VenturiJob,
-    VenturiResult,
     VenturiWorker,
     WindField,
     solve_venturi,
@@ -43,9 +42,15 @@ SEED = 1337
 # Synthetic terrain helpers
 # ---------------------------------------------------------------------------
 
+
 def _chunks_from_region_solid(
-    solid_vox: np.ndarray, *, vz_lo: int, vz_hi: int,
-    origin_cell: tuple[int, int], cells: int, vpc: int,
+    solid_vox: np.ndarray,
+    *,
+    vz_lo: int,
+    vz_hi: int,
+    origin_cell: tuple[int, int],
+    cells: int,
+    vpc: int,
 ) -> dict:
     """
     Build a ``coord -> _Chunk`` dict realising a per-(x,y) solid column.
@@ -69,7 +74,7 @@ def _chunks_from_region_solid(
 
     xs, ys = np.nonzero(solid_vox)
     for lx, ly in zip(xs.tolist(), ys.tolist()):
-        gx = vx0 + lx                       # global voxel x
+        gx = vx0 + lx  # global voxel x
         gy = vy0 + ly
         ccx, ccy = gx // CHUNK, gy // CHUNK
         for ccz in range(vz_lo // CHUNK, (vz_hi - 1) // CHUNK + 1):
@@ -96,9 +101,9 @@ def _wall_with_gap_job(cfg: Config, seq: int = 1) -> tuple[VenturiJob, int, int]
     wind-cell y indices ``gap_cell_y`` and ``gap_cell_y + 1``.
     """
     cells = 16
-    cell_m = float(cfg.wind_cell_m)            # 4.0
-    vpc = int(round(cell_m / VOXEL))           # 8
-    region_v = cells * vpc                     # 128 voxels per axis
+    cell_m = float(cfg.wind_cell_m)  # 4.0
+    vpc = int(round(cell_m / VOXEL))  # 8
+    region_v = cells * vpc  # 128 voxels per axis
     ground = float(cfg.ground_height_m)
     vz_lo = int(np.floor(ground / VOXEL))
     vz_hi = int(np.ceil((ground + float(cfg.wind_layer_m)) / VOXEL))
@@ -108,22 +113,30 @@ def _wall_with_gap_job(cfg: Config, seq: int = 1) -> tuple[VenturiJob, int, int]
 
     solid = np.zeros((region_v, region_v), dtype=bool)
     # Wall: all of the wall cell's voxel columns, every y.
-    solid[wall_cell_x * vpc:(wall_cell_x + 1) * vpc, :] = True
+    solid[wall_cell_x * vpc : (wall_cell_x + 1) * vpc, :] = True
     # Punch a 2-cell-wide gap in Y.
-    solid[wall_cell_x * vpc:(wall_cell_x + 1) * vpc,
-          gap_cell_y * vpc:(gap_cell_y + 2) * vpc] = False
+    solid[
+        wall_cell_x * vpc : (wall_cell_x + 1) * vpc, gap_cell_y * vpc : (gap_cell_y + 2) * vpc
+    ] = False
 
     chunks = _chunks_from_region_solid(
-        solid, vz_lo=vz_lo, vz_hi=vz_hi, origin_cell=(0, 0),
-        cells=cells, vpc=vpc)
+        solid, vz_lo=vz_lo, vz_hi=vz_hi, origin_cell=(0, 0), cells=cells, vpc=vpc
+    )
     materials = {c: ch.materials for c, ch in chunks.items()}
 
     job = VenturiJob(
-        origin_cell=(0, 0), cells=cells, cell_m=cell_m, chunk_size=CHUNK,
-        voxel_size=VOXEL, ground_band=(ground, ground + float(cfg.wind_layer_m)),
-        materials=materials, venturi_iters=int(cfg.wind_venturi_iters),
+        origin_cell=(0, 0),
+        cells=cells,
+        cell_m=cell_m,
+        chunk_size=CHUNK,
+        voxel_size=VOXEL,
+        ground_band=(ground, ground + float(cfg.wind_layer_m)),
+        materials=materials,
+        venturi_iters=int(cfg.wind_venturi_iters),
         venturi_max=float(cfg.wind_venturi_max),
-        deflect_gain=float(cfg.wind_deflect_gain), seq=seq)
+        deflect_gain=float(cfg.wind_deflect_gain),
+        seq=seq,
+    )
     return job, wall_cell_x, gap_cell_y
 
 
@@ -132,12 +145,18 @@ def _empty_job(cfg: Config, seq: int = 1) -> VenturiJob:
     cells = 16
     ground = float(cfg.ground_height_m)
     return VenturiJob(
-        origin_cell=(0, 0), cells=cells, cell_m=float(cfg.wind_cell_m),
-        chunk_size=CHUNK, voxel_size=VOXEL,
+        origin_cell=(0, 0),
+        cells=cells,
+        cell_m=float(cfg.wind_cell_m),
+        chunk_size=CHUNK,
+        voxel_size=VOXEL,
         ground_band=(ground, ground + float(cfg.wind_layer_m)),
-        materials={}, venturi_iters=int(cfg.wind_venturi_iters),
+        materials={},
+        venturi_iters=int(cfg.wind_venturi_iters),
         venturi_max=float(cfg.wind_venturi_max),
-        deflect_gain=float(cfg.wind_deflect_gain), seq=seq)
+        deflect_gain=float(cfg.wind_deflect_gain),
+        seq=seq,
+    )
 
 
 def _drain_until(worker, want: int, timeout_s: float = 5.0):
@@ -155,6 +174,7 @@ def _drain_until(worker, want: int, timeout_s: float = 5.0):
 # solve_venturi correctness
 # ---------------------------------------------------------------------------
 
+
 class TestSolveVenturi:
     def test_gap_speedup_open_identity_and_bounds(self):
         cfg = Config()
@@ -169,7 +189,7 @@ class TestSolveVenturi:
         assert sp.max() <= float(cfg.wind_venturi_max) + 1e-5
 
         # The gap (open cells flanked by wall) funnels: speedup > 1.3 there.
-        gap = sp[wall_x, gap_y:gap_y + 2]
+        gap = sp[wall_x, gap_y : gap_y + 2]
         assert gap.max() > 1.3, f"gap speedup too low: {gap}"
 
         # Open field far from the wall is ≈ 1 (no funneling).
@@ -195,6 +215,7 @@ class TestSolveVenturi:
 # VenturiWorker thread
 # ---------------------------------------------------------------------------
 
+
 class TestVenturiWorker:
     def test_worker_matches_on_thread(self):
         cfg = Config()
@@ -219,14 +240,14 @@ class TestVenturiWorker:
     def test_start_is_idempotent(self):
         worker = VenturiWorker()
         worker.start()
-        worker.start()   # second start is a no-op
+        worker.start()  # second start is a no-op
         worker.stop()
 
     def test_stop_is_clean_and_idempotent(self):
         worker = VenturiWorker()
         worker.start()
         worker.stop()
-        worker.stop()    # second stop must not raise
+        worker.stop()  # second stop must not raise
 
     def test_stop_joins_within_timeout(self):
         worker = VenturiWorker()
@@ -260,19 +281,24 @@ class TestVenturiWorker:
                     raise RuntimeError("boom")
 
             bad = VenturiJob(
-                origin_cell=(0, 0), cells=16, cell_m=float(cfg.wind_cell_m),
-                chunk_size=CHUNK, voxel_size=VOXEL,
-                ground_band=(8.0, 16.0), materials=_Boom({(0, 0, 0): 1}),
+                origin_cell=(0, 0),
+                cells=16,
+                cell_m=float(cfg.wind_cell_m),
+                chunk_size=CHUNK,
+                voxel_size=VOXEL,
+                ground_band=(8.0, 16.0),
+                materials=_Boom({(0, 0, 0): 1}),
                 venturi_iters=int(cfg.wind_venturi_iters),
                 venturi_max=float(cfg.wind_venturi_max),
-                deflect_gain=float(cfg.wind_deflect_gain), seq=99)
+                deflect_gain=float(cfg.wind_deflect_gain),
+                seq=99,
+            )
             worker.submit(bad)
             results = _drain_until(worker, 1)
             assert len(results) == 1
             # Identity result posted (worker did not die silently).
             assert results[0].seq == 99
-            assert np.array_equal(
-                results[0].speedup, np.ones((16, 16), dtype=np.float32))
+            assert np.array_equal(results[0].speedup, np.ones((16, 16), dtype=np.float32))
 
             # The thread survived: a normal job after the raise still solves.
             good, _, _ = _wall_with_gap_job(cfg, seq=100)
@@ -289,11 +315,17 @@ class TestVenturiWorker:
 # WindField integration
 # ---------------------------------------------------------------------------
 
+
 def _sky(wind_dir=(1.0, 0.0), wind_speed=6.0):
     from types import SimpleNamespace
+
     return SimpleNamespace(
-        wind_dir=wind_dir, wind_speed=wind_speed,
-        rain_intensity=0.0, cloud_coverage=0.0, cloud_density=0.0)
+        wind_dir=wind_dir,
+        wind_speed=wind_speed,
+        rain_intensity=0.0,
+        cloud_coverage=0.0,
+        cloud_density=0.0,
+    )
 
 
 class TestWindFieldIntegration:
@@ -314,7 +346,7 @@ class TestWindFieldIntegration:
             player = (centre, centre, cfg.ground_height_m)
 
             # Build a full-region wall-with-gap matched to the field's region.
-            field.update(0.016, 5.0, sky, player)        # places the region
+            field.update(0.016, 5.0, sky, player)  # places the region
             origin = field._region.origin_cell
             vpc = int(round(cell_m / VOXEL))
             region_v = cells * vpc
@@ -325,17 +357,15 @@ class TestWindFieldIntegration:
             wall_x = cells // 2
             gap_y = cells // 2
             solid = np.zeros((region_v, region_v), dtype=bool)
-            solid[wall_x * vpc:(wall_x + 1) * vpc, :] = True
-            solid[wall_x * vpc:(wall_x + 1) * vpc,
-                  gap_y * vpc:(gap_y + 2) * vpc] = False
+            solid[wall_x * vpc : (wall_x + 1) * vpc, :] = True
+            solid[wall_x * vpc : (wall_x + 1) * vpc, gap_y * vpc : (gap_y + 2) * vpc] = False
             chunks = _chunks_from_region_solid(
-                solid, vz_lo=vz_lo, vz_hi=vz_hi, origin_cell=origin,
-                cells=cells, vpc=vpc)
+                solid, vz_lo=vz_lo, vz_hi=vz_hi, origin_cell=origin, cells=cells, vpc=vpc
+            )
 
             # Drive updates passing chunks until a matching-origin result lands.
             deadline = time.monotonic() + 5.0
-            while (field._venturi_origin != origin
-                   and time.monotonic() < deadline):
+            while field._venturi_origin != origin and time.monotonic() < deadline:
                 field.update(0.016, 5.0, sky, player, chunks=chunks)
                 time.sleep(0.002)
             assert field._venturi_origin == origin, "venturi result never landed"
@@ -361,10 +391,14 @@ class TestWindFieldIntegration:
             # Updraft is positive somewhere over the constriction (speedup>1).
             # Sample a grid of points over the wall row at the gap edges.
             ys = (origin[1] + np.arange(cells) + 0.5) * cell_m
-            pts = np.stack([
-                np.full(cells, wall_world_x, dtype=np.float32),
-                ys.astype(np.float32),
-                np.full(cells, z, dtype=np.float32)], axis=1)
+            pts = np.stack(
+                [
+                    np.full(cells, wall_world_x, dtype=np.float32),
+                    ys.astype(np.float32),
+                    np.full(cells, z, dtype=np.float32),
+                ],
+                axis=1,
+            )
             vz = field.sample(pts)[:, 2]
             assert vz.max() > 0.0, "no positive updraft over the constriction"
         finally:

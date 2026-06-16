@@ -52,14 +52,14 @@ from fire_engine.lighting.occluders import TreeOccluderSet, splat_tree_occluders
 from fire_engine.lighting.palette import MaterialPalette
 
 __all__ = [
-    "VolumeWindow",
-    "GeometryVolume",
-    "GeometryOccupancyProvider",
-    "assemble_geometry",
-    "window_chunk_span",
-    "pack_volume",
-    "ChunkBlockCache",
     "EMISSION_SCALE",
+    "ChunkBlockCache",
+    "GeometryOccupancyProvider",
+    "GeometryVolume",
+    "VolumeWindow",
+    "assemble_geometry",
+    "pack_volume",
+    "window_chunk_span",
 ]
 
 
@@ -117,6 +117,7 @@ class GeometryOccupancyProvider(Protocol):
         """
         ...  # pragma: no cover
 
+
 # Emission is HDR (a torch glow is ~2.0) but stored in uint8 textures; values
 # are divided by this scale on pack and multiplied back in the shader.
 EMISSION_SCALE: float = 8.0
@@ -164,8 +165,7 @@ class VolumeWindow:
         margin_cells: int = 8,
     ) -> None:
         if cells % snap_cells != 0:
-            raise ValueError(f"cells ({cells}) must be a multiple of "
-                             f"snap_cells ({snap_cells})")
+            raise ValueError(f"cells ({cells}) must be a multiple of snap_cells ({snap_cells})")
         self.cells = int(cells)
         self.cell_m = float(cell_m)
         self.snap_cells = int(snap_cells)
@@ -183,9 +183,11 @@ class VolumeWindow:
         """
         if self.origin_cell is None:
             raise ValueError("VolumeWindow.recenter() never called")
-        return (self.origin_cell[0] * self.cell_m,
-                self.origin_cell[1] * self.cell_m,
-                self.origin_cell[2] * self.cell_m)
+        return (
+            self.origin_cell[0] * self.cell_m,
+            self.origin_cell[1] * self.cell_m,
+            self.origin_cell[2] * self.cell_m,
+        )
 
     @property
     def size_m(self) -> float:
@@ -217,8 +219,7 @@ class VolumeWindow:
         half = self.cells * 0.5
         for axis in range(3):
             centre = (self.origin_cell[axis] + half) * self.cell_m
-            if abs(float(camera_pos[axis]) - centre) \
-                    > self.margin_cells * self.cell_m:
+            if abs(float(camera_pos[axis]) - centre) > self.margin_cells * self.cell_m:
                 return True
         return False
 
@@ -244,8 +245,7 @@ class VolumeWindow:
         half = self.cells * 0.5
         for axis in range(3):
             centre = (self.origin_cell[axis] + half) * self.cell_m
-            if abs(float(camera_pos[axis]) - centre) \
-                    > self.margin_cells * self.cell_m:
+            if abs(float(camera_pos[axis]) - centre) > self.margin_cells * self.cell_m:
                 self.origin_cell = self._desired_origin(camera_pos)
                 return True
         return False
@@ -315,11 +315,11 @@ def assemble_geometry(
     palette: MaterialPalette,
     chunk_size: int,
     voxel_size: float,
-    cache: "ChunkBlockCache | None" = None,
-    occluders: "TreeOccluderSet | None" = None,
+    cache: ChunkBlockCache | None = None,
+    occluders: TreeOccluderSet | None = None,
     trunk_occ: float = 0.0,
     canopy_gain: float = 0.0,
-    providers: "tuple[GeometryOccupancyProvider, ...]" = (),
+    providers: tuple[GeometryOccupancyProvider, ...] = (),
 ) -> GeometryVolume:
     """
     Slice loaded chunks into one contiguous geometry block for ``window``.
@@ -392,18 +392,18 @@ def assemble_geometry(
     """
     if window.origin_cell is None:
         raise ValueError("VolumeWindow.recenter() never called")
-    k = window.cell_m / voxel_size          # voxels per cell edge
+    k = window.cell_m / voxel_size  # voxels per cell edge
     if abs(k - round(k)) > 1e-9 or k < 1:
         raise ValueError(
-            f"cell_m ({window.cell_m}) must be an integer multiple of "
-            f"voxel_size ({voxel_size})")
+            f"cell_m ({window.cell_m}) must be an integer multiple of voxel_size ({voxel_size})"
+        )
     k = int(round(k))
     n = window.cells
-    cells_per_chunk = (chunk_size // k)     # window cells per chunk edge
+    cells_per_chunk = chunk_size // k  # window cells per chunk edge
     if cells_per_chunk * k != chunk_size:
         raise ValueError("chunk_size must be divisible by cells-per-voxel")
 
-    ox, oy, oz = window.origin_cell         # window origin, in cells
+    ox, oy, oz = window.origin_cell  # window origin, in cells
     materials = np.zeros((n, n, n), dtype=np.uint8)
     # Per-cell solid sub-voxel count (0 .. k³); ÷k³ ×255 → occupancy alpha.
     solid_count = np.zeros((n, n, n), dtype=np.uint16)
@@ -434,47 +434,41 @@ def assemble_geometry(
                         cache.put(coord, window.cell_m, blk)
                 chunk_mat, chunk_cnt = blk
                 # Chunk extent in window-cell coordinates.
-                c0 = (ccx * cells_per_chunk, ccy * cells_per_chunk,
-                      ccz * cells_per_chunk)
+                c0 = (ccx * cells_per_chunk, ccy * cells_per_chunk, ccz * cells_per_chunk)
                 # Overlap range in absolute cell coords.
                 a = [max(c0[i], (ox, oy, oz)[i]) for i in range(3)]
-                b = [min(c0[i] + cells_per_chunk,
-                         (ox, oy, oz)[i] + n) for i in range(3)]
+                b = [min(c0[i] + cells_per_chunk, (ox, oy, oz)[i] + n) for i in range(3)]
                 if any(b[i] <= a[i] for i in range(3)):
                     continue
                 # Source slice in the chunk's cell mini-block; dest in window.
-                src = tuple(
-                    slice(a[i] - c0[i], b[i] - c0[i]) for i in range(3))
-                dst = tuple(
-                    slice(a[i] - (ox, oy, oz)[i], b[i] - (ox, oy, oz)[i])
-                    for i in range(3))
+                src = tuple(slice(a[i] - c0[i], b[i] - c0[i]) for i in range(3))
+                dst = tuple(slice(a[i] - (ox, oy, oz)[i], b[i] - (ox, oy, oz)[i]) for i in range(3))
                 materials[dst] = chunk_mat[src]
                 solid_count[dst] = chunk_cnt[src]
 
     albedo_occ = np.empty((n, n, n, 4), dtype=np.uint8)
-    albedo_occ[..., :3] = np.clip(
-        palette.albedo[materials] * 255.0, 0.0, 255.0).astype(np.uint8)
+    albedo_occ[..., :3] = np.clip(palette.albedo[materials] * 255.0, 0.0, 255.0).astype(np.uint8)
     # A = solid sub-voxel fraction ×255, rounded.  k³ at k==1 → 0/255 binary.
-    occ = np.rint(solid_count.astype(np.float32) * (255.0 / (k ** 3)))
+    occ = np.rint(solid_count.astype(np.float32) * (255.0 / (k**3)))
     albedo_occ[..., 3] = np.clip(occ, 0.0, 255.0).astype(np.uint8)
 
     # Static tree/bush occluders — splatted after the chunk gather so terrain
     # solids win the max-combine (a tree inside a hill stays hill-solid).
     if occluders is not None and occluders.count:
-        splat_tree_occluders(albedo_occ, window.origin_cell, window.cell_m,
-                             occluders, trunk_occ, canopy_gain)
+        splat_tree_occluders(
+            albedo_occ, window.origin_cell, window.cell_m, occluders, trunk_occ, canopy_gain
+        )
 
     emission = np.empty((n, n, n, 4), dtype=np.uint8)
     emission[..., :3] = np.clip(
-        palette.emission[materials] * (255.0 / EMISSION_SCALE),
-        0.0, 255.0).astype(np.uint8)
+        palette.emission[materials] * (255.0 / EMISSION_SCALE), 0.0, 255.0
+    ).astype(np.uint8)
     emission[..., 3] = 255
 
     # Non-terrain geometry providers (buildings, props) splat last so terrain
     # and tree solids win the max-combine.  Empty → byte-identical output.
     for provider in providers:
-        provider.rasterize_occupancy(window.origin_cell, n, window.cell_m,
-                                     albedo_occ, emission)
+        provider.rasterize_occupancy(window.origin_cell, n, window.cell_m, albedo_occ, emission)
 
     return GeometryVolume(
         albedo_occ=albedo_occ,
@@ -526,8 +520,7 @@ def pack_volume(arr: np.ndarray) -> bytes:
     async assembly worker can run it off the main thread, leaving only the
     cheap ``Texture.set_ram_image(bytes)`` memcpy on the render thread.
     """
-    data = np.ascontiguousarray(
-        np.transpose(arr, (2, 1, 0, 3))[..., [2, 1, 0, 3]])
+    data = np.ascontiguousarray(np.transpose(arr, (2, 1, 0, 3))[..., [2, 1, 0, 3]])
     return data.tobytes()
 
 
@@ -587,13 +580,14 @@ class ChunkBlockCache:
     def __init__(self, max_entries: int = 4096) -> None:
         self.max_entries = int(max_entries)
         # key: (coord, cell_m) -> (material_id, solid_count) read-only arrays.
-        self._store: "OrderedDict[tuple, tuple[np.ndarray, np.ndarray]]" = \
-            OrderedDict()
+        self._store: OrderedDict[tuple, tuple[np.ndarray, np.ndarray]] = OrderedDict()
         self._lock = threading.Lock()
 
     def get(
-        self, coord: tuple[int, int, int], cell_m: float,
-    ) -> "tuple[np.ndarray, np.ndarray] | None":
+        self,
+        coord: tuple[int, int, int],
+        cell_m: float,
+    ) -> tuple[np.ndarray, np.ndarray] | None:
         """
         Return the cached ``(material_id, solid_count)`` mini-block for
         ``(coord, cell_m)``, or ``None`` on a miss.  Marks the entry MRU.

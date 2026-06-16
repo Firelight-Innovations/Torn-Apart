@@ -16,37 +16,38 @@ from __future__ import annotations
 import math
 
 import numpy as np
-import pytest
 
 from fire_engine.world.sky import atmosphere
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-NOON_Z = 0.94          # sin(elevation) at v0 noon arc peak
-HORIZON_Z = 0.0        # sin(0°) — exactly at the geometric horizon
+NOON_Z = 0.94  # sin(elevation) at v0 noon arc peak
+HORIZON_Z = 0.0  # sin(0°) — exactly at the geometric horizon
 ZENITH_DIR = np.array([[0.0, 0.0, 1.0]])
-SUN_NOON = np.array([0.34, 0.0, 0.94])    # matches existing fixture
+SUN_NOON = np.array([0.34, 0.0, 0.94])  # matches existing fixture
 
 
 # ---------------------------------------------------------------------------
 # sky_radiance — vectorization correctness
 # ---------------------------------------------------------------------------
 
+
 class TestSkyRadianceVectorization:
     """Batch calls must behave identically to individual calls."""
 
-    VIEW_DIRS_BATCH = np.array([
-        [0.0,  0.0,  1.0],   # zenith
-        [1.0,  0.0,  0.0],   # horizon east
-        [0.0,  1.0,  0.0],   # horizon north
-        [0.0, -1.0,  0.0],   # horizon south
-        [0.7,  0.0,  0.4],   # mid-elevation (used in existing determinism test)
-        [-0.6, 0.0,  0.8],   # upper hemisphere, away from sun
-        [0.0,  0.5,  0.866], # NE upper
-    ])
+    VIEW_DIRS_BATCH = np.array(
+        [
+            [0.0, 0.0, 1.0],  # zenith
+            [1.0, 0.0, 0.0],  # horizon east
+            [0.0, 1.0, 0.0],  # horizon north
+            [0.0, -1.0, 0.0],  # horizon south
+            [0.7, 0.0, 0.4],  # mid-elevation (used in existing determinism test)
+            [-0.6, 0.0, 0.8],  # upper hemisphere, away from sun
+            [0.0, 0.5, 0.866],  # NE upper
+        ]
+    )
 
     def test_batch_returns_N3_shape(self):
         """An (N, 3) batch of view dirs must yield (N, 3) output."""
@@ -69,8 +70,10 @@ class TestSkyRadianceVectorization:
         for i, d in enumerate(self.VIEW_DIRS_BATCH):
             single = atmosphere.sky_radiance(np.array([d]), SUN_NOON)
             np.testing.assert_allclose(
-                single[0], batch[i],
-                rtol=0.0, atol=0.0,
+                single[0],
+                batch[i],
+                rtol=0.0,
+                atol=0.0,
                 err_msg=f"dir[{i}] single vs batch mismatch",
             )
 
@@ -90,6 +93,7 @@ class TestSkyRadianceVectorization:
 # Rayleigh blue-dominance in clear sky
 # ---------------------------------------------------------------------------
 
+
 class TestRayleighBlueDominance:
     """The doc promises B > R for clear-day zenith/sky — pin that direction."""
 
@@ -97,25 +101,25 @@ class TestRayleighBlueDominance:
         """At clear noon, zenith B channel must dominate R (Rayleigh physics)."""
         L = atmosphere.sky_radiance(ZENITH_DIR, SUN_NOON)
         assert L[0, 2] > L[0, 0], (
-            f"Zenith: B={L[0,2]:.4f} not > R={L[0,0]:.4f} — Rayleigh blue expected"
+            f"Zenith: B={L[0, 2]:.4f} not > R={L[0, 0]:.4f} — Rayleigh blue expected"
         )
 
     def test_zenith_blue_over_green_daytime(self):
         """Standard Rayleigh: B > G at zenith under noon sun."""
         L = atmosphere.sky_radiance(ZENITH_DIR, SUN_NOON)
-        assert L[0, 2] > L[0, 1], (
-            f"Zenith: B={L[0,2]:.4f} not > G={L[0,1]:.4f}"
-        )
+        assert L[0, 2] > L[0, 1], f"Zenith: B={L[0, 2]:.4f} not > G={L[0, 1]:.4f}"
 
     def test_upper_hemisphere_batch_mostly_blue_dominant(self):
         """In a diverse batch, the majority of clear-sky samples should be B > R."""
-        dirs = np.array([
-            [0.0, 0.0, 1.0],
-            [0.5, 0.0, 0.866],
-            [-0.5, 0.0, 0.866],
-            [0.0, 0.5, 0.866],
-            [0.3, 0.3, 0.9],
-        ])
+        dirs = np.array(
+            [
+                [0.0, 0.0, 1.0],
+                [0.5, 0.0, 0.866],
+                [-0.5, 0.0, 0.866],
+                [0.0, 0.5, 0.866],
+                [0.3, 0.3, 0.9],
+            ]
+        )
         L = atmosphere.sky_radiance(dirs, SUN_NOON)
         blue_dom = np.sum(L[:, 2] > L[:, 0])
         assert blue_dom >= len(dirs) - 1, (
@@ -125,41 +129,46 @@ class TestRayleighBlueDominance:
     def test_sky_ambient_noon_blue_over_red(self):
         """sky_ambient at noon should be blue-dominant (pinned from docs contract)."""
         amb = atmosphere.sky_ambient(NOON_Z)
-        assert amb[2] > amb[0], (
-            f"sky_ambient noon: B={amb[2]:.4f} not > R={amb[0]:.4f}"
-        )
+        assert amb[2] > amb[0], f"sky_ambient noon: B={amb[2]:.4f} not > R={amb[0]:.4f}"
 
 
 # ---------------------------------------------------------------------------
 # transmittance — shape, range, and monotonicity
 # ---------------------------------------------------------------------------
 
+
 class TestTransmittance:
     def test_returns_N3_for_batch(self):
-        dirs = np.array([
-            [0.0, 0.0, 1.0],
-            [0.7, 0.0, 0.3],
-            [0.5, 0.5, 0.707],
-        ])
+        dirs = np.array(
+            [
+                [0.0, 0.0, 1.0],
+                [0.7, 0.0, 0.3],
+                [0.5, 0.5, 0.707],
+            ]
+        )
         T = atmosphere.transmittance(dirs)
         assert T.shape == (3, 3)
 
     def test_all_components_in_0_1(self):
         """Transmittance must be in (0, 1] for upward rays."""
-        dirs = np.array([
-            [0.0, 0.0, 1.0],
-            [0.5, 0.0, 0.866],
-            [0.866, 0.0, 0.5],
-        ])
+        dirs = np.array(
+            [
+                [0.0, 0.0, 1.0],
+                [0.5, 0.0, 0.866],
+                [0.866, 0.0, 0.5],
+            ]
+        )
         T = atmosphere.transmittance(dirs)
         assert np.all(T >= 0.0), "transmittance has negative components"
         assert np.all(T <= 1.0), "transmittance exceeds 1.0"
 
     def test_finite_non_negative(self):
-        dirs = np.array([
-            [0.0, 0.0, 1.0],
-            [0.0, 0.0, 0.01],   # near-grazing upward
-        ])
+        dirs = np.array(
+            [
+                [0.0, 0.0, 1.0],
+                [0.0, 0.0, 0.01],  # near-grazing upward
+            ]
+        )
         T = atmosphere.transmittance(dirs)
         assert np.all(np.isfinite(T))
         assert np.all(T >= 0.0)
@@ -203,9 +212,7 @@ class TestTransmittance:
         """Rays that strike the planet must return exactly 0."""
         # Straight down — guaranteed planet hit
         T = atmosphere.transmittance(np.array([[0.0, 0.0, -1.0]]))[0]
-        assert np.all(T == 0.0), (
-            f"Below-horizon ray returned non-zero transmittance: {T}"
-        )
+        assert np.all(T == 0.0), f"Below-horizon ray returned non-zero transmittance: {T}"
 
     def test_determinism(self):
         dirs = np.array([[0.0, 0.0, 1.0], [0.7, 0.0, 0.3]])
@@ -218,6 +225,7 @@ class TestTransmittance:
 # ---------------------------------------------------------------------------
 # sun_radiance — shape, sign, and monotonicity
 # ---------------------------------------------------------------------------
+
 
 class TestSunRadiance:
     def test_scalar_returns_shape_3(self):
@@ -238,10 +246,8 @@ class TestSunRadiance:
     def test_high_sun_brighter_than_horizon(self):
         """Clear noon must be brighter in total than near-horizon sun."""
         noon = atmosphere.sun_radiance(NOON_Z)
-        horizon = atmosphere.sun_radiance(0.02)   # ~1° elevation
-        assert noon.sum() > horizon.sum(), (
-            "sun_radiance: noon not brighter than horizon"
-        )
+        horizon = atmosphere.sun_radiance(0.02)  # ~1° elevation
+        assert noon.sum() > horizon.sum(), "sun_radiance: noon not brighter than horizon"
 
     def test_monotone_dimming_toward_horizon(self):
         """Decreasing sun elevation from noon to near-horizon → dimmer each step."""
@@ -250,7 +256,7 @@ class TestSunRadiance:
         for i in range(len(totals) - 1):
             assert totals[i] > totals[i + 1], (
                 f"sun_radiance not monotone at z[{i}]={zs[i]}: "
-                f"{totals[i]:.4f} vs {totals[i+1]:.4f}"
+                f"{totals[i]:.4f} vs {totals[i + 1]:.4f}"
             )
 
     def test_exactly_zero_below_fade_cutoff(self):
@@ -258,20 +264,16 @@ class TestSunRadiance:
         # −5° is safely below the cutoff
         z_below = math.sin(math.radians(-5.0))
         out = atmosphere.sun_radiance(z_below)
-        assert np.all(out == 0.0), (
-            f"sun_radiance at −5°={z_below:.4f} not zero: {out}"
-        )
+        assert np.all(out == 0.0), f"sun_radiance at −5°={z_below:.4f} not zero: {out}"
 
     def test_fade_zone_between_minus4_and_zero(self):
         """Between SUN_FADE_LO_Z and 0° the sun should be non-zero but dimming."""
-        z_twilight = math.sin(math.radians(-2.0))   # −2°, within fade zone
+        z_twilight = math.sin(math.radians(-2.0))  # −2°, within fade zone
         out = atmosphere.sun_radiance(z_twilight)
         # Must be non-zero (twilight tail) but strictly less than the horizon value
         assert out.sum() > 0.0, "Twilight tail at −2° should be non-zero"
         horizon = atmosphere.sun_radiance(0.0)
-        assert out.sum() < horizon.sum(), (
-            "−2° sun brighter than 0° horizon — fade direction wrong"
-        )
+        assert out.sum() < horizon.sum(), "−2° sun brighter than 0° horizon — fade direction wrong"
 
     def test_boundary_sun_z_zero_finite(self):
         """sun_z=0 (exactly at horizon) must be finite and non-negative."""
@@ -302,6 +304,7 @@ class TestSunRadiance:
 # sky_ambient — sign, shape, and sun elevation sensitivity
 # ---------------------------------------------------------------------------
 
+
 class TestSkyAmbient:
     def test_returns_shape_3(self):
         out = atmosphere.sky_ambient(NOON_Z)
@@ -327,9 +330,7 @@ class TestSkyAmbient:
         """Noon sky ambient must exceed a near-sunset value in total luminance."""
         noon = atmosphere.sky_ambient(NOON_Z)
         sunset = atmosphere.sky_ambient(0.02)
-        assert noon.sum() > sunset.sum(), (
-            "sky_ambient: noon not brighter than near-sunset"
-        )
+        assert noon.sum() > sunset.sum(), "sky_ambient: noon not brighter than near-sunset"
 
     def test_determinism(self):
         a = atmosphere.sky_ambient(0.5)

@@ -19,10 +19,15 @@ import numpy as np
 import pytest
 
 from fire_engine.core.rng import set_world_seed
+from fire_engine.lighting.assembly_worker import (
+    AssemblyJob,
+    CascadeAssemblyWorker,
+    assemble_packed,
+)
 from fire_engine.lighting.lights import (
-    AreaLight,
     LIGHT_TYPE_AREA,
     LIGHT_TYPE_POINT,
+    AreaLight,
     LightSet,
     PointLight,
 )
@@ -32,11 +37,6 @@ from fire_engine.lighting.volume import (
     ChunkBlockCache,
     VolumeWindow,
     assemble_geometry,
-)
-from fire_engine.lighting.assembly_worker import (
-    AssemblyJob,
-    CascadeAssemblyWorker,
-    assemble_packed,
 )
 from fire_engine.procedural.maps import (
     black_emission_map,
@@ -58,15 +58,15 @@ class _Chunk:
 def _palette() -> MaterialPalette:
     """Hand-built palette with distinct albedos for material 1 and 2."""
     albedo = np.zeros((256, 3), dtype=np.float32)
-    albedo[1] = (0.4, 0.3, 0.2)   # dirt-ish
-    albedo[2] = (0.2, 0.5, 0.1)   # grass-ish
-    return MaterialPalette(albedo=albedo,
-                           emission=np.zeros((256, 3), dtype=np.float32))
+    albedo[1] = (0.4, 0.3, 0.2)  # dirt-ish
+    albedo[2] = (0.2, 0.5, 0.1)  # grass-ish
+    return MaterialPalette(albedo=albedo, emission=np.zeros((256, 3), dtype=np.float32))
 
 
 # ---------------------------------------------------------------------------
 # VolumeWindow
 # ---------------------------------------------------------------------------
+
 
 class TestVolumeWindow:
     def test_first_recenter_places_window(self):
@@ -84,19 +84,19 @@ class TestVolumeWindow:
         win.recenter((8.0, 8.0, 8.0))
         ox, oy, oz = win.world_origin_m
         # Camera should be within half a box of the centre on every axis.
-        centre = (ox + 8.0, oy + 8.0, oz + 8.0)   # 32 * 0.5 / 2 = 8 m
+        centre = (ox + 8.0, oy + 8.0, oz + 8.0)  # 32 * 0.5 / 2 = 8 m
         assert all(abs(c - 8.0) <= 4.0 + 1e-6 for c in centre)
 
     def test_hysteresis_no_move_within_margin(self):
         win = VolumeWindow(cells=96, cell_m=0.5, margin_cells=8)
         win.recenter((0.0, 0.0, 0.0))
-        assert win.recenter((1.0, 1.0, 1.0)) is False   # 1 m < 4 m margin
+        assert win.recenter((1.0, 1.0, 1.0)) is False  # 1 m < 4 m margin
 
     def test_recenter_after_large_move(self):
         win = VolumeWindow(cells=96, cell_m=0.5, margin_cells=8)
         win.recenter((0.0, 0.0, 0.0))
         first = win.origin_cell
-        assert win.recenter((20.0, 0.0, 0.0)) is True   # 20 m > margin
+        assert win.recenter((20.0, 0.0, 0.0)) is True  # 20 m > margin
         assert win.origin_cell != first
 
     def test_world_origin_before_recenter_raises(self):
@@ -113,30 +113,32 @@ class TestVolumeWindow:
 # assemble_geometry — cascade 0 (cell == voxel)
 # ---------------------------------------------------------------------------
 
+
 class TestAssembleCascade0:
     def _window_at_origin(self, cells=32):
         win = VolumeWindow(cells=cells, cell_m=VOXEL, snap_cells=8)
         win.recenter((8.0, 8.0, 8.0))
-        assert win.origin_cell == (0, 0, 0)   # snapped exactly to chunk 0
+        assert win.origin_cell == (0, 0, 0)  # snapped exactly to chunk 0
         return win
 
     def test_solid_voxel_lands_in_right_cell(self):
         win = self._window_at_origin()
         chunk = _Chunk()
         chunk.materials[5, 6, 7] = 1
-        vol = assemble_geometry(win, {(0, 0, 0): chunk}, _palette(),
-                                chunk_size=CHUNK, voxel_size=VOXEL)
-        assert vol.albedo_occ[5, 6, 7, 3] == 255       # occupied
-        assert vol.albedo_occ[5, 6, 6, 3] == 0         # neighbour air
+        vol = assemble_geometry(
+            win, {(0, 0, 0): chunk}, _palette(), chunk_size=CHUNK, voxel_size=VOXEL
+        )
+        assert vol.albedo_occ[5, 6, 7, 3] == 255  # occupied
+        assert vol.albedo_occ[5, 6, 6, 3] == 0  # neighbour air
         # Albedo = palette[1] * 255.
         np.testing.assert_allclose(
             vol.albedo_occ[5, 6, 7, :3],
-            np.clip(np.array([0.4, 0.3, 0.2]) * 255, 0, 255).astype(np.uint8))
+            np.clip(np.array([0.4, 0.3, 0.2]) * 255, 0, 255).astype(np.uint8),
+        )
 
     def test_missing_chunks_are_air(self):
         win = self._window_at_origin()
-        vol = assemble_geometry(win, {}, _palette(),
-                                chunk_size=CHUNK, voxel_size=VOXEL)
+        vol = assemble_geometry(win, {}, _palette(), chunk_size=CHUNK, voxel_size=VOXEL)
         assert int(vol.albedo_occ[..., 3].max()) == 0
 
     def test_emission_packing(self):
@@ -144,11 +146,10 @@ class TestAssembleCascade0:
         chunk = _Chunk()
         chunk.materials[1, 1, 1] = 3
         pal = _palette().with_emission(3, (2.0, 1.0, 0.5))
-        vol = assemble_geometry(win, {(0, 0, 0): chunk}, pal,
-                                chunk_size=CHUNK, voxel_size=VOXEL)
-        expected = np.clip(
-            np.array([2.0, 1.0, 0.5]) * 255.0 / EMISSION_SCALE,
-            0, 255).astype(np.uint8)
+        vol = assemble_geometry(win, {(0, 0, 0): chunk}, pal, chunk_size=CHUNK, voxel_size=VOXEL)
+        expected = np.clip(np.array([2.0, 1.0, 0.5]) * 255.0 / EMISSION_SCALE, 0, 255).astype(
+            np.uint8
+        )
         np.testing.assert_array_equal(vol.emission[1, 1, 1, :3], expected)
 
     def test_deterministic(self):
@@ -158,8 +159,9 @@ class TestAssembleCascade0:
         outs = []
         for _ in range(2):
             win = self._window_at_origin()
-            vol = assemble_geometry(win, {(0, 0, 0): chunk}, _palette(),
-                                    chunk_size=CHUNK, voxel_size=VOXEL)
+            vol = assemble_geometry(
+                win, {(0, 0, 0): chunk}, _palette(), chunk_size=CHUNK, voxel_size=VOXEL
+            )
             outs.append(vol.albedo_occ.tobytes() + vol.emission.tobytes())
         assert outs[0] == outs[1]
 
@@ -170,9 +172,10 @@ class TestAssembleCascade0:
         ox, oy, oz = win.origin_cell
         assert ox < 0 < ox + win.cells
         neg = _Chunk()
-        neg.materials[CHUNK - 1, CHUNK - 1, CHUNK - 1] = 1   # voxel (-1,-1,-1)
-        vol = assemble_geometry(win, {(-1, -1, -1): neg}, _palette(),
-                                chunk_size=CHUNK, voxel_size=VOXEL)
+        neg.materials[CHUNK - 1, CHUNK - 1, CHUNK - 1] = 1  # voxel (-1,-1,-1)
+        vol = assemble_geometry(
+            win, {(-1, -1, -1): neg}, _palette(), chunk_size=CHUNK, voxel_size=VOXEL
+        )
         idx = (-1 - ox, -1 - oy, -1 - oz)
         assert vol.albedo_occ[idx[0], idx[1], idx[2], 3] == 255
 
@@ -181,17 +184,16 @@ class TestAssembleCascade0:
 # Geometry-occupancy providers (buildings / future props)
 # ---------------------------------------------------------------------------
 
+
 class _RecordingProvider:
     """Records the args it was handed and stamps occupancy into one cell."""
 
     def __init__(self) -> None:
         self.calls: list[tuple] = []
 
-    def rasterize_occupancy(self, origin_cell, cells, cell_m,
-                            albedo_occ, emission) -> None:
-        self.calls.append((origin_cell, cells, cell_m,
-                           albedo_occ.shape, emission.shape))
-        albedo_occ[2, 2, 2, 3] = 200          # mark a cell solid
+    def rasterize_occupancy(self, origin_cell, cells, cell_m, albedo_occ, emission) -> None:
+        self.calls.append((origin_cell, cells, cell_m, albedo_occ.shape, emission.shape))
+        albedo_occ[2, 2, 2, 3] = 200  # mark a cell solid
 
 
 class TestGeometryProviders:
@@ -203,18 +205,26 @@ class TestGeometryProviders:
     def test_empty_providers_is_byte_identical(self):
         chunk = _Chunk()
         chunk.materials[5, 6, 7] = 1
-        a = assemble_geometry(self._window(), {(0, 0, 0): chunk}, _palette(),
-                              chunk_size=CHUNK, voxel_size=VOXEL)
-        b = assemble_geometry(self._window(), {(0, 0, 0): chunk}, _palette(),
-                              chunk_size=CHUNK, voxel_size=VOXEL, providers=())
+        a = assemble_geometry(
+            self._window(), {(0, 0, 0): chunk}, _palette(), chunk_size=CHUNK, voxel_size=VOXEL
+        )
+        b = assemble_geometry(
+            self._window(),
+            {(0, 0, 0): chunk},
+            _palette(),
+            chunk_size=CHUNK,
+            voxel_size=VOXEL,
+            providers=(),
+        )
         assert a.albedo_occ.tobytes() == b.albedo_occ.tobytes()
         assert a.emission.tobytes() == b.emission.tobytes()
 
     def test_provider_receives_window_params(self):
         prov = _RecordingProvider()
         win = self._window()
-        vol = assemble_geometry(win, {}, _palette(), chunk_size=CHUNK,
-                                voxel_size=VOXEL, providers=(prov,))
+        vol = assemble_geometry(
+            win, {}, _palette(), chunk_size=CHUNK, voxel_size=VOXEL, providers=(prov,)
+        )
         assert len(prov.calls) == 1
         origin, cells, cell_m, ashape, eshape = prov.calls[0]
         assert origin == win.origin_cell
@@ -233,11 +243,17 @@ class TestGeometryProviders:
         assert isinstance(rasterizer, GeometryOccupancyProvider)
         chunk = _Chunk()
         chunk.materials[5, 6, 7] = 1
-        base = assemble_geometry(self._window(), {(0, 0, 0): chunk}, _palette(),
-                                 chunk_size=CHUNK, voxel_size=VOXEL)
-        withb = assemble_geometry(self._window(), {(0, 0, 0): chunk}, _palette(),
-                                  chunk_size=CHUNK, voxel_size=VOXEL,
-                                  providers=(rasterizer,))
+        base = assemble_geometry(
+            self._window(), {(0, 0, 0): chunk}, _palette(), chunk_size=CHUNK, voxel_size=VOXEL
+        )
+        withb = assemble_geometry(
+            self._window(),
+            {(0, 0, 0): chunk},
+            _palette(),
+            chunk_size=CHUNK,
+            voxel_size=VOXEL,
+            providers=(rasterizer,),
+        )
         # v1 no-op: byte-identical to the no-provider assembly.
         assert base.albedo_occ.tobytes() == withb.albedo_occ.tobytes()
         assert base.emission.tobytes() == withb.emission.tobytes()
@@ -247,6 +263,7 @@ class TestGeometryProviders:
 # assemble_geometry — cascade 1 (2.0 m cells, 4^3 voxels per cell)
 # ---------------------------------------------------------------------------
 
+
 class TestAssembleCascade1:
     def test_partial_occupancy_and_max_material_wins(self):
         # Coarse cells carry a FRACTIONAL occupancy alpha now (solid-voxel
@@ -255,33 +272,36 @@ class TestAssembleCascade1:
         win.recenter((16.0, 16.0, 16.0))
         assert win.origin_cell == (0, 0, 0)
         chunk = _Chunk()
-        chunk.materials[0, 0, 0] = 1     # one dirt voxel in cell (0,0,0)
-        chunk.materials[1, 0, 0] = 2     # plus one grass voxel — max id wins
-        vol = assemble_geometry(win, {(0, 0, 0): chunk}, _palette(),
-                                chunk_size=CHUNK, voxel_size=VOXEL)
+        chunk.materials[0, 0, 0] = 1  # one dirt voxel in cell (0,0,0)
+        chunk.materials[1, 0, 0] = 2  # plus one grass voxel — max id wins
+        vol = assemble_geometry(
+            win, {(0, 0, 0): chunk}, _palette(), chunk_size=CHUNK, voxel_size=VOXEL
+        )
         # 2 solid voxels of the cell's 4^3 = 64 sub-voxels → round(255*2/64).
-        assert vol.albedo_occ[0, 0, 0, 3] == int(round(255.0 * 2 / 64))
+        assert vol.albedo_occ[0, 0, 0, 3] == round(255.0 * 2 / 64)
         np.testing.assert_allclose(
             vol.albedo_occ[0, 0, 0, :3],
-            np.clip(np.array([0.2, 0.5, 0.1]) * 255, 0, 255).astype(np.uint8))
+            np.clip(np.array([0.2, 0.5, 0.1]) * 255, 0, 255).astype(np.uint8),
+        )
         assert vol.albedo_occ[1, 0, 0, 3] == 0
 
     def test_non_integer_cell_ratio_raises(self):
         win = VolumeWindow(cells=16, cell_m=0.75, snap_cells=8)
         win.recenter((0.0, 0.0, 0.0))
         with pytest.raises(ValueError):
-            assemble_geometry(win, {}, _palette(),
-                              chunk_size=CHUNK, voxel_size=VOXEL)
+            assemble_geometry(win, {}, _palette(), chunk_size=CHUNK, voxel_size=VOXEL)
 
 
 # ---------------------------------------------------------------------------
 # MaterialPalette
 # ---------------------------------------------------------------------------
 
+
 class TestPalette:
     def test_default_palette_air_is_zero_and_materials_differ(self):
         set_world_seed(1337)
         import fire_engine.procedural  # noqa: F401  (registration)
+
         pal = build_default_palette()
         assert (pal.albedo[0] == 0).all()
         assert not np.allclose(pal.albedo[1], pal.albedo[2])
@@ -290,6 +310,7 @@ class TestPalette:
     def test_default_palette_deterministic(self):
         set_world_seed(1337)
         import fire_engine.procedural  # noqa: F401
+
         a = build_default_palette().albedo.tobytes()
         b = build_default_palette().albedo.tobytes()
         assert a == b
@@ -305,11 +326,13 @@ class TestPalette:
 # LightSet
 # ---------------------------------------------------------------------------
 
+
 class TestLightSet:
     def test_pack_point_light_layout(self):
         ls = LightSet()
-        ls.add(PointLight(position=(1.0, 2.0, 3.0), color=(1.0, 0.5, 0.25),
-                          intensity=2.0, radius=10.0))
+        ls.add(
+            PointLight(position=(1.0, 2.0, 3.0), color=(1.0, 0.5, 0.25), intensity=2.0, radius=10.0)
+        )
         arr, count = ls.pack(max_lights=4)
         assert count == 1 and arr.shape == (4, 12)
         np.testing.assert_allclose(arr[0, 0:3], (1.0, 2.0, 3.0))
@@ -320,8 +343,15 @@ class TestLightSet:
 
     def test_pack_area_light_layout(self):
         ls = LightSet()
-        ls.add(AreaLight(center=(0.0, 0.0, 5.0), half_extents=(2.0, 1.0, 0.5),
-                         color=(1.0, 1.0, 1.0), intensity=1.0, radius=8.0))
+        ls.add(
+            AreaLight(
+                center=(0.0, 0.0, 5.0),
+                half_extents=(2.0, 1.0, 0.5),
+                color=(1.0, 1.0, 1.0),
+                intensity=1.0,
+                radius=8.0,
+            )
+        )
         arr, count = ls.pack(max_lights=2)
         assert count == 1
         assert arr[0, 7] == LIGHT_TYPE_AREA
@@ -333,7 +363,7 @@ class TestLightSet:
         ls.update(0.5)
         arr, count = ls.pack(4)
         assert count == 1
-        assert arr[0, 4] == pytest.approx(5.0)   # half-faded
+        assert arr[0, 4] == pytest.approx(5.0)  # half-faded
         ls.update(0.6)
         assert ls.count == 0
 
@@ -346,9 +376,9 @@ class TestLightSet:
         ls.remove(lid)
         assert ls.version > v1
         v2 = ls.version
-        ls.remove(999)                  # absent id: no bump
+        ls.remove(999)  # absent id: no bump
         assert ls.version == v2
-        ls.update(0.1)                  # no transient lights: no bump
+        ls.update(0.1)  # no transient lights: no bump
         assert ls.version == v2
 
     def test_pack_respects_max_lights(self):
@@ -363,6 +393,7 @@ class TestLightSet:
 # procedural/maps.py
 # ---------------------------------------------------------------------------
 
+
 class TestDerivedMaps:
     def test_flat_input_gives_flat_normal(self):
         rgba = np.full((8, 8, 4), 200, dtype=np.uint8)
@@ -375,7 +406,7 @@ class TestDerivedMaps:
     def test_gradient_tilts_normal(self):
         rgba = np.zeros((8, 8, 4), dtype=np.uint8)
         rgba[..., 3] = 255
-        rgba[:, 4:, :3] = 255         # bright right half → slope at the seam
+        rgba[:, 4:, :3] = 255  # bright right half → slope at the seam
         nm = derive_normal_map(rgba)
         assert (nm[:, 3:5, 0].astype(int) != 128).any()
 
@@ -383,9 +414,9 @@ class TestDerivedMaps:
         set_world_seed(1337)
         import fire_engine.procedural  # noqa: F401
         from fire_engine.procedural import get as get_procedural
+
         rgba = get_procedural("grass_ground")
-        assert derive_normal_map(rgba).tobytes() == \
-            derive_normal_map(rgba).tobytes()
+        assert derive_normal_map(rgba).tobytes() == derive_normal_map(rgba).tobytes()
 
     def test_helper_maps(self):
         fn = flat_normal_map()
@@ -398,10 +429,11 @@ class TestDerivedMaps:
 # assemble_geometry — fractional occupancy (coarse downsample)
 # ---------------------------------------------------------------------------
 
+
 def _hollow_box_chunk() -> _Chunk:
     """A chunk-sized hollow box: 1-voxel solid shell, air interior."""
     chunk = _Chunk()
-    chunk.materials[:] = 1               # fill solid
+    chunk.materials[:] = 1  # fill solid
     chunk.materials[1:-1, 1:-1, 1:-1] = 0  # hollow out the interior
     return chunk
 
@@ -416,8 +448,9 @@ class TestFractionalOccupancy:
         chunk.materials[:, :, :8] = 1
         chunk.materials[:, :, 8] = 2
         chunk.materials[3, 4, 5] = 0
-        vol = assemble_geometry(win, {(0, 0, 0): chunk}, _palette(),
-                                chunk_size=CHUNK, voxel_size=VOXEL)
+        vol = assemble_geometry(
+            win, {(0, 0, 0): chunk}, _palette(), chunk_size=CHUNK, voxel_size=VOXEL
+        )
         alpha = vol.albedo_occ[..., 3]
         solid = chunk.materials > 0
         expected = np.where(solid, 255, 0).astype(np.uint8)
@@ -427,11 +460,12 @@ class TestFractionalOccupancy:
     def test_hollow_box_interior_air_walls_partial_8m(self):
         # 8 m cells over a 16 m chunk => 2x2x2 block; each cell is 16^3 voxels.
         win = VolumeWindow(cells=8, cell_m=8.0, snap_cells=8)
-        win.recenter((40.0, 40.0, 40.0))   # centres an 8x8m window on origin 0
+        win.recenter((40.0, 40.0, 40.0))  # centres an 8x8m window on origin 0
         assert win.origin_cell == (0, 0, 0)
         chunk = _hollow_box_chunk()
-        vol = assemble_geometry(win, {(0, 0, 0): chunk}, _palette(),
-                                chunk_size=CHUNK, voxel_size=VOXEL)
+        vol = assemble_geometry(
+            win, {(0, 0, 0): chunk}, _palette(), chunk_size=CHUNK, voxel_size=VOXEL
+        )
         alpha = vol.albedo_occ[..., 3]
         # The 2x2x2 corner block is all wall cells (every 16^3 corner block of
         # the shell touches the shell) — partial, never fully solid, never air.
@@ -446,8 +480,9 @@ class TestFractionalOccupancy:
         win.recenter((8.0, 8.0, 8.0))
         assert win.origin_cell == (0, 0, 0)
         chunk = _hollow_box_chunk()
-        vol = assemble_geometry(win, {(0, 0, 0): chunk}, _palette(),
-                                chunk_size=CHUNK, voxel_size=VOXEL)
+        vol = assemble_geometry(
+            win, {(0, 0, 0): chunk}, _palette(), chunk_size=CHUNK, voxel_size=VOXEL
+        )
         alpha = vol.albedo_occ[..., 3]
         # Cell (2,2,2) spans voxels [8:12]^3 — fully in the hollow interior.
         assert alpha[2, 2, 2] == 0
@@ -459,10 +494,11 @@ class TestFractionalOccupancy:
         win = VolumeWindow(cells=8, cell_m=2.0, snap_cells=8)
         win.recenter((8.0, 8.0, 8.0))
         chunk = _Chunk()
-        chunk.materials[0, 0, 0] = 1     # single solid voxel in cell (0,0,0)
-        vol = assemble_geometry(win, {(0, 0, 0): chunk}, _palette(),
-                                chunk_size=CHUNK, voxel_size=VOXEL)
-        assert vol.albedo_occ[0, 0, 0, 3] == int(round(255.0 / 64.0))
+        chunk.materials[0, 0, 0] = 1  # single solid voxel in cell (0,0,0)
+        vol = assemble_geometry(
+            win, {(0, 0, 0): chunk}, _palette(), chunk_size=CHUNK, voxel_size=VOXEL
+        )
+        assert vol.albedo_occ[0, 0, 0, 3] == round(255.0 / 64.0)
 
     def test_albedo_still_max_material(self):
         # Albedo RGB selection unchanged: max material id wins within a cell.
@@ -470,17 +506,20 @@ class TestFractionalOccupancy:
         win.recenter((8.0, 8.0, 8.0))
         chunk = _Chunk()
         chunk.materials[0, 0, 0] = 1
-        chunk.materials[1, 0, 0] = 2     # same 4^3 cell — id 2 wins
-        vol = assemble_geometry(win, {(0, 0, 0): chunk}, _palette(),
-                                chunk_size=CHUNK, voxel_size=VOXEL)
+        chunk.materials[1, 0, 0] = 2  # same 4^3 cell — id 2 wins
+        vol = assemble_geometry(
+            win, {(0, 0, 0): chunk}, _palette(), chunk_size=CHUNK, voxel_size=VOXEL
+        )
         np.testing.assert_allclose(
             vol.albedo_occ[0, 0, 0, :3],
-            np.clip(np.array([0.2, 0.5, 0.1]) * 255, 0, 255).astype(np.uint8))
+            np.clip(np.array([0.2, 0.5, 0.1]) * 255, 0, 255).astype(np.uint8),
+        )
 
 
 # ---------------------------------------------------------------------------
 # ChunkBlockCache
 # ---------------------------------------------------------------------------
+
 
 def _coarse_window():
     win = VolumeWindow(cells=8, cell_m=2.0, snap_cells=8)
@@ -502,16 +541,17 @@ class TestChunkBlockCache:
         chunks = {(0, 0, 0): chunk}
         pal = _palette()
 
-        no_cache = assemble_geometry(_coarse_window(), chunks, pal,
-                                     chunk_size=CHUNK, voxel_size=VOXEL)
+        no_cache = assemble_geometry(
+            _coarse_window(), chunks, pal, chunk_size=CHUNK, voxel_size=VOXEL
+        )
         cache = ChunkBlockCache()
-        miss = assemble_geometry(_coarse_window(), chunks, pal,
-                                 chunk_size=CHUNK, voxel_size=VOXEL,
-                                 cache=cache)
-        assert len(cache) == 1           # populated on miss
-        hit = assemble_geometry(_coarse_window(), chunks, pal,
-                                chunk_size=CHUNK, voxel_size=VOXEL,
-                                cache=cache)
+        miss = assemble_geometry(
+            _coarse_window(), chunks, pal, chunk_size=CHUNK, voxel_size=VOXEL, cache=cache
+        )
+        assert len(cache) == 1  # populated on miss
+        hit = assemble_geometry(
+            _coarse_window(), chunks, pal, chunk_size=CHUNK, voxel_size=VOXEL, cache=cache
+        )
         a = no_cache.albedo_occ.tobytes() + no_cache.emission.tobytes()
         b = miss.albedo_occ.tobytes() + miss.emission.tobytes()
         c = hit.albedo_occ.tobytes() + hit.emission.tobytes()
@@ -522,29 +562,35 @@ class TestChunkBlockCache:
         chunks = {(0, 0, 0): chunk}
         pal = _palette()
         cache = ChunkBlockCache()
-        assemble_geometry(_coarse_window(), chunks, pal,
-                          chunk_size=CHUNK, voxel_size=VOXEL, cache=cache)
+        assemble_geometry(
+            _coarse_window(), chunks, pal, chunk_size=CHUNK, voxel_size=VOXEL, cache=cache
+        )
         # Mutate the chunk; without invalidation the stale block is reused.
         chunk.materials[10, 10, 10] = 2
-        stale = assemble_geometry(_coarse_window(), chunks, pal,
-                                  chunk_size=CHUNK, voxel_size=VOXEL,
-                                  cache=cache)
+        stale = assemble_geometry(
+            _coarse_window(), chunks, pal, chunk_size=CHUNK, voxel_size=VOXEL, cache=cache
+        )
         cache.invalidate((0, 0, 0))
         assert len(cache) == 0
-        fresh = assemble_geometry(_coarse_window(), chunks, pal,
-                                  chunk_size=CHUNK, voxel_size=VOXEL,
-                                  cache=cache)
+        fresh = assemble_geometry(
+            _coarse_window(), chunks, pal, chunk_size=CHUNK, voxel_size=VOXEL, cache=cache
+        )
         # Fresh must match a no-cache assembly of the mutated chunk.
-        truth = assemble_geometry(_coarse_window(), chunks, pal,
-                                  chunk_size=CHUNK, voxel_size=VOXEL)
+        truth = assemble_geometry(_coarse_window(), chunks, pal, chunk_size=CHUNK, voxel_size=VOXEL)
         assert fresh.albedo_occ.tobytes() == truth.albedo_occ.tobytes()
         assert stale.albedo_occ.tobytes() != truth.albedo_occ.tobytes()
 
     def test_clear(self):
         chunk = _varied_chunk()
         cache = ChunkBlockCache()
-        assemble_geometry(_coarse_window(), {(0, 0, 0): chunk}, _palette(),
-                          chunk_size=CHUNK, voxel_size=VOXEL, cache=cache)
+        assemble_geometry(
+            _coarse_window(),
+            {(0, 0, 0): chunk},
+            _palette(),
+            chunk_size=CHUNK,
+            voxel_size=VOXEL,
+            cache=cache,
+        )
         assert len(cache) == 1
         cache.clear()
         assert len(cache) == 0
@@ -552,9 +598,9 @@ class TestChunkBlockCache:
     def test_lru_eviction_bounds_size(self):
         cache = ChunkBlockCache(max_entries=2)
         for i in range(5):
-            cache.put((i, 0, 0), 2.0,
-                      (np.zeros((2, 2, 2), np.uint8),
-                       np.zeros((2, 2, 2), np.uint16)))
+            cache.put(
+                (i, 0, 0), 2.0, (np.zeros((2, 2, 2), np.uint8), np.zeros((2, 2, 2), np.uint16))
+            )
         assert len(cache) == 2
 
     def test_fine_path_does_not_cache(self):
@@ -565,16 +611,18 @@ class TestChunkBlockCache:
         chunk = _Chunk()
         chunk.materials[5, 5, 5] = 1
         cache = ChunkBlockCache()
-        assemble_geometry(win, {(0, 0, 0): chunk}, _palette(),
-                          chunk_size=CHUNK, voxel_size=VOXEL, cache=cache)
+        assemble_geometry(
+            win, {(0, 0, 0): chunk}, _palette(), chunk_size=CHUNK, voxel_size=VOXEL, cache=cache
+        )
         assert len(cache) == 0
         # The chunk array stays writeable.
-        chunk.materials[5, 5, 5] = 2     # must not raise
+        chunk.materials[5, 5, 5] = 2  # must not raise
 
 
 # ---------------------------------------------------------------------------
 # CascadeAssemblyWorker + cache parity
 # ---------------------------------------------------------------------------
+
 
 def _coarse_job(materials: dict, seq: int = 0) -> AssemblyJob:
     win = _coarse_window()
@@ -603,7 +651,7 @@ class TestWorkerCacheParity:
     def test_worker_thread_output_matches_sync_no_cache(self):
         materials = {(0, 0, 0): _varied_chunk()}
         job = _coarse_job(materials)
-        truth = assemble_packed(job)          # sync, no cache
+        truth = assemble_packed(job)  # sync, no cache
 
         worker = CascadeAssemblyWorker()
         worker.start()
@@ -612,6 +660,7 @@ class TestWorkerCacheParity:
             results = []
             deadline = 5.0
             import time
+
             t0 = time.time()
             while not results and time.time() - t0 < deadline:
                 results = worker.drain_results()

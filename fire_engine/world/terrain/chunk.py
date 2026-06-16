@@ -67,7 +67,7 @@ class Chunk:
     np.True_
     """
 
-    __slots__ = ("coord", "materials", "dirty", "edited", "_chunk_size", "_voxel_size")
+    __slots__ = ("_chunk_size", "_voxel_size", "coord", "dirty", "edited", "materials")
 
     def __init__(
         self,
@@ -100,9 +100,7 @@ class Chunk:
             self.materials = np.zeros((chunk_size, chunk_size, chunk_size), dtype=np.uint8)
         else:
             if materials.shape != (chunk_size, chunk_size, chunk_size):
-                raise ValueError(
-                    f"materials must be {(chunk_size,)*3}, got {materials.shape}"
-                )
+                raise ValueError(f"materials must be {(chunk_size,) * 3}, got {materials.shape}")
             self.materials = np.ascontiguousarray(materials, dtype=np.uint8)
         self.dirty: bool = True
         self.edited: bool = False

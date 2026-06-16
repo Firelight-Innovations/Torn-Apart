@@ -32,10 +32,15 @@ Usage
 from __future__ import annotations
 
 import numpy as np
-from panda3d.core import Texture, SamplerState  # type: ignore[import]
+from panda3d.core import SamplerState, Texture  # type: ignore[import]
 
-__all__ = ["to_panda_texture", "to_field_texture", "to_panda_cubemap",
-           "to_panda_texture_3d", "to_data_texture_f32"]
+__all__ = [
+    "to_data_texture_f32",
+    "to_field_texture",
+    "to_panda_cubemap",
+    "to_panda_texture",
+    "to_panda_texture_3d",
+]
 
 
 def to_panda_texture(rgba: np.ndarray) -> Texture:
@@ -90,13 +95,9 @@ def to_panda_texture(rgba: np.ndarray) -> Texture:
         assert tex.get_y_size() == 4
     """
     if rgba.ndim != 3 or rgba.shape[2] != 4:
-        raise ValueError(
-            f"to_panda_texture expects shape (H, W, 4), got {rgba.shape}"
-        )
+        raise ValueError(f"to_panda_texture expects shape (H, W, 4), got {rgba.shape}")
     if rgba.dtype != np.uint8:
-        raise ValueError(
-            f"to_panda_texture expects dtype uint8, got {rgba.dtype}"
-        )
+        raise ValueError(f"to_panda_texture expects dtype uint8, got {rgba.dtype}")
 
     H, W = rgba.shape[:2]
 
@@ -107,7 +108,7 @@ def to_panda_texture(rgba: np.ndarray) -> Texture:
     # so the image appears right-side-up.  Panda3D RAM images for F_rgba are
     # stored **BGRA** byte order (its native component order), so reorder the
     # channels R<->B on the way in or every texture renders blue-for-brown.
-    flipped = rgba[::-1]                       # vertical flip (view)
+    flipped = rgba[::-1]  # vertical flip (view)
     bgra = np.ascontiguousarray(flipped[..., [2, 1, 0, 3]])  # RGBA -> BGRA
 
     # Bulk RAM upload — one memoryview write, no per-pixel loop.
@@ -146,26 +147,27 @@ def to_panda_cubemap(faces: np.ndarray) -> Texture:
         star/galaxy sky reads as crisp pixels instead of a smeared bilinear
         blur.
     """
-    if faces.ndim != 4 or faces.shape[0] != 6 or faces.shape[3] != 4 \
-            or faces.shape[1] != faces.shape[2]:
-        raise ValueError(
-            f"to_panda_cubemap expects shape (6, S, S, 4), got {faces.shape}")
+    if (
+        faces.ndim != 4
+        or faces.shape[0] != 6
+        or faces.shape[3] != 4
+        or faces.shape[1] != faces.shape[2]
+    ):
+        raise ValueError(f"to_panda_cubemap expects shape (6, S, S, 4), got {faces.shape}")
     if faces.dtype != np.uint8:
-        raise ValueError(
-            f"to_panda_cubemap expects dtype uint8, got {faces.dtype}")
+        raise ValueError(f"to_panda_cubemap expects dtype uint8, got {faces.dtype}")
 
     size = faces.shape[1]
     tex = Texture("cubemap")
     tex.setup_cube_map(size, Texture.T_unsigned_byte, Texture.F_rgba)
-    bgra = np.ascontiguousarray(faces[..., [2, 1, 0, 3]])   # RGBA -> BGRA
+    bgra = np.ascontiguousarray(faces[..., [2, 1, 0, 3]])  # RGBA -> BGRA
     tex.set_ram_image(bytes(bgra))
     tex.set_minfilter(SamplerState.FT_nearest)
     tex.set_magfilter(SamplerState.FT_nearest)
     return tex
 
 
-def to_panda_texture_3d(volume: np.ndarray, *, linear: bool = True,
-                        repeat: bool = True) -> Texture:
+def to_panda_texture_3d(volume: np.ndarray, *, linear: bool = True, repeat: bool = True) -> Texture:
     """
     Upload a ``(N, N, N, 4) uint8`` volume as a Panda3D 3-D ``Texture``.
 
@@ -192,16 +194,14 @@ def to_panda_texture_3d(volume: np.ndarray, *, linear: bool = True,
         A 3-D ``F_rgba`` texture ready for ``set_shader_input`` (sampler3D).
     """
     if volume.ndim != 4 or volume.shape[3] != 4:
-        raise ValueError(
-            f"to_panda_texture_3d expects shape (N, N, N, 4), got {volume.shape}")
+        raise ValueError(f"to_panda_texture_3d expects shape (N, N, N, 4), got {volume.shape}")
     if volume.dtype != np.uint8:
-        raise ValueError(
-            f"to_panda_texture_3d expects dtype uint8, got {volume.dtype}")
+        raise ValueError(f"to_panda_texture_3d expects dtype uint8, got {volume.dtype}")
 
     d, h, w = volume.shape[:3]
     tex = Texture("volume3d")
     tex.setup_3d_texture(w, h, d, Texture.T_unsigned_byte, Texture.F_rgba)
-    bgra = np.ascontiguousarray(volume[..., [2, 1, 0, 3]])   # RGBA -> BGRA
+    bgra = np.ascontiguousarray(volume[..., [2, 1, 0, 3]])  # RGBA -> BGRA
     tex.set_ram_image(bytes(bgra))
     filt = SamplerState.FT_linear if linear else SamplerState.FT_nearest
     tex.set_minfilter(filt)
@@ -242,17 +242,14 @@ def to_data_texture_f32(block: np.ndarray) -> Texture:
         ``F_rgba32`` texture, ``cols × rows`` texels, nearest/clamped.
     """
     if block.ndim != 3 or block.shape[2] != 4:
-        raise ValueError(
-            f"to_data_texture_f32 expects shape (rows, cols, 4), "
-            f"got {block.shape}")
+        raise ValueError(f"to_data_texture_f32 expects shape (rows, cols, 4), got {block.shape}")
     if block.dtype != np.float32:
-        raise ValueError(
-            f"to_data_texture_f32 expects dtype float32, got {block.dtype}")
+        raise ValueError(f"to_data_texture_f32 expects dtype float32, got {block.dtype}")
 
     rows, cols = block.shape[:2]
     tex = Texture("instance_data")
     tex.setup_2d_texture(cols, rows, Texture.T_float, Texture.F_rgba32)
-    bgra = np.ascontiguousarray(block[..., [2, 1, 0, 3]])   # RGBA -> BGRA
+    bgra = np.ascontiguousarray(block[..., [2, 1, 0, 3]])  # RGBA -> BGRA
     tex.set_ram_image(bgra.tobytes())
     tex.set_minfilter(SamplerState.FT_nearest)
     tex.set_magfilter(SamplerState.FT_nearest)
@@ -285,18 +282,14 @@ def to_field_texture(rgba: np.ndarray) -> Texture:
         Nearest-filtered, edge-clamped 2-D texture.
     """
     if rgba.ndim != 3 or rgba.shape[2] != 4:
-        raise ValueError(
-            f"to_field_texture expects shape (H, W, 4), got {rgba.shape}"
-        )
+        raise ValueError(f"to_field_texture expects shape (H, W, 4), got {rgba.shape}")
     if rgba.dtype != np.uint8:
-        raise ValueError(
-            f"to_field_texture expects dtype uint8, got {rgba.dtype}"
-        )
+        raise ValueError(f"to_field_texture expects dtype uint8, got {rgba.dtype}")
 
     H, W = rgba.shape[:2]
     tex = Texture("field")
     tex.setup_2d_texture(W, H, Texture.T_unsigned_byte, Texture.F_rgba)
-    bgra = np.ascontiguousarray(rgba[..., [2, 1, 0, 3]])   # RGBA -> BGRA
+    bgra = np.ascontiguousarray(rgba[..., [2, 1, 0, 3]])  # RGBA -> BGRA
     tex.set_ram_image(bytes(bgra))
     tex.set_minfilter(SamplerState.FT_nearest)
     tex.set_magfilter(SamplerState.FT_nearest)

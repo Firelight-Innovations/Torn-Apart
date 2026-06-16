@@ -51,10 +51,7 @@ def main() -> None:
         "--seed",
         type=int,
         default=None,
-        help=(
-            "World seed override.  Defaults to the value in config.toml "
-            "(or 0 if not set)."
-        ),
+        help=("World seed override.  Defaults to the value in config.toml (or 0 if not set)."),
     )
     parser.add_argument(
         "--width",
@@ -100,7 +97,7 @@ def main() -> None:
     if not isinstance(arr, np.ndarray) or arr.ndim != 3 or arr.shape[2] != 4:
         print(
             f"Error: '{args.def_name}' did not return a (H,W,4) ndarray; "
-            f"got type={type(arr)}, shape={getattr(arr,'shape','N/A')}",
+            f"got type={type(arr)}, shape={getattr(arr, 'shape', 'N/A')}",
             file=sys.stderr,
         )
         sys.exit(1)

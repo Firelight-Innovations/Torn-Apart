@@ -43,7 +43,7 @@ from typing import Protocol, runtime_checkable
 
 import numpy as np
 
-__all__ = ["WindModifier", "GustFront"]
+__all__ = ["GustFront", "WindModifier"]
 
 
 @runtime_checkable
@@ -179,8 +179,7 @@ class GustFront:
         along = X * dx + Y * dy
         front_pos = self.speed * float(t) + self._phase_m
         # Wrap the relative distance into a centred period so the band loops.
-        rel = (along - front_pos + 0.5 * self.period_m) % self.period_m \
-            - 0.5 * self.period_m
+        rel = (along - front_pos + 0.5 * self.period_m) % self.period_m - 0.5 * self.period_m
         band = np.exp(-0.5 * (rel / self.width_m) ** 2).astype(np.float32)
 
         vx += (self.strength * dx) * band

@@ -19,19 +19,19 @@ import pytest
 
 from fire_engine.zones import ZoneStore, ZoneVolume
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _simple_vol(id_=1, tag="grass",
-                lo=(0.0, 0.0, 0.0), hi=(10.0, 10.0, 4.0), **kw) -> ZoneVolume:
+
+def _simple_vol(id_=1, tag="grass", lo=(0.0, 0.0, 0.0), hi=(10.0, 10.0, 4.0), **kw) -> ZoneVolume:
     return ZoneVolume(id_, tag, lo, hi, **kw)
 
 
 # ---------------------------------------------------------------------------
 # ZoneStore — get_delta() BEFORE mark_baseline()
 # ---------------------------------------------------------------------------
+
 
 class TestGetDeltaBeforeBaseline:
     """Pin the pre-baseline get_delta() behavior (no explicit contract in docs)."""
@@ -74,6 +74,7 @@ class TestGetDeltaBeforeBaseline:
 # ZoneStore — delta version handling in apply_delta
 # ---------------------------------------------------------------------------
 
+
 class TestApplyDeltaVersionHandling:
     """Pin behavior when the saved delta version doesn't match _DELTA_VERSION (1)."""
 
@@ -85,9 +86,7 @@ class TestApplyDeltaVersionHandling:
 
         future_delta = {
             "version": 999,
-            "volumes": [
-                ZoneVolume(10, "biome", (0.0, 0.0, 0.0), (100.0, 100.0, 10.0)).to_dict()
-            ],
+            "volumes": [ZoneVolume(10, "biome", (0.0, 0.0, 0.0), (100.0, 100.0, 10.0)).to_dict()],
             "next_id": 11,
         }
         pre_volumes = store.volumes()
@@ -103,9 +102,7 @@ class TestApplyDeltaVersionHandling:
 
         delta_v0 = {
             "version": 0,
-            "volumes": [
-                ZoneVolume(5, "grass", (2.0, 2.0, 0.0), (8.0, 8.0, 4.0)).to_dict()
-            ],
+            "volumes": [ZoneVolume(5, "grass", (2.0, 2.0, 0.0), (8.0, 8.0, 4.0)).to_dict()],
             "next_id": 6,
         }
         store.apply_delta(delta_v0)
@@ -119,9 +116,7 @@ class TestApplyDeltaVersionHandling:
         store.mark_baseline()
 
         delta_no_ver = {
-            "volumes": [
-                ZoneVolume(7, "grass", (1.0, 1.0, 0.0), (3.0, 3.0, 1.0)).to_dict()
-            ],
+            "volumes": [ZoneVolume(7, "grass", (1.0, 1.0, 0.0), (3.0, 3.0, 1.0)).to_dict()],
             "next_id": 8,
         }
         store.apply_delta(delta_no_ver)
@@ -141,6 +136,7 @@ class TestApplyDeltaVersionHandling:
 # ZoneStore — duplicate adds, remove behavior
 # ---------------------------------------------------------------------------
 
+
 class TestDuplicateAndRemove:
     """Pin id auto-increment, duplicate volumes, and remove edge cases."""
 
@@ -154,8 +150,9 @@ class TestDuplicateAndRemove:
 
     def test_ids_auto_increment_monotonically(self):
         store = ZoneStore()
-        ids = [store.add("grass", (float(i), 0.0, 0.0), (float(i+1), 1.0, 1.0)).id
-               for i in range(5)]
+        ids = [
+            store.add("grass", (float(i), 0.0, 0.0), (float(i + 1), 1.0, 1.0)).id for i in range(5)
+        ]
         assert ids == list(range(1, 6))
 
     def test_remove_nonexistent_returns_false(self):
@@ -180,6 +177,7 @@ class TestDuplicateAndRemove:
 # ---------------------------------------------------------------------------
 # ZoneStore — volumes() filtering and ordering
 # ---------------------------------------------------------------------------
+
 
 class TestVolumesFilteringAndOrdering:
     """Pin tag filtering and id-ordered returns."""
@@ -219,6 +217,7 @@ class TestVolumesFilteringAndOrdering:
 # ZoneStore — apply_delta with empty delta leaves state intact
 # ---------------------------------------------------------------------------
 
+
 class TestApplyDeltaEmpty:
     def test_empty_delta_leaves_volumes_unchanged(self):
         store = ZoneStore()
@@ -235,6 +234,7 @@ class TestApplyDeltaEmpty:
 # ---------------------------------------------------------------------------
 # ZoneVolume — NaN / inf in corners
 # ---------------------------------------------------------------------------
+
 
 class TestNaNInfCorners:
     """Pin whether construction raises or silently accepts bad float values."""
@@ -268,14 +268,18 @@ class TestNaNInfCorners:
 
     def test_both_nan_raises(self):
         with pytest.raises((ValueError, Exception)):
-            ZoneVolume(1, "grass",
-                       (float("nan"), float("nan"), float("nan")),
-                       (float("nan"), float("nan"), float("nan")))
+            ZoneVolume(
+                1,
+                "grass",
+                (float("nan"), float("nan"), float("nan")),
+                (float("nan"), float("nan"), float("nan")),
+            )
 
 
 # ---------------------------------------------------------------------------
 # ZoneVolume — zero-size volume (min_corner == max_corner)
 # ---------------------------------------------------------------------------
+
 
 class TestZeroSizeVolume:
     """Pin validation behavior: strict < means zero-size is rejected at construction."""
@@ -298,6 +302,7 @@ class TestZeroSizeVolume:
 # ZoneVolume.contains_xy — scalar vs array, boundary inclusivity
 # ---------------------------------------------------------------------------
 
+
 class TestContainsXY:
     """Pin inclusive-min / exclusive-max semantics and input shapes."""
 
@@ -318,13 +323,11 @@ class TestContainsXY:
         assert result[0] == False
 
     def test_just_inside_max(self):
-        result = self.vol.contains_xy(
-            np.array([6.0 - 1e-9]), np.array([5.0 - 1e-9]))
+        result = self.vol.contains_xy(np.array([6.0 - 1e-9]), np.array([5.0 - 1e-9]))
         assert result[0] == True
 
     def test_just_outside_min(self):
-        result = self.vol.contains_xy(
-            np.array([2.0 - 1e-9]), np.array([1.0]))
+        result = self.vol.contains_xy(np.array([2.0 - 1e-9]), np.array([1.0]))
         assert result[0] == False
 
     # --- scalar-like inputs ---
@@ -357,6 +360,7 @@ class TestContainsXY:
 # ---------------------------------------------------------------------------
 # ZoneVolume.intersects_chunk — geometry edges
 # ---------------------------------------------------------------------------
+
 
 class TestIntersectsChunk:
     """Pin overlap logic at chunk boundaries and z-window edges."""
@@ -420,12 +424,16 @@ class TestIntersectsChunk:
 # ZoneVolume.to_dict / from_dict round-trip
 # ---------------------------------------------------------------------------
 
+
 class TestToDictFromDictRoundTrip:
     """Pin serialization completeness including biome and params."""
 
     def test_round_trip_with_biome_and_params(self):
         v = ZoneVolume(
-            42, "biome", (10.0, 20.0, 0.0), (30.0, 40.0, 16.0),
+            42,
+            "biome",
+            (10.0, 20.0, 0.0),
+            (30.0, 40.0, 16.0),
             biome="snow",
             params={"density": 5.5, "scale": 1.2},
         )
@@ -461,7 +469,6 @@ class TestToDictFromDictRoundTrip:
     def test_params_with_string_values_round_trip(self):
         # ZoneVolume.params is typed dict[str, float] but code does dict(params or {})
         # without enforcing value types — pin that string values survive.
-        v = ZoneVolume(1, "biome", (0.0, 0.0, 0.0), (10.0, 10.0, 5.0),
-                       params={"name": "special"})  # type: ignore[arg-type]
+        v = ZoneVolume(1, "biome", (0.0, 0.0, 0.0), (10.0, 10.0, 5.0), params={"name": "special"})  # type: ignore[arg-type]
         v2 = ZoneVolume.from_dict(v.to_dict())
         assert v2.params.get("name") == "special"

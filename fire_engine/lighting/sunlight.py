@@ -50,7 +50,8 @@ LIGHT_AMBIENT = 40   (from light_grid)
 
 from __future__ import annotations
 
-from typing import Callable, Protocol
+from collections.abc import Callable
+from typing import Protocol
 
 import numpy as np
 
@@ -75,6 +76,7 @@ _log = get_logger("lighting.sunlight")
 # Chunk-provider protocol (same contract as terrain's chunk_provider).
 # ---------------------------------------------------------------------------
 
+
 class _ChunkProvider(Protocol):
     """Minimal protocol for a chunk container / provider."""
 
@@ -85,6 +87,7 @@ class _ChunkProvider(Protocol):
 # ---------------------------------------------------------------------------
 # Public sampler factory (plugs into build_mesh's light_sampler argument)
 # ---------------------------------------------------------------------------
+
 
 def make_light_sampler(
     light_grid: LightGrid,
@@ -147,8 +150,8 @@ def make_light_sampler(
     >>> sampler(positions)   # no light data → full bright fallback
     array([1.], dtype=float32)
     """
-    chunk_m = float(config.chunk_meters)          # 16.0
-    cell_m = float(config.light_cell_meters)       # 1.0
+    chunk_m = float(config.chunk_meters)  # 16.0
+    cell_m = float(config.light_cell_meters)  # 1.0
     grid_cells = config.chunk_size // config.light_grid_scale  # 16
 
     def _sampler(face_centers: np.ndarray) -> np.ndarray:
@@ -177,14 +180,12 @@ def make_light_sampler(
         chunk_origins = chunk_coords_f.astype(np.float64) * chunk_m  # (F, 3)
 
         # 3. Light-cell coords within the chunk, clamped to [0, grid_cells-1].
-        cell_coords = np.floor(
-            (pos - chunk_origins) / cell_m
-        ).astype(np.int32)  # (F, 3)
-        cell_coords = np.clip(cell_coords, 0, grid_cells - 1)   # (F, 3)
+        cell_coords = np.floor((pos - chunk_origins) / cell_m).astype(np.int32)  # (F, 3)
+        cell_coords = np.clip(cell_coords, 0, grid_cells - 1)  # (F, 3)
 
         # 4. Gather light values — process per unique chunk to amortise dict
         #    lookups (most faces come from the same chunk).
-        out = np.ones(F, dtype=np.float32)   # default: full bright
+        out = np.ones(F, dtype=np.float32)  # default: full bright
 
         # Build a unique-chunk index to batch lookups.
         # Encode (cx,cy,cz) as a single int64 key for fast unique.
@@ -197,9 +198,7 @@ def make_light_sampler(
         KEY_SHIFT = 13
         MASK = (1 << KEY_SHIFT) - 1
         packed_keys = (
-            ((cx & MASK) << (2 * KEY_SHIFT)) |
-            ((cy & MASK) << KEY_SHIFT) |
-            (cz & MASK)
+            ((cx & MASK) << (2 * KEY_SHIFT)) | ((cy & MASK) << KEY_SHIFT) | (cz & MASK)
         )  # (F,)
 
         unique_keys, inverse = np.unique(packed_keys, return_inverse=True)
@@ -209,11 +208,13 @@ def make_light_sampler(
             _cz_raw = int(key & MASK)
             _cy_raw = int((key >> KEY_SHIFT) & MASK)
             _cx_raw = int((key >> (2 * KEY_SHIFT)) & MASK)
+
             # Sign-extend 13-bit values.
             def _sign_ext(v: int) -> int:
                 if v >= (1 << (KEY_SHIFT - 1)):
                     return v - (1 << KEY_SHIFT)
                 return v
+
             coord = (_sign_ext(_cx_raw), _sign_ext(_cy_raw), _sign_ext(_cz_raw))
 
             arr = light_grid.get(coord)
@@ -222,7 +223,7 @@ def make_light_sampler(
                 continue
 
             # Face indices belonging to this chunk.
-            mask = inverse == ui           # (F,) bool
+            mask = inverse == ui  # (F,) bool
             lx = cell_coords[mask, 0]
             ly = cell_coords[mask, 1]
             lz = cell_coords[mask, 2]
@@ -237,6 +238,7 @@ def make_light_sampler(
 # ---------------------------------------------------------------------------
 # SunlightComputer
 # ---------------------------------------------------------------------------
+
 
 class SunlightComputer:
     """
@@ -329,7 +331,7 @@ class SunlightComputer:
 
         # Derived constants.
         self._grid_cells: int = config.chunk_size // config.light_grid_scale  # 16
-        self._chunk_m: float = float(config.chunk_meters)                     # 16.0
+        self._chunk_m: float = float(config.chunk_meters)  # 16.0
 
         # Subscribe to events.
         bus.subscribe(TerrainEditedEvent, self._on_terrain_edited)
@@ -391,13 +393,15 @@ class SunlightComputer:
             Y chunk coordinate of the column.
         """
         chunks_dict = self._provider.chunks
-        g = self._grid_cells   # 16
+        g = self._grid_cells  # 16
 
         # Collect all loaded chunks in this column, sorted by cz ascending.
         column_chunks = sorted(
-            [(coord[2], coord, chunk)
-             for coord, chunk in chunks_dict.items()
-             if coord[0] == cx and coord[1] == cy],
+            [
+                (coord[2], coord, chunk)
+                for coord, chunk in chunks_dict.items()
+                if coord[0] == cx and coord[1] == cy
+            ],
             key=lambda t: t[0],
         )
 
@@ -440,7 +444,7 @@ class SunlightComputer:
         padded = np.pad(
             light_float,
             pad_width=1,
-            mode='edge',
+            mode="edge",
         )  # (18, 18, T+2)
 
         # Sum 27 slices with offsets i,j,k ∈ {0,1,2} — no scipy, no per-cell loop.
@@ -448,7 +452,7 @@ class SunlightComputer:
         for i in range(3):
             for j in range(3):
                 for k in range(3):
-                    blurred += padded[i:i + 16, j:j + 16, k:k + T]
+                    blurred += padded[i : i + 16, j : j + 16, k : k + T]
         blurred /= 27.0
         # Note: the 27-iteration loop is over the *constant* 3×3×3 neighbourhood
         # (27 iterations total, not per-cell) — this is O(27 * N) where N is the
@@ -501,8 +505,6 @@ class SunlightComputer:
         of CPU time (not required for v0).
         """
         chunks_dict = self._provider.chunks
-        columns: set[tuple[int, int]] = {
-            (coord[0], coord[1]) for coord in chunks_dict
-        }
+        columns: set[tuple[int, int]] = {(coord[0], coord[1]) for coord in chunks_dict}
         for cx, cy in columns:
             self.recompute_column(cx, cy)

@@ -6,6 +6,7 @@ Covers EDITOR_PRD Phase E0 acceptance:
 - version-mismatch rejection,
 - single-source codegen consistency (generated == schema.json).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -13,9 +14,7 @@ import json
 from pathlib import Path
 
 import pytest
-
 import websockets
-
 from fire_editor import Daemon, decode_frame, encode_frame
 from fire_editor._generated import PROTOCOL_VERSION, ErrorCode, SchemaId
 from fire_editor.binary import BinaryFrameError
@@ -113,20 +112,32 @@ class TestDispatcher:
 class TestHandshake:
     def test_hello_ok(self):
         d = Daemon()
-        resp = _run(d.dispatcher.dispatch({
-            "jsonrpc": "2.0", "id": 1, "method": "hello",
-            "params": {"protocol_version": PROTOCOL_VERSION, "client": "pytest"},
-        }))
+        resp = _run(
+            d.dispatcher.dispatch(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "hello",
+                    "params": {"protocol_version": PROTOCOL_VERSION, "client": "pytest"},
+                }
+            )
+        )
         assert resp["result"]["ok"] is True
         assert resp["result"]["protocol_version"] == PROTOCOL_VERSION
         assert resp["result"]["engine_version"]  # non-empty
 
     def test_hello_version_mismatch(self):
         d = Daemon()
-        resp = _run(d.dispatcher.dispatch({
-            "jsonrpc": "2.0", "id": 1, "method": "hello",
-            "params": {"protocol_version": PROTOCOL_VERSION + 999, "client": "pytest"},
-        }))
+        resp = _run(
+            d.dispatcher.dispatch(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "hello",
+                    "params": {"protocol_version": PROTOCOL_VERSION + 999, "client": "pytest"},
+                }
+            )
+        )
         assert resp["error"]["code"] == ErrorCode.VERSION_MISMATCH
 
 
@@ -141,10 +152,16 @@ class TestLiveSocket:
             try:
                 async with websockets.connect(f"ws://127.0.0.1:{port}") as ws:
                     # hello
-                    await ws.send(json.dumps({
-                        "jsonrpc": "2.0", "id": 1, "method": "hello",
-                        "params": {"protocol_version": PROTOCOL_VERSION, "client": "test"},
-                    }))
+                    await ws.send(
+                        json.dumps(
+                            {
+                                "jsonrpc": "2.0",
+                                "id": 1,
+                                "method": "hello",
+                                "params": {"protocol_version": PROTOCOL_VERSION, "client": "test"},
+                            }
+                        )
+                    )
                     hello = json.loads(await ws.recv())
                     assert hello["result"]["ok"] is True
 
@@ -154,7 +171,9 @@ class TestLiveSocket:
                     assert pong["result"] == {"pong": True}
 
                     # daemon -> client binary broadcast
-                    await daemon.server.broadcast_binary(encode_frame(SchemaId.MESH, 99, b"meshbytes"))
+                    await daemon.server.broadcast_binary(
+                        encode_frame(SchemaId.MESH, 99, b"meshbytes")
+                    )
                     frame = await ws.recv()
                     assert isinstance(frame, bytes)
                     schema_id, payload_id, payload = decode_frame(frame)

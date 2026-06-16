@@ -36,31 +36,31 @@ Quick-start
 """
 
 from fire_engine.devtools.fields import (
+    Button,
     Field,
     FieldKind,
-    Section,
-    Button,
     Panel,
+    Section,
 )
-from fire_engine.devtools.selection import Selection
-from fire_engine.devtools.picking import Selectable, ray_aabb, pick
-from fire_engine.devtools.introspect import describe_object, describe_chunk, is_chunk
-from fire_engine.devtools.tools import (
-    DevTool,
-    PerformanceTool,
-    InspectorTool,
-    ActionsTool,
-    ClockTool,
-    CallbackTool,
-)
-from fire_engine.devtools.manager import DevToolsManager
 from fire_engine.devtools.gizmo import (
-    GizmoMode,
-    HandleType,
-    Handle,
     DragState,
     Gizmo,
+    GizmoMode,
+    Handle,
+    HandleType,
     update_drag,
+)
+from fire_engine.devtools.introspect import describe_chunk, describe_object, is_chunk
+from fire_engine.devtools.manager import DevToolsManager
+from fire_engine.devtools.picking import Selectable, pick, ray_aabb
+from fire_engine.devtools.selection import Selection
+from fire_engine.devtools.tools import (
+    ActionsTool,
+    CallbackTool,
+    ClockTool,
+    DevTool,
+    InspectorTool,
+    PerformanceTool,
 )
 
 __all__ = [

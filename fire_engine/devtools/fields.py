@@ -36,9 +36,10 @@ Example
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, Callable, Optional
+from typing import Any
 
 
 class FieldKind(Enum):
@@ -101,8 +102,8 @@ class Field:
     label: str
     kind: FieldKind
     get: Callable[[], Any]
-    set: Optional[Callable[[Any], None]] = None
-    choices: Optional[tuple[str, ...]] = None
+    set: Callable[[Any], None] | None = None
+    choices: tuple[str, ...] | None = None
     step: float = 0.1
     units: str = ""
 

@@ -6,36 +6,35 @@ no-pickle enforcement, and numpy/tuple-key encoding.  Headless: no panda3d.
 from __future__ import annotations
 
 import re
-import sys
-import tempfile
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from fire_engine.core import load_config, Clock, EventBus
+from fire_engine.core import Clock, EventBus, load_config
 from fire_engine.core.math3d import Vec3
 from fire_engine.core.rng import set_world_seed
-from fire_engine.world.terrain import ChunkManager
-from fire_engine.world.terrain.brush import SphereBrush, BrushMode, apply_brush
-from fire_engine.save import SaveManager, Saveable, SaveIncompatibleError
+from fire_engine.save import Saveable, SaveIncompatibleError, SaveManager
 from fire_engine.save.save_manager import (
-    _encode_delta,
     _decode_delta,
-    _encode_value,
     _decode_value,
+    _encode_delta,
+    _encode_value,
 )
-
+from fire_engine.world.terrain import ChunkManager
+from fire_engine.world.terrain.brush import BrushMode, SphereBrush, apply_brush
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_world(seed: int = 1337):
     """Return (cfg, clock, bus, cm, sm) for a headless world at ``seed``."""
     cfg = load_config()
     # Build a config with the given seed via a simple replacement
     from dataclasses import replace
+
     cfg = replace(cfg, world_seed=seed)
     set_world_seed(seed)
     bus = EventBus()
@@ -75,6 +74,7 @@ def _blast_craters(cm: ChunkManager) -> list[tuple[int, int, int]]:
 # Round-trip test
 # ---------------------------------------------------------------------------
 
+
 class TestRoundTrip:
     """Save → fresh world same seed → load → voxel arrays identical."""
 
@@ -91,10 +91,7 @@ class TestRoundTrip:
         assert edited_coords, "Expected at least one edited chunk"
 
         # Snapshot voxel arrays before saving
-        pre_save = {
-            coord: cm.chunks[coord].materials.copy()
-            for coord in edited_coords
-        }
+        pre_save = {coord: cm.chunks[coord].materials.copy() for coord in edited_coords}
 
         # Advance the clock a little so we verify clock restore too
         clock.update(5.0)
@@ -114,9 +111,7 @@ class TestRoundTrip:
 
         # Edited chunks must have identical voxel arrays
         for coord in edited_coords:
-            assert coord in cm2.chunks, (
-                f"Chunk {coord} should be in cm2.chunks after apply_delta"
-            )
+            assert coord in cm2.chunks, f"Chunk {coord} should be in cm2.chunks after apply_delta"
             post_load = cm2.chunks[coord].materials
             assert np.array_equal(pre_save[coord], post_load), (
                 f"Voxel array mismatch for chunk {coord} after round-trip"
@@ -137,6 +132,7 @@ class TestRoundTrip:
 # ---------------------------------------------------------------------------
 # Wrong-seed incompatibility
 # ---------------------------------------------------------------------------
+
 
 class TestWrongSeedRaisesIncompatible:
     def test_wrong_seed_raises(self, tmp_path):
@@ -165,6 +161,7 @@ class TestWrongSeedRaisesIncompatible:
 # Unedited world is tiny
 # ---------------------------------------------------------------------------
 
+
 class TestUneditedWorldIsTiny:
     def test_file_under_1kb(self, tmp_path):
         """
@@ -174,7 +171,6 @@ class TestUneditedWorldIsTiny:
         We check the total file size as well — it should be well under 1 KB
         plus a small header overhead.
         """
-        import zlib as _zlib
         import msgpack as _msgpack
 
         save_file = tmp_path / "tiny.ta"
@@ -186,10 +182,7 @@ class TestUneditedWorldIsTiny:
         envelope = _msgpack.unpackb(raw, raw=False)
         systems = envelope.get("systems") or envelope.get(b"systems") or {}
         if isinstance(systems, dict):
-            terrain_blob = (
-                systems.get("terrain")
-                or systems.get(b"terrain")
-            )
+            terrain_blob = systems.get("terrain") or systems.get(b"terrain")
         else:
             terrain_blob = None
 
@@ -202,6 +195,7 @@ class TestUneditedWorldIsTiny:
 # ---------------------------------------------------------------------------
 # No-pickle test
 # ---------------------------------------------------------------------------
+
 
 class TestNoPickle:
     """Walk fire_engine/ and tools/ .py files; fail if any contain pickle imports."""
@@ -249,6 +243,7 @@ class TestNoPickle:
 # ---------------------------------------------------------------------------
 # Numpy + tuple-key encoding
 # ---------------------------------------------------------------------------
+
 
 class TestNumpyEncoding:
     """Encoder/decoder round-trips for numpy arrays and tuple keys."""
@@ -322,6 +317,7 @@ class TestNumpyEncoding:
 # ---------------------------------------------------------------------------
 # Saveable protocol
 # ---------------------------------------------------------------------------
+
 
 class TestSaveableProtocol:
     def test_chunk_manager_is_saveable(self):

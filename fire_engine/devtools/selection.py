@@ -11,7 +11,8 @@ No panda3d imports — headless-testable.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     # Duck-typed at runtime; imported only for type-checkers so this module
@@ -40,15 +41,15 @@ class Selection:
         sel.on_change(lambda go: print("selected", go.name if go else None))
     """
 
-    __slots__ = ("_current", "_revision", "_listeners")
+    __slots__ = ("_current", "_listeners", "_revision")
 
     def __init__(self) -> None:
-        self._current: "Optional[GameObject]" = None
+        self._current: GameObject | None = None
         self._revision: int = 0
-        self._listeners: list[Callable[["Optional[GameObject]"], None]] = []
+        self._listeners: list[Callable[[GameObject | None], None]] = []
 
     @property
-    def current(self) -> "Optional[GameObject]":
+    def current(self) -> GameObject | None:
         """The selected GameObject, or None."""
         return self._current
 
@@ -57,7 +58,7 @@ class Selection:
         """Counter that increments on every selection change (never decreases)."""
         return self._revision
 
-    def set(self, go: "Optional[GameObject]") -> None:
+    def set(self, go: GameObject | None) -> None:
         """
         Select ``go`` (or clear with ``None``).
 
@@ -79,9 +80,7 @@ class Selection:
         """Deselect (equivalent to ``set(None)``)."""
         self.set(None)
 
-    def on_change(
-        self, callback: "Callable[[Optional[GameObject]], None]"
-    ) -> None:
+    def on_change(self, callback: Callable[[GameObject | None], None]) -> None:
         """
         Register a callback fired with the new selection whenever it changes.
 

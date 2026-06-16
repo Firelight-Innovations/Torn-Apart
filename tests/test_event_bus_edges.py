@@ -9,27 +9,24 @@ basic subscribe/publish/drain correctness.
 
 from __future__ import annotations
 
-import dataclasses
-from dataclasses import dataclass, FrozenInstanceError
+from dataclasses import FrozenInstanceError, dataclass
 
 import pytest
 
 from fire_engine.core.event_bus import (
-    EventBus,
     BuildingChangedEvent,
-    ChunkLoadedEvent,
     ChunkUnloadedEvent,
+    EventBus,
     GameDayTickEvent,
     LightningStrikeEvent,
-    TerrainEditedEvent,
     ThunderEvent,
     WeatherChangedEvent,
 )
 
-
 # ---------------------------------------------------------------------------
 # Private test event types (not shared with test_event_bus.py)
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class _EvA:
@@ -44,6 +41,7 @@ class _EvB:
 # ---------------------------------------------------------------------------
 # Handler-exception policy during publish()
 # ---------------------------------------------------------------------------
+
 
 class TestHandlerExceptionDuringPublish:
     """Pin: an exception in a handler propagates to the publish() caller
@@ -109,6 +107,7 @@ class TestHandlerExceptionDuringPublish:
 # Handler-exception policy during drain()
 # ---------------------------------------------------------------------------
 
+
 class TestHandlerExceptionDuringDrain:
     """Pin: an exception in a deferred handler propagates to the drain() caller
     and aborts further processing of the current sweep."""
@@ -152,6 +151,7 @@ class TestHandlerExceptionDuringDrain:
 # Double-subscribe
 # ---------------------------------------------------------------------------
 
+
 class TestDoubleSubscribe:
     """Pin: subscribing the same handler twice fires it twice per publish."""
 
@@ -173,11 +173,9 @@ class TestDoubleSubscribe:
         h = calls.append
         bus.subscribe(_EvA, h)
         bus.subscribe(_EvA, h)
-        bus.unsubscribe(_EvA, h)   # removes only the first occurrence
+        bus.unsubscribe(_EvA, h)  # removes only the first occurrence
         bus.publish(_EvA(n=7))
-        assert len(calls) == 1, (
-            f"Expected exactly one call after one unsubscribe; got {len(calls)}"
-        )
+        assert len(calls) == 1, f"Expected exactly one call after one unsubscribe; got {len(calls)}"
 
     def test_unsubscribe_twice_after_double_subscribe_fires_zero(self):
         """Two unsubscribes remove both registrations."""
@@ -195,6 +193,7 @@ class TestDoubleSubscribe:
 # ---------------------------------------------------------------------------
 # Unsubscribe of never-subscribed handler
 # ---------------------------------------------------------------------------
+
 
 class TestUnsubscribeNeverSubscribed:
     """Pin: unsubscribing a handler that was never registered is a no-op."""
@@ -215,6 +214,7 @@ class TestUnsubscribeNeverSubscribed:
 # ---------------------------------------------------------------------------
 # Unsubscribe DURING publish (mid-dispatch mutation safety)
 # ---------------------------------------------------------------------------
+
 
 class TestUnsubscribeDuringPublish:
     """Pin: publish() snapshots the handler list before iterating, so
@@ -288,6 +288,7 @@ class TestUnsubscribeDuringPublish:
 # publish_deferred during drain — ordering across two drains
 # ---------------------------------------------------------------------------
 
+
 class TestDeferredOrderingAcrossDrains:
     """Extend test_event_bus.py's idea: verify precise ordering across two
     consecutive drains when handlers enqueue new events during draining."""
@@ -306,11 +307,11 @@ class TestDeferredOrderingAcrossDrains:
         bus.subscribe(_EvA, handler)
 
         bus.publish_deferred(_EvA(n=10))
-        bus.drain()   # delivers 10; enqueues 20, 30
+        bus.drain()  # delivers 10; enqueues 20, 30
 
         assert order == [("recv", 10)]
 
-        bus.drain()   # delivers 20 then 30
+        bus.drain()  # delivers 20 then 30
         assert order == [("recv", 10), ("recv", 20), ("recv", 30)]
 
     def test_two_events_in_drain1_each_enqueue_drain2_fifo(self):
@@ -326,17 +327,18 @@ class TestDeferredOrderingAcrossDrains:
         bus.subscribe(_EvA, handler)
         bus.publish_deferred(_EvA(n=1))
         bus.publish_deferred(_EvA(n=2))
-        bus.drain()   # delivers 1, 2; enqueues 10, 20
+        bus.drain()  # delivers 1, 2; enqueues 10, 20
 
         assert order == [1, 2]
 
-        bus.drain()   # delivers 10, 20
+        bus.drain()  # delivers 10, 20
         assert order == [1, 2, 10, 20]
 
 
 # ---------------------------------------------------------------------------
 # drain() on empty queue
 # ---------------------------------------------------------------------------
+
 
 class TestDrainEmpty:
     def test_drain_empty_is_noop(self):
@@ -362,6 +364,7 @@ class TestDrainEmpty:
 # Cross-type isolation (subscribe to A, publish B)
 # ---------------------------------------------------------------------------
 
+
 class TestCrossTypeIsolation:
     def test_handler_for_A_does_not_receive_B(self):
         bus = EventBus()
@@ -382,6 +385,7 @@ class TestCrossTypeIsolation:
 # ---------------------------------------------------------------------------
 # Event dataclass invariants — FrozenInstanceError on mutation
 # ---------------------------------------------------------------------------
+
 
 class TestEventDataclassFrozen:
     """Each event must raise FrozenInstanceError on attribute assignment.
@@ -439,6 +443,7 @@ class TestEventDataclassFrozen:
 # ---------------------------------------------------------------------------
 # Event dataclass field names and value equality
 # ---------------------------------------------------------------------------
+
 
 class TestEventDataclassFields:
     """Pin field names, types, and value-equality for all engine event types."""

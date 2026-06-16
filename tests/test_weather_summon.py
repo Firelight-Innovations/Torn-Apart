@@ -35,6 +35,7 @@ def _fresh() -> WeatherSystem:
 # Summon placement + drift
 # ---------------------------------------------------------------------------
 
+
 def test_summon_places_cell_upwind_and_drifts_toward_player():
     ws = _fresh()
     t0 = 2 * 86400.0 + 9.5 * 3600.0
@@ -74,6 +75,7 @@ def test_eta_is_finite_and_sane_for_approaching_cell():
 # ---------------------------------------------------------------------------
 # Saveable delta
 # ---------------------------------------------------------------------------
+
 
 def test_delta_empty_for_pure_natural_weather():
     ws = _fresh()
@@ -139,7 +141,7 @@ def test_legacy_and_garbage_delta_ignored():
 
     # Garbage shapes do not crash.
     ws2 = _fresh()
-    ws2.apply_delta({"summoned": [{"id": "s:0"}]})        # missing fields
+    ws2.apply_delta({"summoned": [{"id": "s:0"}]})  # missing fields
     ws2.apply_delta({"summoned": "not a list"})
     ws2.apply_delta({"suppressed": 12345})
     ws2.apply_delta({})
@@ -151,6 +153,7 @@ def test_legacy_and_garbage_delta_ignored():
 # ---------------------------------------------------------------------------
 # clear_all / suppression persistence
 # ---------------------------------------------------------------------------
+
 
 def test_clear_all_persists_across_update():
     ws = _fresh()
@@ -171,6 +174,7 @@ def test_clear_all_persists_across_update():
 # ---------------------------------------------------------------------------
 # GustFront coupling — register/remove balance (no leak)
 # ---------------------------------------------------------------------------
+
 
 class _FakeWindField:
     """Minimal stand-in for WindField: records add/remove_modifier calls."""
@@ -200,12 +204,12 @@ def test_gustfront_registers_when_cell_near_and_no_leak():
 
     # Update a second after spawn (a cell is "active" only for spawn_time < t).
     ws.update(1, 10.0 * 3600.0 + 1.0, player_pos=player)
-    assert len(wf.modifiers) == 1                 # front registered
+    assert len(wf.modifiers) == 1  # front registered
 
     # Many updates while still near must NOT accumulate fronts.
     for k in range(2, 31):
         ws.update(1, 10.0 * 3600.0 + k, player_pos=player)
-    assert len(wf.modifiers) == 1                 # exactly one, no leak
+    assert len(wf.modifiers) == 1  # exactly one, no leak
 
     # Clearing the cell removes the front cleanly.
     ws.clear_all()
@@ -229,13 +233,14 @@ def test_detach_wind_field_clears_fronts():
 # helpers
 # ---------------------------------------------------------------------------
 
+
 def _find_rainy_sample(ws: WeatherSystem):
     """Scan a few days for a (day, tod, pos) that samples natural rain > 0."""
     for day in range(0, 12):
         cells = ws._cells_for_day(day)
         for c in cells:
             if c.kind in (CellKind.SHOWER, CellKind.THUNDERSTORM):
-                t = c.spawn_time + 0.5 * c.duration_s   # mid-life (plateau)
+                t = c.spawn_time + 0.5 * c.duration_s  # mid-life (plateau)
                 pos = tuple(c.center(t, ws.synoptic))
                 lw = ws.sample_local(pos, t)
                 if lw.rain_intensity > 0.0:

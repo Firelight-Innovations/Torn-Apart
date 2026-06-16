@@ -61,6 +61,7 @@ _DEFAULT_BASELINE = "profiling/baseline.json"
 # Scripted camera path (deterministic — no randomness)
 # ---------------------------------------------------------------------------
 
+
 def _flight_path(i: int):
     """
     Scripted camera position for frame ``i``: a fast sprint out from spawn with
@@ -68,7 +69,8 @@ def _flight_path(i: int):
     cascade window repeatedly.  Pure function of ``i`` -> fully reproducible.
     """
     from fire_engine.core.math3d import Vec3
-    t = i * 0.8                                  # ~50 m/s feel
+
+    t = i * 0.8  # ~50 m/s feel
     x = math.sin(i * 0.01) * t * 0.5
     y = t
     z = 12.0 + math.sin(i * 0.02) * 6.0
@@ -84,17 +86,19 @@ def _flight_xy(i: int) -> tuple[float, float]:
 # Profiler configuration override (force ON regardless of config.toml)
 # ---------------------------------------------------------------------------
 
+
 def _enable_profiler(base_config, frames: int):
     """Re-init the singleton profiler ON, sized to hold the whole run."""
     from fire_engine.core.profiler import init_profiler
+
     cfg = dataclasses.replace(
         base_config,
         profiler_enabled=True,
         profiler_overlay_enabled=False,
-        profiler_snapshot_enabled=False,            # the harness writes its own report
+        profiler_snapshot_enabled=False,  # the harness writes its own report
         profiler_history_frames=max(
-            int(getattr(base_config, "profiler_history_frames", 1024)),
-            frames + 64),
+            int(getattr(base_config, "profiler_history_frames", 1024)), frames + 64
+        ),
     )
     return init_profiler(cfg)
 
@@ -102,6 +106,7 @@ def _enable_profiler(base_config, frames: int):
 # ---------------------------------------------------------------------------
 # Windowed run (real boot path, render included)
 # ---------------------------------------------------------------------------
+
 
 def run_windowed(seed: int, frames: int, warmup: int, pstats: bool) -> dict:
     """Boot the full demo, fly the scripted path, return the profiler snapshot."""
@@ -113,12 +118,14 @@ def run_windowed(seed: int, frames: int, warmup: int, pstats: bool) -> dict:
     # Override the seed on the loaded config if it differs (re-seed RNG too).
     if seed is not None and int(getattr(app._config, "world_seed", seed)) != seed:
         from fire_engine.core.rng import set_world_seed
+
         app._config = dataclasses.replace(app._config, world_seed=int(seed))
         set_world_seed(int(seed))
 
     prof = _enable_profiler(app._config, frames)
     if pstats:
         from fire_engine.render.profiler_bridge import PStatsBridge
+
         PStatsBridge(prof, connect=True)
 
     # Don't let physical mouse / keys perturb the scripted path.
@@ -132,13 +139,16 @@ def run_windowed(seed: int, frames: int, warmup: int, pstats: bool) -> dict:
         app.taskMgr.step()
     # Reset the profiler so warmup frames aren't in the stats.
     prof.configure_from_config(
-        dataclasses.replace(app._config, profiler_enabled=True,
-                            profiler_overlay_enabled=False,
-                            profiler_snapshot_enabled=False,
-                            profiler_history_frames=max(
-                                int(getattr(app._config,
-                                            "profiler_history_frames", 1024)),
-                                frames + 64)))
+        dataclasses.replace(
+            app._config,
+            profiler_enabled=True,
+            profiler_overlay_enabled=False,
+            profiler_snapshot_enabled=False,
+            profiler_history_frames=max(
+                int(getattr(app._config, "profiler_history_frames", 1024)), frames + 64
+            ),
+        )
+    )
 
     for i in range(warmup, warmup + frames):
         cam.local_position = _flight_path(i)
@@ -147,8 +157,13 @@ def run_windowed(seed: int, frames: int, warmup: int, pstats: bool) -> dict:
     app.taskMgr.step()
 
     snap = prof.snapshot()
-    snap["meta"] = {"mode": "windowed", "seed": seed, "frames": frames,
-                    "warmup": warmup, "camera_path": "sprint_v1"}
+    snap["meta"] = {
+        "mode": "windowed",
+        "seed": seed,
+        "frames": frames,
+        "warmup": warmup,
+        "camera_path": "sprint_v1",
+    }
     # Clean shutdown (don't enter the blocking loop).
     pipeline = getattr(app, "lighting_pipeline", None)
     if pipeline is not None:
@@ -162,6 +177,7 @@ def run_windowed(seed: int, frames: int, warmup: int, pstats: bool) -> dict:
 # ---------------------------------------------------------------------------
 # Headless-sim run (GPU-free CPU-stage subset)
 # ---------------------------------------------------------------------------
+
 
 def run_headless_sim(seed: int, frames: int, warmup: int) -> dict:
     """
@@ -191,7 +207,7 @@ def run_headless_sim(seed: int, frames: int, warmup: int) -> dict:
         with prof.scope("Clock"):
             clock.update(0.016)
         with prof.scope("Update"), prof.scope("Update:Sky"):
-            sky.update(_flight_xy(i))     # Weather:Update nests inside
+            sky.update(_flight_xy(i))  # Weather:Update nests inside
         with prof.scope("ChunkStream"):
             chunks.stream_frame(_flight_path(i), None)
         prof.end_frame()
@@ -199,25 +215,34 @@ def run_headless_sim(seed: int, frames: int, warmup: int) -> dict:
     for i in range(warmup):
         step(i)
     prof.configure_from_config(
-        dataclasses.replace(cfg, profiler_enabled=True,
-                            profiler_overlay_enabled=False,
-                            profiler_snapshot_enabled=False,
-                            profiler_history_frames=max(
-                                int(cfg.profiler_history_frames), frames + 64)))
+        dataclasses.replace(
+            cfg,
+            profiler_enabled=True,
+            profiler_overlay_enabled=False,
+            profiler_snapshot_enabled=False,
+            profiler_history_frames=max(int(cfg.profiler_history_frames), frames + 64),
+        )
+    )
     for i in range(warmup, warmup + frames):
         step(i)
-    prof.begin_frame()        # commit the last frame
+    prof.begin_frame()  # commit the last frame
 
     snap = prof.snapshot()
-    snap["meta"] = {"mode": "headless-sim", "seed": seed, "frames": frames,
-                    "warmup": warmup, "camera_path": "sprint_v1",
-                    "note": "CPU-stage subset only -- no render stages"}
+    snap["meta"] = {
+        "mode": "headless-sim",
+        "seed": seed,
+        "frames": frames,
+        "warmup": warmup,
+        "camera_path": "sprint_v1",
+        "note": "CPU-stage subset only -- no render stages",
+    }
     return snap
 
 
 # ---------------------------------------------------------------------------
 # Reporting + baseline diff
 # ---------------------------------------------------------------------------
+
 
 def _scope_total_ms(scope: dict, frames_measured: int) -> float:
     return scope["mean_ms"] * frames_measured
@@ -227,30 +252,36 @@ def print_summary(snap: dict) -> None:
     fm = snap["frame_ms"]
     meta = snap.get("meta", {})
     n = snap["frames_measured"]
-    print(f"\n=== profile_run [{meta.get('mode', '?')}] "
-          f"seed={meta.get('seed')} frames={n} ===")
-    print(f"frame_ms:  p50 {fm['median']:.2f}   p99 {fm['p99']:.2f}   "
-          f"p99.9 {fm['p999']:.2f}   mean {fm['mean']:.2f}   "
-          f"max {fm['max']:.2f}   (~{fm['fps_mean']:.0f} FPS mean)")
-    print(f"budget {snap['budget_ms']:.1f} ms  ->  over-budget "
-          f"{snap['over_budget_pct']:.1f}% of frames")
+    print(f"\n=== profile_run [{meta.get('mode', '?')}] seed={meta.get('seed')} frames={n} ===")
+    print(
+        f"frame_ms:  p50 {fm['median']:.2f}   p99 {fm['p99']:.2f}   "
+        f"p99.9 {fm['p999']:.2f}   mean {fm['mean']:.2f}   "
+        f"max {fm['max']:.2f}   (~{fm['fps_mean']:.0f} FPS mean)"
+    )
+    print(
+        f"budget {snap['budget_ms']:.1f} ms  ->  over-budget "
+        f"{snap['over_budget_pct']:.1f}% of frames"
+    )
     h = snap["hitches"]
-    print(f"hitches:   {h['count']} ({h['per_second']:.2f}/s, "
-          f"threshold {h['threshold_ms']:.1f} ms)")
+    print(
+        f"hitches:   {h['count']} ({h['per_second']:.2f}/s, threshold {h['threshold_ms']:.1f} ms)"
+    )
     if h["recent"]:
         worst = max(h["recent"], key=lambda r: r["ms"])
-        print(f"  worst recent: {worst['ms']:.1f} ms @ frame "
-              f"{worst['frame']} -> {worst['prime_suspect']}")
+        print(
+            f"  worst recent: {worst['ms']:.1f} ms @ frame "
+            f"{worst['frame']} -> {worst['prime_suspect']}"
+        )
 
-    print(f"\n{'scope':<34}{'total ms':>11}{'mean ms':>10}"
-          f"{'max ms':>10}{'% frame':>9}{'calls':>7}")
+    print(f"\n{'scope':<34}{'total ms':>11}{'mean ms':>10}{'max ms':>10}{'% frame':>9}{'calls':>7}")
     print("-" * 81)
-    scopes = sorted(snap["scopes"],
-                    key=lambda s: _scope_total_ms(s, n), reverse=True)
+    scopes = sorted(snap["scopes"], key=lambda s: _scope_total_ms(s, n), reverse=True)
     for s in scopes:
-        print(f"{s['name']:<34}{_scope_total_ms(s, n):>11.1f}"
-              f"{s['mean_ms']:>10.2f}{s['max_ms']:>10.2f}"
-              f"{s['pct_of_frame']:>8.1f}%{s['calls_per_frame']:>7.1f}")
+        print(
+            f"{s['name']:<34}{_scope_total_ms(s, n):>11.1f}"
+            f"{s['mean_ms']:>10.2f}{s['max_ms']:>10.2f}"
+            f"{s['pct_of_frame']:>8.1f}%{s['calls_per_frame']:>7.1f}"
+        )
     if snap["counters"]:
         print("\ncounters (mean/frame):")
         for k, v in sorted(snap["counters"].items()):
@@ -268,12 +299,13 @@ def diff_baseline(snap: dict, baseline_path: str, regress_pct: float) -> bool:
     """
     p = Path(baseline_path)
     if not p.exists():
-        print(f"\n[baseline] none at {baseline_path} — run with --save-baseline "
-              f"first to enable regression checks.")
+        print(
+            f"\n[baseline] none at {baseline_path} — run with --save-baseline "
+            f"first to enable regression checks."
+        )
         return False
     base = json.loads(p.read_text(encoding="utf-8"))
-    print(f"\n=== regression check vs {baseline_path} "
-          f"(threshold +{regress_pct:.0f}%) ===")
+    print(f"\n=== regression check vs {baseline_path} (threshold +{regress_pct:.0f}%) ===")
     factor = 1.0 + regress_pct / 100.0
     regressed = False
 
@@ -282,8 +314,7 @@ def diff_baseline(snap: dict, baseline_path: str, regress_pct: float) -> bool:
     c99 = snap["frame_ms"]["p99"]
     if b99 > 0 and c99 > b99 * factor:
         regressed = True
-        print(f"  REGRESS  frame_ms.p99  {b99:.2f} -> {c99:.2f} ms "
-              f"(+{(c99 / b99 - 1) * 100:.0f}%)")
+        print(f"  REGRESS  frame_ms.p99  {b99:.2f} -> {c99:.2f} ms (+{(c99 / b99 - 1) * 100:.0f}%)")
     else:
         print(f"  ok       frame_ms.p99  {b99:.2f} -> {c99:.2f} ms")
 
@@ -297,8 +328,7 @@ def diff_baseline(snap: dict, baseline_path: str, regress_pct: float) -> bool:
         bm, cm = bs["mean_ms"], cs["mean_ms"]
         if bm > 0 and cm > bm * factor:
             regressed = True
-            print(f"  REGRESS  {name}  {bm:.2f} -> {cm:.2f} ms mean "
-                  f"(+{(cm / bm - 1) * 100:.0f}%)")
+            print(f"  REGRESS  {name}  {bm:.2f} -> {cm:.2f} ms mean (+{(cm / bm - 1) * 100:.0f}%)")
     for name in sorted(set(base_scopes) - set(cur_scopes)):
         print(f"  gone     {name}  (was {base_scopes[name]['mean_ms']:.2f} ms)")
 
@@ -318,27 +348,33 @@ def write_report(snap: dict, path: str) -> None:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Deterministic perf benchmark.")
     ap.add_argument("--seed", type=int, default=1, help="world seed (default 1)")
-    ap.add_argument("--frames", type=int, default=2000,
-                    help="timed frames (default 2000)")
-    ap.add_argument("--warmup", type=int, default=60,
-                    help="discarded warmup frames (default 60)")
-    ap.add_argument("--headless-sim", action="store_true",
-                    help="GPU-free CPU-stage subset (no window)")
-    ap.add_argument("--pstats", action="store_true",
-                    help="also connect to a PStats server (windowed mode)")
-    ap.add_argument("--out", default=_DEFAULT_REPORT,
-                    help=f"report JSON path (default {_DEFAULT_REPORT})")
-    ap.add_argument("--save-baseline", action="store_true",
-                    help=f"write the run to {_DEFAULT_BASELINE} as the baseline")
-    ap.add_argument("--baseline", default=_DEFAULT_BASELINE,
-                    help="baseline JSON to diff against")
-    ap.add_argument("--regress-pct", type=float, default=15.0,
-                    help="regression threshold percent (default 15)")
-    ap.add_argument("--fail-on-regress", action="store_true",
-                    help="exit non-zero if a regression is detected")
+    ap.add_argument("--frames", type=int, default=2000, help="timed frames (default 2000)")
+    ap.add_argument("--warmup", type=int, default=60, help="discarded warmup frames (default 60)")
+    ap.add_argument(
+        "--headless-sim", action="store_true", help="GPU-free CPU-stage subset (no window)"
+    )
+    ap.add_argument(
+        "--pstats", action="store_true", help="also connect to a PStats server (windowed mode)"
+    )
+    ap.add_argument(
+        "--out", default=_DEFAULT_REPORT, help=f"report JSON path (default {_DEFAULT_REPORT})"
+    )
+    ap.add_argument(
+        "--save-baseline",
+        action="store_true",
+        help=f"write the run to {_DEFAULT_BASELINE} as the baseline",
+    )
+    ap.add_argument("--baseline", default=_DEFAULT_BASELINE, help="baseline JSON to diff against")
+    ap.add_argument(
+        "--regress-pct", type=float, default=15.0, help="regression threshold percent (default 15)"
+    )
+    ap.add_argument(
+        "--fail-on-regress", action="store_true", help="exit non-zero if a regression is detected"
+    )
     args = ap.parse_args()
 
     try:
@@ -349,12 +385,12 @@ def main() -> int:
     except Exception as exc:
         print(f"profile_run FAILED to run: {exc}", file=sys.stderr)
         import traceback
+
         traceback.print_exc()
         return 2
 
     if snap["frames_measured"] == 0:
-        print("profile_run produced 0 frames — boot/step failure.",
-              file=sys.stderr)
+        print("profile_run produced 0 frames — boot/step failure.", file=sys.stderr)
         return 2
 
     print_summary(snap)

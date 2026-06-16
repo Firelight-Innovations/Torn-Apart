@@ -11,6 +11,7 @@ Public surface (Phase E0):
 - :class:`~fire_editor.rpc.Dispatcher`, :class:`~fire_editor.rpc.RpcError`.
 - Constants in :mod:`fire_editor._generated` (codegen from ``protocol/schema.json``).
 """
+
 from __future__ import annotations
 
 from ._generated import DAEMON_VERSION, PROTOCOL_VERSION
@@ -22,19 +23,19 @@ from .rpc import Dispatcher, RpcError
 from .session import EditorSession
 
 __all__ = [
+    "DAEMON_VERSION",
+    "PROTOCOL_VERSION",
+    "BinaryFrame",
+    "BinaryFrameError",
     "Daemon",
     "Dispatcher",
-    "RpcError",
-    "EditorSession",
     "EditorClient",
+    "EditorSession",
+    "RpcError",
     "RpcRemoteError",
-    "BinaryFrame",
-    "spawn_daemon",
-    "encode_frame",
     "decode_frame",
-    "BinaryFrameError",
-    "encode_mesh_payload",
     "decode_mesh_payload",
-    "PROTOCOL_VERSION",
-    "DAEMON_VERSION",
+    "encode_frame",
+    "encode_mesh_payload",
+    "spawn_daemon",
 ]

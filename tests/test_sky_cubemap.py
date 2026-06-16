@@ -16,11 +16,12 @@ from fire_engine.core.rng import set_world_seed
 
 def _fresh_registry():
     """Reset + re-register the night-sky defs only (fast, isolated)."""
-    from fire_engine.procedural.registry import reset_registry, register
+    from fire_engine.procedural.registry import register, reset_registry
     from fire_engine.procedural.textures.night_sky import (
         NightSkyCubeDef,
         NightSkyDef,
     )
+
     reset_registry()
     register(NightSkyDef())
     register(NightSkyCubeDef())
@@ -34,6 +35,7 @@ class TestCubeFaceMath:
             _dirs_to_face_pixels,
             cube_face_directions,
         )
+
         size = 32
         dirs = cube_face_directions(size).reshape(-1, 3)
         face, row, col = _dirs_to_face_pixels(dirs, size)
@@ -45,6 +47,7 @@ class TestCubeFaceMath:
         from fire_engine.procedural.textures.night_sky import (
             cube_face_directions,
         )
+
         dirs = cube_face_directions(16)
         norms = np.linalg.norm(dirs, axis=-1)
         assert np.allclose(norms, 1.0, atol=1e-6)
@@ -54,12 +57,19 @@ class TestCubeFaceMath:
         from fire_engine.procedural.textures.night_sky import (
             _dirs_to_face_pixels,
         )
+
         size = 8
-        axes = np.array([
-            [1, 0, 0], [-1, 0, 0],
-            [0, 1, 0], [0, -1, 0],
-            [0, 0, 1], [0, 0, -1],
-        ], dtype=np.float32)
+        axes = np.array(
+            [
+                [1, 0, 0],
+                [-1, 0, 0],
+                [0, 1, 0],
+                [0, -1, 0],
+                [0, 0, 1],
+                [0, 0, -1],
+            ],
+            dtype=np.float32,
+        )
         face, row, col = _dirs_to_face_pixels(axes, size)
         assert (face == np.arange(6)).all()
         # sc = tc = 0 → texel size/2 (first texel of the upper half).
@@ -74,12 +84,14 @@ class TestNightSkyCube:
 
     def test_shape_and_dtype(self):
         from fire_engine.procedural import get
+
         arr = get("night_sky_cube", face_size=128, star_count=800)
         assert arr.shape == (6, 128, 128, 4)
         assert arr.dtype == np.uint8
 
     def test_deterministic(self):
         from fire_engine.procedural import get
+
         a = get("night_sky_cube", face_size=128, star_count=800)
         set_world_seed(1337)
         _fresh_registry()
@@ -88,6 +100,7 @@ class TestNightSkyCube:
 
     def test_seed_changes_sky(self):
         from fire_engine.procedural import get
+
         a = get("night_sky_cube", face_size=128, star_count=800)
         set_world_seed(99)
         _fresh_registry()
@@ -96,6 +109,7 @@ class TestNightSkyCube:
 
     def test_alpha_is_luminance_mask(self):
         from fire_engine.procedural import get
+
         arr = get("night_sky_cube", face_size=128, star_count=800)
         # Alpha tracks brightness: bright texels mask high, floor masks low.
         bright = arr[..., :3].max(axis=-1) > 200
@@ -115,7 +129,7 @@ class TestNightSkyCube:
         d = NightSkyCubeDef()
 
         def bright_count(star_count: int) -> int:
-            rng = np.random.default_rng(7)      # fixed test-local generator
+            rng = np.random.default_rng(7)  # fixed test-local generator
             arr = d.generate(rng, face_size=128, star_count=star_count)
             # 60/255 ≈ clearly visible against the ~10/255 night floor —
             # catches the dim power-law tier, not just the bright 3 %.
@@ -135,8 +149,8 @@ class TestNightSkyCube:
         statistic (medians are robust to the splatted stars).
         """
         from fire_engine.procedural import get
-        arr = get("night_sky_cube", face_size=128, star_count=0).astype(
-            np.int32)
+
+        arr = get("night_sky_cube", face_size=128, star_count=0).astype(np.int32)
         # Face 4 (+Z) col S-1 (sc=+1) borders face 0 (+X) row... derive via
         # directions: just check that adjacent-edge medians are close for
         # every pair of edges that share an arc.  Simpler robust check: the

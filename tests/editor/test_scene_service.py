@@ -4,14 +4,15 @@ Mirrors test_edit.py's pattern: build a Daemon with a live session and drive the
 async service methods directly (no socket). Confirms the scene.* methods are
 registered, mutate the session's store, and broadcast scene.changed.
 """
+
 from __future__ import annotations
 
 import asyncio
 
-from fire_engine.core import load_config
-
 from fire_editor import Daemon, EditorSession
 from fire_editor._generated import Method, Notification
+
+from fire_engine.core import load_config
 
 
 def _run(coro):

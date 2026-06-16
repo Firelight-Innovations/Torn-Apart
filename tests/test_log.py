@@ -22,7 +22,6 @@ Covers
 from __future__ import annotations
 
 import logging
-import importlib
 
 import pytest
 
@@ -32,6 +31,7 @@ from fire_engine.core.log import get_logger
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True)
 def _restore_logging_state():
@@ -73,8 +73,8 @@ def _force_fresh_setup():
 # Return type & name
 # ---------------------------------------------------------------------------
 
-class TestGetLoggerReturnType:
 
+class TestGetLoggerReturnType:
     def test_returns_logger_instance(self):
         log = get_logger("fire_engine.test.foo")
         assert isinstance(log, logging.Logger)
@@ -106,8 +106,8 @@ class TestGetLoggerReturnType:
 # Idempotency — no duplicate handlers
 # ---------------------------------------------------------------------------
 
-class TestHandlerIdempotency:
 
+class TestHandlerIdempotency:
     def test_second_call_same_name_no_extra_handler(self):
         """Two calls with the same name must not add a second handler."""
         _force_fresh_setup()
@@ -156,8 +156,8 @@ class TestHandlerIdempotency:
 # Format string
 # ---------------------------------------------------------------------------
 
-class TestHandlerFormat:
 
+class TestHandlerFormat:
     def _get_root_stream_handler(self) -> logging.StreamHandler | None:
         """Return the first StreamHandler on the root logger, or None."""
         root = logging.getLogger()
@@ -196,17 +196,15 @@ class TestHandlerFormat:
         _force_fresh_setup()
         get_logger("fire_engine.handler_type_check")
         handler = self._get_root_stream_handler()
-        assert handler is not None, (
-            "Expected a StreamHandler on root logger after get_logger()."
-        )
+        assert handler is not None, "Expected a StreamHandler on root logger after get_logger()."
 
 
 # ---------------------------------------------------------------------------
 # Root logger level
 # ---------------------------------------------------------------------------
 
-class TestRootLoggerLevel:
 
+class TestRootLoggerLevel:
     def test_root_level_is_warning_when_previously_notset(self):
         """
         When root.level is NOTSET before the first call, _setup_root_handler
@@ -230,7 +228,7 @@ class TestRootLoggerLevel:
         """
         _force_fresh_setup()
         root = logging.getLogger()
-        root.setLevel(logging.DEBUG)     # caller already configured a level
+        root.setLevel(logging.DEBUG)  # caller already configured a level
         get_logger("fire_engine.no_override")
         # Pin current behaviour: level should stay DEBUG
         assert root.level == logging.DEBUG, (
@@ -242,8 +240,8 @@ class TestRootLoggerLevel:
 # Distinct loggers for distinct names
 # ---------------------------------------------------------------------------
 
-class TestDistinctLoggers:
 
+class TestDistinctLoggers:
     def test_same_name_returns_same_object(self):
         """logging.getLogger guarantees the same Logger object for the same name."""
         a = get_logger("fire_engine.shared")
@@ -275,18 +273,16 @@ class TestDistinctLoggers:
 # Headless / import safety
 # ---------------------------------------------------------------------------
 
-class TestHeadless:
 
+class TestHeadless:
     def test_no_panda3d_import(self):
         """log.py must not import panda3d (hard engine rule)."""
-        import sys
+
         # If panda3d was imported transitively by log.py it would appear here.
         # We can check the module's globals for any panda3d reference.
         module_globals = vars(_log_module)
         panda_keys = [k for k in module_globals if "panda" in k.lower()]
-        assert panda_keys == [], (
-            f"panda3d symbols found in log module globals: {panda_keys}"
-        )
+        assert panda_keys == [], f"panda3d symbols found in log module globals: {panda_keys}"
 
     def test_only_stdlib_logging_imported(self):
         """log.py should import only stdlib logging (and __future__)."""

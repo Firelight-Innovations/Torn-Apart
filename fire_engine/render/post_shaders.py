@@ -19,18 +19,19 @@ Passes (added across phases; the loader lists only what exists today):
 The GLSL lives in ``world/shaders/*.vert`` / ``*.frag`` (loaded via
 ``load_glsl``) so editors get syntax highlighting + LSP.
 """
+
 from __future__ import annotations
 
 from fire_engine.core.shader_source import load_glsl
 
 __all__ = [
-    "POST_FULLSCREEN_VERTEX",
     "BLOOM_DOWN_FRAGMENT",
     "BLOOM_UP_FRAGMENT",
-    "LENS_FLARE_FRAGMENT",
-    "GOD_RAYS_FRAGMENT",
-    "FXAA_FRAGMENT",
     "COMPOSITE_FRAGMENT",
+    "FXAA_FRAGMENT",
+    "GOD_RAYS_FRAGMENT",
+    "LENS_FLARE_FRAGMENT",
+    "POST_FULLSCREEN_VERTEX",
 ]
 
 

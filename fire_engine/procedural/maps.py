@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import numpy as np
 
-__all__ = ["derive_normal_map", "flat_normal_map", "black_emission_map"]
+__all__ = ["black_emission_map", "derive_normal_map", "flat_normal_map"]
 
 
 def derive_normal_map(rgba: np.ndarray, strength: float = 1.4) -> np.ndarray:
@@ -51,14 +51,19 @@ def derive_normal_map(rgba: np.ndarray, strength: float = 1.4) -> np.ndarray:
     numpy.ndarray
         ``uint8 (H, W, 4)`` normal map, alpha 255.
     """
-    lum = (rgba[..., :3].astype(np.float32) @
-           np.asarray([0.299, 0.587, 0.114], dtype=np.float32)) / 255.0
+    lum = (
+        rgba[..., :3].astype(np.float32) @ np.asarray([0.299, 0.587, 0.114], dtype=np.float32)
+    ) / 255.0
     p = np.pad(lum, 1, mode="wrap")
     # Sobel gradients (X = columns axis 1, Y = rows axis 0).
-    gx = ((p[0:-2, 2:] + 2.0 * p[1:-1, 2:] + p[2:, 2:]) -
-          (p[0:-2, 0:-2] + 2.0 * p[1:-1, 0:-2] + p[2:, 0:-2])) * 0.25
-    gy = ((p[2:, 0:-2] + 2.0 * p[2:, 1:-1] + p[2:, 2:]) -
-          (p[0:-2, 0:-2] + 2.0 * p[0:-2, 1:-1] + p[0:-2, 2:])) * 0.25
+    gx = (
+        (p[0:-2, 2:] + 2.0 * p[1:-1, 2:] + p[2:, 2:])
+        - (p[0:-2, 0:-2] + 2.0 * p[1:-1, 0:-2] + p[2:, 0:-2])
+    ) * 0.25
+    gy = (
+        (p[2:, 0:-2] + 2.0 * p[2:, 1:-1] + p[2:, 2:])
+        - (p[0:-2, 0:-2] + 2.0 * p[0:-2, 1:-1] + p[0:-2, 2:])
+    ) * 0.25
     nx = -gx * strength
     ny = -gy * strength
     nz = np.ones_like(nx)

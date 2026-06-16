@@ -91,8 +91,8 @@ from fire_engine.core import (
     TerrainEditedEvent,
     get_logger,
 )
-from fire_engine.world.wind import pack_wind_field
 from fire_engine.render.component import Component
+from fire_engine.world.wind import pack_wind_field
 
 __all__ = ["WindSystemComponent"]
 
@@ -146,10 +146,17 @@ class WindSystemComponent(Component):
     Units: meters, seconds, radians.  World-space Z-up.
     """
 
-    def __init__(self, base: Any = None, clock: Any = None,
-                 wind_field: Any = None, worker: Any = None,
-                 sky_system: Any = None, chunk_provider: Any = None,
-                 lighting_pipeline: Any = None, bus: Any = None) -> None:
+    def __init__(
+        self,
+        base: Any = None,
+        clock: Any = None,
+        wind_field: Any = None,
+        worker: Any = None,
+        sky_system: Any = None,
+        chunk_provider: Any = None,
+        lighting_pipeline: Any = None,
+        bus: Any = None,
+    ) -> None:
         super().__init__()
         self.base = base
         self.clock = clock
@@ -162,9 +169,9 @@ class WindSystemComponent(Component):
 
         self._tex: Texture | None = None
         self._cells: int = 0
-        self._chunks_dirty: bool = True      # first update feeds chunks (venturi init)
+        self._chunks_dirty: bool = True  # first update feeds chunks (venturi init)
         self._uploaded_once: bool = False
-        self._wind_time: float = 0.0         # seeded in start(), then += real dt
+        self._wind_time: float = 0.0  # seeded in start(), then += real dt
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -173,14 +180,18 @@ class WindSystemComponent(Component):
     def start(self) -> None:
         """Allocate the wind texture and bind the uniform contract (once)."""
         if self.base is None or self.wind_field is None or self.clock is None:
-            _log.warning("WindSystemComponent: missing base/wind_field/clock — "
-                         "disabled (grass uses scalar sway fallback)")
+            _log.warning(
+                "WindSystemComponent: missing base/wind_field/clock — "
+                "disabled (grass uses scalar sway fallback)"
+            )
             self.enabled = False
             return
         if self.lighting_pipeline is None:
-            _log.warning("WindSystemComponent: GPU lighting pipeline required "
-                         "(lighting_backend = \"gpu\") — disabled (grass uses "
-                         "scalar sway fallback)")
+            _log.warning(
+                "WindSystemComponent: GPU lighting pipeline required "
+                '(lighting_backend = "gpu") — disabled (grass uses '
+                "scalar sway fallback)"
+            )
             self.enabled = False
             return
 
@@ -199,8 +210,7 @@ class WindSystemComponent(Component):
         # wind/field.py untouched.  (F_rgba16 is still the storage format — half
         # precision is plenty for a smooth ±~15 m/s velocity field.)
         tex = Texture("wind_field")
-        tex.setup_2d_texture(self._cells, self._cells,
-                             Texture.T_half_float, Texture.F_rgba16)
+        tex.setup_2d_texture(self._cells, self._cells, Texture.T_half_float, Texture.F_rgba16)
         # FT_linear (NOT nearest like grass's field textures): wind is a smooth
         # physical field — linear filtering makes a gust glide across the grass
         # instead of snapping cell-to-cell at the 4 m grid boundaries.
@@ -231,16 +241,21 @@ class WindSystemComponent(Component):
         # seconds through the CURRENT timescale, then scaled by the wind rate.
         # This makes a loaded save resume at a deterministic gust phase while
         # per-frame advancement (below) stays real-time and timescale-free.
-        game_s = (float(self.clock.game_day) * _GAME_SECONDS_PER_DAY
-                  + float(self.clock.game_time_of_day))
+        game_s = float(self.clock.game_day) * _GAME_SECONDS_PER_DAY + float(
+            self.clock.game_time_of_day
+        )
         scale = max(float(self.clock.game_time_scale), 1e-6)
         self._wind_time = game_s / scale * float(cfg.wind_time_scale)
 
-        _log.info("Wind system online: %dx%d field, %.1f m cells (%.0f m "
-                  "region), wind clock %.2f s/s (real-time, timescale-free)",
-                  self._cells, self._cells, float(cfg.wind_cell_m),
-                  self._cells * float(cfg.wind_cell_m),
-                  float(cfg.wind_time_scale))
+        _log.info(
+            "Wind system online: %dx%d field, %.1f m cells (%.0f m "
+            "region), wind clock %.2f s/s (real-time, timescale-free)",
+            self._cells,
+            self._cells,
+            float(cfg.wind_cell_m),
+            self._cells * float(cfg.wind_cell_m),
+            float(cfg.wind_time_scale),
+        )
 
     def late_update(self, dt: float) -> None:
         """Update the field, upload it, and refresh the origin (same frame)."""
@@ -255,8 +270,7 @@ class WindSystemComponent(Component):
         # 60×/1800× too fast.  Monotonic by construction (dt ≥ 0).
         self._wind_time += float(dt) * float(base._config.wind_time_scale)
 
-        sky_state = getattr(self.sky_system, "state", None) \
-            if self.sky_system is not None else None
+        sky_state = getattr(self.sky_system, "state", None) if self.sky_system is not None else None
 
         cam = base.camera_go.transform.position
         cam_pos = (float(cam.x), float(cam.y), float(cam.z))
@@ -270,8 +284,7 @@ class WindSystemComponent(Component):
             chunks = getattr(self.chunk_provider, "chunks", None)
             self._chunks_dirty = False
 
-        self.wind_field.update(dt, self._wind_time, sky_state, cam_pos,
-                               chunks=chunks)
+        self.wind_field.update(dt, self._wind_time, sky_state, cam_pos, chunks=chunks)
 
         # Pack (64x64 fp16 ~= 32 KB — cheap on the main thread) and upload.
         snap = self.wind_field.snapshot
@@ -295,7 +308,7 @@ class WindSystemComponent(Component):
         if self.worker is not None:
             try:
                 self.worker.stop(join=True)
-            except Exception:  # noqa: BLE001  (shutdown best-effort)
+            except Exception:
                 pass
             self.worker = None
         self._tex = None

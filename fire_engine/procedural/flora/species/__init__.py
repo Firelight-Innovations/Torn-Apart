@@ -7,9 +7,9 @@ One file per species; importing this package registers them all
 full guide in ``docs/content/tree_species_authoring.md``.
 """
 
-from fire_engine.procedural.flora.species.gnarled_oak import GnarledOakDef
-from fire_engine.procedural.flora.species.dead_tree import DeadTreeDef
-from fire_engine.procedural.flora.species.scrub_bush import ScrubBushDef
 from fire_engine.procedural.flora.species.berry_bush import BerryBushDef
+from fire_engine.procedural.flora.species.dead_tree import DeadTreeDef
+from fire_engine.procedural.flora.species.gnarled_oak import GnarledOakDef
+from fire_engine.procedural.flora.species.scrub_bush import ScrubBushDef
 
-__all__ = ["GnarledOakDef", "DeadTreeDef", "ScrubBushDef", "BerryBushDef"]
+__all__ = ["BerryBushDef", "DeadTreeDef", "GnarledOakDef", "ScrubBushDef"]

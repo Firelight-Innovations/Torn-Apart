@@ -75,14 +75,20 @@ class TestRasterMatchesSample:
         n = wm.cells
         half = 0.5 * wm.span_m
         # Probe a spread of texels (including ones near the storm core).
-        for row, col in [(0, 0), (n - 1, n - 1), (n // 2, n // 2),
-                         (n // 2 + 3, n // 2 - 5), (10, n - 10)]:
+        for row, col in [
+            (0, 0),
+            (n - 1, n - 1),
+            (n // 2, n // 2),
+            (n // 2 + 3, n // 2 - 5),
+            (10, n - 10),
+        ]:
             wx = center[0] - half + (col + 0.5) * wm.cell_m
             wy = center[1] - half + (row + 0.5) * wm.cell_m
             lw = ws.sample_local((wx, wy), t)
             expected = np.array(
-                [lw.cloud_coverage, lw.cloud_density,
-                 lw.rain_intensity, lw.fog_density], dtype=np.float32)
+                [lw.cloud_coverage, lw.cloud_density, lw.rain_intensity, lw.fog_density],
+                dtype=np.float32,
+            )
             assert np.allclose(r[row, col], expected, atol=1e-6), (
                 f"texel ({row},{col}) mismatch: {r[row, col]} != {expected}"
             )

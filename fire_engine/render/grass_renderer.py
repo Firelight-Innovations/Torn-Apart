@@ -76,8 +76,8 @@ from fire_engine.core import (
     TerrainEditedEvent,
     get_logger,
 )
-from fire_engine.render.component import Component
 from fire_engine.render import grass_shaders
+from fire_engine.render.component import Component
 from fire_engine.zones import (
     bake_grass_height_field,
     grass_hash_seed,
@@ -102,10 +102,10 @@ _SWAY_BASE_WIND_M = 0.16
 _SWAY_GUST_MIN_M = 0.03
 _SWAY_GUST_WIND_M = 0.18
 _SWAY_GUST_RAIN_M = 0.12
-_GUST_FREQ_MIN = 1.2          # rad/s
-_GUST_FREQ_PER_WIND = 0.25    # rad/s per m/s of wind
-_GUST_FREQ_RAIN = 1.8         # extra rad/s at full rain
-_WIND_SPEED_MAX = 12.0        # normalisation ceiling (storm wind, m/s)
+_GUST_FREQ_MIN = 1.2  # rad/s
+_GUST_FREQ_PER_WIND = 0.25  # rad/s per m/s of wind
+_GUST_FREQ_RAIN = 1.8  # extra rad/s at full rain
+_WIND_SPEED_MAX = 12.0  # normalisation ceiling (storm wind, m/s)
 
 
 class GrassRendererComponent(Component):
@@ -135,9 +135,15 @@ class GrassRendererComponent(Component):
     Units: meters, seconds, radians.  World-space Z-up.
     """
 
-    def __init__(self, base: Any = None, sky_system: Any = None,
-                 zone_store: Any = None, chunk_provider: Any = None,
-                 lighting_pipeline: Any = None, bus: Any = None) -> None:
+    def __init__(
+        self,
+        base: Any = None,
+        sky_system: Any = None,
+        zone_store: Any = None,
+        chunk_provider: Any = None,
+        lighting_pipeline: Any = None,
+        bus: Any = None,
+    ) -> None:
         super().__init__()
         self.base = base
         self.sky_system = sky_system
@@ -161,15 +167,17 @@ class GrassRendererComponent(Component):
 
     def start(self) -> None:
         """Build the shared tuft Geom, shader and per-volume nodes (once)."""
-        if self.base is None or self.zone_store is None \
-                or self.chunk_provider is None:
-            _log.warning("GrassRendererComponent: missing base/zone_store/"
-                         "chunk_provider — disabled")
+        if self.base is None or self.zone_store is None or self.chunk_provider is None:
+            _log.warning(
+                "GrassRendererComponent: missing base/zone_store/chunk_provider — disabled"
+            )
             self.enabled = False
             return
         if self.lighting_pipeline is None:
-            _log.warning("GrassRendererComponent: GPU lighting pipeline "
-                         "required (lighting_backend = \"gpu\") — disabled")
+            _log.warning(
+                "GrassRendererComponent: GPU lighting pipeline "
+                'required (lighting_backend = "gpu") — disabled'
+            )
             self.enabled = False
             return
 
@@ -181,21 +189,18 @@ class GrassRendererComponent(Component):
         # is bound + refreshed on ``render`` by GpuLightingPipeline and
         # inherited here; terrain_root parenting groups the world geometry.
         self._root = self.base.terrain_root.attach_new_node("grass_root")
-        self._shader = Shader.make(Shader.SL_GLSL,
-                                   vertex=grass_shaders.GRASS_VERTEX,
-                                   fragment=grass_shaders.GRASS_FRAGMENT)
-        self._root.set_two_sided(True)        # crossed quads face both ways
+        self._shader = Shader.make(
+            Shader.SL_GLSL, vertex=grass_shaders.GRASS_VERTEX, fragment=grass_shaders.GRASS_FRAGMENT
+        )
+        self._root.set_two_sided(True)  # crossed quads face both ways
         self._root.set_shader_input("u_tuft", self._tuft_texture())
         self._root.set_shader_input("u_blade_height_m", self._blade_h)
-        self._root.set_shader_input("u_fade_start_m",
-                                    float(cfg.grass_fade_start_m))
-        self._root.set_shader_input("u_fade_end_m",
-                                    float(cfg.grass_fade_end_m))
+        self._root.set_shader_input("u_fade_start_m", float(cfg.grass_fade_start_m))
+        self._root.set_shader_input("u_fade_end_m", float(cfg.grass_fade_end_m))
         # Shadow-refinement gate (lit_surface.glsl).  Bound HERE, not
         # inherited: terrain_root above us pins u_refine = 1.0 for the
         # terrain, foliage follows the graphics preset.
-        self._root.set_shader_input(
-            "u_refine", 1.0 if cfg.gfx_foliage_shadow_refine else 0.0)
+        self._root.set_shader_input("u_refine", 1.0 if cfg.gfx_foliage_shadow_refine else 0.0)
         # Wind defaults until the first late_update sees a SkyState.
         self._root.set_shader_input("u_wind_dir", LVecBase2f(1.0, 0.0))
         self._root.set_shader_input("u_sway_base", _SWAY_BASE_MIN_M)
@@ -222,25 +227,21 @@ class GrassRendererComponent(Component):
                 self._rebake_field(vol_id)
             self._dirty_fields.clear()
 
-        st = getattr(self.sky_system, "state", None) \
-            if self.sky_system is not None else None
+        st = getattr(self.sky_system, "state", None) if self.sky_system is not None else None
         if st is not None:
             wind = float(st.wind_speed)
             rain = float(st.rain_intensity)
             wn = max(0.0, min(wind / _WIND_SPEED_MAX, 1.0))
             self._root.set_shader_input(
-                "u_wind_dir",
-                LVecBase2f(float(st.wind_dir[0]), float(st.wind_dir[1])))
+                "u_wind_dir", LVecBase2f(float(st.wind_dir[0]), float(st.wind_dir[1]))
+            )
+            self._root.set_shader_input("u_sway_base", _SWAY_BASE_MIN_M + _SWAY_BASE_WIND_M * wn)
             self._root.set_shader_input(
-                "u_sway_base", _SWAY_BASE_MIN_M + _SWAY_BASE_WIND_M * wn)
+                "u_sway_gust", _SWAY_GUST_MIN_M + _SWAY_GUST_WIND_M * wn + _SWAY_GUST_RAIN_M * rain
+            )
             self._root.set_shader_input(
-                "u_sway_gust",
-                _SWAY_GUST_MIN_M + _SWAY_GUST_WIND_M * wn
-                + _SWAY_GUST_RAIN_M * rain)
-            self._root.set_shader_input(
-                "u_gust_freq",
-                _GUST_FREQ_MIN + _GUST_FREQ_PER_WIND * wind
-                + _GUST_FREQ_RAIN * rain)
+                "u_gust_freq", _GUST_FREQ_MIN + _GUST_FREQ_PER_WIND * wind + _GUST_FREQ_RAIN * rain
+            )
         self._root.set_shader_input("u_time_s", self._time_s)
 
     def on_destroy(self) -> None:
@@ -259,8 +260,7 @@ class GrassRendererComponent(Component):
 
     def _on_terrain_edited(self, event: TerrainEditedEvent) -> None:
         coords = event.chunk_coords
-        if isinstance(coords, tuple) and len(coords) == 3 \
-                and isinstance(coords[0], int):
+        if isinstance(coords, tuple) and len(coords) == 3 and isinstance(coords[0], int):
             coords = (coords,)
         self._mark_dirty_for_coords(coords)
 
@@ -316,18 +316,22 @@ class GrassRendererComponent(Component):
             # the base Geom's tiny origin bounds.  Give the node the volume's
             # real box (plus blade reach) and stop bounds recomputation.
             pad = self._blade_h * 1.3 + _BOUNDS_PAD_M
-            geom_node.set_bounds(BoundingBox(
-                LPoint3(vol.min_corner[0] - pad, vol.min_corner[1] - pad,
-                        vol.min_corner[2] - pad),
-                LPoint3(vol.max_corner[0] + pad, vol.max_corner[1] + pad,
-                        vol.max_corner[2] + pad)))
+            geom_node.set_bounds(
+                BoundingBox(
+                    LPoint3(
+                        vol.min_corner[0] - pad, vol.min_corner[1] - pad, vol.min_corner[2] - pad
+                    ),
+                    LPoint3(
+                        vol.max_corner[0] + pad, vol.max_corner[1] + pad, vol.max_corner[2] + pad
+                    ),
+                )
+            )
             geom_node.set_final(True)
             self._volume_nodes[vol.id] = node
             total += count
 
         self._store_version_built = self.zone_store.version
-        _log.info("Grass built: %d volume(s), %d instances total",
-                  len(self._volume_nodes), total)
+        _log.info("Grass built: %d volume(s), %d instances total", len(self._volume_nodes), total)
 
     def _rebake_field(self, vol_id: int) -> None:
         """Re-bake + re-upload one volume's height field (terrain changed)."""
@@ -341,20 +345,22 @@ class GrassRendererComponent(Component):
     def _upload_field(self, node: NodePath, vol) -> None:
         """Bake the volume's height field and bind it as u_height_field."""
         from fire_engine.render.texture_bridge import to_field_texture
-        field = bake_grass_height_field(
-            vol, self.chunk_provider.chunks, self.base._config)
+
+        field = bake_grass_height_field(vol, self.chunk_provider.chunks, self.base._config)
         node.set_shader_input("u_height_field", to_field_texture(field))
 
     def _tuft_texture(self):
         """The pixel-art ``grass_tuft`` silhouette as a Panda3D texture."""
         from fire_engine.procedural import get as get_procedural
         from fire_engine.render.texture_bridge import to_panda_texture
+
         return to_panda_texture(get_procedural("grass_tuft"))
 
 
 # ---------------------------------------------------------------------------
 # Tuft geometry (built once, shared by every volume's GeomNode)
 # ---------------------------------------------------------------------------
+
 
 def _build_tuft_geom(blade_height_m: float) -> Geom:
     """
@@ -378,7 +384,7 @@ def _build_tuft_geom(blade_height_m: float) -> Geom:
     tris = GeomTriangles(Geom.UH_static)
 
     half_w = blade_height_m * _QUAD_WIDTH_RATIO * 0.5
-    for k in range(3):                       # 3 quads — fixed tiny loop
+    for k in range(3):  # 3 quads — fixed tiny loop
         ang = k * math.pi / 3.0
         dx, dy = math.cos(ang) * half_w, math.sin(ang) * half_w
         base = k * 4

@@ -36,7 +36,7 @@ Example
 from __future__ import annotations
 
 import math
-from typing import Mapping
+from collections.abc import Mapping
 
 import numpy as np
 
@@ -45,14 +45,14 @@ from fire_engine.core.rng import for_domain
 from fire_engine.zones.volume import ZoneVolume
 
 __all__ = [
-    "hash_lowbias32",
-    "instance_attribs",
+    "HEIGHT_SENTINEL",
+    "bake_grass_height_field",
     "grass_hash_seed",
     "grass_instance_count",
+    "hash_lowbias32",
+    "instance_attribs",
     "leaf_hash_seed",
     "leaf_instance_count",
-    "bake_grass_height_field",
-    "HEIGHT_SENTINEL",
 ]
 
 # R-channel byte meaning "no terrain surface in the volume's Z window here" —
@@ -132,7 +132,7 @@ def instance_attribs(
     h3 = hash_lowbias32(h2 ^ _K3)
     h4 = hash_lowbias32(h3 ^ _K4)
 
-    inv = np.float32(1.0 / 4294967296.0)   # 1 / 2^32 — matches GLSL u2f()
+    inv = np.float32(1.0 / 4294967296.0)  # 1 / 2^32 — matches GLSL u2f()
     fx = h0.astype(np.float32) * inv
     fy = h1.astype(np.float32) * inv
     size_x = np.float32(max_corner[0] - min_corner[0])
@@ -142,8 +142,7 @@ def instance_attribs(
         "x": np.float32(min_corner[0]) + fx * size_x,
         "y": np.float32(min_corner[1]) + fy * size_y,
         "rot": h2.astype(np.float32) * inv * two_pi,
-        "scale": np.float32(_SCALE_MIN)
-        + h3.astype(np.float32) * inv * np.float32(_SCALE_SPAN),
+        "scale": np.float32(_SCALE_MIN) + h3.astype(np.float32) * inv * np.float32(_SCALE_SPAN),
         "phase": h4.astype(np.float32) * inv * two_pi,
     }
 
@@ -156,7 +155,7 @@ def grass_hash_seed(volume: ZoneVolume) -> int:
     so the same world seed + volume id always places identical grass.
     Bounded to [0, 2**31) — Panda3D shader inputs pass it as a signed int.
     """
-    return int(for_domain("zones", "grass", volume.id).integers(0, 2 ** 31))
+    return int(for_domain("zones", "grass", volume.id).integers(0, 2**31))
 
 
 def grass_instance_count(volume: ZoneVolume, config: Config) -> int:
@@ -193,7 +192,7 @@ def leaf_hash_seed(volume: ZoneVolume) -> int:
     (Hard Rule 2) so the same world seed + volume id always scatters identical
     litter.  Bounded to ``[0, 2**31)`` (Panda3D passes it as a signed int).
     """
-    return int(for_domain("wind", "leaves", volume.id).integers(0, 2 ** 31))
+    return int(for_domain("wind", "leaves", volume.id).integers(0, 2**31))
 
 
 def leaf_instance_count(volume: ZoneVolume, config: Config) -> int:
@@ -215,8 +214,7 @@ def leaf_instance_count(volume: ZoneVolume, config: Config) -> int:
     >>> leaf_instance_count(v, Config())          # 400 m² × 0.15
     60
     """
-    density = float(volume.params.get("leaf_density",
-                                      config.wind_leaf_density_per_m2))
+    density = float(volume.params.get("leaf_density", config.wind_leaf_density_per_m2))
     count = int(volume.area_xy_m2 * max(density, 0.0))
     return max(0, min(count, int(config.wind_leaf_max_instances)))
 

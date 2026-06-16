@@ -4,6 +4,7 @@ Boots the demo, carves a SphereBrush crater in the middle of the demo grass
 volume, moves the camera close, steps frames (height-field re-bake happens on
 TerrainEditedEvent) and saves a screenshot.  Dev diagnostics only.
 """
+
 from __future__ import annotations
 
 import math
@@ -12,9 +13,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import main as demo  # noqa: E402
-from fire_engine.core.math3d import Vec3, Quat  # noqa: E402
-from fire_engine.world.terrain import SphereBrush, BrushMode, apply_brush  # noqa: E402
+import main as demo
+from fire_engine.core.math3d import Quat, Vec3
+from fire_engine.world.terrain import BrushMode, SphereBrush, apply_brush
 
 app = demo.build_demo()
 app.input_state.mouse_captured = False
@@ -33,7 +34,8 @@ apply_brush(
 # Camera just outside the volume looking at the crater.
 app.camera_go.transform.position = Vec3(0.0, -6.0, 12.0)
 app.camera_go.transform.local_rotation = Quat.from_axis_angle(
-    Vec3.RIGHT, math.radians(-14.0)).normalized()
+    Vec3.RIGHT, math.radians(-14.0)
+).normalized()
 
 for _ in range(200):
     app.taskMgr.step()

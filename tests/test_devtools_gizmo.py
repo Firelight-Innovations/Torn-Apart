@@ -18,26 +18,24 @@ No panda3d imports; all headless.
 
 from __future__ import annotations
 
-import math
-
 import numpy as np
 import pytest
 
-from fire_engine.core.math3d import Vec3, Quat
+from fire_engine.core.math3d import Quat, Vec3
 from fire_engine.devtools import (
+    DragState,
     Gizmo,
     GizmoMode,
-    HandleType,
     Handle,
-    DragState,
+    HandleType,
     update_drag,
 )
-from fire_engine.devtools.gizmo import ray_plane_intersect, closest_on_axis
-
+from fire_engine.devtools.gizmo import closest_on_axis, ray_plane_intersect
 
 # ===========================================================================
 # Helpers
 # ===========================================================================
+
 
 def _np(v: Vec3) -> np.ndarray:
     """Convert Vec3 to float64 array (matches gizmo.py internal convention)."""
@@ -47,6 +45,7 @@ def _np(v: Vec3) -> np.ndarray:
 # ===========================================================================
 # 1. Enum membership
 # ===========================================================================
+
 
 class TestEnumMembers:
     def test_gizmo_mode_members_exist(self):
@@ -76,6 +75,7 @@ class TestEnumMembers:
 # ===========================================================================
 # 2. ray_plane_intersect
 # ===========================================================================
+
 
 class TestRayPlaneIntersect:
     def test_ray_hits_z0_plane_straight_down(self):
@@ -112,7 +112,7 @@ class TestRayPlaneIntersect:
     def test_parallel_ray_returns_none(self):
         """Ray parallel to the plane → None."""
         o = np.array([0.0, 0.0, 1.0])
-        d = np.array([1.0, 0.0, 0.0])   # lies in z=const, normal is Z
+        d = np.array([1.0, 0.0, 0.0])  # lies in z=const, normal is Z
         n = np.array([0.0, 0.0, 1.0])
         p = np.array([0.0, 0.0, 0.0])
         assert ray_plane_intersect(o, d, p, n) is None
@@ -149,6 +149,7 @@ class TestRayPlaneIntersect:
 # ===========================================================================
 # 3. closest_on_axis
 # ===========================================================================
+
 
 class TestClosestOnAxis:
     def test_perpendicular_crossing_x_axis(self):
@@ -212,6 +213,7 @@ class TestClosestOnAxis:
 # ===========================================================================
 # 4. Gizmo construction and handles
 # ===========================================================================
+
 
 class TestGizmoConstruction:
     def test_gizmo_stores_pivot_size_mode(self):
@@ -304,6 +306,7 @@ class TestGizmoConstruction:
 # 5. Handle dataclass
 # ===========================================================================
 
+
 class TestHandleDataclass:
     def test_handle_is_frozen(self):
         h = Handle(HandleType.AXIS, 0)
@@ -319,6 +322,7 @@ class TestHandleDataclass:
 # ===========================================================================
 # 6. update_drag — TRANSLATE axis
 # ===========================================================================
+
 
 class TestUpdateDragTranslateAxis:
     def _setup(self, axis: int) -> tuple[Gizmo, Handle]:
@@ -338,9 +342,14 @@ class TestUpdateDragTranslateAxis:
         Grab X handle at x=2, drag to x=5 → delta=+3 applied to start_pos (0,0,0).
         """
         giz, handle = self._setup(0)
-        drag = giz.begin(handle,
-                         Vec3(2.0, 0.0, 5.0), Vec3(0.0, 0.0, -1.0),
-                         Vec3(0, 0, 0), Quat.identity(), Vec3(1, 1, 1))
+        drag = giz.begin(
+            handle,
+            Vec3(2.0, 0.0, 5.0),
+            Vec3(0.0, 0.0, -1.0),
+            Vec3(0, 0, 0),
+            Quat.identity(),
+            Vec3(1, 1, 1),
+        )
         pos, rot, scl = update_drag(drag, Vec3(5.0, 0.0, 5.0), Vec3(0.0, 0.0, -1.0))
         assert pos.approx_eq(Vec3(3.0, 0.0, 0.0), eps=1e-5)
         assert rot.approx_eq(Quat.identity())
@@ -349,18 +358,28 @@ class TestUpdateDragTranslateAxis:
     def test_translate_x_axis_drag_negative(self):
         """Drag from x=2 back to x=0.5 → delta=-1.5."""
         giz, handle = self._setup(0)
-        drag = giz.begin(handle,
-                         Vec3(2.0, 0.0, 5.0), Vec3(0.0, 0.0, -1.0),
-                         Vec3(0, 0, 0), Quat.identity(), Vec3(1, 1, 1))
+        drag = giz.begin(
+            handle,
+            Vec3(2.0, 0.0, 5.0),
+            Vec3(0.0, 0.0, -1.0),
+            Vec3(0, 0, 0),
+            Quat.identity(),
+            Vec3(1, 1, 1),
+        )
         pos, rot, scl = update_drag(drag, Vec3(0.5, 0.0, 5.0), Vec3(0.0, 0.0, -1.0))
         assert pos.approx_eq(Vec3(-1.5, 0.0, 0.0), eps=1e-4)
 
     def test_translate_y_axis_drag(self):
         """Drag Y handle from y=0.5 to y=3.5 → delta=+3 on Y."""
         giz, handle = self._setup(1)
-        drag = giz.begin(handle,
-                         Vec3(0.0, 0.5, 5.0), Vec3(0.0, 0.0, -1.0),
-                         Vec3(0, 0, 0), Quat.identity(), Vec3(1, 1, 1))
+        drag = giz.begin(
+            handle,
+            Vec3(0.0, 0.5, 5.0),
+            Vec3(0.0, 0.0, -1.0),
+            Vec3(0, 0, 0),
+            Quat.identity(),
+            Vec3(1, 1, 1),
+        )
         pos, rot, scl = update_drag(drag, Vec3(0.0, 3.5, 5.0), Vec3(0.0, 0.0, -1.0))
         assert pos.approx_eq(Vec3(0.0, 3.0, 0.0), eps=1e-4)
 
@@ -370,9 +389,14 @@ class TestUpdateDragTranslateAxis:
         handle = giz.pick(Vec3(0.5, 0.0, 5.0), Vec3(0.0, 0.0, -1.0))
         assert handle is not None
         start_pos = Vec3(7.0, -3.0, 2.0)
-        drag = giz.begin(handle,
-                         Vec3(0.5, 0.0, 5.0), Vec3(0.0, 0.0, -1.0),
-                         start_pos, Quat.identity(), Vec3(1, 1, 1))
+        drag = giz.begin(
+            handle,
+            Vec3(0.5, 0.0, 5.0),
+            Vec3(0.0, 0.0, -1.0),
+            start_pos,
+            Quat.identity(),
+            Vec3(1, 1, 1),
+        )
         pos, _, _ = update_drag(drag, Vec3(0.5, 0.0, 5.0), Vec3(0.0, 0.0, -1.0))
         assert pos.approx_eq(start_pos, eps=1e-4)
 
@@ -380,6 +404,7 @@ class TestUpdateDragTranslateAxis:
 # ===========================================================================
 # 7. update_drag — TRANSLATE plane
 # ===========================================================================
+
 
 class TestUpdateDragTranslatePlane:
     def test_plane_drag_moves_in_xy_plane(self):
@@ -392,9 +417,14 @@ class TestUpdateDragTranslatePlane:
         handle = giz.pick(Vec3(0.3, 0.3, 5.0), Vec3(0.0, 0.0, -1.0))
         assert handle is not None and handle.type == HandleType.PLANE
 
-        drag = giz.begin(handle,
-                         Vec3(0.3, 0.3, 5.0), Vec3(0.0, 0.0, -1.0),
-                         Vec3(0, 0, 0), Quat.identity(), Vec3(1, 1, 1))
+        drag = giz.begin(
+            handle,
+            Vec3(0.3, 0.3, 5.0),
+            Vec3(0.0, 0.0, -1.0),
+            Vec3(0, 0, 0),
+            Quat.identity(),
+            Vec3(1, 1, 1),
+        )
         pos, rot, scl = update_drag(drag, Vec3(1.3, 0.8, 5.0), Vec3(0.0, 0.0, -1.0))
         # ref_point was (0.3, 0.3, 0.0) on z=0 plane; new hit is (1.3, 0.8, 0.0)
         assert pos.approx_eq(Vec3(1.0, 0.5, 0.0), eps=1e-4)
@@ -403,6 +433,7 @@ class TestUpdateDragTranslatePlane:
 # ===========================================================================
 # 8. update_drag — SCALE axis
 # ===========================================================================
+
 
 class TestUpdateDragScaleAxis:
     def test_scale_x_axis_doubles_on_size_drag(self):
@@ -413,9 +444,14 @@ class TestUpdateDragScaleAxis:
         giz = Gizmo(Vec3(0, 0, 0), 1.0, GizmoMode.SCALE)
         handle = giz.pick(Vec3(0.5, 0.0, 5.0), Vec3(0.0, 0.0, -1.0))
         assert handle is not None and handle.type == HandleType.AXIS and handle.axis == 0
-        drag = giz.begin(handle,
-                         Vec3(0.5, 0.0, 5.0), Vec3(0.0, 0.0, -1.0),
-                         Vec3(0, 0, 0), Quat.identity(), Vec3(1, 1, 1))
+        drag = giz.begin(
+            handle,
+            Vec3(0.5, 0.0, 5.0),
+            Vec3(0.0, 0.0, -1.0),
+            Vec3(0, 0, 0),
+            Quat.identity(),
+            Vec3(1, 1, 1),
+        )
         _, _, scl = update_drag(drag, Vec3(1.5, 0.0, 5.0), Vec3(0.0, 0.0, -1.0))
         assert scl.approx_eq(Vec3(2.0, 1.0, 1.0), eps=1e-5)
 
@@ -426,9 +462,14 @@ class TestUpdateDragScaleAxis:
         giz = Gizmo(Vec3(0, 0, 0), 1.0, GizmoMode.SCALE)
         handle = giz.pick(Vec3(0.5, 0.0, 5.0), Vec3(0.0, 0.0, -1.0))
         assert handle is not None
-        drag = giz.begin(handle,
-                         Vec3(0.5, 0.0, 5.0), Vec3(0.0, 0.0, -1.0),
-                         Vec3(0, 0, 0), Quat.identity(), Vec3(1, 1, 1))
+        drag = giz.begin(
+            handle,
+            Vec3(0.5, 0.0, 5.0),
+            Vec3(0.0, 0.0, -1.0),
+            Vec3(0, 0, 0),
+            Quat.identity(),
+            Vec3(1, 1, 1),
+        )
         # drag to -1000 → delta = -1000.5 → factor = 1 + (-1000.5)/1.0 ≪ 0.01
         _, _, scl = update_drag(drag, Vec3(-1000.0, 0.0, 5.0), Vec3(0.0, 0.0, -1.0))
         assert scl.x == pytest.approx(0.01, abs=1e-6)
@@ -439,6 +480,7 @@ class TestUpdateDragScaleAxis:
 # ===========================================================================
 # 9. update_drag — SCALE uniform
 # ===========================================================================
+
 
 class TestUpdateDragScaleUniform:
     def test_uniform_scale_doubles_when_dist_doubles(self):
@@ -494,6 +536,7 @@ class TestUpdateDragScaleUniform:
 # 10. Determinism
 # ===========================================================================
 
+
 class TestDeterminism:
     def test_ray_plane_intersect_deterministic(self):
         o = np.array([1.5, -2.0, 4.0])
@@ -518,9 +561,14 @@ class TestDeterminism:
         giz = Gizmo(Vec3(0, 0, 0), 1.0, GizmoMode.TRANSLATE)
         handle = giz.pick(Vec3(0.5, 0.0, 5.0), Vec3(0.0, 0.0, -1.0))
         assert handle is not None
-        drag = giz.begin(handle,
-                         Vec3(0.5, 0.0, 5.0), Vec3(0.0, 0.0, -1.0),
-                         Vec3(1, 2, 3), Quat.identity(), Vec3(1, 1, 1))
+        drag = giz.begin(
+            handle,
+            Vec3(0.5, 0.0, 5.0),
+            Vec3(0.0, 0.0, -1.0),
+            Vec3(1, 2, 3),
+            Quat.identity(),
+            Vec3(1, 1, 1),
+        )
         r1 = update_drag(drag, Vec3(2.5, 0.0, 5.0), Vec3(0.0, 0.0, -1.0))
         r2 = update_drag(drag, Vec3(2.5, 0.0, 5.0), Vec3(0.0, 0.0, -1.0))
         p1, q1, s1 = r1
@@ -533,6 +581,7 @@ class TestDeterminism:
 # ===========================================================================
 # 11. Edge cases
 # ===========================================================================
+
 
 class TestEdgeCases:
     def test_zero_length_ray_direction_plane(self):
@@ -555,9 +604,14 @@ class TestEdgeCases:
         giz = Gizmo(Vec3(0, 0, 0), 1.0, GizmoMode.TRANSLATE)
         handle = giz.pick(Vec3(0.5, 0.0, 5.0), Vec3(0.0, 0.0, -1.0))
         assert handle is not None
-        drag = giz.begin(handle,
-                         Vec3(0.5, 0.0, 5.0), Vec3(0.0, 0.0, -1.0),
-                         Vec3(0, 0, 0), Quat.identity(), Vec3(0, 0, 0))
+        drag = giz.begin(
+            handle,
+            Vec3(0.5, 0.0, 5.0),
+            Vec3(0.0, 0.0, -1.0),
+            Vec3(0, 0, 0),
+            Quat.identity(),
+            Vec3(0, 0, 0),
+        )
         pos, rot, scl = update_drag(drag, Vec3(1.5, 0.0, 5.0), Vec3(0.0, 0.0, -1.0))
         assert pos.approx_eq(Vec3(1.0, 0.0, 0.0), eps=1e-4)
         assert scl.approx_eq(Vec3(0, 0, 0))
@@ -594,8 +648,13 @@ class TestEdgeCases:
         # X stalk now runs from (10,0,0) to (11,0,0)
         h = giz.pick(Vec3(10.5, 0.0, 5.0), Vec3(0.0, 0.0, -1.0))
         assert h is not None and h.axis == 0
-        drag = giz.begin(h,
-                         Vec3(10.5, 0.0, 5.0), Vec3(0.0, 0.0, -1.0),
-                         Vec3(10, 0, 0), Quat.identity(), Vec3(1, 1, 1))
+        drag = giz.begin(
+            h,
+            Vec3(10.5, 0.0, 5.0),
+            Vec3(0.0, 0.0, -1.0),
+            Vec3(10, 0, 0),
+            Quat.identity(),
+            Vec3(1, 1, 1),
+        )
         pos, _, _ = update_drag(drag, Vec3(12.5, 0.0, 5.0), Vec3(0.0, 0.0, -1.0))
         assert pos.approx_eq(Vec3(12.0, 0.0, 0.0), eps=1e-4)

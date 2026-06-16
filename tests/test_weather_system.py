@@ -49,12 +49,13 @@ def _first_thunderstorm(cfg):
 # Determinism
 # ---------------------------------------------------------------------------
 
+
 class TestDeterminism:
     def test_same_seed_identical_samples(self):
         a = _ws(seed=42)
         b = _ws(seed=42)
         for day in range(2):
-            for step in range(0, 24 * 4):           # every 15 game minutes
+            for step in range(0, 24 * 4):  # every 15 game minutes
                 tod = step * (15 * 60.0)
                 pos = (step * 7.0, -step * 3.0)
                 assert a.update(day, tod, pos) == b.update(day, tod, pos)
@@ -71,6 +72,7 @@ class TestDeterminism:
 # Spatial sampling
 # ---------------------------------------------------------------------------
 
+
 class TestSpatial:
     def test_under_shower_wetter_than_far(self):
         cfg = load_config()
@@ -78,7 +80,7 @@ class TestSpatial:
         c = _first_thunderstorm(cfg)
         t = c.spawn_time + 0.5 * c.duration_s
         under = tuple(c.center(t, ws.synoptic))
-        far = (under[0] + 20000.0, under[1])         # 20 km away
+        far = (under[0] + 20000.0, under[1])  # 20 km away
         s_under = ws.sample_local(under, t)
         s_far = ws.sample_local(far, t)
         assert s_under.rain_intensity > 0.3
@@ -103,6 +105,7 @@ class TestSpatial:
 # Continuity (no popping) — even as a fast cell sweeps the sample point
 # ---------------------------------------------------------------------------
 
+
 class TestContinuity:
     STEP = 2.0
     BOUNDS = {
@@ -122,9 +125,7 @@ class TestContinuity:
             if prev is not None:
                 for field, bound in self.BOUNDS.items():
                     delta = abs(getattr(p, field) - getattr(prev, field))
-                    assert delta <= bound, (
-                        f"{field} popped {delta:.4f} (> {bound}) at t={t:.0f}"
-                    )
+                    assert delta <= bound, f"{field} popped {delta:.4f} (> {bound}) at t={t:.0f}"
             prev = p
             t += self.STEP
 
@@ -147,13 +148,14 @@ class TestContinuity:
 # Classification hysteresis
 # ---------------------------------------------------------------------------
 
+
 class TestHysteresis:
     def test_label_change_waits_for_hysteresis(self):
         cfg = load_config()
         ws = _ws(seed=1337)
         c = _first_thunderstorm(cfg)
         syn = ws.synoptic
-        mid = c.spawn_time + 0.5 * c.duration_s      # deep in the plateau
+        mid = c.spawn_time + 0.5 * c.duration_s  # deep in the plateau
 
         def _upd(t_abs, pos):
             day = int(t_abs // DAY)
@@ -186,6 +188,7 @@ class TestHysteresis:
 # force_weather (dev override shim)
 # ---------------------------------------------------------------------------
 
+
 class TestForceWeather:
     def test_force_blends_to_target(self):
         ws = _ws(seed=5)
@@ -193,7 +196,7 @@ class TestForceWeather:
         ws.force_weather(WeatherType.STORM)
         assert ws.current is WeatherType.STORM
 
-        p_start = ws.update(0, 10 * HOUR, (0.0, 0.0))         # anchors the blend
+        p_start = ws.update(0, 10 * HOUR, (0.0, 0.0))  # anchors the blend
         p_mid = ws.update(0, 10 * HOUR + BLEND_SECONDS / 2, (0.0, 0.0))
         p_end = ws.update(0, 10 * HOUR + BLEND_SECONDS + 1.0, (0.0, 0.0))
 
@@ -211,7 +214,7 @@ class TestForceWeather:
 
         ws.force_weather(None)
         t_release = 10 * HOUR + BLEND_SECONDS + 2.0
-        ws.update(0, t_release, (0.0, 0.0))                  # anchors release
+        ws.update(0, t_release, (0.0, 0.0))  # anchors release
         assert ws.get_delta() != {}, "mid-release blend must be saveable"
 
         t_done = t_release + BLEND_SECONDS + 120.0
@@ -227,6 +230,7 @@ class TestForceWeather:
 # WeatherChangedEvent
 # ---------------------------------------------------------------------------
 
+
 class TestWeatherChangedEvent:
     def test_event_deferred_and_once_per_change(self):
         bus = EventBus()
@@ -234,9 +238,9 @@ class TestWeatherChangedEvent:
         bus.subscribe(WeatherChangedEvent, received.append)
 
         ws = _ws(seed=1337, bus=bus)
-        ws.update(0, 6 * HOUR, (0.0, 0.0))          # establishes last_state
+        ws.update(0, 6 * HOUR, (0.0, 0.0))  # establishes last_state
         ws.force_weather(WeatherType.STORM)
-        ws.update(0, 6 * HOUR + 1.0, (0.0, 0.0))    # guaranteed change…
+        ws.update(0, 6 * HOUR + 1.0, (0.0, 0.0))  # guaranteed change…
         if received:
             pytest.fail("event delivered before drain()")
         bus.drain()
@@ -252,6 +256,7 @@ class TestWeatherChangedEvent:
 # ---------------------------------------------------------------------------
 # Saveable protocol
 # ---------------------------------------------------------------------------
+
 
 class TestSaveable:
     def test_save_key(self):
@@ -269,7 +274,7 @@ class TestSaveable:
         ws1 = _ws(seed=11)
         ws1.update(0, t0, (0.0, 0.0))
         ws1.force_weather(WeatherType.RAIN)
-        ws1.update(0, t0 + 60.0, (0.0, 0.0))         # anchor mid-blend
+        ws1.update(0, t0 + 60.0, (0.0, 0.0))  # anchor mid-blend
 
         delta = ws1.get_delta()
         assert delta != {} and delta["override"] == "rain"
@@ -305,8 +310,8 @@ class TestSaveable:
         legacy = {
             "override": "storm",
             "override_start_abs_t": 36000.0,
-            "override_from": {                       # old WeatherParams keys —
-                "cloud_coverage": 0.5,               # no humidity/wetness/temp
+            "override_from": {  # old WeatherParams keys —
+                "cloud_coverage": 0.5,  # no humidity/wetness/temp
                 "cloud_density": 0.6,
                 "fog_density": 0.002,
                 "rain_intensity": 0.3,
@@ -316,6 +321,6 @@ class TestSaveable:
             "last_state": "rain",
         }
         ws = _ws(seed=11)
-        ws.apply_delta(legacy)                       # must not raise
+        ws.apply_delta(legacy)  # must not raise
         assert ws.current is WeatherType.STORM
         assert ws.get_delta()["override"] == "storm"

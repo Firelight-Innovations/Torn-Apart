@@ -89,9 +89,7 @@ class WindRegion:
         margin_cells: int = 8,
     ) -> None:
         if cells % snap_cells != 0:
-            raise ValueError(
-                f"cells ({cells}) must be a multiple of snap_cells ({snap_cells})"
-            )
+            raise ValueError(f"cells ({cells}) must be a multiple of snap_cells ({snap_cells})")
         self.cells = int(cells)
         self.cell_m = float(cell_m)
         self.snap_cells = int(snap_cells)
@@ -117,8 +115,7 @@ class WindRegion:
         """
         if self.origin_cell is None:
             raise ValueError("WindRegion.maybe_recenter() never called")
-        return (self.origin_cell[0] * self.cell_m,
-                self.origin_cell[1] * self.cell_m)
+        return (self.origin_cell[0] * self.cell_m, self.origin_cell[1] * self.cell_m)
 
     @property
     def size_m(self) -> float:
@@ -153,8 +150,7 @@ class WindRegion:
         half = self.cells * 0.5
         for axis in range(2):
             centre = (self.origin_cell[axis] + half) * self.cell_m
-            if abs(float(player_xy[axis]) - centre) \
-                    > self.margin_cells * self.cell_m:
+            if abs(float(player_xy[axis]) - centre) > self.margin_cells * self.cell_m:
                 return True
         return False
 

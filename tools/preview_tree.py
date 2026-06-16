@@ -37,8 +37,7 @@ _project_root = os.path.dirname(_script_dir)
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-_BUILTIN_SPECIES = ("tree_gnarled_oak", "tree_dead", "bush_scrub",
-                    "bush_berry")
+_BUILTIN_SPECIES = ("tree_gnarled_oak", "tree_dead", "bush_scrub", "bush_berry")
 
 
 def _write_obj(path: str, mesh) -> None:
@@ -46,37 +45,35 @@ def _write_obj(path: str, mesh) -> None:
     import numpy as np
 
     pos, uv, nrm = mesh.positions, mesh.uvs, mesh.normals
-    tri = mesh.indices.reshape(-1, 3) + 1            # OBJ is 1-based
+    tri = mesh.indices.reshape(-1, 3) + 1  # OBJ is 1-based
     lines = ["# Torn Apart tree variant (preview_tree.py)"]
     lines += [f"v {x:.5f} {y:.5f} {z:.5f}" for x, y, z in pos]
     lines += [f"vt {u:.5f} {v:.5f}" for u, v in uv]
     lines += [f"vn {x:.4f} {y:.4f} {z:.4f}" for x, y, z in nrm]
-    lines += [f"f {a}/{a}/{a} {b}/{b}/{b} {c}/{c}/{c}"
-              for a, b, c in np.asarray(tri)]
+    lines += [f"f {a}/{a}/{a} {b}/{b}/{b} {c}/{c}/{c}" for a, b, c in np.asarray(tri)]
     with open(path, "w", encoding="ascii") as f:
         f.write("\n".join(lines) + "\n")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Preview a TreeSpeciesDef variant pool (headless).")
-    parser.add_argument("species", nargs="?", default=None,
-                        help="Registered species name, e.g. "
-                             "'tree_gnarled_oak'.")
-    parser.add_argument("--all", action="store_true",
-                        help="Preview every built-in species.")
-    parser.add_argument("--seed", type=int, default=None,
-                        help="World seed override (default: config.toml).")
-    parser.add_argument("--obj", action="store_true",
-                        help="Write one OBJ per variant.")
-    parser.add_argument("--png", action="store_true",
-                        help="Write atlas + impostor-atlas PNGs.")
+        description="Preview a TreeSpeciesDef variant pool (headless)."
+    )
+    parser.add_argument(
+        "species", nargs="?", default=None, help="Registered species name, e.g. 'tree_gnarled_oak'."
+    )
+    parser.add_argument("--all", action="store_true", help="Preview every built-in species.")
+    parser.add_argument(
+        "--seed", type=int, default=None, help="World seed override (default: config.toml)."
+    )
+    parser.add_argument("--obj", action="store_true", help="Write one OBJ per variant.")
+    parser.add_argument("--png", action="store_true", help="Write atlas + impostor-atlas PNGs.")
     args = parser.parse_args()
 
     if not args.species and not args.all:
         parser.error("give a species name or --all")
     if not args.obj and not args.png:
-        args.obj = args.png = True                  # default: everything
+        args.obj = args.png = True  # default: everything
 
     from fire_engine.core.config import load_config
     from fire_engine.core.rng import set_world_seed
@@ -107,19 +104,19 @@ def main() -> None:
             try:
                 from PIL import Image
             except ImportError:
-                print("Error: Pillow not installed (pip install pillow)",
-                      file=sys.stderr)
+                print("Error: Pillow not installed (pip install pillow)", file=sys.stderr)
                 sys.exit(1)
-            Image.fromarray(vs.atlas, mode="RGBA").save(
-                os.path.join(out_dir, f"{name}_atlas.png"))
+            Image.fromarray(vs.atlas, mode="RGBA").save(os.path.join(out_dir, f"{name}_atlas.png"))
             Image.fromarray(vs.impostors, mode="RGBA").save(
-                os.path.join(out_dir, f"{name}_impostors.png"))
-            print(f"{name}: atlas {vs.atlas.shape[1]}x{vs.atlas.shape[0]}, "
-                  f"impostors {vs.impostors.shape[1]}x{vs.impostors.shape[0]}"
-                  f" -> {out_dir}")
+                os.path.join(out_dir, f"{name}_impostors.png")
+            )
+            print(
+                f"{name}: atlas {vs.atlas.shape[1]}x{vs.atlas.shape[0]}, "
+                f"impostors {vs.impostors.shape[1]}x{vs.impostors.shape[0]}"
+                f" -> {out_dir}"
+            )
 
-        print(f"  h_max={vs.max_height_m:.2f} m  r_max={vs.max_radius_m:.2f} m"
-              f"  seed={seed}")
+        print(f"  h_max={vs.max_height_m:.2f} m  r_max={vs.max_radius_m:.2f} m  seed={seed}")
 
 
 if __name__ == "__main__":

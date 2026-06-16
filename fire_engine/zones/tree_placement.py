@@ -46,8 +46,8 @@ Example
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Mapping
 
 import numpy as np
 
@@ -60,12 +60,12 @@ from fire_engine.zones.grass_placement import (
 from fire_engine.zones.volume import ZoneVolume
 
 __all__ = [
-    "TREE_KINDS",
     "SCALE_JITTER",
+    "TREE_KINDS",
     "TreeInstances",
-    "species_mix_from_params",
     "bake_tree_instances",
     "instances_data_block",
+    "species_mix_from_params",
 ]
 
 # The zone tags the tree renderer consumes.  A "trees" volume ALSO feeds the
@@ -134,8 +134,7 @@ class TreeInstances:
         return int(self.x.shape[0])
 
 
-def species_mix_from_params(params: Mapping, default: str) \
-        -> list[tuple[str, float]]:
+def species_mix_from_params(params: Mapping, default: str) -> list[tuple[str, float]]:
     """
     Resolve a volume's species mix from its ``params``.
 
@@ -168,8 +167,7 @@ def species_mix_from_params(params: Mapping, default: str) \
             if weight > 0.0:
                 mix.append((name.strip(), weight))
         if not mix:
-            raise ValueError(
-                f"species_mix parsed to nothing: {params['species_mix']!r}")
+            raise ValueError(f"species_mix parsed to nothing: {params['species_mix']!r}")
         return mix
     if "species" in params:
         return [(str(params["species"]), 1.0)]
@@ -218,8 +216,7 @@ def bake_tree_instances(
     """
     prefix = _KIND_PREFIX[kind]
     scale_min, scale_span = SCALE_JITTER[kind]
-    density = float(volume.params.get(
-        "density", getattr(config, f"{prefix}_density_per_m2")))
+    density = float(volume.params.get("density", getattr(config, f"{prefix}_density_per_m2")))
     min_spacing = float(getattr(config, f"{prefix}_min_spacing_m"))
     cap = int(getattr(config, f"{prefix}_max_instances"))
     rng = for_domain("zones", "tree_placement", kind, volume.id)
@@ -239,8 +236,7 @@ def bake_tree_instances(
     cx = x0 + (gx.ravel() + 0.5) * cell
     cy = y0 + (gy.ravel() + 0.5) * cell
     n_cells = cx.shape[0]
-    jit = rng.uniform(-_JITTER_FRAC * cell, _JITTER_FRAC * cell,
-                      size=(n_cells, 2))
+    jit = rng.uniform(-_JITTER_FRAC * cell, _JITTER_FRAC * cell, size=(n_cells, 2))
     px = (cx + jit[:, 0]).astype(np.float32)
     py = (cy + jit[:, 1]).astype(np.float32)
 
@@ -265,33 +261,31 @@ def bake_tree_instances(
         idx = idx[np.sort(rng.permutation(idx.size)[:cap])]
 
     n = idx.size
-    z = (np.float32(z0)
-         + r[idx].astype(np.float32) / np.float32(254.0)
-         * np.float32(z1 - z0))
+    z = np.float32(z0) + r[idx].astype(np.float32) / np.float32(254.0) * np.float32(z1 - z0)
 
     # --- per-instance attributes -----------------------------------------
     weights = np.asarray([w for _, w in species_weights], dtype=np.float64)
     weights /= weights.sum()
-    species_idx = rng.choice(len(names), size=n, p=weights) \
-        .astype(np.int32)
-    pool = np.asarray([int(variant_counts[nm]) for nm in names],
-                      dtype=np.int32)
+    species_idx = rng.choice(len(names), size=n, p=weights).astype(np.int32)
+    pool = np.asarray([int(variant_counts[nm]) for nm in names], dtype=np.int32)
     variant = (rng.random(n) * pool[species_idx]).astype(np.int32)
 
     two_pi = 2.0 * math.pi
     return TreeInstances(
-        x=px[idx], y=py[idx], z=z,
+        x=px[idx],
+        y=py[idx],
+        z=z,
         yaw=rng.uniform(0.0, two_pi, n).astype(np.float32),
         scale=(scale_min + scale_span * rng.random(n)).astype(np.float32),
         phase=rng.uniform(0.0, two_pi, n).astype(np.float32),
         tint=(_TINT_MIN + _TINT_SPAN * rng.random(n)).astype(np.float32),
         species_idx=species_idx,
         variant=variant,
-        species_names=names)
+        species_names=names,
+    )
 
 
-def instances_data_block(inst: TreeInstances,
-                         mask: np.ndarray | None = None) -> np.ndarray:
+def instances_data_block(inst: TreeInstances, mask: np.ndarray | None = None) -> np.ndarray:
     """
     Pack instances into the renderer's data-texture block.
 
@@ -317,12 +311,21 @@ def instances_data_block(inst: TreeInstances,
         texels.  May be ``(0, 2, 4)``.
     """
     sel = slice(None) if mask is None else np.asarray(mask, dtype=bool)
-    block = np.stack([
-        np.stack([inst.x[sel], inst.y[sel], inst.z[sel], inst.yaw[sel]],
-                 axis=1),
-        np.stack([inst.scale[sel], inst.phase[sel], inst.tint[sel],
-                  inst.variant[sel].astype(np.float32)], axis=1),
-    ], axis=1)
+    block = np.stack(
+        [
+            np.stack([inst.x[sel], inst.y[sel], inst.z[sel], inst.yaw[sel]], axis=1),
+            np.stack(
+                [
+                    inst.scale[sel],
+                    inst.phase[sel],
+                    inst.tint[sel],
+                    inst.variant[sel].astype(np.float32),
+                ],
+                axis=1,
+            ),
+        ],
+        axis=1,
+    )
     return np.ascontiguousarray(block, dtype=np.float32)
 
 
@@ -330,7 +333,15 @@ def _empty_instances(names: tuple[str, ...]) -> TreeInstances:
     """Zero-instance result (keeps dtypes/fields consistent)."""
     f = np.empty(0, dtype=np.float32)
     i = np.empty(0, dtype=np.int32)
-    return TreeInstances(x=f, y=f.copy(), z=f.copy(), yaw=f.copy(),
-                         scale=f.copy(), phase=f.copy(), tint=f.copy(),
-                         species_idx=i, variant=i.copy(),
-                         species_names=names)
+    return TreeInstances(
+        x=f,
+        y=f.copy(),
+        z=f.copy(),
+        yaw=f.copy(),
+        scale=f.copy(),
+        phase=f.copy(),
+        tint=f.copy(),
+        species_idx=i,
+        variant=i.copy(),
+        species_names=names,
+    )

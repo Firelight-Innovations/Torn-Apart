@@ -25,31 +25,32 @@ from fire_engine.core import Config
 from fire_engine.core.rng import set_world_seed
 from fire_engine.zones import ZoneVolume, leaf_hash_seed, leaf_instance_count
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _gen(name: str, seed: int, **params) -> np.ndarray:
     """Generate a texture def fresh under a given world seed (bypasses the
     registry cache so seed changes actually re-generate)."""
     set_world_seed(seed)
     if name == "dust_mote":
+        from fire_engine.core.rng import for_domain
         from fire_engine.procedural.textures.dust_mote import DustMoteDef
-        from fire_engine.core.rng import for_domain
-        return DustMoteDef().generate(for_domain("procedural", "dust_mote"),
-                                      **params)
+
+        return DustMoteDef().generate(for_domain("procedural", "dust_mote"), **params)
     if name == "leaf_sprite":
-        from fire_engine.procedural.textures.leaf_sprite import LeafSpriteDef
         from fire_engine.core.rng import for_domain
-        return LeafSpriteDef().generate(for_domain("procedural", "leaf_sprite"),
-                                        **params)
+        from fire_engine.procedural.textures.leaf_sprite import LeafSpriteDef
+
+        return LeafSpriteDef().generate(for_domain("procedural", "leaf_sprite"), **params)
     raise ValueError(name)
 
 
 # ---------------------------------------------------------------------------
 # 1 & 2 — texture determinism + invariants
 # ---------------------------------------------------------------------------
+
 
 class TestDustMoteTexture:
     def test_shape_dtype(self):
@@ -89,7 +90,7 @@ class TestDustMoteTexture:
 class TestLeafSpriteTexture:
     def test_shape_dtype(self):
         arr = _gen("leaf_sprite", 1337)
-        assert arr.shape == (32, 96, 4)       # 3 cells × 32 wide
+        assert arr.shape == (32, 96, 4)  # 3 cells × 32 wide
         assert arr.dtype == np.uint8
 
     def test_determinism_same_seed(self):
@@ -123,6 +124,7 @@ class TestLeafSpriteTexture:
         # The registry path (with the package import side-effect) returns it.
         set_world_seed(1337)
         from fire_engine.procedural import get
+
         arr = get("leaf_sprite")
         assert arr.shape == (32, 96, 4)
 
@@ -131,19 +133,19 @@ class TestLeafSpriteTexture:
 # 3 — leaf instance-count math (pure function mirror of the renderer)
 # ---------------------------------------------------------------------------
 
+
 class TestLeafInstanceCount:
     def _vol(self, sx=20.0, sy=20.0, params=None):
-        return ZoneVolume(1, "trees", (0.0, 0.0, 0.0), (sx, sy, 8.0),
-                          params=params or {})
+        return ZoneVolume(1, "trees", (0.0, 0.0, 0.0), (sx, sy, 8.0), params=params or {})
 
     def test_area_times_density(self):
-        cfg = Config()                          # wind_leaf_density_per_m2 = 0.15
-        vol = self._vol(20.0, 20.0)             # 400 m²
-        assert leaf_instance_count(vol, cfg) == int(400.0 * 0.15)   # 60
+        cfg = Config()  # wind_leaf_density_per_m2 = 0.15
+        vol = self._vol(20.0, 20.0)  # 400 m²
+        assert leaf_instance_count(vol, cfg) == int(400.0 * 0.15)  # 60
 
     def test_density_param_override(self):
         cfg = Config()
-        vol = self._vol(10.0, 10.0, params={"leaf_density": 1.0})   # 100 m²
+        vol = self._vol(10.0, 10.0, params={"leaf_density": 1.0})  # 100 m²
         assert leaf_instance_count(vol, cfg) == 100
 
     def test_cap_applied(self):
@@ -167,6 +169,7 @@ class TestLeafInstanceCount:
 # 4 — leaf hash-seed determinism
 # ---------------------------------------------------------------------------
 
+
 class TestLeafHashSeed:
     def test_deterministic_same_seed_same_volume(self):
         vol = ZoneVolume(7, "trees", (0.0, 0.0, 0.0), (10.0, 10.0, 4.0))
@@ -189,12 +192,13 @@ class TestLeafHashSeed:
         vol = ZoneVolume(3, "trees", (0.0, 0.0, 0.0), (10.0, 10.0, 4.0))
         set_world_seed(1337)
         s = leaf_hash_seed(vol)
-        assert 0 <= s < 2 ** 31
+        assert 0 <= s < 2**31
 
 
 # ---------------------------------------------------------------------------
 # 5 — no panda3d / direct leaks into procedural/ or zones/
 # ---------------------------------------------------------------------------
+
 
 class TestNoPandaLeak:
     @staticmethod

@@ -40,8 +40,6 @@ import queue
 import threading
 from dataclasses import dataclass
 
-import numpy as np
-
 from fire_engine.core import get_logger
 from fire_engine.lighting.occluders import TreeOccluderSet
 from fire_engine.lighting.palette import MaterialPalette
@@ -105,7 +103,7 @@ class AssemblyJob:
     materials: dict
     palette: MaterialPalette
     seq: int
-    occluders: "TreeOccluderSet | None" = None
+    occluders: TreeOccluderSet | None = None
     trunk_occ: float = 0.0
     canopy_gain: float = 0.0
 
@@ -134,7 +132,8 @@ class AssemblyResult:
 
 
 def assemble_packed(
-    job: AssemblyJob, cache: "ChunkBlockCache | None" = None,
+    job: AssemblyJob,
+    cache: ChunkBlockCache | None = None,
 ) -> AssemblyResult:
     """
     Run one job: ``assemble_geometry`` on the snapshot, then ``pack_volume``.
@@ -152,10 +151,16 @@ def assemble_packed(
     window = VolumeWindow(cells=job.cells, cell_m=job.cell_m)
     window.origin_cell = job.origin_cell  # placed directly; no recenter needed
     vol = assemble_geometry(
-        window, job.materials, job.palette,
-        chunk_size=job.chunk_size, voxel_size=job.voxel_size, cache=cache,
+        window,
+        job.materials,
+        job.palette,
+        chunk_size=job.chunk_size,
+        voxel_size=job.voxel_size,
+        cache=cache,
         occluders=job.occluders,
-        trunk_occ=job.trunk_occ, canopy_gain=job.canopy_gain)
+        trunk_occ=job.trunk_occ,
+        canopy_gain=job.canopy_gain,
+    )
     return AssemblyResult(
         cascade_index=job.cascade_index,
         origin_cell=job.origin_cell,
@@ -193,8 +198,8 @@ class CascadeAssemblyWorker:
     """
 
     def __init__(self, *, cache_max_entries: int = 4096) -> None:
-        self._in: "queue.Queue[AssemblyJob | None]" = queue.Queue()
-        self._out: "queue.Queue[AssemblyResult]" = queue.Queue()
+        self._in: queue.Queue[AssemblyJob | None] = queue.Queue()
+        self._out: queue.Queue[AssemblyResult] = queue.Queue()
         self._thread: threading.Thread | None = None
         self._pending = 0
         self.block_cache = ChunkBlockCache(max_entries=cache_max_entries)
@@ -205,8 +210,7 @@ class CascadeAssemblyWorker:
         """Spawn the worker thread (idempotent)."""
         if self._thread is not None:
             return
-        self._thread = threading.Thread(
-            target=self._run, name="CascadeAssemblyWorker", daemon=True)
+        self._thread = threading.Thread(target=self._run, name="CascadeAssemblyWorker", daemon=True)
         self._thread.start()
 
     def submit(self, job: AssemblyJob) -> None:
@@ -259,14 +263,19 @@ class CascadeAssemblyWorker:
                 break
             try:
                 self._out.put(assemble_packed(job, cache=self.block_cache))
-            except Exception:  # noqa: BLE001 — never let the worker die silently
+            except Exception:
                 _log.exception(
-                    "Cascade assembly failed (cascade %d, seq %d)",
-                    job.cascade_index, job.seq)
+                    "Cascade assembly failed (cascade %d, seq %d)", job.cascade_index, job.seq
+                )
                 # Post a failure sentinel (empty bytes) so the consumer can
                 # clear its in-flight flag and retry — a raised job must not
                 # leave the cascade stuck forever.
-                self._out.put(AssemblyResult(
-                    cascade_index=job.cascade_index,
-                    origin_cell=job.origin_cell,
-                    albedo_bytes=b"", emis_bytes=b"", seq=job.seq))
+                self._out.put(
+                    AssemblyResult(
+                        cascade_index=job.cascade_index,
+                        origin_cell=job.origin_cell,
+                        albedo_bytes=b"",
+                        emis_bytes=b"",
+                        seq=job.seq,
+                    )
+                )

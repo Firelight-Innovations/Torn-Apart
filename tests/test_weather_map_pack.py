@@ -38,7 +38,7 @@ def _synthetic_raster(cells: int = 8) -> np.ndarray:
 def test_byte_length():
     raster = _synthetic_raster(16)
     data = pack_weather_map(raster)
-    assert len(data) == 16 * 16 * 4 * 2          # fp16 RGBA
+    assert len(data) == 16 * 16 * 4 * 2  # fp16 RGBA
 
 
 def test_channel_order_and_layout():
@@ -49,14 +49,14 @@ def test_channel_order_and_layout():
     cells = 8
     raster = _synthetic_raster(cells)
     buf = np.frombuffer(pack_weather_map(raster), dtype=np.float16)
-    dec = buf.reshape(cells, cells, 4).astype(np.float32)   # [y, x, BGRA]
-    for (y, x) in [(0, 0), (3, 5), (7, 7), (1, 6)]:
-        cov, den, precip, fog = raster[y, x]                # logical RGBA
-        b, g, r, a = dec[y, x]                              # packed BGRA
-        np.testing.assert_allclose(b, precip, atol=1e-3)    # B = precip
-        np.testing.assert_allclose(g, den, atol=1e-3)       # G = density
-        np.testing.assert_allclose(r, cov, atol=1e-3)       # R = coverage
-        np.testing.assert_allclose(a, fog, atol=1e-3)       # A = fog
+    dec = buf.reshape(cells, cells, 4).astype(np.float32)  # [y, x, BGRA]
+    for y, x in [(0, 0), (3, 5), (7, 7), (1, 6)]:
+        cov, den, precip, fog = raster[y, x]  # logical RGBA
+        b, g, r, a = dec[y, x]  # packed BGRA
+        np.testing.assert_allclose(b, precip, atol=1e-3)  # B = precip
+        np.testing.assert_allclose(g, den, atol=1e-3)  # G = density
+        np.testing.assert_allclose(r, cov, atol=1e-3)  # R = coverage
+        np.testing.assert_allclose(a, fog, atol=1e-3)  # A = fog
 
 
 def test_swizzle_matches_pack_wind_field_convention():
@@ -64,14 +64,18 @@ def test_swizzle_matches_pack_wind_field_convention():
     # weather packer uses the identical channel permutation (the pinned quirk).
     cells = 4
     raster = _synthetic_raster(cells)
-    dec = np.frombuffer(pack_weather_map(raster), dtype=np.float16) \
-        .reshape(cells, cells, 4).astype(np.float32)
+    dec = (
+        np.frombuffer(pack_weather_map(raster), dtype=np.float16)
+        .reshape(cells, cells, 4)
+        .astype(np.float32)
+    )
     expected = raster[..., [2, 1, 0, 3]].astype(np.float16).astype(np.float32)
     np.testing.assert_allclose(dec, expected, atol=1e-6)
 
 
 def test_rejects_bad_shape():
     import pytest
+
     with pytest.raises(ValueError):
         pack_weather_map(np.zeros((8, 8, 3), dtype=np.float32))
     with pytest.raises(ValueError):
@@ -89,8 +93,11 @@ def test_round_trips_real_raster():
     wm = WeatherMap(cfg)
     raster = wm.rasterize(ws, center_xy=(0.0, 0.0), t_abs=12 * 3600.0)
     cells = raster.shape[0]
-    dec = np.frombuffer(pack_weather_map(raster), dtype=np.float16) \
-        .reshape(cells, cells, 4).astype(np.float32)
+    dec = (
+        np.frombuffer(pack_weather_map(raster), dtype=np.float16)
+        .reshape(cells, cells, 4)
+        .astype(np.float32)
+    )
     # Logical channels survive (BGRA decode → RGBA).  Weather values are in
     # [0, 1] so float16 abs error is ~1e-3.
     np.testing.assert_allclose(dec[..., 2], raster[..., 0], atol=2e-3)  # coverage
@@ -106,8 +113,7 @@ def test_no_panda3d_import():
     import ast
     from pathlib import Path
 
-    src = (Path(__file__).parent.parent / "fire_engine" / "world" / "sky"
-           / "weather_map_pack.py")
+    src = Path(__file__).parent.parent / "fire_engine" / "world" / "sky" / "weather_map_pack.py"
     tree = ast.parse(src.read_text(encoding="utf-8"))
     offenders: list[str] = []
     for node in ast.walk(tree):

@@ -29,6 +29,7 @@ Add ``--json`` for machine-readable output (the raw RPC result as JSON).
 
 No panda3d import here (hard rule 1) — pure protocol client over fire_editor.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -89,9 +90,7 @@ async def _cmd_set_center(c: EditorClient, args) -> object:
     if args.radius is not None:
         params["radius"] = args.radius
     if args.wait:
-        frames = await c.drain_until_stream_done(
-            lambda: c.request("chunks.set_center", params)
-        )
+        frames = await c.drain_until_stream_done(lambda: c.request("chunks.set_center", params))
         meshes = sum(1 for f in frames if f.schema_id == 1)
         return {"ok": True, "streamed_frames": len(frames), "meshes": meshes}
     return await c.request("chunks.set_center", params)
@@ -164,16 +163,21 @@ async def _cmd_set_component(c: EditorClient, args) -> object:
 
 
 async def _cmd_raycast(c: EditorClient, args) -> object:
-    params = {"ox": args.ox, "oy": args.oy, "oz": args.oz,
-              "dx": args.dx, "dy": args.dy, "dz": args.dz}
+    params = {
+        "ox": args.ox,
+        "oy": args.oy,
+        "oz": args.oz,
+        "dx": args.dx,
+        "dy": args.dy,
+        "dz": args.dz,
+    }
     if args.max_distance is not None:
         params["max_distance"] = args.max_distance
     return await c.request("terrain.raycast", params)
 
 
 async def _cmd_brush(c: EditorClient, args) -> object:
-    params = {"shape": args.shape, "mode": args.mode,
-              "x": args.x, "y": args.y, "z": args.z}
+    params = {"shape": args.shape, "mode": args.mode, "x": args.x, "y": args.y, "z": args.z}
     for k in ("material", "radius", "hx", "hy", "hz", "height"):
         v = getattr(args, k)
         if v is not None:
@@ -204,8 +208,15 @@ async def _cmd_watch(c: EditorClient, args) -> object:
     print(f"[watch] listening on port {args.port} (Ctrl+C to stop)", file=sys.stderr)
     c.on_notification = lambda m, p: print(json.dumps({"notification": m, "params": p}))
     c.on_binary = lambda f: print(
-        json.dumps({"binary": {"schema_id": f.schema_id, "payload_id": f.payload_id,
-                               "bytes": len(f.payload)}})
+        json.dumps(
+            {
+                "binary": {
+                    "schema_id": f.schema_id,
+                    "payload_id": f.payload_id,
+                    "bytes": len(f.payload),
+                }
+            }
+        )
     )
     with contextlib.suppress(asyncio.CancelledError):
         await asyncio.Event().wait()  # run until cancelled (Ctrl+C)
@@ -285,13 +296,15 @@ async def _serve(args) -> int:
     daemon = Daemon(host=args.host)
     bound = await daemon.server.start(args.port)
     httpd = _start_http(args.http_port, args.host)
-    url = (f"http://{args.host}:{args.http_port}/harness/"
-           f"?port={bound}&seed={args.seed}&cam={args.cam}")
+    url = (
+        f"http://{args.host}:{args.http_port}/harness/?port={bound}&seed={args.seed}&cam={args.cam}"
+    )
     print(f"[serve] daemon ws://{args.host}:{bound}", file=sys.stderr)
     print(f"[serve] harness {url}", file=sys.stderr)
     # The harness URL on stdout so callers (and Chrome MCP) can grab it.
-    _emit({"ok": True, "ws_port": bound, "http_port": args.http_port, "harness_url": url},
-          args.json)
+    _emit(
+        {"ok": True, "ws_port": bound, "http_port": args.http_port, "harness_url": url}, args.json
+    )
     try:
         await daemon.server._server.wait_closed()  # type: ignore[union-attr]
     except (KeyboardInterrupt, asyncio.CancelledError):
@@ -306,11 +319,16 @@ async def _serve(args) -> int:
 # Argument parsing
 # --------------------------------------------------------------------------- #
 def _build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="editor_client",
-                                description="Drive the Fire Editor daemon from the CLI.")
-    p.add_argument("--port", type=int, default=0,
-                   help=f"daemon port to connect to (0 = spawn a throwaway daemon; "
-                        f"use {_DEFAULT_PORT} with `serve`)")
+    p = argparse.ArgumentParser(
+        prog="editor_client", description="Drive the Fire Editor daemon from the CLI."
+    )
+    p.add_argument(
+        "--port",
+        type=int,
+        default=0,
+        help=f"daemon port to connect to (0 = spawn a throwaway daemon; "
+        f"use {_DEFAULT_PORT} with `serve`)",
+    )
     p.add_argument("--host", default="127.0.0.1", help="daemon host")
     p.add_argument("--json", action="store_true", help="emit raw JSON (machine-readable)")
     sub = p.add_subparsers(dest="command", required=True)
@@ -373,10 +391,10 @@ def _build_parser() -> argparse.ArgumentParser:
     s.add_argument("id", type=int)
     s.add_argument("index", type=int)
     s.add_argument("--params", help="JSON object of param overrides")
-    s.add_argument("--enabled", dest="enabled", action="store_true", default=None,
-                   help="enable the component")
-    s.add_argument("--disabled", dest="enabled", action="store_false",
-                   help="disable the component")
+    s.add_argument(
+        "--enabled", dest="enabled", action="store_true", default=None, help="enable the component"
+    )
+    s.add_argument("--disabled", dest="enabled", action="store_false", help="disable the component")
 
     s = sub.add_parser("raycast", help="raycast the terrain")
     for k in ("ox", "oy", "oz", "dx", "dy", "dz"):
@@ -406,8 +424,13 @@ def _build_parser() -> argparse.ArgumentParser:
     sub.add_parser("watch", help="stream every notification + binary header to stdout")
 
     s = sub.add_parser("serve", help="run a persistent daemon + HTTP host for the harness")
-    s.add_argument("--port", type=int, default=_DEFAULT_PORT, dest="serve_port",
-                   help="daemon WebSocket port (0 = OS-assigned)")
+    s.add_argument(
+        "--port",
+        type=int,
+        default=_DEFAULT_PORT,
+        dest="serve_port",
+        help="daemon WebSocket port (0 = OS-assigned)",
+    )
     s.add_argument("--http-port", type=int, default=_DEFAULT_HTTP_PORT)
     s.add_argument("--seed", type=int, default=1337, help="seed baked into the harness URL")
     s.add_argument("--cam", default="20,-20,24", help="initial camera, baked into the URL")

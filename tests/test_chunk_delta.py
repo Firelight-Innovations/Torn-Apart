@@ -22,16 +22,16 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from fire_engine.core import load_config, EventBus
+from fire_engine.core import EventBus, load_config
 from fire_engine.core.rng import set_world_seed
 from fire_engine.world.terrain.chunk import Chunk
-from fire_engine.world.terrain.generation import generate_chunk, MATERIAL_DIRT, MATERIAL_GRASS
 from fire_engine.world.terrain.chunk_manager import ChunkManager
-
+from fire_engine.world.terrain.generation import MATERIAL_DIRT, MATERIAL_GRASS, generate_chunk
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def cfg():
@@ -54,8 +54,8 @@ def cm(cfg):
 # is_solid_mask()
 # ---------------------------------------------------------------------------
 
-class TestIsSolidMask:
 
+class TestIsSolidMask:
     def test_all_air_all_false(self):
         """All-zero materials -> every mask entry is False."""
         c = Chunk((0, 0, 0))
@@ -77,7 +77,7 @@ class TestIsSolidMask:
         c = Chunk((0, 0, 0))
         # Set an irregular block: checkerboard slice + corner voxels.
         c.materials[::2, ::2, 0] = 1
-        c.materials[1::2, 1::2, 1] = 2        # material id 2 is also solid
+        c.materials[1::2, 1::2, 1] = 2  # material id 2 is also solid
         c.materials[31, 31, 31] = 1
         expected = c.materials != 0
         assert np.array_equal(c.is_solid_mask(), expected)
@@ -109,8 +109,8 @@ class TestIsSolidMask:
 # world_origin property
 # ---------------------------------------------------------------------------
 
-class TestWorldOrigin:
 
+class TestWorldOrigin:
     def test_origin_zero_coord(self, chunk_meters):
         """Chunk at (0,0,0) has world origin (0,0,0)."""
         c = Chunk((0, 0, 0))
@@ -162,8 +162,8 @@ class TestWorldOrigin:
 # dirty / edited initial state and flag transitions
 # ---------------------------------------------------------------------------
 
-class TestDirtyEditedFlags:
 
+class TestDirtyEditedFlags:
     def test_fresh_chunk_dirty_true_edited_false(self):
         """A freshly constructed Chunk starts dirty=True, edited=False."""
         c = Chunk((0, 0, 0))
@@ -213,7 +213,7 @@ class TestDirtyEditedFlags:
 
     def test_unedited_chunk_not_in_delta(self, cm):
         """A chunk that was generated but never edited must be absent from the delta."""
-        cm.get_or_create((5, 5, 0))   # loaded but not edited
+        cm.get_or_create((5, 5, 0))  # loaded but not edited
         delta = cm.get_delta()
         assert (5, 5, 0) not in delta
 
@@ -227,8 +227,8 @@ class TestDirtyEditedFlags:
 # save_delta / apply_delta round-trip (on ChunkManager)
 # ---------------------------------------------------------------------------
 
-class TestDeltaRoundTrip:
 
+class TestDeltaRoundTrip:
     def test_round_trip_preserves_materials(self, cfg):
         """Edit a chunk, get_delta, apply_delta into fresh CM, materials identical."""
         set_world_seed(cfg.world_seed)
@@ -326,7 +326,7 @@ class TestDeltaRoundTrip:
         cm1 = ChunkManager(cfg, EventBus())
         coord = (0, 0, 5)
         ch = cm1.get_or_create(coord)
-        ch.materials[:] = 0   # force all-air
+        ch.materials[:] = 0  # force all-air
         ch.edited = True
 
         delta = cm1.get_delta()
@@ -340,8 +340,8 @@ class TestDeltaRoundTrip:
 # Boundary coordinates
 # ---------------------------------------------------------------------------
 
-class TestBoundaryCoords:
 
+class TestBoundaryCoords:
     def test_delta_large_positive_coord(self, cfg):
         """get_delta / apply_delta at a large positive coord."""
         set_world_seed(cfg.world_seed)
@@ -383,8 +383,8 @@ class TestBoundaryCoords:
 # Determinism
 # ---------------------------------------------------------------------------
 
-class TestDeterminism:
 
+class TestDeterminism:
     def test_same_coord_same_materials(self, cfg):
         """generate_chunk called twice with the same coord returns identical arrays."""
         coord = (3, -2, 0)

@@ -22,7 +22,6 @@ Headless only.  No panda3d imports.  Fixed seed throughout.
 from __future__ import annotations
 
 import math
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -67,6 +66,7 @@ def _cell(**kw) -> StormCell:
 # regime_ambient golden mapping
 # ---------------------------------------------------------------------------
 
+
 class TestRegimeAmbient:
     """Pin the exact (coverage, density) pair returned for each Regime."""
 
@@ -74,8 +74,8 @@ class TestRegimeAmbient:
     # behaviour so any silent edit trips the test.
     GOLDEN = {
         Regime.HIGH_PRESSURE: (0.08, 0.30),
-        Regime.MIXED:         (0.40, 0.52),
-        Regime.FRONTAL:       (0.75, 0.72),
+        Regime.MIXED: (0.40, 0.52),
+        Regime.FRONTAL: (0.75, 0.72),
     }
 
     @pytest.mark.parametrize("regime", list(Regime))
@@ -128,6 +128,7 @@ class TestRegimeAmbient:
 # active() boundary inclusivity
 # ---------------------------------------------------------------------------
 
+
 class TestActiveBoundary:
     """
     Pin the boundary behaviour of active():
@@ -165,6 +166,7 @@ class TestActiveBoundary:
 # ---------------------------------------------------------------------------
 # intensity() envelope — birth/death fraction pins
 # ---------------------------------------------------------------------------
+
 
 class TestIntensityEnvelope:
     """
@@ -232,6 +234,7 @@ class TestIntensityEnvelope:
 # contribution() — vectorised position array behaviour
 # ---------------------------------------------------------------------------
 
+
 class TestContributionVectorised:
     """
     contribution(points_xy, t, syn) must:
@@ -245,8 +248,11 @@ class TestContributionVectorised:
         set_world_seed(_FIXED_SEED)
         self.syn = Synoptic(load_config())
         self.c = _cell(
-            spawn_time=0.0, duration_s=4000.0, radius_m=500.0,
-            peak_intensity=0.8, drift_bias=(0.0, 0.0),
+            spawn_time=0.0,
+            duration_s=4000.0,
+            radius_m=500.0,
+            peak_intensity=0.8,
+            drift_bias=(0.0, 0.0),
         )
         self.t = 2000.0  # plateau (u=0.5)
 
@@ -269,11 +275,13 @@ class TestContributionVectorised:
         """Points 50 × radius away should contribute essentially nothing."""
         center = self.c.center(self.t, self.syn)
         r = self.c.radius(self.t)
-        far_pts = np.array([
-            center + np.array([50.0 * r, 0.0]),
-            center + np.array([0.0, 50.0 * r]),
-            center + np.array([-50.0 * r, 0.0]),
-        ])
+        far_pts = np.array(
+            [
+                center + np.array([50.0 * r, 0.0]),
+                center + np.array([0.0, 50.0 * r]),
+                center + np.array([-50.0 * r, 0.0]),
+            ]
+        )
         out = self.c.contribution(far_pts, self.t, self.syn)
         assert np.all(out < 1e-9)
 
@@ -281,8 +289,7 @@ class TestContributionVectorised:
         """Radial samples must be monotonically decreasing away from center."""
         center = self.c.center(self.t, self.syn)
         distances = np.array([0.0, 0.2, 0.5, 1.0, 2.0]) * self.c.radius(self.t)
-        pts = np.column_stack([center[0] + distances,
-                               np.full(len(distances), center[1])])
+        pts = np.column_stack([center[0] + distances, np.full(len(distances), center[1])])
         out = self.c.contribution(pts, self.t, self.syn)
         # Each successive value must be <= the previous (non-increasing).
         assert np.all(np.diff(out) <= 0.0)
@@ -297,11 +304,13 @@ class TestContributionVectorised:
     def test_dead_cell_all_zeros(self):
         """A dead cell returns an all-zero array regardless of positions."""
         c = _cell(spawn_time=0.0, duration_s=1000.0)
-        pts = np.array([
-            [0.0, 0.0],
-            [100.0, 0.0],
-            [-200.0, 50.0],
-        ])
+        pts = np.array(
+            [
+                [0.0, 0.0],
+                [100.0, 0.0],
+                [-200.0, 50.0],
+            ]
+        )
         out = c.contribution(pts, 9999.0, self.syn)
         assert out.shape == (3,)
         assert np.all(out == 0.0)
@@ -310,12 +319,14 @@ class TestContributionVectorised:
         """contribution must always return finite non-negative values."""
         center = self.c.center(self.t, self.syn)
         r = self.c.radius(self.t)
-        pts = np.array([
-            center,
-            center + [r, 0.0],
-            center + [0.0, r],
-            center + [10 * r, 0.0],
-        ])
+        pts = np.array(
+            [
+                center,
+                center + [r, 0.0],
+                center + [0.0, r],
+                center + [10 * r, 0.0],
+            ]
+        )
         out = self.c.contribution(pts, self.t, self.syn)
         assert np.all(np.isfinite(out))
         assert np.all(out >= 0.0)
@@ -325,8 +336,8 @@ class TestContributionVectorised:
 # day_regime: determinism + coverage across many days
 # ---------------------------------------------------------------------------
 
-class TestDayRegimeDeterminism:
 
+class TestDayRegimeDeterminism:
     def test_same_seed_same_day_same_regime(self):
         set_world_seed(_FIXED_SEED)
         results_a = [day_regime(d) for d in range(30)]
@@ -376,8 +387,8 @@ class TestDayRegimeDeterminism:
 # natural_cells: determinism + inter-day variability
 # ---------------------------------------------------------------------------
 
-class TestNaturalCellsDeterminism:
 
+class TestNaturalCellsDeterminism:
     def test_same_seed_same_day_same_ids(self):
         cfg = load_config()
         set_world_seed(_FIXED_SEED)
@@ -451,6 +462,7 @@ class TestNaturalCellsDeterminism:
         cfg = load_config()
         # Find a HIGH_PRESSURE day in first 50 days.
         from fire_engine.world.weather.cells import Regime
+
         set_world_seed(_FIXED_SEED)
         for d in range(50):
             if day_regime(d) is Regime.HIGH_PRESSURE:

@@ -31,8 +31,8 @@ this chunk sits at/below the lowest streamed Z band — see chunk_manager.py).
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 import numpy as np
 
@@ -134,6 +134,7 @@ class MeshArrays:
 # Winding is CCW seen from outside.
 # ---------------------------------------------------------------------------
 
+
 def _build_face_templates() -> dict[tuple[int, int, int], dict]:
     """
     Build the static per-direction quad corner offsets and normals.
@@ -210,7 +211,7 @@ def _build_padded_solid(
         Chunk edge in voxels (32).
     """
     pad = np.zeros((n + 2, n + 2, n + 2), dtype=bool)
-    pad[1:n + 1, 1:n + 1, 1:n + 1] = solid
+    pad[1 : n + 1, 1 : n + 1, 1 : n + 1] = solid
 
     ns = neighbor_solids or {}
 
@@ -220,39 +221,39 @@ def _build_padded_solid(
     # +X neighbour fills the x = n+1 slab using its x=0 slab.
     nb = neighbour((1, 0, 0))
     if nb is WORLD_FLOOR_SOLID:
-        pad[n + 1, 1:n + 1, 1:n + 1] = True
+        pad[n + 1, 1 : n + 1, 1 : n + 1] = True
     elif nb is not None:
-        pad[n + 1, 1:n + 1, 1:n + 1] = nb[0, :, :]
+        pad[n + 1, 1 : n + 1, 1 : n + 1] = nb[0, :, :]
     # -X neighbour fills x = 0 slab using its x=n-1 slab.
     nb = neighbour((-1, 0, 0))
     if nb is WORLD_FLOOR_SOLID:
-        pad[0, 1:n + 1, 1:n + 1] = True
+        pad[0, 1 : n + 1, 1 : n + 1] = True
     elif nb is not None:
-        pad[0, 1:n + 1, 1:n + 1] = nb[n - 1, :, :]
+        pad[0, 1 : n + 1, 1 : n + 1] = nb[n - 1, :, :]
     # +Y
     nb = neighbour((0, 1, 0))
     if nb is WORLD_FLOOR_SOLID:
-        pad[1:n + 1, n + 1, 1:n + 1] = True
+        pad[1 : n + 1, n + 1, 1 : n + 1] = True
     elif nb is not None:
-        pad[1:n + 1, n + 1, 1:n + 1] = nb[:, 0, :]
+        pad[1 : n + 1, n + 1, 1 : n + 1] = nb[:, 0, :]
     # -Y
     nb = neighbour((0, -1, 0))
     if nb is WORLD_FLOOR_SOLID:
-        pad[1:n + 1, 0, 1:n + 1] = True
+        pad[1 : n + 1, 0, 1 : n + 1] = True
     elif nb is not None:
-        pad[1:n + 1, 0, 1:n + 1] = nb[:, n - 1, :]
+        pad[1 : n + 1, 0, 1 : n + 1] = nb[:, n - 1, :]
     # +Z
     nb = neighbour((0, 0, 1))
     if nb is WORLD_FLOOR_SOLID:
-        pad[1:n + 1, 1:n + 1, n + 1] = True
+        pad[1 : n + 1, 1 : n + 1, n + 1] = True
     elif nb is not None:
-        pad[1:n + 1, 1:n + 1, n + 1] = nb[:, :, 0]
+        pad[1 : n + 1, 1 : n + 1, n + 1] = nb[:, :, 0]
     # -Z (the bottom-of-world case): sentinel → SOLID pad.
     nb = neighbour((0, 0, -1))
     if nb is WORLD_FLOOR_SOLID:
-        pad[1:n + 1, 1:n + 1, 0] = True
+        pad[1 : n + 1, 1 : n + 1, 0] = True
     elif nb is not None:
-        pad[1:n + 1, 1:n + 1, 0] = nb[:, :, n - 1]
+        pad[1 : n + 1, 1 : n + 1, 0] = nb[:, :, n - 1]
 
     return pad
 
@@ -318,7 +319,7 @@ def build_mesh(
 
     solid = chunk.is_solid_mask()  # (n,n,n) bool [x,y,z]
     pad = _build_padded_solid(solid, neighbor_solids, n)  # (n+2,)*3
-    interior = pad[1:n + 1, 1:n + 1, 1:n + 1]  # == solid (view)
+    interior = pad[1 : n + 1, 1 : n + 1, 1 : n + 1]  # == solid (view)
 
     # Collect per-direction face voxel coordinates.
     pos_blocks = []
@@ -331,33 +332,33 @@ def build_mesh(
         # neighbour solidity across this face, via padded slicing (NOT np.roll).
         # neighbour at (x+dx, y+dy, z+dz) lives in pad shifted by +1 + d.
         nb = pad[
-            1 + dx: 1 + dx + n,
-            1 + dy: 1 + dy + n,
-            1 + dz: 1 + dz + n,
+            1 + dx : 1 + dx + n,
+            1 + dy : 1 + dy + n,
+            1 + dz : 1 + dz + n,
         ]
         face_mask = interior & ~nb  # (n,n,n) bool: exposed faces in this direction
         if not face_mask.any():
             continue
 
         # voxel indices (x,y,z) of every exposed face in this direction
-        vx, vy, vz = np.nonzero(face_mask)          # each (F_d,)
+        vx, vy, vz = np.nonzero(face_mask)  # each (F_d,)
         f = vx.shape[0]
         voxel_idx = np.stack([vx, vy, vz], axis=1).astype(np.float32)  # (F_d, 3)
 
         tpl = _FACE_TEMPLATES[d]
-        corners = tpl["corners"]   # (4, 3) voxel-space corner offsets
-        normal = tpl["normal"]     # (3,)
+        corners = tpl["corners"]  # (4, 3) voxel-space corner offsets
+        normal = tpl["normal"]  # (3,)
 
         # Vertex positions: (voxel_idx + corner) * voxel_size + origin
         # broadcast: (F_d,1,3) + (1,4,3) -> (F_d,4,3)
         vpos = (voxel_idx[:, None, :] + corners[None, :, :]) * vs + origin[None, None, :]
-        vpos = vpos.reshape(f * 4, 3)               # (F_d*4, 3)
+        vpos = vpos.reshape(f * 4, 3)  # (F_d*4, 3)
 
         # Normals: same flat normal for all 4 verts of every face.
         vnrm = np.broadcast_to(normal, (f, 4, 3)).reshape(f * 4, 3).copy()
 
         # Face centre world position (for the light sampler): voxel centre + half-step in d.
-        center_voxel = voxel_idx + 0.5            # (F_d, 3) voxel centre in voxel units
+        center_voxel = voxel_idx + 0.5  # (F_d, 3) voxel centre in voxel units
         offset = np.array(d, dtype=np.float32) * 0.5  # half a voxel toward the face
         fcenter = (center_voxel + offset) * vs + origin  # (F_d, 3) world meters
         facecenter_blocks.append((d, fcenter))
@@ -389,9 +390,9 @@ def build_mesh(
             indices=np.zeros((0,), np.uint32),
         )
 
-    positions = np.concatenate(pos_blocks, axis=0)   # (N, 3)
-    normals = np.concatenate(nrm_blocks, axis=0)     # (N, 3)
-    uvs = np.concatenate(uv_blocks, axis=0)          # (N, 2)
+    positions = np.concatenate(pos_blocks, axis=0)  # (N, 3)
+    normals = np.concatenate(nrm_blocks, axis=0)  # (N, 3)
+    uvs = np.concatenate(uv_blocks, axis=0)  # (N, 2)
     total_faces = positions.shape[0] // 4
 
     # --- Light baking ---------------------------------------------------
@@ -403,7 +404,7 @@ def build_mesh(
     else:
         light = np.ones((total_faces,), dtype=np.float32)
     # Expand per-face light to per-vertex (4 verts/face) and build greyscale RGBA.
-    light_v = np.repeat(light, 4)                    # (N,)
+    light_v = np.repeat(light, 4)  # (N,)
     colors = np.empty((positions.shape[0], 4), np.float32)
     colors[:, 0] = light_v
     colors[:, 1] = light_v
@@ -413,8 +414,8 @@ def build_mesh(
     # --- Indices: two CCW triangles per quad (0,1,2) (0,2,3) ------------
     # Vectorised: base = 4*face_index, add the template offsets.
     face_base = (np.arange(total_faces, dtype=np.uint32) * 4)[:, None]  # (F,1)
-    quad = np.array([0, 1, 2, 0, 2, 3], dtype=np.uint32)[None, :]       # (1,6)
-    indices = (face_base + quad).reshape(-1)                            # (F*6,)
+    quad = np.array([0, 1, 2, 0, 2, 3], dtype=np.uint32)[None, :]  # (1,6)
+    indices = (face_base + quad).reshape(-1)  # (F*6,)
 
     return MeshArrays(
         positions=positions,

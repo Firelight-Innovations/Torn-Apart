@@ -40,10 +40,10 @@ CFG = load_config()
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _layers(**kw) -> CloudLayers:
     """Call cloud_layers with defaults, overriding named fields."""
-    defaults = dict(coverage=0.5, density=0.5, precip=0.0,
-                    regime=Regime.MIXED, config=CFG)
+    defaults = dict(coverage=0.5, density=0.5, precip=0.0, regime=Regime.MIXED, config=CFG)
     defaults.update(kw)
     return cloud_layers(**defaults)
 
@@ -51,6 +51,7 @@ def _layers(**kw) -> CloudLayers:
 # ===========================================================================
 # 1. classify_genus — golden mapping across ALL three regimes
 # ===========================================================================
+
 
 class TestClassifyGenusGoldenMapping:
     """Pin the exact (high, mid, low) triple returned for representative inputs."""
@@ -62,9 +63,9 @@ class TestClassifyGenusGoldenMapping:
         # High band is wispy CIRRUS; mid is thin ALTOCUMULUS; low is degenerate STRATUS.
         # (cov=0.05 is below both 0.18 CUMULUS and 0.55 STRATO thresholds)
         h, m, l = classify_genus(0.05, 0.10, 0.0, Regime.HIGH_PRESSURE)
-        assert h is CloudGenus.CIRRUS        # cov <= 0.55 → cirrus
-        assert m is CloudGenus.ALTOCUMULUS   # always altocumulus at low cov
-        assert l is CloudGenus.STRATUS       # cov=0.05 ≤ 0.18 → degenerate stratus
+        assert h is CloudGenus.CIRRUS  # cov <= 0.55 → cirrus
+        assert m is CloudGenus.ALTOCUMULUS  # always altocumulus at low cov
+        assert l is CloudGenus.STRATUS  # cov=0.05 ≤ 0.18 → degenerate stratus
 
     def test_hp_residual_cirrus(self):
         # Classic mares' tails: cov=0.08, den=0.30 → all three bands.
@@ -77,9 +78,9 @@ class TestClassifyGenusGoldenMapping:
     def test_hp_moderate_coverage(self):
         # Moderate cover on a high-pressure day: fair-weather cumulus.
         h, m, l = classify_genus(0.35, 0.40, 0.0, Regime.HIGH_PRESSURE)
-        assert h is CloudGenus.CIRRUS        # cov=0.35 ≤ 0.55 → CIRRUS (not CIRROSTRATUS)
-        assert m is CloudGenus.ALTOCUMULUS   # cov=0.35 > 0.30 but still ALTOCUMULUS
-        assert l is CloudGenus.CUMULUS       # 0.18 < cov=0.35 < 0.55 → CUMULUS
+        assert h is CloudGenus.CIRRUS  # cov=0.35 ≤ 0.55 → CIRRUS (not CIRROSTRATUS)
+        assert m is CloudGenus.ALTOCUMULUS  # cov=0.35 > 0.30 but still ALTOCUMULUS
+        assert l is CloudGenus.CUMULUS  # 0.18 < cov=0.35 < 0.55 → CUMULUS
 
     # --- MIXED ---
 
@@ -88,7 +89,7 @@ class TestClassifyGenusGoldenMapping:
         h, m, l = classify_genus(0.30, 0.40, 0.0, Regime.MIXED)
         assert h is CloudGenus.CIRRUS
         assert m is CloudGenus.ALTOCUMULUS
-        assert l is CloudGenus.CUMULUS       # 0.18 < cov=0.30 < 0.55
+        assert l is CloudGenus.CUMULUS  # 0.18 < cov=0.30 < 0.55
 
     def test_mixed_overcast_no_rain(self):
         # High cover, no precip → STRATOCUMULUS low (lumpy overcast).
@@ -96,15 +97,15 @@ class TestClassifyGenusGoldenMapping:
         # STRATOCUMULUS. In MIXED regime, frontal=False, so only `cov > 0.55` fires.
         h, m, l = classify_genus(0.80, 0.65, 0.0, Regime.MIXED)
         assert h is CloudGenus.CIRROSTRATUS  # cov=0.80 > 0.55
-        assert m is CloudGenus.ALTOSTRATUS   # cov > 0.55 AND den > 0.55
-        assert l is CloudGenus.STRATOCUMULUS # cov=0.80 > 0.55, no precip
+        assert m is CloudGenus.ALTOSTRATUS  # cov > 0.55 AND den > 0.55
+        assert l is CloudGenus.STRATOCUMULUS  # cov=0.80 > 0.55, no precip
 
     def test_mixed_light_rain(self):
         # pre=0.10 is just above the 0.05 rain-layer threshold → STRATUS (rain deck).
         h, m, l = classify_genus(0.60, 0.65, 0.10, Regime.MIXED)
-        assert l is CloudGenus.STRATUS       # rain layer threshold (pre > 0.05)
+        assert l is CloudGenus.STRATUS  # rain layer threshold (pre > 0.05)
         assert h is CloudGenus.CIRROSTRATUS  # cov=0.60 > 0.55
-        assert m is CloudGenus.ALTOSTRATUS   # cov > 0.55 AND den > 0.55
+        assert m is CloudGenus.ALTOSTRATUS  # cov > 0.55 AND den > 0.55
 
     def test_mixed_heavy_rain_cumulonimbus(self):
         # pre=0.50 is just above 0.45 → CUMULONIMBUS tower.
@@ -120,7 +121,7 @@ class TestClassifyGenusGoldenMapping:
         # Pin current behaviour.
         h, m, l = classify_genus(0.50, 0.55, 0.0, Regime.FRONTAL)
         assert l is CloudGenus.STRATOCUMULUS  # frontal branch fires at cov > 0.45
-        assert h is CloudGenus.CIRRUS         # cov=0.50 ≤ 0.55 → not cirrostratus
+        assert h is CloudGenus.CIRRUS  # cov=0.50 ≤ 0.55 → not cirrostratus
         # cov=0.50 > 0.30 so altocumulus is still altocumulus (cov+den threshold not met)
         # cov=0.50 NOT > 0.55 so altostratus branch doesn't fire
         assert m is CloudGenus.ALTOCUMULUS
@@ -129,13 +130,13 @@ class TestClassifyGenusGoldenMapping:
         # Classic frontal overcast: cirrostratus / altostratus / stratocumulus.
         h, m, l = classify_genus(0.85, 0.80, 0.0, Regime.FRONTAL)
         assert h is CloudGenus.CIRROSTRATUS  # cov > 0.55
-        assert m is CloudGenus.ALTOSTRATUS   # cov > 0.55 AND den > 0.55
-        assert l is CloudGenus.STRATOCUMULUS # cov > 0.55, no precip
+        assert m is CloudGenus.ALTOSTRATUS  # cov > 0.55 AND den > 0.55
+        assert l is CloudGenus.STRATOCUMULUS  # cov > 0.55, no precip
 
     def test_frontal_moderate_precip_stratus(self):
         # FRONTAL with moderate precip (rain layer, not yet CUMULONIMBUS).
         h, m, l = classify_genus(0.80, 0.75, 0.30, Regime.FRONTAL)
-        assert l is CloudGenus.STRATUS        # pre=0.30 > 0.05 → rain layer
+        assert l is CloudGenus.STRATUS  # pre=0.30 > 0.05 → rain layer
         assert h is CloudGenus.CIRROSTRATUS
         assert m is CloudGenus.ALTOSTRATUS
 
@@ -151,27 +152,28 @@ class TestClassifyGenusGoldenMapping:
 # 2. classify_genus — boundary / edge inputs
 # ===========================================================================
 
+
 class TestClassifyGenusBoundaries:
     """Pin the genus at exact boundary values."""
 
     def test_all_zeros(self):
         # coverage=0, density=0, precip=0 → all thresholds below minimum.
         h, m, l = classify_genus(0.0, 0.0, 0.0, Regime.HIGH_PRESSURE)
-        assert h is CloudGenus.CIRRUS       # cov=0 ≤ 0.55
+        assert h is CloudGenus.CIRRUS  # cov=0 ≤ 0.55
         assert m is CloudGenus.ALTOCUMULUS  # default for mid
-        assert l is CloudGenus.STRATUS      # cov=0 ≤ 0.18 → degenerate stratus
+        assert l is CloudGenus.STRATUS  # cov=0 ≤ 0.18 → degenerate stratus
 
     def test_all_ones(self):
         # coverage=1, density=1, precip=1 → top of every scale.
         h, m, l = classify_genus(1.0, 1.0, 1.0, Regime.FRONTAL)
         assert l is CloudGenus.CUMULONIMBUS  # pre=1.0 > 0.45 → storm tower
         assert h is CloudGenus.CIRROSTRATUS  # cov=1.0 > 0.55
-        assert m is CloudGenus.ALTOSTRATUS   # cov AND den > 0.55
+        assert m is CloudGenus.ALTOSTRATUS  # cov AND den > 0.55
 
     def test_precip_exactly_at_cumulonimbus_threshold(self):
         # pre=0.45 is NOT > 0.45 (strict), so → STRATUS not CUMULONIMBUS.
         _, _, l = classify_genus(0.9, 0.9, 0.45, Regime.FRONTAL)
-        assert l is CloudGenus.STRATUS      # strict threshold: 0.45 is NOT > 0.45
+        assert l is CloudGenus.STRATUS  # strict threshold: 0.45 is NOT > 0.45
 
     def test_precip_just_above_cumulonimbus_threshold(self):
         # pre just above 0.45 tips into CUMULONIMBUS.
@@ -187,12 +189,12 @@ class TestClassifyGenusBoundaries:
     def test_precip_just_above_rain_layer_threshold(self):
         # pre=0.06 > 0.05 → STRATUS rain layer (overwrites STRATOCUMULUS).
         _, _, l = classify_genus(0.7, 0.7, 0.06, Regime.MIXED)
-        assert l is CloudGenus.STRATUS        # rain layer wins over stratocumulus
+        assert l is CloudGenus.STRATUS  # rain layer wins over stratocumulus
 
     def test_cov_at_cumulus_threshold(self):
         # cov=0.18 is NOT > 0.18 (strict) → stays STRATUS not CUMULUS.
         _, _, l = classify_genus(0.18, 0.3, 0.0, Regime.MIXED)
-        assert l is CloudGenus.STRATUS   # strict: 0.18 is NOT > 0.18
+        assert l is CloudGenus.STRATUS  # strict: 0.18 is NOT > 0.18
 
     def test_cov_just_above_cumulus_threshold(self):
         # cov=0.19 > 0.18 → CUMULUS.
@@ -203,14 +205,15 @@ class TestClassifyGenusBoundaries:
         # In FRONTAL regime, STRATOCUMULUS fires at cov > 0.45 (not 0.55).
         # cov=0.50: FRONTAL → STRATOCUMULUS; MIXED → CUMULUS.
         _, _, l_frontal = classify_genus(0.50, 0.5, 0.0, Regime.FRONTAL)
-        _, _, l_mixed   = classify_genus(0.50, 0.5, 0.0, Regime.MIXED)
+        _, _, l_mixed = classify_genus(0.50, 0.5, 0.0, Regime.MIXED)
         assert l_frontal is CloudGenus.STRATOCUMULUS  # frontal branch: cov > 0.45
-        assert l_mixed   is CloudGenus.CUMULUS         # 0.18 < cov=0.50 ≤ 0.55
+        assert l_mixed is CloudGenus.CUMULUS  # 0.18 < cov=0.50 ≤ 0.55
 
 
 # ===========================================================================
 # 3. classify_genus — vectorization
 # ===========================================================================
+
 
 class TestClassifyGenusVectorization:
     """
@@ -237,9 +240,7 @@ class TestClassifyGenusVectorization:
         for regime in (Regime.HIGH_PRESSURE, Regime.MIXED, Regime.FRONTAL):
             ah, am, al = classify_genus(cov, den, pre, regime)
             for i in range(len(cov)):
-                sh, sm, sl = classify_genus(
-                    float(cov[i]), float(den[i]), float(pre[i]), regime
-                )
+                sh, sm, sl = classify_genus(float(cov[i]), float(den[i]), float(pre[i]), regime)
                 assert ah[i] is sh, f"high mismatch at i={i}, regime={regime}"
                 assert am[i] is sm, f"mid mismatch at i={i}, regime={regime}"
                 assert al[i] is sl, f"low mismatch at i={i}, regime={regime}"
@@ -264,6 +265,7 @@ class TestClassifyGenusVectorization:
 # 4. cloud_layers — structural invariants
 # ===========================================================================
 
+
 class TestCloudLayersStructure:
     """Pin the shape, finiteness, and sign of every field in CloudLayers."""
 
@@ -273,15 +275,13 @@ class TestCloudLayersStructure:
 
     def test_all_arrays_shape_3(self):
         L = _layers(coverage=0.6, density=0.6, precip=0.2)
-        for name in ("base_altitude_m", "thickness_m", "coverage",
-                     "density", "detail_scale"):
+        for name in ("base_altitude_m", "thickness_m", "coverage", "density", "detail_scale"):
             arr = getattr(L, name)
             assert arr.shape == (3,), f"{name} shape is {arr.shape}, expected (3,)"
 
     def test_all_arrays_finite(self):
         L = _layers(coverage=0.7, density=0.7, precip=0.5)
-        for name in ("base_altitude_m", "thickness_m", "coverage",
-                     "density", "detail_scale"):
+        for name in ("base_altitude_m", "thickness_m", "coverage", "density", "detail_scale"):
             arr = getattr(L, name)
             assert np.all(np.isfinite(arr)), f"{name} has non-finite values: {arr}"
 
@@ -311,16 +311,16 @@ class TestCloudLayersStructure:
         # config.toml (1400.0, 850.0, 500.0) to catch any config-wiring bugs.
         L = _layers()
         assert L.base_altitude_m[BAND_HIGH] == pytest.approx(1400.0)
-        assert L.base_altitude_m[BAND_MID]  == pytest.approx(850.0)
-        assert L.base_altitude_m[BAND_LOW]  == pytest.approx(500.0)
+        assert L.base_altitude_m[BAND_MID] == pytest.approx(850.0)
+        assert L.base_altitude_m[BAND_LOW] == pytest.approx(500.0)
 
     def test_altitudes_invariant_to_regime(self):
         # base_altitude_m does NOT vary with regime (it's purely config-derived).
         # This is a golden pin: if the design changes to shift bands by regime,
         # this test should fail first.
-        L_hp  = _layers(coverage=0.1, density=0.1, precip=0.0, regime=Regime.HIGH_PRESSURE)
+        L_hp = _layers(coverage=0.1, density=0.1, precip=0.0, regime=Regime.HIGH_PRESSURE)
         L_mix = _layers(coverage=0.6, density=0.6, precip=0.0, regime=Regime.MIXED)
-        L_fr  = _layers(coverage=0.9, density=0.9, precip=0.5, regime=Regime.FRONTAL)
+        L_fr = _layers(coverage=0.9, density=0.9, precip=0.5, regime=Regime.FRONTAL)
         np.testing.assert_array_equal(L_hp.base_altitude_m, L_mix.base_altitude_m)
         np.testing.assert_array_equal(L_mix.base_altitude_m, L_fr.base_altitude_m)
 
@@ -335,17 +335,21 @@ class TestCloudLayersStructure:
         # detail_scale is purely from config — pin that it never changes with inputs.
         L_a = _layers(coverage=0.0, density=0.0, precip=0.0, regime=Regime.HIGH_PRESSURE)
         L_b = _layers(coverage=1.0, density=1.0, precip=1.0, regime=Regime.FRONTAL)
-        np.testing.assert_array_equal(L_a.detail_scale, L_b.detail_scale,
-                                      err_msg="detail_scale must be constant (config-only)")
+        np.testing.assert_array_equal(
+            L_a.detail_scale,
+            L_b.detail_scale,
+            err_msg="detail_scale must be constant (config-only)",
+        )
         # Pin actual config values: [0.45, 0.85, 1.30]
         assert L_a.detail_scale[BAND_HIGH] == pytest.approx(0.45)
-        assert L_a.detail_scale[BAND_MID]  == pytest.approx(0.85)
-        assert L_a.detail_scale[BAND_LOW]  == pytest.approx(1.30)
+        assert L_a.detail_scale[BAND_MID] == pytest.approx(0.85)
+        assert L_a.detail_scale[BAND_LOW] == pytest.approx(1.30)
 
 
 # ===========================================================================
 # 5. cloud_layers — coverage / density golden values
 # ===========================================================================
+
 
 class TestCloudLayersGoldenWeights:
     """
@@ -407,33 +411,28 @@ class TestCloudLayersGoldenWeights:
 # 6. cloud_layers — boundary inputs
 # ===========================================================================
 
+
 class TestCloudLayersBoundaries:
     """Pin genus + finite/positive-valued output at extremes."""
 
-    @pytest.mark.parametrize("regime", [
-        Regime.HIGH_PRESSURE, Regime.MIXED, Regime.FRONTAL
-    ])
+    @pytest.mark.parametrize("regime", [Regime.HIGH_PRESSURE, Regime.MIXED, Regime.FRONTAL])
     def test_all_zero_inputs_per_regime(self, regime):
         L = cloud_layers(0.0, 0.0, 0.0, regime, CFG)
         assert isinstance(L, CloudLayers)
-        for arr in (L.base_altitude_m, L.thickness_m, L.coverage,
-                    L.density, L.detail_scale):
+        for arr in (L.base_altitude_m, L.thickness_m, L.coverage, L.density, L.detail_scale):
             assert np.all(np.isfinite(arr))
         # Pin genus at zero inputs — should map to the "degenerate" case.
         # In all regimes: cov=0 ≤ 0.18 → STRATUS for low; ALTOCUMULUS for mid;
         # cov=0 ≤ 0.55 → CIRRUS for high.
         assert L.genus_high is CloudGenus.CIRRUS
-        assert L.genus_mid  is CloudGenus.ALTOCUMULUS
-        assert L.genus_low  is CloudGenus.STRATUS
+        assert L.genus_mid is CloudGenus.ALTOCUMULUS
+        assert L.genus_low is CloudGenus.STRATUS
 
-    @pytest.mark.parametrize("regime", [
-        Regime.HIGH_PRESSURE, Regime.MIXED, Regime.FRONTAL
-    ])
+    @pytest.mark.parametrize("regime", [Regime.HIGH_PRESSURE, Regime.MIXED, Regime.FRONTAL])
     def test_all_one_inputs_per_regime(self, regime):
         L = cloud_layers(1.0, 1.0, 1.0, regime, CFG)
         assert isinstance(L, CloudLayers)
-        for arr in (L.base_altitude_m, L.thickness_m, L.coverage,
-                    L.density, L.detail_scale):
+        for arr in (L.base_altitude_m, L.thickness_m, L.coverage, L.density, L.detail_scale):
             assert np.all(np.isfinite(arr))
             assert np.all(arr > 0.0), f"Expected all positive at max inputs: {arr}"
         # At max precip (1.0 > 0.45) → CUMULONIMBUS in all regimes.
@@ -464,6 +463,7 @@ class TestCloudLayersBoundaries:
 # ===========================================================================
 # 7. Determinism — cloud_layers and classify_genus are pure functions
 # ===========================================================================
+
 
 class TestDeterminismEdges:
     """Determinism cases not covered by the existing test_weather_clouds.py suite."""

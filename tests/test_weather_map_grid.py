@@ -27,6 +27,7 @@ HOUR = 3600.0
 # Helpers — copied from test_weather_map.py / test_weather_system.py style
 # ---------------------------------------------------------------------------
 
+
 def _ws(seed: int = 1337) -> WeatherSystem:
     set_world_seed(seed)
     return WeatherSystem(load_config(), EventBus())
@@ -43,6 +44,7 @@ def _first_thunderstorm(cfg):
 # ---------------------------------------------------------------------------
 # MAP_CHANNELS contract
 # ---------------------------------------------------------------------------
+
 
 class TestMapChannels:
     def test_channel_count(self):
@@ -73,6 +75,7 @@ class TestMapChannels:
 # ---------------------------------------------------------------------------
 # Shape and dtype
 # ---------------------------------------------------------------------------
+
 
 class TestShapeAndDtype:
     def test_shape_cells_cells_4(self):
@@ -107,6 +110,7 @@ class TestShapeAndDtype:
 # ---------------------------------------------------------------------------
 # Finite values / channel bounds
 # ---------------------------------------------------------------------------
+
 
 class TestChannelBounds:
     def test_no_nan_or_inf_ambient(self):
@@ -172,6 +176,7 @@ class TestChannelBounds:
 # texel_centers geometry
 # ---------------------------------------------------------------------------
 
+
 class TestTexelCenters:
     def test_shape(self):
         cfg = load_config()
@@ -231,15 +236,14 @@ class TestTexelCenters:
         # row 0, col 0 → lowest Y, lowest X
         expected_x0 = -0.5 * wm.span_m + 0.5 * wm.cell_m
         expected_y0 = -0.5 * wm.span_m + 0.5 * wm.cell_m
-        assert pts[0, 0] == pytest.approx(expected_x0, rel=1e-5), \
-            "first texel X wrong"
-        assert pts[0, 1] == pytest.approx(expected_y0, rel=1e-5), \
-            "first texel Y wrong"
+        assert pts[0, 0] == pytest.approx(expected_x0, rel=1e-5), "first texel X wrong"
+        assert pts[0, 1] == pytest.approx(expected_y0, rel=1e-5), "first texel Y wrong"
 
 
 # ---------------------------------------------------------------------------
 # rasterize == sample_fields equivalence (the core contract)
 # ---------------------------------------------------------------------------
+
 
 class TestRasterEqualsFieldSample:
     """
@@ -268,8 +272,9 @@ class TestRasterEqualsFieldSample:
         t = 12 * HOUR
         r = wm.rasterize(ws, center, t)
         expected = self._expected_grid(ws, wm, center, t)
-        assert np.array_equal(r, expected), \
+        assert np.array_equal(r, expected), (
             "rasterize differs from sample_fields at ambient conditions"
+        )
 
     def test_exact_match_under_storm(self):
         cfg = load_config()
@@ -280,8 +285,7 @@ class TestRasterEqualsFieldSample:
         center = tuple(c.center(t, ws.synoptic))
         r = wm.rasterize(ws, center, t)
         expected = self._expected_grid(ws, wm, center, t)
-        assert np.array_equal(r, expected), \
-            "rasterize differs from sample_fields under storm"
+        assert np.array_equal(r, expected), "rasterize differs from sample_fields under storm"
 
     def test_allclose_match_off_center(self):
         """Off-origin center: rasterize ≈ sample_fields (float32 cast only)."""
@@ -292,8 +296,9 @@ class TestRasterEqualsFieldSample:
         t = 7 * HOUR
         r = wm.rasterize(ws, center, t)
         expected = self._expected_grid(ws, wm, center, t)
-        assert np.allclose(r, expected, atol=1e-6), \
+        assert np.allclose(r, expected, atol=1e-6), (
             "rasterize vs sample_fields mismatch at off-center position"
+        )
 
     def test_sample_fields_channel_order_matches_map_channels(self):
         """
@@ -316,19 +321,22 @@ class TestRasterEqualsFieldSample:
         r = wm.rasterize(ws, center, t)
 
         n = wm.cells
-        assert np.allclose(r[..., 0], cov.reshape(n, n).astype(np.float32),
-                            atol=1e-6), "ch0 != coverage"
-        assert np.allclose(r[..., 1], den.reshape(n, n).astype(np.float32),
-                            atol=1e-6), "ch1 != density"
-        assert np.allclose(r[..., 2], rain.reshape(n, n).astype(np.float32),
-                            atol=1e-6), "ch2 != precip/rain"
-        assert np.allclose(r[..., 3], fog.reshape(n, n).astype(np.float32),
-                            atol=1e-6), "ch3 != fog"
+        assert np.allclose(r[..., 0], cov.reshape(n, n).astype(np.float32), atol=1e-6), (
+            "ch0 != coverage"
+        )
+        assert np.allclose(r[..., 1], den.reshape(n, n).astype(np.float32), atol=1e-6), (
+            "ch1 != density"
+        )
+        assert np.allclose(r[..., 2], rain.reshape(n, n).astype(np.float32), atol=1e-6), (
+            "ch2 != precip/rain"
+        )
+        assert np.allclose(r[..., 3], fog.reshape(n, n).astype(np.float32), atol=1e-6), "ch3 != fog"
 
 
 # ---------------------------------------------------------------------------
 # Time-invariance / determinism
 # ---------------------------------------------------------------------------
+
 
 class TestDeterminism:
     def test_same_args_identical_array(self):
@@ -340,8 +348,7 @@ class TestDeterminism:
         t = 15 * HOUR
         first = wm.rasterize(ws, center, t)
         second = wm.rasterize(ws, center, t)
-        assert np.array_equal(first, second), \
-            "rasterize not deterministic for same (center, t)"
+        assert np.array_equal(first, second), "rasterize not deterministic for same (center, t)"
 
     def test_determinism_after_system_state_changes(self):
         """
@@ -364,8 +371,7 @@ class TestDeterminism:
         ws.sample_local((99999.0, -99999.0), 14 * DAY)
 
         second = wm.rasterize(ws, center, t)
-        assert np.array_equal(first, second), \
-            "rasterize not reproducible after system churn"
+        assert np.array_equal(first, second), "rasterize not reproducible after system churn"
 
     def test_storm_raster_differs_from_ambient_raster(self):
         """
@@ -395,5 +401,6 @@ class TestDeterminism:
         center_far = (center_storm[0] + 50000.0, center_storm[1])
         r_storm = wm.rasterize(ws, center_storm, t)
         r_far = wm.rasterize(ws, center_far, t)
-        assert not np.array_equal(r_storm, r_far), \
+        assert not np.array_equal(r_storm, r_far), (
             "storm-centered raster equals far-away raster — no spatial variation"
+        )

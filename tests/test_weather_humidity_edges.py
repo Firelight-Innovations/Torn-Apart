@@ -30,10 +30,10 @@ from fire_engine.core import load_config
 from fire_engine.core.rng import set_world_seed
 from fire_engine.world.weather import humidity as H
 
-
 # ---------------------------------------------------------------------------
 # Shared fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="module")
 def cfg():
@@ -44,6 +44,7 @@ def cfg():
 # 1. saturation_humidity — monotonicity, finiteness, non-negativity
 # ---------------------------------------------------------------------------
 
+
 class TestSaturationHumidity:
     def test_monotonically_non_decreasing_over_range(self, cfg):
         """h_sat rises (weakly) with temperature — core invariant."""
@@ -51,8 +52,9 @@ class TestSaturationHumidity:
         h_sat = H.saturation_humidity(T, cfg)
         diffs = np.diff(h_sat)
         # Non-decreasing: every step is >= 0 (or within float rounding)
-        assert np.all(diffs >= -1e-15), \
+        assert np.all(diffs >= -1e-15), (
             f"saturation_humidity not monotone: min diff = {diffs.min()}"
+        )
 
     def test_finite_and_non_negative_everywhere(self, cfg):
         T = np.array([-100.0, -30.0, -10.0, 0.0, 5.0, 20.0, 50.0, 100.0])
@@ -95,6 +97,7 @@ class TestSaturationHumidity:
 # 2. wind_gate — monotonic non-increasing, bounded [0,1]
 # ---------------------------------------------------------------------------
 
+
 class TestWindGate:
     def test_monotonically_non_increasing(self, cfg):
         """Higher wind → less gate (or equal — it's flat in the plateau zones)."""
@@ -103,8 +106,9 @@ class TestWindGate:
         speeds = np.linspace(0.0, none + 5.0, 200)
         gate = H.wind_gate(speeds, cfg)
         diffs = np.diff(gate)
-        assert np.all(diffs <= 1e-12), \
+        assert np.all(diffs <= 1e-12), (
             f"wind_gate not monotone non-increasing: max diff = {diffs.max()}"
+        )
 
     def test_bounded_zero_to_one(self, cfg):
         speeds = np.array([0.0, 0.5, 1.0, 2.0, 3.0, 5.0, 10.0, 100.0])
@@ -159,6 +163,7 @@ class TestWindGate:
 # 3. relative_humidity — vectorisation, monotonicity in rain/wetness, clamp
 # ---------------------------------------------------------------------------
 
+
 class TestRelativeHumidity:
     def test_scalar_input_gives_scalar_like(self, cfg):
         """Length-1 arrays behave consistently."""
@@ -191,7 +196,7 @@ class TestRelativeHumidity:
 
     def test_clamped_to_zero_one(self, cfg):
         """Output is always in [0, 1] regardless of inputs."""
-        rr = np.array([0.0, 1.0, 2.0])   # 2.0 > 1 is over-range
+        rr = np.array([0.0, 1.0, 2.0])  # 2.0 > 1 is over-range
         wet = np.array([0.0, 0.0, 1.0])
         h = H.relative_humidity(rr, wet, 0.9, cfg)
         assert np.all(h >= 0.0)
@@ -221,6 +226,7 @@ class TestRelativeHumidity:
 # 4. condense_fraction — monotonicity, boundaries, shape
 # ---------------------------------------------------------------------------
 
+
 class TestCondenseFraction:
     def test_zero_below_saturation(self, cfg):
         """When humidity < h_sat, condensation fraction is zero."""
@@ -232,7 +238,7 @@ class TestCondenseFraction:
     def test_one_well_above_saturation(self, cfg):
         """When humidity >> h_sat + band, condensation fraction is 1.0."""
         h_sat = np.array([0.6])
-        hum = np.array([0.9])   # over by 0.3, band = 0.10
+        hum = np.array([0.9])  # over by 0.3, band = 0.10
         cf = H.condense_fraction(hum, h_sat, cfg)
         assert cf[0] == pytest.approx(1.0)
 
@@ -245,7 +251,7 @@ class TestCondenseFraction:
 
     def test_bounded_zero_to_one(self, cfg):
         h_sat = np.array([0.5, 0.7, 0.9])
-        hum = np.array([0.0, 0.5, 1.5])   # extreme range including > 1
+        hum = np.array([0.0, 0.5, 1.5])  # extreme range including > 1
         cf = H.condense_fraction(hum, h_sat, cfg)
         assert np.all(cf >= 0.0)
         assert np.all(cf <= 1.0)
@@ -274,7 +280,7 @@ class TestCondenseFraction:
     def test_humidity_over_one_pinned(self, cfg):
         """Humidity > 1 (un-clamped input) yields condensation in [0,1]; pin it."""
         h_sat = np.array([0.9])
-        hum = np.array([1.5])   # unphysical but we pin the behaviour
+        hum = np.array([1.5])  # unphysical but we pin the behaviour
         cf = H.condense_fraction(hum, h_sat, cfg)
         assert 0.0 <= cf[0] <= 1.0
 
@@ -282,6 +288,7 @@ class TestCondenseFraction:
 # ---------------------------------------------------------------------------
 # 5. emergent_fog — directional behaviour and shape
 # ---------------------------------------------------------------------------
+
 
 class TestEmergentFog:
     def test_zero_rh_gives_no_fog(self, cfg):
@@ -337,7 +344,7 @@ class TestEmergentFog:
     def test_warm_air_higher_saturation_requires_more_rh(self, cfg):
         """Warm air saturates higher, so the same RH yields less fog than cold air."""
         h = np.array([0.75, 0.75])
-        T = np.array([2.0, 25.0])   # cold vs warm
+        T = np.array([2.0, 25.0])  # cold vs warm
         w = np.array([0.0, 0.0])
         f = H.emergent_fog(h, T, w, cfg)
         # Cold produces fog (if 0.75 > h_sat at 2°C); warm may produce none
@@ -379,6 +386,7 @@ class TestEmergentFog:
 # ---------------------------------------------------------------------------
 # 6. humidity_base — config band, determinism
 # ---------------------------------------------------------------------------
+
 
 class TestHumidityBase:
     def test_within_config_band(self, cfg):

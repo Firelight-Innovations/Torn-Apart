@@ -53,14 +53,10 @@ class TestPassthrough:
 class TestIncludeExpansion:
     def test_include_expands_verbatim(self, tmp_path):
         lib = "float litOne() { return 1.0; }\n"
-        src = (
-            "#version 330 core\n"
-            '//#include "lib.glsl"\n'
-            "void main() {}\n"
-        )
+        src = '#version 330 core\n//#include "lib.glsl"\nvoid main() {}\n'
         anchor = _write_shaders(tmp_path, {"lib.glsl": lib, "user.frag": src})
         out = load_glsl(anchor, "user.frag")
-        assert lib in out                          # included text verbatim
+        assert lib in out  # included text verbatim
         assert '//#include "lib.glsl"' not in out  # directive consumed
         # Order preserved: version line, then library, then main.
         assert out.index("#version") < out.index("litOne") < out.index("main")
@@ -68,8 +64,7 @@ class TestIncludeExpansion:
     def test_include_markers_present(self, tmp_path):
         anchor = _write_shaders(
             tmp_path,
-            {"lib.glsl": "float x;\n",
-             "user.frag": '#version 330 core\n//#include "lib.glsl"\n'},
+            {"lib.glsl": "float x;\n", "user.frag": '#version 330 core\n//#include "lib.glsl"\n'},
         )
         out = load_glsl(anchor, "user.frag")
         assert "// --- begin include: lib.glsl ---" in out
@@ -78,8 +73,10 @@ class TestIncludeExpansion:
     def test_include_without_trailing_newline_stays_well_formed(self, tmp_path):
         anchor = _write_shaders(
             tmp_path,
-            {"lib.glsl": "float x;",  # no trailing newline
-             "user.frag": '#version 330 core\n//#include "lib.glsl"\nvoid main() {}\n'},
+            {
+                "lib.glsl": "float x;",  # no trailing newline
+                "user.frag": '#version 330 core\n//#include "lib.glsl"\nvoid main() {}\n',
+            },
         )
         out = load_glsl(anchor, "user.frag")
         # The end marker must land on its own line, not glued to `float x;`.
@@ -88,8 +85,10 @@ class TestIncludeExpansion:
     def test_indented_directive_fires(self, tmp_path):
         anchor = _write_shaders(
             tmp_path,
-            {"lib.glsl": "float x;\n",
-             "user.frag": '#version 330 core\n    //#include "lib.glsl"\n'},
+            {
+                "lib.glsl": "float x;\n",
+                "user.frag": '#version 330 core\n    //#include "lib.glsl"\n',
+            },
         )
         assert "float x;" in load_glsl(anchor, "user.frag")
 
@@ -99,15 +98,17 @@ class TestIncludeErrors:
         anchor = _write_shaders(
             tmp_path, {"user.frag": '#version 330 core\n//#include "nope.glsl"\n'}
         )
-        with pytest.raises(FileNotFoundError, match=r'user\.frag.*nope\.glsl'):
+        with pytest.raises(FileNotFoundError, match=r"user\.frag.*nope\.glsl"):
             load_glsl(anchor, "user.frag")
 
     def test_nested_include_raises_valueerror(self, tmp_path):
         anchor = _write_shaders(
             tmp_path,
-            {"inner.glsl": "float y;\n",
-             "lib.glsl": '//#include "inner.glsl"\nfloat x;\n',
-             "user.frag": '#version 330 core\n//#include "lib.glsl"\n'},
+            {
+                "inner.glsl": "float y;\n",
+                "lib.glsl": '//#include "inner.glsl"\nfloat x;\n',
+                "user.frag": '#version 330 core\n//#include "lib.glsl"\n',
+            },
         )
         with pytest.raises(ValueError, match="nested"):
             load_glsl(anchor, "user.frag")

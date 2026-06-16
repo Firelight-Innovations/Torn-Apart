@@ -52,14 +52,14 @@ Example
 
 from __future__ import annotations
 
-from typing import Iterable, Mapping
+from collections.abc import Iterable, Mapping
 
 import numpy as np
 
 from fire_engine.core.config import Config
 from fire_engine.world.terrain.chunk import Chunk
 
-__all__ = ["RainCoverField", "OPEN_SKY_Z"]
+__all__ = ["OPEN_SKY_Z", "RainCoverField"]
 
 #: World Z (meters) reported for a column with no known solid voxel — far below
 #: any terrain, so an open-to-sky column never clips falling rain.  Rain streaks
@@ -110,9 +110,7 @@ class RainCoverField:
         self._origin_y: float = 0.0
 
         # The heightmap.  float32 so it uploads to an R32F texture directly.
-        self.height: np.ndarray = np.full(
-            (self.cells, self.cells), OPEN_SKY_Z, dtype=np.float32
-        )
+        self.height: np.ndarray = np.full((self.cells, self.cells), OPEN_SKY_Z, dtype=np.float32)
 
     # ------------------------------------------------------------------
     # Geometry helpers
@@ -166,15 +164,15 @@ class RainCoverField:
             ``(32, 32)`` float32 of top-face world Z indexed ``[x, y]``, or
             ``None`` when the chunk is entirely air (nothing to fold).
         """
-        solid = chunk.materials > 0                       # (n, n, n) [x, y, z]
-        col_any = solid.any(axis=2)                       # (n, n) has any solid?
+        solid = chunk.materials > 0  # (n, n, n) [x, y, z]
+        col_any = solid.any(axis=2)  # (n, n) has any solid?
         if not col_any.any():
             return None
         # Highest solid z-index per column: argmax on the reversed Z axis finds
         # the first solid from the TOP; convert back to a forward z-index.
         n = self._chunk_n
         rev_first = np.argmax(solid[:, :, ::-1], axis=2)  # (n, n) from top
-        top_z_idx = (n - 1) - rev_first                   # (n, n) forward index
+        top_z_idx = (n - 1) - rev_first  # (n, n) forward index
         # World Z of the voxel's TOP face = origin_z + (z_idx + 1) * voxel_size.
         origin_z = chunk.coord[2] * self._chunk_m
         top_z = origin_z + (top_z_idx.astype(np.float32) + 1.0) * self._voxel_m
@@ -202,8 +200,8 @@ class RainCoverField:
         oy = chunk.coord[1] * self._chunk_m
         xi = np.arange(n)
         yi = np.arange(n)
-        col_cx = ox + (xi.astype(np.float64) + 0.5) * self._voxel_m   # (n,) world X
-        col_cy = oy + (yi.astype(np.float64) + 0.5) * self._voxel_m   # (n,) world Y
+        col_cx = ox + (xi.astype(np.float64) + 0.5) * self._voxel_m  # (n,) world X
+        col_cy = oy + (yi.astype(np.float64) + 0.5) * self._voxel_m  # (n,) world Y
         tx = np.floor((col_cx - self._origin_x) / self.cell_m).astype(np.int64)  # col
         ty = np.floor((col_cy - self._origin_y) / self.cell_m).astype(np.int64)  # row
         # In-window mask per axis.
@@ -212,13 +210,13 @@ class RainCoverField:
         if not (mx.any() and my.any()):
             return
         # Restrict to in-window columns; build the (rows, cols) destination.
-        gx_idx = np.where(mx)[0]            # chunk-local x indices in window
-        gy_idx = np.where(my)[0]            # chunk-local y indices in window
-        dst_cols = tx[gx_idx]               # window col per kept x  (→ world +X)
-        dst_rows = ty[gy_idx]               # window row per kept y  (→ world +Y)
+        gx_idx = np.where(mx)[0]  # chunk-local x indices in window
+        gy_idx = np.where(my)[0]  # chunk-local y indices in window
+        dst_cols = tx[gx_idx]  # window col per kept x  (→ world +X)
+        dst_rows = ty[gy_idx]  # window row per kept y  (→ world +Y)
         # top_z is [x, y]; the window is [row=Y, col=X].  Select the kept block
         # and transpose to [y, x] so it lines up with [row, col].
-        block = top_z[np.ix_(gx_idx, gy_idx)].T            # (len(y), len(x))
+        block = top_z[np.ix_(gx_idx, gy_idx)].T  # (len(y), len(x))
         # Scatter-max into the window (multiple chunk-Z layers fold here too).
         np.maximum.at(self.height, (dst_rows[:, None], dst_cols[None, :]), block)
 
@@ -280,8 +278,10 @@ class RainCoverField:
         c1 = int(np.ceil((ox + self._chunk_m - self._origin_x) / self.cell_m))
         r0 = int(np.floor((oy - self._origin_y) / self.cell_m))
         r1 = int(np.ceil((oy + self._chunk_m - self._origin_y) / self.cell_m))
-        c0 = max(c0, 0); c1 = min(c1, self.cells)
-        r0 = max(r0, 0); r1 = min(r1, self.cells)
+        c0 = max(c0, 0)
+        c1 = min(c1, self.cells)
+        r0 = max(r0, 0)
+        r1 = min(r1, self.cells)
         if c1 > c0 and r1 > r0:
             self.height[r0:r1, c0:c1] = OPEN_SKY_Z
 

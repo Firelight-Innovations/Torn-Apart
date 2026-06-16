@@ -21,12 +21,18 @@ if str(_REPO_ROOT) not in sys.path:
 
 from panda3d.core import loadPrcFileData  # noqa: E402
 
-loadPrcFileData("", "window-type offscreen\naudio-library-name null\n"
-                    "notify-level-glgsg error\ngl-debug true")
+loadPrcFileData(
+    "", "window-type offscreen\naudio-library-name null\nnotify-level-glgsg error\ngl-debug true"
+)
 
 from direct.showbase.ShowBase import ShowBase  # noqa: E402
 from panda3d.core import (  # noqa: E402
-    NodePath, SamplerState, Shader, ShaderAttrib, Texture)
+    NodePath,
+    SamplerState,
+    Shader,
+    ShaderAttrib,
+    Texture,
+)
 
 from fire_engine.lighting import glsl  # noqa: E402
 
@@ -60,7 +66,7 @@ def readback(base, t: Texture) -> np.ndarray:
 
 def main() -> None:
     base = ShowBase()
-    geom = make_tex("geom", hdr=False)          # all zeros = all air
+    geom = make_tex("geom", hdr=False)  # all zeros = all air
     source = make_tex("source", hdr=True)
     lit = make_tex("lit", hdr=True)
     src = make_tex("src", hdr=True)
@@ -92,7 +98,8 @@ def main() -> None:
 
     gsg = base.win.get_gsg()
     base.graphicsEngine.dispatch_compute(
-        (N // 4, N // 4, N // 4), np_node.get_attrib(ShaderAttrib), gsg)
+        (N // 4, N // 4, N // 4), np_node.get_attrib(ShaderAttrib), gsg
+    )
 
     out = readback(base, dst)
     # Expected: air-masked (here: full) 3^3 local mean with edge clamping.

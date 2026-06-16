@@ -12,11 +12,11 @@ Covers areas NOT already exercised by tests/test_graphics_config.py:
 NOTE: This file pins CURRENT behaviour. Do NOT fix bugs here; report suspicions
 in comments only.
 """
+
 from __future__ import annotations
 
 import dataclasses
 import warnings
-from pathlib import Path
 
 import pytest
 
@@ -31,6 +31,7 @@ from fire_engine.core.config import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _default() -> Config:
     """Return a fresh default Config (equivalent to Config())."""
     return Config()
@@ -39,6 +40,7 @@ def _default() -> Config:
 # ===========================================================================
 # Derived properties — assert the RELATIONSHIP, not a literal magic number
 # ===========================================================================
+
 
 class TestDerivedProperties:
     def test_chunk_meters_formula(self):
@@ -77,6 +79,7 @@ class TestDerivedProperties:
 # CLAUDE.md / core.md documented invariants at defaults
 # ===========================================================================
 
+
 class TestDocumentedInvariants:
     def test_voxel_size_is_half_meter(self):
         assert _default().voxel_size == 0.5
@@ -100,6 +103,7 @@ class TestDocumentedInvariants:
 # ===========================================================================
 # Frozen-dataclass guarantees
 # ===========================================================================
+
 
 class TestFrozenDataclass:
     def test_attribute_assignment_raises(self):
@@ -133,12 +137,12 @@ class TestFrozenDataclass:
 # Determinism of load_config and resolve_graphics_preset
 # ===========================================================================
 
+
 class TestDeterminism:
     def test_load_config_twice_equal(self, tmp_path):
         """load_config() on the same file must produce equal results."""
         toml = tmp_path / "cfg.toml"
-        toml.write_text("world_seed = 555\n[graphics]\npreset = \"medium\"\n",
-                        encoding="utf-8")
+        toml.write_text('world_seed = 555\n[graphics]\npreset = "medium"\n', encoding="utf-8")
         a = load_config(str(toml))
         b = load_config(str(toml))
         assert a == b
@@ -162,6 +166,7 @@ class TestDeterminism:
 # resolve_graphics_preset edges (not already in test_graphics_config.py)
 # ===========================================================================
 
+
 class TestResolveEdges:
     def test_empty_table_returns_high_preset(self):
         """Empty dict → same as no table → 'high' preset."""
@@ -173,8 +178,8 @@ class TestResolveEdges:
     def test_only_overrides_no_preset_key(self):
         """Table with only gfx_* keys (no 'preset') → base is 'high', overrides win."""
         result = resolve_graphics_preset({"gfx_cloud_steps": 999})
-        assert result["gfx_preset"] == "high"          # default base
-        assert result["gfx_cloud_steps"] == 999        # override wins
+        assert result["gfx_preset"] == "high"  # default base
+        assert result["gfx_cloud_steps"] == 999  # override wins
         # Remaining preset keys still from "high"
         assert result["gfx_bloom_mips"] == GRAPHICS_PRESETS["high"]["gfx_bloom_mips"]
 
@@ -208,8 +213,9 @@ class TestResolveEdges:
             result = resolve_graphics_preset({"preset": "EXTREME"})
         assert result["gfx_preset"] == "high"
         # Pin current behaviour: warning uses the LOWERCASED form of the input.
-        assert any("extreme" in str(w.message) for w in caught), \
+        assert any("extreme" in str(w.message) for w in caught), (
             "expected warning mentioning the (lowercased) bad preset name"
+        )
 
     def test_override_beats_invalid_preset_fallback(self):
         """Even when the preset is invalid (→ 'high'), explicit overrides still win."""
@@ -229,14 +235,13 @@ class TestResolveEdges:
 # (complements test_graphics_config.py's test_load_config_end_to_end)
 # ===========================================================================
 
+
 class TestLoadConfigToml:
     def test_top_level_overrides(self, tmp_path):
         """Top-level keys (not under a table) override the matching Config field."""
         toml = tmp_path / "config.toml"
         toml.write_text(
-            "world_seed = 42\n"
-            "view_distance_chunks = 10\n"
-            "fixed_dt = 0.01\n",
+            "world_seed = 42\nview_distance_chunks = 10\nfixed_dt = 0.01\n",
             encoding="utf-8",
         )
         cfg = load_config(str(toml))
@@ -251,9 +256,7 @@ class TestLoadConfigToml:
         """Keys under [debug] flatten into Config correctly."""
         toml = tmp_path / "config.toml"
         toml.write_text(
-            "[debug]\n"
-            "show_fps = false\n"
-            "show_chunk_borders = true\n",
+            "[debug]\nshow_fps = false\nshow_chunk_borders = true\n",
             encoding="utf-8",
         )
         cfg = load_config(str(toml))
@@ -264,9 +267,7 @@ class TestLoadConfigToml:
         """Keys under [sky] flatten into Config correctly."""
         toml = tmp_path / "config.toml"
         toml.write_text(
-            "[sky]\n"
-            "sky_star_count = 1000\n"
-            "sky_cloud_altitude_m = 200.0\n",
+            "[sky]\nsky_star_count = 1000\nsky_cloud_altitude_m = 200.0\n",
             encoding="utf-8",
         )
         cfg = load_config(str(toml))
@@ -277,8 +278,7 @@ class TestLoadConfigToml:
         """Extra TOML keys not in Config must be silently dropped (no error)."""
         toml = tmp_path / "config.toml"
         toml.write_text(
-            "totally_unknown_key = 999\n"
-            "world_seed = 77\n",
+            "totally_unknown_key = 999\nworld_seed = 77\n",
             encoding="utf-8",
         )
         cfg = load_config(str(toml))
@@ -305,6 +305,7 @@ class TestLoadConfigToml:
 # ===========================================================================
 # Key field default types and values
 # ===========================================================================
+
 
 class TestDefaultFieldTypes:
     def test_world_seed_is_int(self):

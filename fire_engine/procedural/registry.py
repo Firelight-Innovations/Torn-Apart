@@ -50,7 +50,7 @@ from typing import Any
 
 from fire_engine.procedural.defs import ProceduralDef
 
-__all__ = ["register", "get", "clear_cache", "reset_registry"]
+__all__ = ["clear_cache", "get", "register", "reset_registry"]
 
 # ---------------------------------------------------------------------------
 # Module-level state
@@ -66,6 +66,7 @@ _cache: dict[tuple[str, int, str], Any] = {}
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _params_digest(params: dict) -> str:
     """
@@ -95,13 +96,15 @@ def _current_world_seed() -> int:
     """Return the current world seed from ``core.rng`` module state."""
     # Import here to avoid a circular import at module init time and to
     # always read the *current* value (which changes on set_world_seed).
-    from fire_engine.core import rng as _rng  # noqa: PLC0415
+    from fire_engine.core import rng as _rng
+
     return _rng._world_seed
 
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def register(def_instance: ProceduralDef) -> None:
     """
@@ -140,9 +143,7 @@ def register(def_instance: ProceduralDef) -> None:
         register(MyDef())
     """
     if not isinstance(def_instance, ProceduralDef):
-        raise TypeError(
-            f"register() expects a ProceduralDef instance, got {type(def_instance)}"
-        )
+        raise TypeError(f"register() expects a ProceduralDef instance, got {type(def_instance)}")
     name: str = def_instance.name
     # Evict stale cache entries for this name (any seed/params combo).
     keys_to_drop = [k for k in _cache if k[0] == name]
@@ -207,7 +208,8 @@ def get(name: str, **params) -> Any:
         return _cache[cache_key]
 
     # Cache miss — generate fresh.
-    from fire_engine.core.rng import for_domain  # noqa: PLC0415
+    from fire_engine.core.rng import for_domain
+
     rng = for_domain("procedural", name, p_digest)
     result = _registry[name].generate(rng, **params)
     _cache[cache_key] = result

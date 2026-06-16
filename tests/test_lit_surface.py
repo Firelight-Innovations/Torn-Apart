@@ -64,10 +64,7 @@ _LIBRARY_FUNCTIONS = [
     "vec3 litFinish(",
 ]
 
-_CANONICAL_SAMPLE = (
-    "void sampleCascades(vec3 wp, out vec3 radiance, out vec3 vis, "
-    "out float occ)"
-)
+_CANONICAL_SAMPLE = "void sampleCascades(vec3 wp, out vec3 radiance, out vec3 vis, out float occ)"
 
 
 def _composed(name: str) -> str:
@@ -119,13 +116,17 @@ class TestLibraryPins:
         lib = _raw("lit_surface.glsl")
         guard = lib.index("#ifdef LIT_REFINE")
         end = lib.index("#endif", guard)
-        for symbol in ("uniform int   u_num_boxes",
-                       "uniform vec4  u_box_min",
-                       "uniform vec4  u_box_max",
-                       "uniform float u_penumbra_tan",
-                       "uniform float u_refine",
-                       "float occCell(", "float boxVis(",
-                       "float refineVis(", "float refineVisSoft("):
+        for symbol in (
+            "uniform int   u_num_boxes",
+            "uniform vec4  u_box_min",
+            "uniform vec4  u_box_max",
+            "uniform float u_penumbra_tan",
+            "uniform float u_refine",
+            "float occCell(",
+            "float boxVis(",
+            "float refineVis(",
+            "float refineVisSoft(",
+        ):
             pos = lib.index(symbol)
             assert guard < pos < end, f"{symbol} outside LIT_REFINE guard"
 
@@ -158,13 +159,13 @@ class TestSamplerBudget:
 
 class TestTierSelection:
     def test_refine_consumers_define_lit_refine(self):
-        for name in ("terrain.frag", "grass.frag", "flora.frag", "tree.frag",
-                     "building.frag"):
+        for name in ("terrain.frag", "grass.frag", "flora.frag", "tree.frag", "building.frag"):
             raw = _raw(name)
             assert "#define LIT_REFINE 1" in raw, name
             # The define must precede the include or the guard never fires.
-            assert raw.index("#define LIT_REFINE 1") \
-                < raw.index('//#include "lit_surface.glsl"'), name
+            assert raw.index("#define LIT_REFINE 1") < raw.index('//#include "lit_surface.glsl"'), (
+                name
+            )
 
     def test_cheap_fragments_skip_lit_refine(self):
         for name in _CHEAP_FRAGMENTS:

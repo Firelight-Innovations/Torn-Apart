@@ -46,7 +46,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from fire_engine.core.math3d import Vec3, Quat
+from fire_engine.core.math3d import Quat, Vec3
 
 if TYPE_CHECKING:
     pass  # no circular imports needed currently
@@ -55,6 +55,7 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 # Space enum
 # ---------------------------------------------------------------------------
+
 
 class Space(Enum):
     """
@@ -68,13 +69,15 @@ class Space(Enum):
         t.translate(Vec3(0, 1, 0), relative_to=Space.SELF)   # move 1 m forward
         t.translate(Vec3(0, 1, 0), relative_to=Space.WORLD)  # move 1 m along world +Y
     """
-    SELF  = auto()
+
+    SELF = auto()
     WORLD = auto()
 
 
 # ---------------------------------------------------------------------------
 # 4×4 matrix helpers (pure numpy, float64 internally for precision)
 # ---------------------------------------------------------------------------
+
 
 def _trs_matrix(pos: Vec3, rot: Quat, scale: Vec3) -> np.ndarray:
     """
@@ -96,12 +99,15 @@ def _trs_matrix(pos: Vec3, rot: Quat, scale: Vec3) -> np.ndarray:
     sx, sy, sz = float(scale.x), float(scale.y), float(scale.z)
 
     # Rotation matrix from quaternion
-    m = np.array([
-        [1 - 2*(y*y + z*z),     2*(x*y - w*z),     2*(x*z + w*y),  0.0],
-        [    2*(x*y + w*z), 1 - 2*(x*x + z*z),     2*(y*z - w*x),  0.0],
-        [    2*(x*z - w*y),     2*(y*z + w*x), 1 - 2*(x*x + y*y),  0.0],
-        [              0.0,               0.0,               0.0,  1.0],
-    ], dtype=np.float64)
+    m = np.array(
+        [
+            [1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y), 0.0],
+            [2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x), 0.0],
+            [2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y), 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ],
+        dtype=np.float64,
+    )
 
     # Apply scale to rotation columns
     m[0, :3] *= sx
@@ -119,6 +125,7 @@ def _trs_matrix(pos: Vec3, rot: Quat, scale: Vec3) -> np.ndarray:
 # ---------------------------------------------------------------------------
 # Transform
 # ---------------------------------------------------------------------------
+
 
 class Transform:
     """
@@ -155,23 +162,23 @@ class Transform:
     """
 
     __slots__ = (
+        "_children",
+        "_dirty",
         "_local_position",
         "_local_rotation",
         "_local_scale",
         "_parent",
-        "_children",
-        "_world_matrix",   # (4,4) float64 or None when dirty
-        "_dirty",
-        "game_object",     # back-reference set by GameObject after construction
+        "_world_matrix",  # (4,4) float64 or None when dirty
+        "game_object",  # back-reference set by GameObject after construction
     )
 
     def __init__(self) -> None:
         self._local_position: Vec3 = Vec3(0.0, 0.0, 0.0)
         self._local_rotation: Quat = Quat.identity()
-        self._local_scale:    Vec3 = Vec3(1.0, 1.0, 1.0)
+        self._local_scale: Vec3 = Vec3(1.0, 1.0, 1.0)
 
-        self._parent:   Transform | None = None
-        self._children: list[Transform]  = []
+        self._parent: Transform | None = None
+        self._children: list[Transform] = []
 
         self._world_matrix: np.ndarray | None = None
         self._dirty: bool = True
@@ -183,18 +190,18 @@ class Transform:
     # ------------------------------------------------------------------
 
     @property
-    def parent(self) -> "Transform | None":
+    def parent(self) -> Transform | None:
         """Parent transform, or None if this is a root transform."""
         return self._parent
 
     @property
-    def children(self) -> tuple["Transform", ...]:
+    def children(self) -> tuple[Transform, ...]:
         """Read-only tuple of immediate child transforms."""
         return tuple(self._children)
 
     def set_parent(
         self,
-        p: "Transform | None",
+        p: Transform | None,
         keep_world: bool = True,
     ) -> None:
         """
@@ -421,7 +428,7 @@ class Transform:
             # camera.forward ≈ direction toward (10,20,0)
         """
         world_pos = self.position
-        fwd = (target - world_pos)
+        fwd = target - world_pos
         if fwd.length < 1e-8:
             return  # target coincides with self — no change
         fwd = fwd.normalized()
@@ -441,7 +448,7 @@ class Transform:
         if right.length < 1e-8:
             return
         right = right.normalized()
-        true_up = fwd.cross(right)   # fwd × right = -up... need right × fwd = up? Let's use:
+        true_up = fwd.cross(right)  # fwd × right = -up... need right × fwd = up? Let's use:
         # Actually: right × fwd gives the "down" so:
         # In RH system with fwd=+Y, right=+X: up = right × fwd = +X × +Y = +Z. Correct.
         true_up = (right.cross(fwd)).normalized()
@@ -452,11 +459,14 @@ class Transform:
         #   col 1 = fwd     (where local +Y goes)
         #   col 2 = true_up (where local +Z goes)
         # Row-major storage (numpy default), so rows = destination per column:
-        m3 = np.array([
-            [right.x,   fwd.x,   true_up.x],
-            [right.y,   fwd.y,   true_up.y],
-            [right.z,   fwd.z,   true_up.z],
-        ], dtype=np.float64)
+        m3 = np.array(
+            [
+                [right.x, fwd.x, true_up.x],
+                [right.y, fwd.y, true_up.y],
+                [right.z, fwd.z, true_up.z],
+            ],
+            dtype=np.float64,
+        )
 
         # Convert rotation matrix to quaternion
         # Using Shepperd's method
@@ -536,6 +546,7 @@ class Transform:
 # ---------------------------------------------------------------------------
 # Helper: 3×3 rotation matrix → Quat  (Shepperd's method)
 # ---------------------------------------------------------------------------
+
 
 def _mat3_to_quat(m: np.ndarray) -> Quat:
     """

@@ -30,45 +30,45 @@ See ``docs/systems/terrain.md`` for the full contract (padding rule,
 light_sampler contract, chunk_provider contract, Saveable delta format).
 """
 
+from fire_engine.world.terrain.brush import (
+    BoxBrush,
+    BrushMode,
+    CylinderBrush,
+    SphereBrush,
+    apply_brush,
+)
 from fire_engine.world.terrain.chunk import Chunk
+from fire_engine.world.terrain.chunk_manager import ChunkManager
 from fire_engine.world.terrain.generation import (
     MATERIAL_DIRT,
     MATERIAL_GRASS,
     generate_chunk,
     surface_height,
 )
-from fire_engine.world.terrain.meshing import build_mesh, MeshArrays, WORLD_FLOOR_SOLID
+from fire_engine.world.terrain.meshing import WORLD_FLOOR_SOLID, MeshArrays, build_mesh
+from fire_engine.world.terrain.rain_cover import OPEN_SKY_Z, RainCoverField
+from fire_engine.world.terrain.raycast import Hit, raycast_voxel
 from fire_engine.world.terrain.surface_nets import NEIGHBOR_OFFSETS_26, build_mesh_faceted
-from fire_engine.world.terrain.brush import (
-    SphereBrush,
-    BoxBrush,
-    CylinderBrush,
-    BrushMode,
-    apply_brush,
-)
-from fire_engine.world.terrain.raycast import raycast_voxel, Hit
-from fire_engine.world.terrain.chunk_manager import ChunkManager
-from fire_engine.world.terrain.rain_cover import RainCoverField, OPEN_SKY_Z
 
 __all__ = [
-    "Chunk",
-    "generate_chunk",
-    "surface_height",
     "MATERIAL_DIRT",
     "MATERIAL_GRASS",
+    "NEIGHBOR_OFFSETS_26",
+    "OPEN_SKY_Z",
+    "WORLD_FLOOR_SOLID",
+    "BoxBrush",
+    "BrushMode",
+    "Chunk",
+    "ChunkManager",
+    "CylinderBrush",
+    "Hit",
+    "MeshArrays",
+    "RainCoverField",
+    "SphereBrush",
+    "apply_brush",
     "build_mesh",
     "build_mesh_faceted",
-    "NEIGHBOR_OFFSETS_26",
-    "MeshArrays",
-    "WORLD_FLOOR_SOLID",
-    "SphereBrush",
-    "BoxBrush",
-    "CylinderBrush",
-    "BrushMode",
-    "apply_brush",
+    "generate_chunk",
     "raycast_voxel",
-    "Hit",
-    "ChunkManager",
-    "RainCoverField",
-    "OPEN_SKY_Z",
+    "surface_height",
 ]

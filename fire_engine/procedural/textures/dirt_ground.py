@@ -47,7 +47,7 @@ import numpy as np
 from fire_engine.procedural.defs import register_def
 from fire_engine.procedural.textures.base import ProceduralTextureDef, pixel_noise
 
-__all__ = ["DirtGroundDef", "DIRT_PALETTE", "DIRT_THRESHOLDS"]
+__all__ = ["DIRT_PALETTE", "DIRT_THRESHOLDS", "DirtGroundDef"]
 
 
 # ---------------------------------------------------------------------------
@@ -58,14 +58,17 @@ __all__ = ["DirtGroundDef", "DIRT_PALETTE", "DIRT_THRESHOLDS"]
 # near-black soil shadows → dark earthy brown → sandy mid-tones →
 # pale dust highlights.  Small dark clods read as index 0/1.
 
-_DIRT_PALETTE = np.array([
-    ( 28,  18,   8),   # 0 — dark clod / deep shadow (near-black soil)
-    ( 55,  38,  18),   # 1 — dark earthy brown (shadow clod edge)
-    ( 88,  62,  32),   # 2 — mid earthy brown (dominant base)
-    (128,  95,  52),   # 3 — sandy brown mid-tone
-    (162, 128,  75),   # 4 — light sandy tan
-    (192, 162, 102),   # 5 — pale dust / light highlight
-], dtype=np.uint8)
+_DIRT_PALETTE = np.array(
+    [
+        (28, 18, 8),  # 0 — dark clod / deep shadow (near-black soil)
+        (55, 38, 18),  # 1 — dark earthy brown (shadow clod edge)
+        (88, 62, 32),  # 2 — mid earthy brown (dominant base)
+        (128, 95, 52),  # 3 — sandy brown mid-tone
+        (162, 128, 75),  # 4 — light sandy tan
+        (192, 162, 102),  # 5 — pale dust / light highlight
+    ],
+    dtype=np.uint8,
+)
 
 # 5 thresholds divide [0,1] into 6 buckets.
 _THRESHOLDS = np.array([0.10, 0.24, 0.42, 0.60, 0.80], dtype=np.float32)
@@ -144,7 +147,7 @@ class DirtGroundDef(ProceduralTextureDef):
 
     name = "dirt_ground"
 
-    DEFAULT_WIDTH  = 64
+    DEFAULT_WIDTH = 64
     DEFAULT_HEIGHT = 64
 
     def generate(self, rng: np.random.Generator, **params) -> np.ndarray:
@@ -165,7 +168,7 @@ class DirtGroundDef(ProceduralTextureDef):
         numpy.ndarray
             Shape ``(H, W, 4)``, dtype ``uint8``.
         """
-        W = int(params.get("width",  self.DEFAULT_WIDTH))
+        W = int(params.get("width", self.DEFAULT_WIDTH))
         H = int(params.get("height", self.DEFAULT_HEIGHT))
         shape = (H, W)
 

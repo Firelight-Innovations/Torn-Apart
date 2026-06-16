@@ -4,6 +4,7 @@ The bake (``fire_engine.world.sky.cloud_noise``) feeds the volumetric cloud raym
 It must be deterministic (same seed → byte-identical, so worlds reproduce) and
 tileable (no seam as the field scrolls with the wind).  Pure numpy / headless.
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -11,10 +12,9 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 from fire_engine.core.rng import set_world_seed
-from fire_engine.world.sky.cloud_noise import bake_shape_noise, bake_detail_noise
+from fire_engine.world.sky.cloud_noise import bake_detail_noise, bake_shape_noise
 
 _ROOT = Path(__file__).resolve().parents[1]
 
@@ -62,15 +62,15 @@ def test_tileable_no_seam():
         seam = np.abs(np.take(r, 0, axis) - np.take(r, -1, axis)).mean()
         # A real seam would be many times the interior step; tileable ≈ interior.
         assert seam < 4.0 * interior + 1.0, (
-            f"axis {axis}: seam {seam:.2f} vs interior {interior:.2f}")
+            f"axis {axis}: seam {seam:.2f} vs interior {interior:.2f}"
+        )
 
 
 def test_coverage_monotonic():
     """The shader's coverage remap (R > 1-coverage) must be monotonic."""
     set_world_seed(1337)
     r = bake_shape_noise(64)[..., 0].astype(np.float32) / 255.0
-    fracs = [float((r > (1.0 - cov)).mean())
-             for cov in (0.1, 0.3, 0.5, 0.7, 0.9)]
+    fracs = [float((r > (1.0 - cov)).mean()) for cov in (0.1, 0.3, 0.5, 0.7, 0.9)]
     assert fracs == sorted(fracs), fracs
     assert fracs[-1] > fracs[0]
 
@@ -86,8 +86,9 @@ def test_cross_process_determinism():
     )
     outs = []
     for _ in range(2):
-        p = subprocess.run([sys.executable, "-c", probe], cwd=str(_ROOT),
-                           capture_output=True, text=True)
+        p = subprocess.run(
+            [sys.executable, "-c", probe], cwd=str(_ROOT), capture_output=True, text=True
+        )
         assert p.returncode == 0, p.stderr
         outs.append(p.stdout.strip())
     assert outs[0] == outs[1] and outs[0] != ""

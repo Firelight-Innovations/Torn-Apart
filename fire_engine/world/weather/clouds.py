@@ -66,12 +66,12 @@ from fire_engine.core.config import Config
 from fire_engine.world.weather.cells import Regime
 
 __all__ = [
-    "CloudGenus",
-    "CloudBand",
-    "CloudLayers",
     "BAND_HIGH",
-    "BAND_MID",
     "BAND_LOW",
+    "BAND_MID",
+    "CloudBand",
+    "CloudGenus",
+    "CloudLayers",
     "classify_genus",
     "cloud_layers",
 ]
@@ -123,14 +123,14 @@ BAND_LOW: int = int(CloudBand.LOW)
 
 #: Which altitude band each genus renders in.
 BAND_OF: dict[CloudGenus, CloudBand] = {
-    CloudGenus.CIRRUS:        CloudBand.HIGH,
-    CloudGenus.CIRROSTRATUS:  CloudBand.HIGH,
-    CloudGenus.ALTOCUMULUS:   CloudBand.MID,
-    CloudGenus.ALTOSTRATUS:   CloudBand.MID,
+    CloudGenus.CIRRUS: CloudBand.HIGH,
+    CloudGenus.CIRROSTRATUS: CloudBand.HIGH,
+    CloudGenus.ALTOCUMULUS: CloudBand.MID,
+    CloudGenus.ALTOSTRATUS: CloudBand.MID,
     CloudGenus.STRATOCUMULUS: CloudBand.LOW,
-    CloudGenus.STRATUS:       CloudBand.LOW,
-    CloudGenus.CUMULUS:       CloudBand.LOW,
-    CloudGenus.CUMULONIMBUS:  CloudBand.LOW,
+    CloudGenus.STRATUS: CloudBand.LOW,
+    CloudGenus.CUMULUS: CloudBand.LOW,
+    CloudGenus.CUMULONIMBUS: CloudBand.LOW,
 }
 
 
@@ -258,8 +258,8 @@ def classify_genus(
     low[cov > 0.18] = CloudGenus.CUMULUS
     strato = (cov > 0.55) | (frontal & (cov > 0.45))
     low[strato] = CloudGenus.STRATOCUMULUS
-    low[pre > 0.05] = CloudGenus.STRATUS                     # rain layer
-    low[pre > 0.45] = CloudGenus.CUMULONIMBUS               # storm tower
+    low[pre > 0.05] = CloudGenus.STRATUS  # rain layer
+    low[pre > 0.45] = CloudGenus.CUMULONIMBUS  # storm tower
 
     # --- mid band ---
     mid = np.empty(cov.shape, dtype=object)
@@ -272,23 +272,28 @@ def classify_genus(
     high[cov > 0.55] = CloudGenus.CIRROSTRATUS
 
     if scalar:
-        return (CloudGenus(high.item()), CloudGenus(mid.item()),
-                CloudGenus(low.item()))
+        return (CloudGenus(high.item()), CloudGenus(mid.item()), CloudGenus(low.item()))
     return high, mid, low
 
 
 def _band_altitudes(config: Config) -> tuple[np.ndarray, np.ndarray]:
     """Per-band (base_altitude_m, thickness_m) arrays from config, len-3."""
-    base = np.array([
-        float(config.cloud_genera_high_alt_m),
-        float(config.cloud_genera_mid_alt_m),
-        float(config.cloud_genera_low_alt_m),
-    ], dtype=np.float64)
-    thick = np.array([
-        float(config.cloud_genera_high_thick_m),
-        float(config.cloud_genera_mid_thick_m),
-        float(config.cloud_genera_low_thick_m),
-    ], dtype=np.float64)
+    base = np.array(
+        [
+            float(config.cloud_genera_high_alt_m),
+            float(config.cloud_genera_mid_alt_m),
+            float(config.cloud_genera_low_alt_m),
+        ],
+        dtype=np.float64,
+    )
+    thick = np.array(
+        [
+            float(config.cloud_genera_high_thick_m),
+            float(config.cloud_genera_mid_thick_m),
+            float(config.cloud_genera_low_thick_m),
+        ],
+        dtype=np.float64,
+    )
     return base, thick
 
 
@@ -356,11 +361,14 @@ def cloud_layers(
     w_mid = float(config.cloud_genera_mid_cov_weight)
     floor_high = float(config.cloud_genera_high_cov_floor)
     den_high = float(config.cloud_genera_high_density)
-    detail = np.array([
-        float(config.cloud_genera_high_detail_scale),
-        float(config.cloud_genera_mid_detail_scale),
-        float(config.cloud_genera_low_detail_scale),
-    ], dtype=np.float64)
+    detail = np.array(
+        [
+            float(config.cloud_genera_high_detail_scale),
+            float(config.cloud_genera_mid_detail_scale),
+            float(config.cloud_genera_low_detail_scale),
+        ],
+        dtype=np.float64,
+    )
 
     # Use scalar smoothsteps (the array helper works fine on 0-d too).
     def ss(x: float, lo: float, hi: float) -> float:
@@ -372,7 +380,7 @@ def cloud_layers(
     low_cov = float(np.clip(cov + 0.35 * pre, 0.0, 1.0))
     low_den = float(np.clip(den + 0.25 * pre, 0.0, 1.0))
     # CUMULONIMBUS towers: deepen + darken the slab so it reads as a wall.
-    cb = ss(pre, 0.30, 0.60)                       # 0 → 1 as it becomes a storm
+    cb = ss(pre, 0.30, 0.60)  # 0 → 1 as it becomes a storm
     low_thick = thick[BAND_LOW] * (1.0 + 0.8 * cb)
     low_den = float(np.clip(low_den + 0.10 * cb, 0.0, 1.0))
 

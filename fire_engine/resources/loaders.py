@@ -34,7 +34,8 @@ Usage
 
 from __future__ import annotations
 
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 # ---------------------------------------------------------------------------
 # Public type alias
@@ -49,6 +50,7 @@ LoaderCallable = Callable[[str], Any]
 # ---------------------------------------------------------------------------
 # Error
 # ---------------------------------------------------------------------------
+
 
 class UnknownResourceFormatError(Exception):
     """
@@ -75,7 +77,7 @@ class UnknownResourceFormatError(Exception):
     """
 
     def __init__(self, path: str, suffix: str) -> None:
-        self.path   = path
+        self.path = path
         self.suffix = suffix
         super().__init__(
             f"No loader registered for suffix {suffix!r} "
@@ -92,18 +94,18 @@ class UnknownResourceFormatError(Exception):
 # Module-level dispatch table: suffix (lowercase, with dot) → loader callable.
 # Entries are initialised to None for known suffixes to distinguish
 # "recognised but not yet registered" from "completely unknown".
-_LOADERS: dict[str, Optional[LoaderCallable]] = {
+_LOADERS: dict[str, LoaderCallable | None] = {
     # --- 3D models (Panda3D loader registered by world/resource_adapter.py) ---
-    ".egg":  None,
-    ".bam":  None,
+    ".egg": None,
+    ".bam": None,
     ".gltf": None,
-    ".glb":  None,
+    ".glb": None,
     # --- Audio (Panda3D loader registered by world/resource_adapter.py) ---
-    ".ogg":  None,
-    ".wav":  None,
+    ".ogg": None,
+    ".wav": None,
     # --- Static hand-crafted textures (Pillow/Panda3D registered at boot) ---
-    ".png":  None,
-    ".jpg":  None,
+    ".png": None,
+    ".jpg": None,
 }
 
 

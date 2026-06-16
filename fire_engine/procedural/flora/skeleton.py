@@ -54,7 +54,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-__all__ = ["TreeSkeleton", "SkeletonBuilder", "validate_skeleton"]
+__all__ = ["SkeletonBuilder", "TreeSkeleton", "validate_skeleton"]
 
 _UP = np.array([0.0, 0.0, 1.0], dtype=np.float32)
 _TWO_PI = 2.0 * math.pi
@@ -114,8 +114,7 @@ class TreeSkeleton:
         A segment's start sway is its parent's end sway (0 for roots), so
         sway is continuous along every branch path.
         """
-        s = np.where(self.parent >= 0,
-                     self.sway[np.maximum(self.parent, 0)], 0.0)
+        s = np.where(self.parent >= 0, self.sway[np.maximum(self.parent, 0)], 0.0)
         return s.astype(np.float32)
 
     def tip_ids(self, ids: np.ndarray | None = None) -> np.ndarray:
@@ -150,8 +149,9 @@ def _frames(axes: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     ``u = normalize(cross(axis, up))`` with an X-axis fallback for
     near-vertical axes; ``v = cross(axis, u)``.  Deterministic, vectorized.
     """
-    ref = np.where(np.abs(axes[:, 2:3]) < 0.94,
-                   _UP[None, :], np.array([[1.0, 0.0, 0.0]], dtype=np.float32))
+    ref = np.where(
+        np.abs(axes[:, 2:3]) < 0.94, _UP[None, :], np.array([[1.0, 0.0, 0.0]], dtype=np.float32)
+    )
     u = _normalize(np.cross(axes, ref))
     v = _normalize(np.cross(axes, u))
     return u, v
@@ -219,7 +219,7 @@ class SkeletonBuilder:
         self._r0: list[np.ndarray] = []
         self._r1: list[np.ndarray] = []
         self._depth: list[np.ndarray] = []
-        self._chain_len: list[np.ndarray] = []   # full length of owning chain
+        self._chain_len: list[np.ndarray] = []  # full length of owning chain
         self._count: int = 0
         self._max_z: float = 1e-6
 
@@ -247,9 +247,16 @@ class SkeletonBuilder:
     # Growth API (what species scripts call)
     # ------------------------------------------------------------------
 
-    def trunk(self, *, height_m: float, base_radius_m: float,
-              tip_radius_m: float | None = None, segments: int = 3,
-              wobble_m: float = 0.1, lean_rad: float = 0.0) -> np.ndarray:
+    def trunk(
+        self,
+        *,
+        height_m: float,
+        base_radius_m: float,
+        tip_radius_m: float | None = None,
+        segments: int = 3,
+        wobble_m: float = 0.1,
+        lean_rad: float = 0.0,
+    ) -> np.ndarray:
         """
         Grow the trunk: ``segments`` stacked tapering segments from the origin.
 
@@ -286,44 +293,49 @@ class SkeletonBuilder:
         z = np.linspace(0.0, float(height_m), n + 1, dtype=np.float32)
         t = z / max(float(height_m), 1e-6)
         lean_yaw = float(self.rng.uniform(0.0, _TWO_PI))
-        lean_xy = np.array([math.cos(lean_yaw), math.sin(lean_yaw)],
-                           dtype=np.float32) * math.tan(float(lean_rad))
-        wob = self.rng.uniform(-wobble_m, wobble_m, size=(n + 1, 2)) \
-            .astype(np.float32) * t[:, None]
+        lean_xy = np.array([math.cos(lean_yaw), math.sin(lean_yaw)], dtype=np.float32) * math.tan(
+            float(lean_rad)
+        )
+        wob = self.rng.uniform(-wobble_m, wobble_m, size=(n + 1, 2)).astype(np.float32) * t[:, None]
         nodes = np.empty((n + 1, 3), dtype=np.float32)
         nodes[:, 0:2] = wob + lean_xy[None, :] * z[:, None]
-        nodes[0, 0:2] = 0.0                      # base exactly at the origin
+        nodes[0, 0:2] = 0.0  # base exactly at the origin
         nodes[:, 2] = z
 
-        radii = (float(base_radius_m)
-                 + (tip_r - float(base_radius_m)) * t).astype(np.float32)
+        radii = (float(base_radius_m) + (tip_r - float(base_radius_m)) * t).astype(np.float32)
         # Chain linkage: segment k's parent is segment k-1; the base is a root.
-        parent = np.arange(-1 + self._count, n - 1 + self._count,
-                           dtype=np.int32)
+        parent = np.arange(-1 + self._count, n - 1 + self._count, dtype=np.int32)
         parent[0] = -1
         return self._append(
             parent=parent,
-            start=nodes[:-1], end=nodes[1:],
-            r0=radii[:-1], r1=radii[1:],
+            start=nodes[:-1],
+            end=nodes[1:],
+            r0=radii[:-1],
+            r1=radii[1:],
             depth=np.zeros(n, dtype=np.int32),
-            chain_len=np.full(n, float(height_m), dtype=np.float32))
+            chain_len=np.full(n, float(height_m), dtype=np.float32),
+        )
 
-    def branches(self, parents: np.ndarray, *,
-                 count: tuple[int, int] = (2, 4),
-                 t_range: tuple[float, float] = (0.45, 0.95),
-                 pitch_set: tuple[float, ...] = (math.pi / 2.0,),
-                 pitch_jitter_rad: float = 0.12,
-                 yaw_mode: str = "spiral",
-                 yaw_jitter_rad: float = 0.3,
-                 length_ratio: tuple[float, float] = (0.45, 0.7),
-                 length_m: tuple[float, float] | None = None,
-                 length_scale_by_height: tuple[float, float] = (1.0, 1.0),
-                 radius_ratio: float = 0.55,
-                 min_radius_m: float = 0.02,
-                 upturn_rad: float = 0.0,
-                 droop_rad: float = 0.0,
-                 bend_rad: float = 0.15,
-                 segments: int = 1) -> np.ndarray:
+    def branches(
+        self,
+        parents: np.ndarray,
+        *,
+        count: tuple[int, int] = (2, 4),
+        t_range: tuple[float, float] = (0.45, 0.95),
+        pitch_set: tuple[float, ...] = (math.pi / 2.0,),
+        pitch_jitter_rad: float = 0.12,
+        yaw_mode: str = "spiral",
+        yaw_jitter_rad: float = 0.3,
+        length_ratio: tuple[float, float] = (0.45, 0.7),
+        length_m: tuple[float, float] | None = None,
+        length_scale_by_height: tuple[float, float] = (1.0, 1.0),
+        radius_ratio: float = 0.55,
+        min_radius_m: float = 0.02,
+        upturn_rad: float = 0.0,
+        droop_rad: float = 0.0,
+        bend_rad: float = 0.15,
+        segments: int = 1,
+    ) -> np.ndarray:
         """
         Sprout child branches from points along the *parents* segments.
 
@@ -404,23 +416,21 @@ class SkeletonBuilder:
         B = int(counts.sum())
         if B == 0:
             return np.empty(0, dtype=np.int32)
-        pidx = np.repeat(parents, counts)                       # (B,)
+        pidx = np.repeat(parents, counts)  # (B,)
         # Ordinal of each branch within its parent (for spiral / opposite).
-        ordinal = (np.arange(B)
-                   - np.repeat(np.cumsum(counts) - counts, counts))
+        ordinal = np.arange(B) - np.repeat(np.cumsum(counts) - counts, counts)
 
         # --- attachment points ON the parent segment ----------------------
         t = rng.uniform(t_range[0], t_range[1], B).astype(np.float32)
         p_start, p_end = all_start[pidx], all_end[pidx]
         attach = p_start + (p_end - p_start) * t[:, None]
         p_axis = _normalize(p_end - p_start)
-        r_attach = (all_r0[pidx]
-                    + (all_r1[pidx] - all_r0[pidx]) * t).astype(np.float32)
+        r_attach = (all_r0[pidx] + (all_r1[pidx] - all_r0[pidx]) * t).astype(np.float32)
 
         # --- branch directions: pitch from the angle set, yaw by mode -----
-        pitch = (np.asarray(pitch_set, dtype=np.float64)
-                 [rng.integers(0, len(pitch_set), B)]
-                 + rng.uniform(-pitch_jitter_rad, pitch_jitter_rad, B))
+        pitch = np.asarray(pitch_set, dtype=np.float64)[
+            rng.integers(0, len(pitch_set), B)
+        ] + rng.uniform(-pitch_jitter_rad, pitch_jitter_rad, B)
         if yaw_mode == "spiral":
             yaw0 = rng.uniform(0.0, _TWO_PI, parents.size)
             yaw = np.repeat(yaw0, counts) + ordinal * _GOLDEN_ANGLE
@@ -430,9 +440,7 @@ class SkeletonBuilder:
         elif yaw_mode == "random":
             yaw = rng.uniform(0.0, _TWO_PI, B)
         else:
-            raise ValueError(
-                f"yaw_mode must be 'spiral', 'opposite' or 'random', "
-                f"got {yaw_mode!r}")
+            raise ValueError(f"yaw_mode must be 'spiral', 'opposite' or 'random', got {yaw_mode!r}")
         yaw = yaw + rng.uniform(-yaw_jitter_rad, yaw_jitter_rad, B)
 
         u, v = _frames(p_axis)
@@ -440,25 +448,22 @@ class SkeletonBuilder:
         sy, cy = np.sin(yaw)[:, None], np.cos(yaw)[:, None]
         dirs = _normalize(p_axis * cp + (u * cy + v * sy) * sp)
         if upturn_rad or droop_rad:
-            dirs = _rotate_toward_up(
-                dirs, np.full(B, float(upturn_rad) - float(droop_rad)))
+            dirs = _rotate_toward_up(dirs, np.full(B, float(upturn_rad) - float(droop_rad)))
 
         # --- lengths -------------------------------------------------------
         if length_m is not None:
             length = rng.uniform(length_m[0], length_m[1], B)
         else:
-            length = (rng.uniform(length_ratio[0], length_ratio[1], B)
-                      * all_chain[pidx])
+            length = rng.uniform(length_ratio[0], length_ratio[1], B) * all_chain[pidx]
         h_norm = np.clip(attach[:, 2] / self._max_z, 0.0, 1.0)
         ls0, ls1 = length_scale_by_height
         length = (length * (ls0 + (ls1 - ls0) * h_norm)).astype(np.float32)
 
         # --- radii ----------------------------------------------------------
         r_start = np.minimum(
-            np.maximum(r_attach * float(radius_ratio), min_radius_m),
-            r_attach).astype(np.float32)
-        r_tip = np.maximum(r_start * 0.3, min_radius_m * 0.75) \
-            .astype(np.float32)
+            np.maximum(r_attach * float(radius_ratio), min_radius_m), r_attach
+        ).astype(np.float32)
+        r_tip = np.maximum(r_start * 0.3, min_radius_m * 0.75).astype(np.float32)
 
         # --- emit sub-segments (fixed small loop over `segments`) ----------
         n_sub = max(1, int(segments))
@@ -471,17 +476,22 @@ class SkeletonBuilder:
         for k in range(n_sub):
             if k > 0 and bend_rad > 0.0:
                 dev = rng.uniform(-1.0, 1.0, (B, 3)).astype(np.float32)
-                cur_dir = _normalize(cur_dir
-                                     + dev * math.tan(float(bend_rad)))
+                cur_dir = _normalize(cur_dir + dev * math.tan(float(bend_rad)))
             cur_end = cur_start + cur_dir * seg_len
             f0 = k / n_sub
             f1 = (k + 1) / n_sub
             seg_r0 = r_start + (r_tip - r_start) * f0
             seg_r1 = r_start + (r_tip - r_start) * f1
-            par = (pidx.astype(np.int32) if prev_ids is None else prev_ids)
-            ids = self._append(parent=par, start=cur_start, end=cur_end,
-                               r0=seg_r0, r1=seg_r1, depth=depth,
-                               chain_len=length)
+            par = pidx.astype(np.int32) if prev_ids is None else prev_ids
+            ids = self._append(
+                parent=par,
+                start=cur_start,
+                end=cur_end,
+                r0=seg_r0,
+                r1=seg_r1,
+                depth=depth,
+                chain_len=length,
+            )
             ids_out.append(ids)
             prev_ids = ids
             cur_start = cur_end
@@ -502,8 +512,7 @@ class SkeletonBuilder:
         TreeSkeleton
         """
         if self._count == 0:
-            raise ValueError("SkeletonBuilder: nothing grown — call trunk() "
-                             "before skeleton()")
+            raise ValueError("SkeletonBuilder: nothing grown — call trunk() before skeleton()")
         parent = self._all(self._parent).astype(np.int32)
         start = self._all(self._start).reshape(-1, 3).astype(np.float32)
         end = self._all(self._end).reshape(-1, 3).astype(np.float32)
@@ -516,15 +525,20 @@ class SkeletonBuilder:
         # so one ordered pass resolves every chain.  S is tens — fine.
         seg_len = np.linalg.norm(end - start, axis=1)
         path = np.zeros(self._count, dtype=np.float64)
-        for i in range(self._count):           # tens of segments, bounded
+        for i in range(self._count):  # tens of segments, bounded
             p = parent[i]
             path[i] = seg_len[i] + (path[p] if p >= 0 else 0.0)
-        sway = np.clip(path / max(path.max(), 1e-6), 0.0, 1.0) \
-            .astype(np.float32)
+        sway = np.clip(path / max(path.max(), 1e-6), 0.0, 1.0).astype(np.float32)
 
-        return TreeSkeleton(parent=parent, start=start, end=end,
-                            radius_start=r0, radius_end=r1,
-                            depth=depth, sway=sway)
+        return TreeSkeleton(
+            parent=parent,
+            start=start,
+            end=end,
+            radius_start=r0,
+            radius_end=r1,
+            depth=depth,
+            sway=sway,
+        )
 
 
 def validate_skeleton(sk: TreeSkeleton, atol: float = 1e-3) -> None:
@@ -558,26 +572,22 @@ def validate_skeleton(sk: TreeSkeleton, atol: float = 1e-3) -> None:
         b = sk.end[p]
         ab = b - a
         denom = np.maximum(np.sum(ab * ab, axis=1), 1e-12)
-        t = np.clip(np.sum((sk.start[child] - a) * ab, axis=1) / denom,
-                    0.0, 1.0)
+        t = np.clip(np.sum((sk.start[child] - a) * ab, axis=1) / denom, 0.0, 1.0)
         nearest = a + ab * t[:, None]
         d = np.linalg.norm(sk.start[child] - nearest, axis=1)
         if (d > atol).any():
             worst = int(child[int(np.argmax(d))])
             raise ValueError(
                 f"validate_skeleton: segment {worst} starts {d.max():.4f} m "
-                f"off its parent segment (floating branch)")
+                f"off its parent segment (floating branch)"
+            )
 
-        if (sk.radius_start[child]
-                > np.maximum(sk.radius_start[p], sk.radius_end[p]) + 1e-5).any():
-            raise ValueError(
-                "validate_skeleton: a child branch is thicker than its parent")
+        if (sk.radius_start[child] > np.maximum(sk.radius_start[p], sk.radius_end[p]) + 1e-5).any():
+            raise ValueError("validate_skeleton: a child branch is thicker than its parent")
         if (sk.sway[child] + 1e-6 < sk.sway[p]).any():
-            raise ValueError(
-                "validate_skeleton: sway decreases along a branch path")
+            raise ValueError("validate_skeleton: sway decreases along a branch path")
 
     if (sk.radius_end > sk.radius_start + 1e-5).any():
-        raise ValueError(
-            "validate_skeleton: a segment's radius grows toward its tip")
+        raise ValueError("validate_skeleton: a segment's radius grows toward its tip")
     if (sk.sway < -1e-6).any() or (sk.sway > 1.0 + 1e-6).any():
         raise ValueError("validate_skeleton: sway weights outside [0, 1]")

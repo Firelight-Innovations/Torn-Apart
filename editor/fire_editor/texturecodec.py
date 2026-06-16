@@ -15,6 +15,7 @@ Row order is the numpy array's natural order (row 0 = texture V=0 on the
 client; the ground LUT is addressed by explicit row index, so orientation
 conventions never matter for it).
 """
+
 from __future__ import annotations
 
 import struct

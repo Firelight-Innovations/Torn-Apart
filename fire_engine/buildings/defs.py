@@ -60,10 +60,11 @@ class BuildingDef(ProceduralDef):
         house = get("building_demo_house", ground_z=8.0)   # a Building
     """
 
-    def generate(self, rng: np.random.Generator, **params) -> Building:  # noqa: D401
+    def generate(self, rng: np.random.Generator, **params) -> Building:
         raise NotImplementedError(
             "BuildingDef subclasses must implement generate() -> Building. "
-            "See ARCHITECTURE.md §5.7 and docs/systems/buildings.md.")
+            "See ARCHITECTURE.md §5.7 and docs/systems/buildings.md."
+        )
 
 
 @register_def
@@ -118,13 +119,13 @@ class DemoHouseDef(BuildingDef):
     name = "building_demo_house"
 
     # Plan dimensions (meters, building-local).  Width along +x, depth +y.
-    _W = 12.0          # overall width  (x: 0 .. 12)
-    _D = 8.0           # overall depth  (y: 0 .. 8)
-    _XSPINE = 6.0      # x of the vertical spine wall
-    _YSPLIT = 4.0      # y of the east half-wall split (kitchen / dining)
-    _CHAMFER = 1.5     # 45° corner cut at the south-west corner
-    _EXT_T = 0.4       # exterior wall thickness
-    _INT_T = 0.15      # interior partition thickness
+    _W = 12.0  # overall width  (x: 0 .. 12)
+    _D = 8.0  # overall depth  (y: 0 .. 8)
+    _XSPINE = 6.0  # x of the vertical spine wall
+    _YSPLIT = 4.0  # y of the east half-wall split (kitchen / dining)
+    _CHAMFER = 1.5  # 45° corner cut at the south-west corner
+    _EXT_T = 0.4  # exterior wall thickness
+    _INT_T = 0.15  # interior partition thickness
 
     def generate(self, rng: np.random.Generator, **params) -> Building:
         ground_z = float(params.get("ground_z", 8.0))
@@ -143,22 +144,27 @@ class DemoHouseDef(BuildingDef):
             position=Vec3(float(pos[0]), float(pos[1]), float(pos[2])),
             rotation=Quat.from_axis_angle(Vec3.UP, yaw),
             defaults=defaults,
-            tags=["demo", "rural", "cottage", "showcase"])
+            tags=["demo", "rural", "cottage", "showcase"],
+        )
 
         # ---- storey 0: 3 rooms (living + dining + kitchen) ----------------
         # Taller ground storey (3.5 m) to contrast with the 2.5 m upper one.
         s0 = b.add_storey(height_m=3.5)
         # Perimeter (CCW), split at every spine/divider junction node so room
         # detection sees walls meeting only at shared endpoints (no T-joins).
-        sw = s0.add_wall((ch, 0), (xs, 0), thickness_m=ext)     # S-W (door)
-        se = s0.add_wall((xs, 0), (W, 0), thickness_m=ext)      # S-E (window)
-        bay0 = s0.add_wall((W, 0), (W, ys), bulge=-0.4,         # E bay (curved)
-                           thickness_m=ext)
-        eup = s0.add_wall((W, ys), (W, D), thickness_m=ext)     # E upper (window)
-        s0.add_wall((W, D), (xs, D), thickness_m=ext)           # N-E
-        nw = s0.add_wall((xs, D), (0, D), thickness_m=ext)      # N-W (window)
-        west = s0.add_wall((0, D), (0, ch), thickness_m=ext)    # W (window)
-        cham = s0.add_wall((0, ch), (ch, 0), thickness_m=ext)   # SW chamfer
+        sw = s0.add_wall((ch, 0), (xs, 0), thickness_m=ext)  # S-W (door)
+        se = s0.add_wall((xs, 0), (W, 0), thickness_m=ext)  # S-E (window)
+        bay0 = s0.add_wall(
+            (W, 0),
+            (W, ys),
+            bulge=-0.4,  # E bay (curved)
+            thickness_m=ext,
+        )
+        eup = s0.add_wall((W, ys), (W, D), thickness_m=ext)  # E upper (window)
+        s0.add_wall((W, D), (xs, D), thickness_m=ext)  # N-E
+        nw = s0.add_wall((xs, D), (0, D), thickness_m=ext)  # N-W (window)
+        west = s0.add_wall((0, D), (0, ch), thickness_m=ext)  # W (window)
+        cham = s0.add_wall((0, ch), (ch, 0), thickness_m=ext)  # SW chamfer
         # Interior spine (thin) — split at the east half-wall node (xs, ys).
         spine_lo = s0.add_wall((xs, 0), (xs, ys), thickness_m=inte)
         spine_hi = s0.add_wall((xs, ys), (xs, D), thickness_m=inte)
@@ -166,26 +172,29 @@ class DemoHouseDef(BuildingDef):
         s0.add_wall((xs, ys), (W, ys), thickness_m=inte, height_m=1.1)
 
         # Openings: 1 exterior door, 2 interior doors, varied windows.
-        s0.add_opening(sw.id, OpeningKind.DOOR, offset_m=1.6, width_m=1.0,
-                       head_m=2.2)
-        s0.add_opening(se.id, OpeningKind.WINDOW, offset_m=2.4, width_m=1.6,
-                       sill_m=0.9, head_m=2.3)
-        s0.add_opening(bay0.id, OpeningKind.WINDOW, offset_m=1.5, width_m=1.4,
-                       sill_m=0.9, head_m=2.0)            # curved-wall window
-        s0.add_opening(nw.id, OpeningKind.WINDOW, offset_m=2.0, width_m=1.8,
-                       sill_m=1.0, head_m=2.4)
-        s0.add_opening(west.id, OpeningKind.WINDOW, offset_m=2.6, width_m=1.2,
-                       sill_m=1.0, head_m=2.2)
-        s0.add_opening(cham.id, OpeningKind.WINDOW, offset_m=0.6, width_m=0.8,
-                       sill_m=1.0, head_m=1.9)            # window on angled wall
-        s0.add_opening(spine_lo.id, OpeningKind.DOOR, offset_m=1.4, width_m=0.9,
-                       head_m=2.1)                        # living -> dining
-        s0.add_opening(spine_hi.id, OpeningKind.DOOR, offset_m=1.4, width_m=0.9,
-                       head_m=2.1)                        # living -> kitchen
+        s0.add_opening(sw.id, OpeningKind.DOOR, offset_m=1.6, width_m=1.0, head_m=2.2)
+        s0.add_opening(se.id, OpeningKind.WINDOW, offset_m=2.4, width_m=1.6, sill_m=0.9, head_m=2.3)
+        s0.add_opening(
+            bay0.id, OpeningKind.WINDOW, offset_m=1.5, width_m=1.4, sill_m=0.9, head_m=2.0
+        )  # curved-wall window
+        s0.add_opening(nw.id, OpeningKind.WINDOW, offset_m=2.0, width_m=1.8, sill_m=1.0, head_m=2.4)
+        s0.add_opening(
+            west.id, OpeningKind.WINDOW, offset_m=2.6, width_m=1.2, sill_m=1.0, head_m=2.2
+        )
+        s0.add_opening(
+            cham.id, OpeningKind.WINDOW, offset_m=0.6, width_m=0.8, sill_m=1.0, head_m=1.9
+        )  # window on angled wall
+        s0.add_opening(
+            spine_lo.id, OpeningKind.DOOR, offset_m=1.4, width_m=0.9, head_m=2.1
+        )  # living -> dining
+        s0.add_opening(
+            spine_hi.id, OpeningKind.DOOR, offset_m=1.4, width_m=0.9, head_m=2.1
+        )  # living -> kitchen
 
         rooms = s0.detect_rooms(
             snap_eps_m=cfg.building_snap_eps_m,
-            arc_segments_per_quarter=cfg.building_arc_segments_per_quarter)
+            arc_segments_per_quarter=cfg.building_arc_segments_per_quarter,
+        )
         # Tag the detected rooms by centroid so future furnishing has labels.
         for room in rooms:
             cx, cy = room.centroid()
@@ -195,27 +204,28 @@ class DemoHouseDef(BuildingDef):
                 room.tag = "dining"
             else:
                 room.tag = "kitchen"
-        s0.add_stairs(storey_to=1, anchor=(2.0, D - 2.0),
-                      direction_rad=0.0, width_m=1.1)
+        s0.add_stairs(storey_to=1, anchor=(2.0, D - 2.0), direction_rad=0.0, width_m=1.1)
 
         # ---- storey 1: same shell (matching bay + chamfer) + explicit room
         s1 = b.add_storey(height_m=2.5)
-        s1.add_wall((ch, 0), (W, 0), thickness_m=ext)          # south
+        s1.add_wall((ch, 0), (W, 0), thickness_m=ext)  # south
         sbay = s1.add_wall((W, 0), (W, ys), bulge=-0.4, thickness_m=ext)
-        s1.add_wall((W, ys), (W, D), thickness_m=ext)          # east upper
-        n1 = s1.add_wall((W, D), (0, D), thickness_m=ext)      # north (window)
-        w1 = s1.add_wall((0, D), (0, ch), thickness_m=ext)     # west (window)
-        s1.add_wall((0, ch), (ch, 0), thickness_m=ext)         # chamfer
-        s1.add_opening(sbay.id, OpeningKind.WINDOW, offset_m=1.5, width_m=1.2,
-                       sill_m=0.8, head_m=2.0)
-        s1.add_opening(n1.id, OpeningKind.WINDOW, offset_m=4.0, width_m=2.0,
-                       sill_m=0.8, head_m=2.1)
-        s1.add_opening(w1.id, OpeningKind.WINDOW, offset_m=2.6, width_m=1.2,
-                       sill_m=0.8, head_m=2.0)
+        s1.add_wall((W, ys), (W, D), thickness_m=ext)  # east upper
+        n1 = s1.add_wall((W, D), (0, D), thickness_m=ext)  # north (window)
+        w1 = s1.add_wall((0, D), (0, ch), thickness_m=ext)  # west (window)
+        s1.add_wall((0, ch), (ch, 0), thickness_m=ext)  # chamfer
+        s1.add_opening(
+            sbay.id, OpeningKind.WINDOW, offset_m=1.5, width_m=1.2, sill_m=0.8, head_m=2.0
+        )
+        s1.add_opening(n1.id, OpeningKind.WINDOW, offset_m=4.0, width_m=2.0, sill_m=0.8, head_m=2.1)
+        s1.add_opening(w1.id, OpeningKind.WINDOW, offset_m=2.6, width_m=1.2, sill_m=0.8, head_m=2.0)
         # Explicit (authored) room — proves add_room alongside auto-detection.
-        s1.add_room([(0.5, 0.5), (W - 0.5, 0.5), (W - 0.5, D - 0.5),
-                     (0.5, D - 0.5)], tag="loft", meta={"furnish": "open"})
+        s1.add_room(
+            [(0.5, 0.5), (W - 0.5, 0.5), (W - 0.5, D - 0.5), (0.5, D - 0.5)],
+            tag="loft",
+            meta={"furnish": "open"},
+        )
 
-        b.set_foundation()                          # auto hull, 0.5 m deep
-        b.set_roof()                                # flat roof slab caps top
+        b.set_foundation()  # auto hull, 0.5 m deep
+        b.set_roof()  # flat roof slab caps top
         return b

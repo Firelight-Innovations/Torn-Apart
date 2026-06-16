@@ -70,8 +70,13 @@ class BuildingRendererComponent(Component):
     Units: meters, radians; world-space Z-up.
     """
 
-    def __init__(self, base: Any = None, building_manager: Any = None,
-                 lighting_pipeline: Any = None, bus: Any = None) -> None:
+    def __init__(
+        self,
+        base: Any = None,
+        building_manager: Any = None,
+        lighting_pipeline: Any = None,
+        bus: Any = None,
+    ) -> None:
         super().__init__()
         self.base = base
         self.manager = building_manager
@@ -81,9 +86,9 @@ class BuildingRendererComponent(Component):
         self._root: NodePath | None = None
         self._shader: Shader | None = None
         self._albedo: Texture | None = None
-        self._nodes: dict[int, NodePath] = {}      # building id → its node
-        self._dirty: set[int] = set()              # ids to (re)build
-        self._removed: set[int] = set()            # ids to detach
+        self._nodes: dict[int, NodePath] = {}  # building id → its node
+        self._dirty: set[int] = set()  # ids to (re)build
+        self._removed: set[int] = set()  # ids to detach
         self._store_version_built: int = -1
 
     # ------------------------------------------------------------------
@@ -93,20 +98,22 @@ class BuildingRendererComponent(Component):
     def start(self) -> None:
         """Compile the shader, build the root, and draw every building once."""
         if self.base is None or self.manager is None:
-            _log.warning("BuildingRendererComponent: missing base/manager — "
-                         "disabled")
+            _log.warning("BuildingRendererComponent: missing base/manager — disabled")
             self.enabled = False
             return
         if self.lighting_pipeline is None:
-            _log.warning("BuildingRendererComponent: GPU lighting pipeline "
-                         "required (lighting_backend = \"gpu\") — disabled")
+            _log.warning(
+                "BuildingRendererComponent: GPU lighting pipeline "
+                'required (lighting_backend = "gpu") — disabled'
+            )
             self.enabled = False
             return
 
         self._shader = Shader.make(
             Shader.SL_GLSL,
             vertex=building_shaders.BUILDING_VERTEX,
-            fragment=building_shaders.BUILDING_FRAGMENT)
+            fragment=building_shaders.BUILDING_FRAGMENT,
+        )
         self._albedo = self._load_albedo()
 
         # Parent under terrain_root so the lit-surface cascade/fog uniforms are
@@ -124,8 +131,11 @@ class BuildingRendererComponent(Component):
         """Process queued rebuilds/removals; full rebuild on a version jump."""
         if self._root is None:
             return
-        if self.manager.version != self._store_version_built and \
-                not self._dirty and not self._removed:
+        if (
+            self.manager.version != self._store_version_built
+            and not self._dirty
+            and not self._removed
+        ):
             # A change we didn't get an event for (e.g. bulk apply) — resync.
             self._build_all()
             return
@@ -197,8 +207,7 @@ class BuildingRendererComponent(Component):
         p = building.position
         node.set_pos(float(p.x), float(p.y), float(p.z))
         q = building.rotation
-        node.set_quat(LQuaternionf(float(q.w), float(q.x),
-                                   float(q.y), float(q.z)))
+        node.set_quat(LQuaternionf(float(q.w), float(q.x), float(q.y), float(q.z)))
         self._nodes[building_id] = node
 
     def _detach(self, building_id: int) -> None:
@@ -211,8 +220,8 @@ class BuildingRendererComponent(Component):
         try:
             from fire_engine.procedural import get as get_procedural
             from fire_engine.render.texture_bridge import to_panda_texture
+
             return to_panda_texture(get_procedural("plaster_wall"))
         except Exception as exc:  # pragma: no cover - content optional
-            _log.warning("plaster_wall texture unavailable (%s) — flat albedo",
-                         exc)
+            _log.warning("plaster_wall texture unavailable (%s) — flat albedo", exc)
             return None

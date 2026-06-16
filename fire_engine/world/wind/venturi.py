@@ -103,11 +103,11 @@ def _box_blur3(a: np.ndarray) -> np.ndarray:
     acc = np.zeros_like(a)
     for di in (0, 1, 2):
         for dj in (0, 1, 2):
-            acc = acc + p[di:di + a.shape[0], dj:dj + a.shape[1]]
+            acc = acc + p[di : di + a.shape[0], dj : dj + a.shape[1]]
     return acc * (1.0 / 9.0)
 
 
-def column_solid_fraction(job: "VenturiJob") -> np.ndarray:
+def column_solid_fraction(job: VenturiJob) -> np.ndarray:
     """
     Fold the job's chunk terrain into a per-wind-cell solid column fraction.
 
@@ -142,14 +142,12 @@ def column_solid_fraction(job: "VenturiJob") -> np.ndarray:
     S = int(job.chunk_size)
     chunk_m = S * voxel
 
-    vpc = cell_m / voxel                      # voxels per wind-cell edge
+    vpc = cell_m / voxel  # voxels per wind-cell edge
     if abs(vpc - round(vpc)) > 1e-9 or vpc < 1:
-        raise ValueError(
-            f"cell_m ({cell_m}) must be an integer multiple of "
-            f"voxel_size ({voxel})")
-    vpc = int(round(vpc))                     # 8 at the defaults
+        raise ValueError(f"cell_m ({cell_m}) must be an integer multiple of voxel_size ({voxel})")
+    vpc = int(round(vpc))  # 8 at the defaults
 
-    ox_cell, oy_cell = job.origin_cell        # wind cells
+    ox_cell, oy_cell = job.origin_cell  # wind cells
     # World corner of wind cell (0,0), in voxel indices on the global voxel
     # grid (voxel v spans world [v*voxel, (v+1)*voxel)).
     vx0 = int(round(ox_cell * cell_m / voxel))
@@ -164,7 +162,7 @@ def column_solid_fraction(job: "VenturiJob") -> np.ndarray:
 
     # Accumulate solid-voxel count and total-voxel count per wind cell over the
     # whole region's voxel footprint; ratio = column solid fraction.
-    region_vx = n * vpc                       # voxels spanning the region, X
+    region_vx = n * vpc  # voxels spanning the region, X
     region_vy = n * vpc
     solid_vox = np.zeros((region_vx, region_vy), dtype=np.float64)
     total_vox = np.zeros((region_vx, region_vy), dtype=np.float64)
@@ -205,9 +203,7 @@ def column_solid_fraction(job: "VenturiJob") -> np.ndarray:
                     col_total += nz
                     if arr is None:
                         continue  # missing Z chunk → that band slice is air
-                    sub = arr[ax - gx0:bx - gx0,
-                              ay - gy0:by - gy0,
-                              az - gz0:bz - gz0]
+                    sub = arr[ax - gx0 : bx - gx0, ay - gy0 : by - gy0, az - gz0 : bz - gz0]
                     cs = (sub > 0).sum(axis=2).astype(np.float64)
                     col_solid = cs if col_solid is None else (col_solid + cs)
                 if col_total == 0:
@@ -231,7 +227,7 @@ def column_solid_fraction(job: "VenturiJob") -> np.ndarray:
     return frac
 
 
-def solve_venturi(job: "VenturiJob") -> "VenturiResult":
+def solve_venturi(job: VenturiJob) -> VenturiResult:
     """
     Solve the terrain-venturi correction for ``job`` — a pure function.
 
@@ -283,21 +279,18 @@ def solve_venturi(job: "VenturiJob") -> "VenturiResult":
     crowd = solid.copy()
     iters = max(int(job.venturi_iters), 0)
     for _ in range(iters):
-        crowd = ((1.0 - _CROWD_DIFFUSE) * crowd
-                 + _CROWD_DIFFUSE * _neighbor_mean4(crowd))
+        crowd = (1.0 - _CROWD_DIFFUSE) * crowd + _CROWD_DIFFUSE * _neighbor_mean4(crowd)
     crowd = crowd.astype(np.float32)
 
     # --- Speed-up: an OPEN cell in a crowded neighbourhood is a pinch -------
-    speedup = np.clip(
-        1.0 + _CROWD_GAIN * crowd * passw, 1.0, float(job.venturi_max))
+    speedup = np.clip(1.0 + _CROWD_GAIN * crowd * passw, 1.0, float(job.venturi_max))
     speedup = _box_blur3(speedup).astype(np.float32)
     # The blur can nudge a near-1 cell a hair below 1; re-clamp the floor.
     speedup = np.clip(speedup, 1.0, float(job.venturi_max)).astype(np.float32)
 
     # --- Deflection: openness gradient pushes flow around walls -------------
     gx, gy = np.gradient(open_)
-    deflect = np.stack([gx, gy], axis=-1).astype(np.float32) \
-        * float(job.deflect_gain)
+    deflect = np.stack([gx, gy], axis=-1).astype(np.float32) * float(job.deflect_gain)
 
     return VenturiResult(
         origin_cell=job.origin_cell,

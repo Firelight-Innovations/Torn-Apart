@@ -20,15 +20,13 @@ Excluded from the default headless run via ``addopts = -m "not window"`` in
 from __future__ import annotations
 
 import os
-import importlib
-import sys
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers: fake loaders module for headless isolation
 # ---------------------------------------------------------------------------
+
 
 class _FakeLoadersModule:
     """
@@ -46,8 +44,9 @@ class _FakeLoadersModule:
 
     def dispatch(self, path: str) -> object:
         from fire_engine.resources.loaders import UnknownResourceFormatError
+
         dot_idx = path.rfind(".")
-        suffix  = path[dot_idx:].lower() if dot_idx != -1 else ""
+        suffix = path[dot_idx:].lower() if dot_idx != -1 else ""
         if suffix not in self._loaders or self._loaders[suffix] is None:
             raise UnknownResourceFormatError(path, suffix)
         return self._loaders[suffix](path)
@@ -73,6 +72,7 @@ def _fresh_manager(fake_loaders=None):
 # Headless: cache identity
 # ---------------------------------------------------------------------------
 
+
 class TestCacheIdentity:
     """load() of the same path must return the identical Handle object."""
 
@@ -95,9 +95,9 @@ class TestCacheIdentity:
     def test_different_paths_different_handles(self):
         fake = _FakeLoadersModule()
         fake.register_loader(".fake", lambda p: {"p": p})
-        manager = __import__("fire_engine.resources.manager", fromlist=["ResourceManager"]).ResourceManager(
-            loaders_module=fake
-        )
+        manager = __import__(
+            "fire_engine.resources.manager", fromlist=["ResourceManager"]
+        ).ResourceManager(loaders_module=fake)
         h1 = manager.load("a.fake")
         h2 = manager.load("b.fake")
         assert h1 is not h2
@@ -106,6 +106,7 @@ class TestCacheIdentity:
 # ---------------------------------------------------------------------------
 # Headless: refcount lifecycle
 # ---------------------------------------------------------------------------
+
 
 class TestRefcount:
     """acquire/release adjust refcount correctly; never goes negative."""
@@ -139,7 +140,7 @@ class TestRefcount:
     def test_release_never_negative(self):
         manager, _ = _fresh_manager()
         h = manager.load("x.fake")
-        manager.release(h)   # refcount already 0 — must not go negative
+        manager.release(h)  # refcount already 0 — must not go negative
         assert h.refcount == 0
 
     def test_acquire_returns_handle(self):
@@ -161,6 +162,7 @@ class TestRefcount:
 # ---------------------------------------------------------------------------
 # Headless: unload_unreferenced
 # ---------------------------------------------------------------------------
+
 
 class TestUnloadUnreferenced:
     """Only zero-ref handles are evicted; non-zero handles stay."""
@@ -188,11 +190,12 @@ class TestUnloadUnreferenced:
         fake = _FakeLoadersModule()
         fake.register_loader(".fake", lambda p: p)
         from fire_engine.resources.manager import ResourceManager
+
         manager = ResourceManager(loaders_module=fake)
 
         h_keep = manager.load("keep.fake")
-        h_ev1  = manager.load("evict1.fake")
-        h_ev2  = manager.load("evict2.fake")
+        h_ev1 = manager.load("evict1.fake")
+        h_ev2 = manager.load("evict2.fake")
 
         manager.acquire(h_keep)  # refcount → 1
 
@@ -223,9 +226,10 @@ class TestUnloadUnreferenced:
         fake = _FakeLoadersModule()
         fake.register_loader(".fake", lambda p: _Cleanable())
         from fire_engine.resources.manager import ResourceManager
+
         manager = ResourceManager(loaders_module=fake)
 
-        manager.load("clean.fake")   # refcount 0
+        manager.load("clean.fake")  # refcount 0
         manager.unload_unreferenced()
         assert cleanup_called == [True]
 
@@ -233,6 +237,7 @@ class TestUnloadUnreferenced:
 # ---------------------------------------------------------------------------
 # Headless: suffix dispatch
 # ---------------------------------------------------------------------------
+
 
 class TestSuffixDispatch:
     """dispatch() routes to the correct loader based on file suffix."""
@@ -242,6 +247,7 @@ class TestSuffixDispatch:
         call_log = []
         fake.register_loader(".fake", lambda p: call_log.append(p) or "result")
         from fire_engine.resources.manager import ResourceManager
+
         manager = ResourceManager(loaders_module=fake)
         h = manager.load("some/path/asset.fake")
         assert h.resource == "result"
@@ -250,8 +256,9 @@ class TestSuffixDispatch:
     def test_two_suffixes_route_independently(self):
         fake = _FakeLoadersModule()
         fake.register_loader(".alpha", lambda p: "alpha_result")
-        fake.register_loader(".beta",  lambda p: "beta_result")
+        fake.register_loader(".beta", lambda p: "beta_result")
         from fire_engine.resources.manager import ResourceManager
+
         manager = ResourceManager(loaders_module=fake)
         ha = manager.load("file.alpha")
         hb = manager.load("file.beta")
@@ -263,11 +270,13 @@ class TestSuffixDispatch:
 # Headless: unknown suffix
 # ---------------------------------------------------------------------------
 
+
 class TestUnknownSuffix:
     """Unregistered suffix raises UnknownResourceFormatError."""
 
     def test_unknown_suffix_raises(self):
         from fire_engine.resources.loaders import UnknownResourceFormatError
+
         manager, _ = _fresh_manager()
         with pytest.raises(UnknownResourceFormatError) as exc_info:
             manager.load("model.xyz")
@@ -275,6 +284,7 @@ class TestUnknownSuffix:
 
     def test_error_has_correct_suffix_attribute(self):
         from fire_engine.resources.loaders import UnknownResourceFormatError
+
         manager, _ = _fresh_manager()
         try:
             manager.load("sound.mp3")
@@ -289,15 +299,17 @@ class TestUnknownSuffix:
         registered yet should also raise UnknownResourceFormatError.
         """
         from fire_engine.resources.loaders import UnknownResourceFormatError
+
         # Use a fresh fake loaders module that knows nothing about .egg
         manager, _ = _fresh_manager()
         with pytest.raises(UnknownResourceFormatError):
-            manager.load("model.egg")   # .egg not in _FakeLoadersModule
+            manager.load("model.egg")  # .egg not in _FakeLoadersModule
 
 
 # ---------------------------------------------------------------------------
 # Headless: stats()
 # ---------------------------------------------------------------------------
+
 
 class TestStats:
     """stats() returns sane numbers reflecting cache state."""
@@ -305,35 +317,36 @@ class TestStats:
     def test_empty_cache_stats(self):
         manager, _ = _fresh_manager()
         s = manager.stats()
-        assert s["cache_size"]    == 0
+        assert s["cache_size"] == 0
         assert s["total_handles"] == 0
-        assert s["zero_ref"]      == 0
-        assert s["nonzero_ref"]   == 0
-        assert s["max_refcount"]  == 0
-        assert s["total_refcount"]== 0
+        assert s["zero_ref"] == 0
+        assert s["nonzero_ref"] == 0
+        assert s["max_refcount"] == 0
+        assert s["total_refcount"] == 0
 
     def test_stats_after_load(self):
         manager, _ = _fresh_manager()
         manager.load("a.fake")
         s = manager.stats()
-        assert s["cache_size"]    == 1
-        assert s["zero_ref"]      == 1   # refcount is 0 at load time
-        assert s["nonzero_ref"]   == 0
+        assert s["cache_size"] == 1
+        assert s["zero_ref"] == 1  # refcount is 0 at load time
+        assert s["nonzero_ref"] == 0
 
     def test_stats_after_acquire(self):
         manager, _ = _fresh_manager()
         h = manager.load("a.fake")
         manager.acquire(h)
         s = manager.stats()
-        assert s["nonzero_ref"]    == 1
-        assert s["zero_ref"]       == 0
-        assert s["max_refcount"]   == 1
+        assert s["nonzero_ref"] == 1
+        assert s["zero_ref"] == 0
+        assert s["max_refcount"] == 1
         assert s["total_refcount"] == 1
 
     def test_stats_mixed(self):
         fake = _FakeLoadersModule()
         fake.register_loader(".fake", lambda p: p)
         from fire_engine.resources.manager import ResourceManager
+
         manager = ResourceManager(loaders_module=fake)
 
         h1 = manager.load("a.fake")
@@ -343,10 +356,10 @@ class TestStats:
         manager.acquire(h2)  # refcount 1
 
         s = manager.stats()
-        assert s["cache_size"]     == 2
-        assert s["nonzero_ref"]    == 2
-        assert s["zero_ref"]       == 0
-        assert s["max_refcount"]   == 2
+        assert s["cache_size"] == 2
+        assert s["nonzero_ref"] == 2
+        assert s["zero_ref"] == 0
+        assert s["max_refcount"] == 2
         assert s["total_refcount"] == 3
 
     def test_stats_after_unload(self):
@@ -361,18 +374,22 @@ class TestStats:
 # Headless: module-level default instance
 # ---------------------------------------------------------------------------
 
+
 class TestDefaultManager:
     """The module-level default_manager and convenience functions work correctly."""
 
     def test_default_manager_exists(self):
-        from fire_engine.resources import default_manager, ResourceManager
+        from fire_engine.resources import ResourceManager, default_manager
+
         assert isinstance(default_manager, ResourceManager)
 
     def test_register_loader_on_global(self):
         """register_loader wires into the global loaders module dispatch table."""
         import fire_engine.resources.loaders as _loaders
+
         _loaders.register_loader(".testfmt", lambda p: "test_resource")
         from fire_engine.resources.loaders import dispatch
+
         result = dispatch("something.testfmt")
         assert result == "test_resource"
         # Clean up
@@ -382,6 +399,7 @@ class TestDefaultManager:
 # ---------------------------------------------------------------------------
 # Window test: real Panda3D loader
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.window
 def test_load_triangle_egg_with_panda3d():
@@ -399,28 +417,26 @@ def test_load_triangle_egg_with_panda3d():
     documented.
     """
     # Locate the fixture relative to this test file
-    fixture_path = os.path.join(
-        os.path.dirname(__file__), "fixtures", "triangle.egg"
-    )
+    fixture_path = os.path.join(os.path.dirname(__file__), "fixtures", "triangle.egg")
     assert os.path.exists(fixture_path), (
-        f"Test fixture not found: {fixture_path!r}. "
-        "Ensure tests/fixtures/triangle.egg is present."
+        f"Test fixture not found: {fixture_path!r}. Ensure tests/fixtures/triangle.egg is present."
     )
 
     # We need a ShowBase before Panda3D's global loader is available.
     # Use an offscreen window to avoid needing a display.
     from panda3d.core import loadPrcFileData  # type: ignore[import]
+
     loadPrcFileData("", "window-type offscreen\naudio-library-name null")
 
     from direct.showbase.ShowBase import ShowBase  # type: ignore[import]
+
     base = ShowBase()
 
     try:
         # Create a fresh ResourceManager backed by the real loaders module
         # but with a clean private loaders state to avoid polluting the global.
-        import fire_engine.resources.loaders as _loaders
-        from fire_engine.resources.manager import ResourceManager
         from fire_engine.render.resource_adapter import register_panda_loaders
+        from fire_engine.resources.manager import ResourceManager
 
         manager = ResourceManager()
         register_panda_loaders(manager)

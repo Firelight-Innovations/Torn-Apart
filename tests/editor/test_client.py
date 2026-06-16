@@ -5,16 +5,16 @@ WebSocket: handshake, world.open, chunk streaming, scene ops, the resend
 semantics that let a *second* client attach to a running daemon, and the
 ``spawn_daemon`` subprocess round-trip.
 """
+
 from __future__ import annotations
 
 import asyncio
 
 import pytest
-
-from fire_engine.core import load_config
-
 from fire_editor import Daemon, EditorClient, RpcRemoteError, spawn_daemon
 from fire_editor._generated import SchemaId
+
+from fire_engine.core import load_config
 
 
 def _run(coro):
@@ -102,9 +102,7 @@ class TestSceneOps:
                 await c.connect(port)
                 await c.hello("t")
                 await c.request("world.open", {"seed": _seed()})
-                created = await c.request(
-                    "scene.create", {"kind": "cube", "x": 2, "y": 0, "z": 8}
-                )
+                created = await c.request("scene.create", {"kind": "cube", "x": 2, "y": 0, "z": 8})
                 assert created["object"]["kind"] == "cube"
                 tree = await c.request("scene.tree", {})
                 assert any(o["kind"] == "cube" for o in tree["objects"])
@@ -129,9 +127,7 @@ class TestResendSemantics:
                 await a.hello("a")
                 await a.request("world.open", {"seed": _seed()})
                 first = await a.drain_until_stream_done(
-                    lambda: a.request(
-                        "chunks.set_center", {"x": 0, "y": 0, "z": 24, "radius": 2}
-                    )
+                    lambda: a.request("chunks.set_center", {"x": 0, "y": 0, "z": 24, "radius": 2})
                 )
                 assert sum(1 for f in first if f.schema_id == SchemaId.MESH) >= 1
 
@@ -141,9 +137,7 @@ class TestResendSemantics:
                 await b.connect(port)
                 await b.hello("b")
                 no_resend = await b.drain_until_stream_done(
-                    lambda: b.request(
-                        "chunks.set_center", {"x": 0, "y": 0, "z": 24, "radius": 2}
-                    )
+                    lambda: b.request("chunks.set_center", {"x": 0, "y": 0, "z": 24, "radius": 2})
                 )
                 assert sum(1 for f in no_resend if f.schema_id == SchemaId.MESH) == 0
 

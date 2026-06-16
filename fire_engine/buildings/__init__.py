@@ -33,8 +33,8 @@ Example
     b.set_foundation()
 """
 
-from fire_engine.buildings.manager import BuildingManager
 from fire_engine.buildings.defs import BuildingDef, DemoHouseDef  # registers defs
+from fire_engine.buildings.manager import BuildingManager
 from fire_engine.buildings.model import (
     Building,
     BuildingDefaults,

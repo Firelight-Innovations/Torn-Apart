@@ -61,16 +61,19 @@ from fire_engine.procedural.textures.base import ProceduralTextureDef, value_noi
 
 __all__ = ["LeafSpriteDef"]
 
-_CELL = 32                 # one leaf cell is 32×32
-_VARIANTS = 3              # green / ochre / russet
+_CELL = 32  # one leaf cell is 32×32
+_VARIANTS = 3  # green / ochre / russet
 
 # Autumn-muted, slightly desaturated leaf hues (RGB), base colour per variant.
 # Minecraft × Morrowind art direction: nothing saturated, everything dusty.
-_LEAF_HUES = np.array([
-    (104, 122,  66),    # 0 — muted olive green
-    (170, 138,  62),    # 1 — ochre / amber
-    (148,  86,  52),    # 2 — russet brown
-], dtype=np.float32)
+_LEAF_HUES = np.array(
+    [
+        (104, 122, 66),  # 0 — muted olive green
+        (170, 138, 62),  # 1 — ochre / amber
+        (148, 86, 52),  # 2 — russet brown
+    ],
+    dtype=np.float32,
+)
 
 # Midrib / vein darkening factor (multiplies the base hue along the rib).
 _RIB_DARKEN = 0.62
@@ -108,8 +111,8 @@ class LeafSpriteDef(ProceduralTextureDef):
 
     name = "leaf_sprite"
 
-    DEFAULT_WIDTH = _CELL * _VARIANTS          # 96
-    DEFAULT_HEIGHT = _CELL                     # 32
+    DEFAULT_WIDTH = _CELL * _VARIANTS  # 96
+    DEFAULT_HEIGHT = _CELL  # 32
 
     def generate(self, rng: np.random.Generator, **params) -> np.ndarray:
         """
@@ -138,9 +141,9 @@ class LeafSpriteDef(ProceduralTextureDef):
         # axis), y in [-1,1] (long axis).
         ys = np.linspace(-1.0, 1.0, H, dtype=np.float32)
         xs = np.linspace(-1.0, 1.0, cell_w, dtype=np.float32)
-        gx, gy = np.meshgrid(xs, ys)           # (H, cell_w)
+        gx, gy = np.meshgrid(xs, ys)  # (H, cell_w)
 
-        for k in range(_VARIANTS):             # fixed 3-iteration loop
+        for k in range(_VARIANTS):  # fixed 3-iteration loop
             x0 = k * cell_w
             x1 = min((k + 1) * cell_w, W)
             cw = x1 - x0
@@ -153,7 +156,7 @@ class LeafSpriteDef(ProceduralTextureDef):
 
             # Elliptical leaf: narrow in X (0.62), full in Y, tapered to a point
             # at both ends.  taper widens the middle, pinches the tip/stem.
-            taper = np.sqrt(np.clip(1.0 - cgy * cgy, 0.0, 1.0))   # 0 at ends, 1 mid
+            taper = np.sqrt(np.clip(1.0 - cgy * cgy, 0.0, 1.0))  # 0 at ends, 1 mid
             half_w = 0.62 * taper
 
             # Serrated edge: a few sine teeth along the long axis modulating the
@@ -166,24 +169,27 @@ class LeafSpriteDef(ProceduralTextureDef):
 
             # Base hue, blotched slightly by the body noise.
             hue = _LEAF_HUES[k]
-            shade = 0.82 + 0.30 * noise[:, :cw]          # (H, cw) body shading
+            shade = 0.82 + 0.30 * noise[:, :cw]  # (H, cw) body shading
             body = hue[None, None, :] * shade[..., None]  # (H, cw, 3)
 
             # Midrib: thin dark vertical band down the centre (|x| small),
             # fading out near the tip/stem so it doesn't poke past the outline.
             rib = np.clip(1.0 - np.abs(cgx) / 0.10, 0.0, 1.0) * taper
             # A couple of diagonal vein hints branching off the midrib.
-            veins = np.clip(1.0 - np.abs(np.abs(cgx) - 0.30 * (1.0 - np.abs(cgy)))
-                            / 0.05, 0.0, 1.0) * taper * 0.6
+            veins = (
+                np.clip(1.0 - np.abs(np.abs(cgx) - 0.30 * (1.0 - np.abs(cgy))) / 0.05, 0.0, 1.0)
+                * taper
+                * 0.6
+            )
             rib = np.clip(rib + veins, 0.0, 1.0)
-            rib_mul = (1.0 - rib) + rib * _RIB_DARKEN     # darken along ribs
+            rib_mul = (1.0 - rib) + rib * _RIB_DARKEN  # darken along ribs
             body = body * rib_mul[..., None]
 
             cell_rgb = np.clip(body, 0.0, 255.0).astype(np.uint8)
             # Alpha: binary leaf mask with a soft 1-texel rim near the edge so
             # the fragment discard has a clean (non-aliased-to-death) boundary.
-            margin = np.maximum(edge, 0.0) - np.abs(cgx)   # >0 inside, 0 at edge
-            rim = np.clip(margin / 0.06, 0.0, 1.0)         # soft last ~2 texels
+            margin = np.maximum(edge, 0.0) - np.abs(cgx)  # >0 inside, 0 at edge
+            rim = np.clip(margin / 0.06, 0.0, 1.0)  # soft last ~2 texels
             alpha = np.where(inside, rim, 0.0)
             cell_a = np.clip(np.round(alpha * 255.0), 0, 255).astype(np.uint8)
 

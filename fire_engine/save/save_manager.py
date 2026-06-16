@@ -112,8 +112,8 @@ from typing import Any
 import msgpack
 import numpy as np
 
-from fire_engine.core.config import Config
 from fire_engine.core.clock import Clock
+from fire_engine.core.config import Config
 from fire_engine.core.log import get_logger
 from fire_engine.save.saveable import Saveable, SaveIncompatibleError
 
@@ -129,6 +129,7 @@ _CONFIG_DIGEST_SIZE: int = 16
 # ---------------------------------------------------------------------------
 # Config digest
 # ---------------------------------------------------------------------------
+
 
 def _compute_config_digest(config: Config) -> str:
     """
@@ -150,8 +151,7 @@ def _compute_config_digest(config: Config) -> str:
         32-character lowercase hex string.
     """
     canonical = (
-        f"{config.world_seed}:{config.voxel_size}:"
-        f"{config.chunk_size}:{config.light_grid_scale}"
+        f"{config.world_seed}:{config.voxel_size}:{config.chunk_size}:{config.light_grid_scale}"
     )
     return hashlib.blake2b(
         canonical.encode("ascii"),
@@ -193,10 +193,7 @@ def _encode_value(obj: Any) -> Any:
     if isinstance(obj, dict):
         # Check if any key is non-string (e.g. tuple key for chunk coords)
         if obj and not all(isinstance(k, str) for k in obj):
-            pairs = [
-                [_encode_value(k), _encode_value(v)]
-                for k, v in obj.items()
-            ]
+            pairs = [[_encode_value(k), _encode_value(v)] for k, v in obj.items()]
             return {_DELTA_KV_TAG: "kv_pairs", "pairs": pairs}
         return {k: _encode_value(v) for k, v in obj.items()}
     if isinstance(obj, (list, tuple)):
@@ -300,6 +297,7 @@ def _decode_delta(data: bytes) -> dict:
 # ---------------------------------------------------------------------------
 # SaveManager
 # ---------------------------------------------------------------------------
+
 
 class SaveManager:
     """
@@ -510,16 +508,12 @@ class SaveManager:
 
         # Decode bytes keys at envelope level (msgpack may use bytes keys).
         if isinstance(envelope, dict):
-            envelope = {
-                (k.decode() if isinstance(k, bytes) else k): v
-                for k, v in envelope.items()
-            }
+            envelope = {(k.decode() if isinstance(k, bytes) else k): v for k, v in envelope.items()}
 
         header_raw = envelope.get("header", {})
         if isinstance(header_raw, dict):
             header: dict = {
-                (k.decode() if isinstance(k, bytes) else k): v
-                for k, v in header_raw.items()
+                (k.decode() if isinstance(k, bytes) else k): v for k, v in header_raw.items()
             }
         else:
             header = {}
@@ -527,8 +521,7 @@ class SaveManager:
         systems_raw = envelope.get("systems", {})
         if isinstance(systems_raw, dict):
             systems: dict[str, bytes] = {
-                (k.decode() if isinstance(k, bytes) else k): v
-                for k, v in systems_raw.items()
+                (k.decode() if isinstance(k, bytes) else k): v for k, v in systems_raw.items()
             }
         else:
             systems = {}
@@ -565,8 +558,7 @@ class SaveManager:
         clock_state_raw = header.get("game_clock", {})
         if isinstance(clock_state_raw, dict):
             clock_state: dict = {
-                (k.decode() if isinstance(k, bytes) else k): v
-                for k, v in clock_state_raw.items()
+                (k.decode() if isinstance(k, bytes) else k): v for k, v in clock_state_raw.items()
             }
         else:
             clock_state = {}

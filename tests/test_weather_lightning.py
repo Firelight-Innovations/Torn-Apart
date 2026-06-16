@@ -31,7 +31,6 @@ from fire_engine.core.rng import set_world_seed
 from fire_engine.world.weather.bolt import BoltGeometry, generate_bolt
 from fire_engine.world.weather.cells import CellKind, StormCell, natural_cells
 from fire_engine.world.weather.lightning import (
-    StrikeParams,
     cell_id_int,
     scheduled_strikes,
 )
@@ -44,8 +43,9 @@ def cfg():
     return load_config()
 
 
-def _storm_cell(spawn_time: float = 0.0, duration: float = 10800.0,
-                radius: float = 800.0, peak: float = 1.0) -> StormCell:
+def _storm_cell(
+    spawn_time: float = 0.0, duration: float = 10800.0, radius: float = 800.0, peak: float = 1.0
+) -> StormCell:
     """A plain THUNDERSTORM cell with no drift (deterministic footprint)."""
     return StormCell(
         id="n:0:0",
@@ -62,6 +62,7 @@ def _storm_cell(spawn_time: float = 0.0, duration: float = 10800.0,
 # ---------------------------------------------------------------------------
 # Bolt geometry
 # ---------------------------------------------------------------------------
+
 
 def test_bolt_is_deterministic(cfg):
     set_world_seed(1337)
@@ -136,10 +137,10 @@ def test_bolt_respects_step_budget(cfg):
 # Strike schedule
 # ---------------------------------------------------------------------------
 
+
 def test_schedule_only_thunderstorms(cfg):
     set_world_seed(1337)
-    shower = StormCell("n:0:1", CellKind.SHOWER, 0.0, (0.0, 0.0),
-                       10800.0, 800.0, 1.0, (0.0, 0.0))
+    shower = StormCell("n:0:1", CellKind.SHOWER, 0.0, (0.0, 0.0), 10800.0, 800.0, 1.0, (0.0, 0.0))
     assert scheduled_strikes(shower, 0.0, 10800.0, cfg) == []
 
 
@@ -198,12 +199,13 @@ def test_schedule_thinned_by_intensity(cfg):
 def test_cell_id_int_stable(cfg):
     assert cell_id_int("n:5:2") == cell_id_int("n:5:2")
     assert cell_id_int("n:5:2") != cell_id_int("n:5:3")
-    assert 0 <= cell_id_int("s:0") < 2 ** 31
+    assert 0 <= cell_id_int("s:0") < 2**31
 
 
 # ---------------------------------------------------------------------------
 # WeatherSystem emission hook
 # ---------------------------------------------------------------------------
+
 
 def test_system_emits_strike_events(cfg):
     """Find a day with a thunderstorm, advance the system over it, expect events."""
@@ -218,8 +220,7 @@ def test_system_emits_strike_events(cfg):
             break
     assert storm_day is not None, "no thunderstorm in the first 40 days at seed 1337"
 
-    cell = next(c for c in natural_cells(storm_day, cfg)
-                if c.kind is CellKind.THUNDERSTORM)
+    cell = next(c for c in natural_cells(storm_day, cfg) if c.kind is CellKind.THUNDERSTORM)
 
     bus = EventBus()
     received: list[LightningStrikeEvent] = []
@@ -244,7 +245,7 @@ def test_system_emits_strike_events(cfg):
     e = received[0]
     # The event contract M8 depends on.
     assert len(e.pos) == 3 and len(e.ground_pos) == 3
-    assert e.pos[2] > e.ground_pos[2]          # cloud base above ground
+    assert e.pos[2] > e.ground_pos[2]  # cloud base above ground
     assert isinstance(e.seed, int) and isinstance(e.cell_id, int)
     assert 0.0 <= e.intensity <= 1.0
 
@@ -253,6 +254,7 @@ def test_system_no_events_without_bus(cfg):
     """No bus → the hook is a silent no-op (and update still works)."""
     set_world_seed(1337)
     from fire_engine.world.weather import WeatherSystem
+
     ws = WeatherSystem(cfg, bus=None)
     lw = ws.update(0, 3600.0, player_pos=(0.0, 0.0))
     lw2 = ws.update(0, 3660.0, player_pos=(0.0, 0.0))
@@ -263,9 +265,11 @@ def test_system_no_events_without_bus(cfg):
 # Headless guard
 # ---------------------------------------------------------------------------
 
+
 def test_no_panda3d_in_weather_lightning():
     """weather/lightning.py + weather/bolt.py never import panda3d (Hard Rule 1)."""
     import ast
+
     root = Path(__file__).resolve().parents[1] / "fire_engine" / "world" / "weather"
     for name in ("lightning.py", "bolt.py"):
         tree = ast.parse((root / name).read_text(encoding="utf-8"))
@@ -276,5 +280,6 @@ def test_no_panda3d_in_weather_lightning():
                 mods = [node.module or ""]
             else:
                 continue
-            assert not any(m.split(".")[0] == "panda3d" for m in mods), \
+            assert not any(m.split(".")[0] == "panda3d" for m in mods), (
                 f"{name} imports panda3d (Hard Rule 1)"
+            )

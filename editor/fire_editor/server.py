@@ -7,12 +7,13 @@ to a :class:`~fire_editor.rpc.Dispatcher`; binary frames are protocol payloads
 The server tracks connected clients so services can broadcast notifications and
 binary payloads. Localhost only — this is a developer tool bound to ``127.0.0.1``.
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
 import logging
-from typing import Iterable
+from collections.abc import Iterable
 
 import websockets
 from websockets.legacy.server import WebSocketServerProtocol
@@ -81,11 +82,15 @@ class EditorServer:
         try:
             message = json.loads(raw)
         except json.JSONDecodeError:
-            await ws.send(json.dumps({
-                "jsonrpc": "2.0",
-                "id": None,
-                "error": {"code": -32700, "message": "parse error"},
-            }))
+            await ws.send(
+                json.dumps(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": None,
+                        "error": {"code": -32700, "message": "parse error"},
+                    }
+                )
+            )
             return
         response = await self._dispatcher.dispatch(message)
         if response is not None:

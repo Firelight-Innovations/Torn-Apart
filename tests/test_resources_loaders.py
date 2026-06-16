@@ -16,8 +16,8 @@ Headless only — no panda3d imports, no real file I/O.
 from __future__ import annotations
 
 import os
-import pytest
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # Helpers — snapshot + restore the real _LOADERS table so these tests don't
@@ -25,8 +25,10 @@ import pytest
 # test modules.
 # ---------------------------------------------------------------------------
 
+
 def _loaders_module():
     import fire_engine.resources.loaders as lm
+
     return lm
 
 
@@ -37,6 +39,7 @@ def clean_loaders():
     Each test that touches the global registry uses this fixture.
     """
     import fire_engine.resources.loaders as lm
+
     original = dict(lm._LOADERS)
     yield lm
     lm._LOADERS.clear()
@@ -46,6 +49,7 @@ def clean_loaders():
 # ---------------------------------------------------------------------------
 # SECTION 1 — loaders.py: dispatch + register_loader
 # ---------------------------------------------------------------------------
+
 
 class TestRegisterAndDispatch:
     """register_loader then dispatch routes to the right loader by suffix."""
@@ -69,6 +73,7 @@ class TestRegisterAndDispatch:
 
     def test_dispatch_unregistered_suffix_raises(self, clean_loaders):
         from fire_engine.resources.loaders import UnknownResourceFormatError
+
         lm = clean_loaders
         with pytest.raises(UnknownResourceFormatError) as exc_info:
             lm.dispatch("model.xyz")
@@ -77,6 +82,7 @@ class TestRegisterAndDispatch:
 
     def test_dispatch_error_has_path_attribute(self, clean_loaders):
         from fire_engine.resources.loaders import UnknownResourceFormatError
+
         lm = clean_loaders
         path = "assets/unknown.xyz"
         with pytest.raises(UnknownResourceFormatError) as exc_info:
@@ -85,6 +91,7 @@ class TestRegisterAndDispatch:
 
     def test_dispatch_error_has_suffix_attribute(self, clean_loaders):
         from fire_engine.resources.loaders import UnknownResourceFormatError
+
         lm = clean_loaders
         with pytest.raises(UnknownResourceFormatError) as exc_info:
             lm.dispatch("assets/unknown.xyz")
@@ -96,6 +103,7 @@ class TestRegisterAndDispatch:
         dispatch should raise UnknownResourceFormatError, not call None.
         """
         from fire_engine.resources.loaders import UnknownResourceFormatError
+
         lm = clean_loaders
         # Confirm .egg starts as None in the module-level table
         assert ".egg" in lm._LOADERS
@@ -114,6 +122,7 @@ class TestRegisterAndDispatch:
 # ---------------------------------------------------------------------------
 # SECTION 2 — loaders.py: registered_suffixes()
 # ---------------------------------------------------------------------------
+
 
 class TestRegisteredSuffixes:
     """registered_suffixes() returns sorted list of non-None suffixes."""
@@ -159,6 +168,7 @@ class TestRegisteredSuffixes:
 # SECTION 3 — loaders.py: case sensitivity of dispatch
 # ---------------------------------------------------------------------------
 
+
 class TestCaseSensitivity:
     """
     Pin the case-handling behaviour of dispatch().
@@ -201,6 +211,7 @@ class TestCaseSensitivity:
 # SECTION 4 — loaders.py: re-registering the same suffix
 # ---------------------------------------------------------------------------
 
+
 class TestReRegister:
     """
     Pin the behaviour when the same suffix is registered twice.
@@ -216,9 +227,7 @@ class TestReRegister:
         lm.register_loader(".zap", lambda p: "second")
         result = lm.dispatch("file.zap")
         # Pin: the second registration wins
-        assert result == "second", (
-            "Re-registering a suffix should overwrite silently (no error)."
-        )
+        assert result == "second", "Re-registering a suffix should overwrite silently (no error)."
 
     def test_reregister_none_removes_from_registered_suffixes(self, clean_loaders):
         """
@@ -239,6 +248,7 @@ class TestReRegister:
 # SECTION 5 — loaders.py: path with no suffix
 # ---------------------------------------------------------------------------
 
+
 class TestNoSuffix:
     """
     Pin the behaviour when dispatch() receives a path with no '.' at all.
@@ -250,6 +260,7 @@ class TestNoSuffix:
         UnknownResourceFormatError (not e.g. ValueError or KeyError).
         """
         from fire_engine.resources.loaders import UnknownResourceFormatError
+
         lm = clean_loaders
         with pytest.raises(UnknownResourceFormatError) as exc_info:
             lm.dispatch("nodotfile")
@@ -260,6 +271,7 @@ class TestNoSuffix:
 
     def test_path_without_dot_error_carries_path(self, clean_loaders):
         from fire_engine.resources.loaders import UnknownResourceFormatError
+
         lm = clean_loaders
         with pytest.raises(UnknownResourceFormatError) as exc_info:
             lm.dispatch("nodotfile")
@@ -270,11 +282,13 @@ class TestNoSuffix:
 # Helpers for ResourceManager tests — isolated fake loaders
 # ---------------------------------------------------------------------------
 
+
 class _FakeLoaders:
     """
     Minimal fake loaders module for ResourceManager isolation.
     Mirrors the headless pattern from test_resources.py.
     """
+
     def __init__(self):
         self._table: dict = {}
 
@@ -283,6 +297,7 @@ class _FakeLoaders:
 
     def dispatch(self, path: str) -> object:
         from fire_engine.resources.loaders import UnknownResourceFormatError
+
         dot = path.rfind(".")
         suffix = path[dot:].lower() if dot != -1 else ""
         if suffix not in self._table or self._table[suffix] is None:
@@ -296,6 +311,7 @@ def _make_manager(extra_suffixes=None):
     extra_suffixes: list of (suffix, fn) pairs to additionally register.
     """
     from fire_engine.resources.manager import ResourceManager
+
     fake = _FakeLoaders()
     fake.register_loader(".fake", lambda p: {"p": p})
     if extra_suffixes:
@@ -308,11 +324,13 @@ def _make_manager(extra_suffixes=None):
 # SECTION 6 — manager.py: load() identity and path normalisation
 # ---------------------------------------------------------------------------
 
+
 class TestManagerLoad:
     """load() returns a Handle with refcount 0; identity and normalisation."""
 
     def test_load_returns_handle(self):
         from fire_engine.resources.manager import Handle
+
         manager, _ = _make_manager()
         h = manager.load("x.fake")
         assert isinstance(h, Handle)
@@ -341,9 +359,7 @@ class TestManagerLoad:
         manager, _ = _make_manager()
         h1 = manager.load("assets/x.fake")
         h2 = manager.load("assets\\x.fake")
-        assert h1 is h2, (
-            "Forward-slash and back-slash variants must share the same Handle"
-        )
+        assert h1 is h2, "Forward-slash and back-slash variants must share the same Handle"
 
     def test_case_variants_same_handle_on_windows(self):
         """
@@ -372,6 +388,7 @@ class TestManagerLoad:
 # ---------------------------------------------------------------------------
 # SECTION 7 — manager.py: acquire / release / refcount floor
 # ---------------------------------------------------------------------------
+
 
 class TestManagerRefcount:
     """acquire increments, release decrements, never below 0."""
@@ -406,9 +423,9 @@ class TestManagerRefcount:
     def test_double_release_stays_zero(self):
         manager, _ = _make_manager()
         h = manager.load("x.fake")
-        manager.acquire(h)        # → 1
-        manager.release(h)        # → 0
-        manager.release(h)        # → must stay 0, not -1
+        manager.acquire(h)  # → 1
+        manager.release(h)  # → 0
+        manager.release(h)  # → must stay 0, not -1
         assert h.refcount == 0
 
 
@@ -416,12 +433,13 @@ class TestManagerRefcount:
 # SECTION 8 — manager.py: unload_unreferenced
 # ---------------------------------------------------------------------------
 
+
 class TestManagerUnload:
     """unload_unreferenced evicts refcount==0 handles; keeps referenced ones."""
 
     def test_evicts_zero_ref_handle(self):
         manager, _ = _make_manager()
-        manager.load("evict.fake")   # refcount stays 0
+        manager.load("evict.fake")  # refcount stays 0
         evicted = manager.unload_unreferenced()
         assert evicted == 1
         assert manager.stats()["cache_size"] == 0
@@ -429,7 +447,7 @@ class TestManagerUnload:
     def test_keeps_nonzero_ref_handle(self):
         manager, _ = _make_manager()
         h = manager.load("keep.fake")
-        manager.acquire(h)           # refcount → 1
+        manager.acquire(h)  # refcount → 1
         evicted = manager.unload_unreferenced()
         assert evicted == 0
         assert manager.stats()["cache_size"] == 1
@@ -439,11 +457,12 @@ class TestManagerUnload:
         fake = _FakeLoaders()
         fake.register_loader(".fake", lambda p: p)
         from fire_engine.resources.manager import ResourceManager
+
         manager = ResourceManager(loaders_module=fake)
         h_keep = manager.load("keep.fake")
         manager.load("ev1.fake")
         manager.load("ev2.fake")
-        manager.acquire(h_keep)      # only this one survives
+        manager.acquire(h_keep)  # only this one survives
         evicted = manager.unload_unreferenced()
         assert evicted == 2
         # h_keep is still in cache and returns the same handle
@@ -468,6 +487,7 @@ class TestManagerUnload:
         fake = _FakeLoaders()
         fake.register_loader(".fake", lambda p: _R())
         from fire_engine.resources.manager import ResourceManager
+
         manager = ResourceManager(loaders_module=fake)
         manager.load("clean.fake")
         manager.unload_unreferenced()
@@ -477,6 +497,7 @@ class TestManagerUnload:
 # ---------------------------------------------------------------------------
 # SECTION 9 — manager.py: module-level convenience functions on default_manager
 # ---------------------------------------------------------------------------
+
 
 class TestDefaultManagerConvenience:
     """
@@ -489,9 +510,10 @@ class TestDefaultManagerConvenience:
     def _register_and_restore(self):
         import fire_engine.resources.loaders as lm
         import fire_engine.resources.manager as mm
+
         # Register a test suffix on the real module
         original_loaders = dict(lm._LOADERS)
-        original_cache   = dict(mm.default_manager._cache)
+        original_cache = dict(mm.default_manager._cache)
         lm.register_loader(".convtest", lambda p: f"loaded:{p}")
         yield
         # Restore loaders table
@@ -505,24 +527,28 @@ class TestDefaultManagerConvenience:
     def test_module_load_returns_handle(self):
         import fire_engine.resources.manager as mm
         from fire_engine.resources.manager import Handle
+
         h = mm.load("something.convtest")
         assert isinstance(h, Handle)
 
     def test_module_load_same_path_same_handle(self):
         import fire_engine.resources.manager as mm
+
         h1 = mm.load("x.convtest")
         h2 = mm.load("x.convtest")
         assert h1 is h2
 
     def test_module_acquire_increments_refcount(self):
         import fire_engine.resources.manager as mm
+
         h = mm.load("acq.convtest")
         mm.acquire(h)
         assert h.refcount == 1
-        mm.release(h)   # clean up
+        mm.release(h)  # clean up
 
     def test_module_release_decrements_refcount(self):
         import fire_engine.resources.manager as mm
+
         h = mm.load("rel.convtest")
         mm.acquire(h)
         mm.release(h)
@@ -530,14 +556,16 @@ class TestDefaultManagerConvenience:
 
     def test_module_unload_unreferenced_evicts(self):
         import fire_engine.resources.manager as mm
+
         h = mm.load("unload_conv.convtest")
         # refcount is 0 — should be evicted
         count = mm.unload_unreferenced()
-        assert count >= 1   # may include other zero-ref handles in default_manager
+        assert count >= 1  # may include other zero-ref handles in default_manager
 
     def test_module_convenience_operate_on_default_manager(self):
         """Verify the module-level fns really go through default_manager."""
         import fire_engine.resources.manager as mm
+
         h = mm.load("dm.convtest")
         key = mm.ResourceManager._normalise(h.path)  # path already normalised
         # The handle must be in default_manager's cache

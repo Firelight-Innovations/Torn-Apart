@@ -45,13 +45,21 @@ Example
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 
-__all__ = ["PointLight", "AreaLight", "SpotLight", "LightSet",
-           "OccluderSet", "LIGHT_TYPE_POINT", "LIGHT_TYPE_AREA",
-           "LIGHT_TYPE_SPOT", "MAX_OCCLUDERS"]
+__all__ = [
+    "LIGHT_TYPE_AREA",
+    "LIGHT_TYPE_POINT",
+    "LIGHT_TYPE_SPOT",
+    "MAX_OCCLUDERS",
+    "AreaLight",
+    "LightSet",
+    "OccluderSet",
+    "PointLight",
+    "SpotLight",
+]
 
 LIGHT_TYPE_POINT: float = 0.0
 LIGHT_TYPE_AREA: float = 1.0
@@ -246,9 +254,11 @@ class LightSet:
         """
         if not self._entries:
             return
-        expired = [lid for lid, e in self._entries.items()
-                   if e.light.ttl_s is not None
-                   and e.age_s + dt >= e.light.ttl_s]
+        expired = [
+            lid
+            for lid, e in self._entries.items()
+            if e.light.ttl_s is not None and e.age_s + dt >= e.light.ttl_s
+        ]
         any_transient = False
         for e in self._entries.values():
             if e.light.ttl_s is not None:
@@ -300,15 +310,13 @@ class LightSet:
                 out[n, 7] = LIGHT_TYPE_SPOT
                 d = np.asarray(li.direction, np.float32)
                 norm = float(np.linalg.norm(d))
-                out[n, 8:11] = d / norm if norm > 1e-6 \
-                    else np.float32((0.0, 0.0, -1.0))
+                out[n, 8:11] = d / norm if norm > 1e-6 else np.float32((0.0, 0.0, -1.0))
                 out[n, 11] = math.cos(math.radians(li.cone_deg) * 0.5)
             else:
                 out[n, 0:3] = li.position
                 out[n, 7] = LIGHT_TYPE_POINT
             out[n, 3] = li.radius
-            out[n, 4:7] = np.asarray(li.color, np.float32) \
-                * (li.intensity * fade)
+            out[n, 4:7] = np.asarray(li.color, np.float32) * (li.intensity * fade)
             n += 1
         return out, n
 
@@ -350,8 +358,7 @@ class OccluderSet:
 
     def set_boxes(
         self,
-        boxes: list[tuple[tuple[float, float, float],
-                          tuple[float, float, float]]],
+        boxes: list[tuple[tuple[float, float, float], tuple[float, float, float]]],
     ) -> bool:
         """
         Replace the full occluder list with ``boxes`` (world-space AABBs).
@@ -369,9 +376,10 @@ class OccluderSet:
         if len(boxes) > MAX_OCCLUDERS and not self._warned:
             self._warned = True
             import logging
+
             logging.getLogger("fire_engine.lighting.lights").warning(
-                "OccluderSet: %d boxes > max %d — extras dropped",
-                len(boxes), MAX_OCCLUDERS)
+                "OccluderSet: %d boxes > max %d — extras dropped", len(boxes), MAX_OCCLUDERS
+            )
         boxes = boxes[:MAX_OCCLUDERS]
         n = len(boxes)
         mins = np.zeros((MAX_OCCLUDERS, 3), dtype=np.float32)
@@ -379,9 +387,11 @@ class OccluderSet:
         if n:
             mins[:n] = np.asarray([b[0] for b in boxes], dtype=np.float32)
             maxs[:n] = np.asarray([b[1] for b in boxes], dtype=np.float32)
-        if (n == self._count
-                and np.allclose(mins, self._mins, atol=0.01)
-                and np.allclose(maxs, self._maxs, atol=0.01)):
+        if (
+            n == self._count
+            and np.allclose(mins, self._mins, atol=0.01)
+            and np.allclose(maxs, self._maxs, atol=0.01)
+        ):
             return False
         self._mins, self._maxs, self._count = mins, maxs, n
         self.version += 1

@@ -13,6 +13,7 @@ This module is pure data + numpy; applying a command back onto the live session
 (remesh/relight/restream or scene apply_delta) is the caller's job (see
 ``services/chunks.py``).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -93,18 +94,18 @@ class UndoStack:
     def can_redo(self) -> bool:
         return bool(self._redo)
 
-    def push(self, command: "EditCommand | SceneCommand") -> None:
+    def push(self, command: EditCommand | SceneCommand) -> None:
         """Record a freshly applied command; clears the redo history."""
         self._undo.append(command)
         self._redo.clear()
         if len(self._undo) > self._max:
             self._undo.pop(0)  # LRU-drop the oldest
 
-    def replace_top(self, command: "EditCommand | SceneCommand") -> None:
+    def replace_top(self, command: EditCommand | SceneCommand) -> None:
         """Swap the most recent command in place (coalescing); requires one."""
         self._undo[-1] = command
 
-    def undo(self) -> "EditCommand | SceneCommand | None":
+    def undo(self) -> EditCommand | SceneCommand | None:
         """Pop the last command to the redo stack and return it (or ``None``)."""
         if not self._undo:
             return None
@@ -112,7 +113,7 @@ class UndoStack:
         self._redo.append(cmd)
         return cmd
 
-    def redo(self) -> "EditCommand | SceneCommand | None":
+    def redo(self) -> EditCommand | SceneCommand | None:
         """Pop the last undone command back to the undo stack and return it."""
         if not self._redo:
             return None

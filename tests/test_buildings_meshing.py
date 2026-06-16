@@ -7,11 +7,10 @@ Headless (numpy only — fire_engine/buildings/ never imports panda3d).
 """
 
 import numpy as np
-import pytest
 
 from fire_engine.buildings import Building, BuildingDefaults, OpeningKind
-from fire_engine.buildings.model import Opening, Wall
 from fire_engine.buildings.meshing import mesh_building, mesh_slab, mesh_wall
+from fire_engine.buildings.model import Opening, Wall
 from fire_engine.core.config import Config
 from fire_engine.core.math3d import Quat, Vec3
 
@@ -32,7 +31,7 @@ def _assert_contract(mesh):
     assert mesh.positions.shape[0] == mesh.normals.shape[0]
     assert mesh.positions.shape[0] == mesh.uvs.shape[0]
     assert mesh.positions.shape[0] == mesh.indices.shape[0]
-    assert np.all(mesh.colors == 1.0)               # flat white
+    assert np.all(mesh.colors == 1.0)  # flat white
     assert mesh.face_materials is None
     # flat unit normals
     nl = np.linalg.norm(mesh.normals, axis=1)
@@ -61,9 +60,17 @@ class TestWallCounts:
     def test_window_adds_reveals_and_removes_hole_cell(self):
         # 3 s-cells x 3 z-cells = 9 panels - 1 hole = 8 per face (16),
         # + 3 top + 2 ends + 4 reveals (2 jambs, head, sill) = 25 quads.
-        w = Wall(id=1, a=(0, 0), b=(4, 0), thickness_m=0.3, openings=[
-            Opening(id=9, kind=OpeningKind.WINDOW, offset_m=1.0, width_m=1.2,
-                    sill_m=1.0, head_m=2.2)])
+        w = Wall(
+            id=1,
+            a=(0, 0),
+            b=(4, 0),
+            thickness_m=0.3,
+            openings=[
+                Opening(
+                    id=9, kind=OpeningKind.WINDOW, offset_m=1.0, width_m=1.2, sill_m=1.0, head_m=2.2
+                )
+            ],
+        )
         mesh = mesh_wall(w, 0.2, 3.0, _QPQ)
         _assert_contract(mesh)
         assert _tris(mesh) == 2 * 25
@@ -71,23 +78,44 @@ class TestWallCounts:
     def test_door_has_no_sill_reveal(self):
         # door (sill=0): 3 s-cells x 2 z-cells = 6 - 1 hole = 5 per face (10),
         # + 3 top + 2 ends + 3 reveals (2 jambs, head, NO sill) = 18 quads.
-        w = Wall(id=1, a=(0, 0), b=(4, 0), thickness_m=0.3, openings=[
-            Opening(id=8, kind=OpeningKind.DOOR, offset_m=1.0, width_m=0.9,
-                    sill_m=0.0, head_m=2.0)])
+        w = Wall(
+            id=1,
+            a=(0, 0),
+            b=(4, 0),
+            thickness_m=0.3,
+            openings=[
+                Opening(
+                    id=8, kind=OpeningKind.DOOR, offset_m=1.0, width_m=0.9, sill_m=0.0, head_m=2.0
+                )
+            ],
+        )
         mesh = mesh_wall(w, 0.2, 3.0, _QPQ)
         _assert_contract(mesh)
         assert _tris(mesh) == 2 * 18
 
     def test_no_vertex_strictly_inside_opening_box(self):
         # Wall along +x; faces at y=±0.15. Opening x∈(1,2.2), z∈(1.2,2.4).
-        w = Wall(id=1, a=(0, 0), b=(4, 0), thickness_m=0.3, openings=[
-            Opening(id=9, kind=OpeningKind.WINDOW, offset_m=1.0, width_m=1.2,
-                    sill_m=1.0, head_m=2.2)])
+        w = Wall(
+            id=1,
+            a=(0, 0),
+            b=(4, 0),
+            thickness_m=0.3,
+            openings=[
+                Opening(
+                    id=9, kind=OpeningKind.WINDOW, offset_m=1.0, width_m=1.2, sill_m=1.0, head_m=2.2
+                )
+            ],
+        )
         p = mesh_wall(w, 0.2, 3.0, _QPQ).positions
         e = 1e-4
-        inside = ((p[:, 0] > 1.0 + e) & (p[:, 0] < 2.2 - e) &
-                  (p[:, 1] > -0.15 + e) & (p[:, 1] < 0.15 - e) &
-                  (p[:, 2] > 1.2 + e) & (p[:, 2] < 2.4 - e))
+        inside = (
+            (p[:, 0] > 1.0 + e)
+            & (p[:, 0] < 2.2 - e)
+            & (p[:, 1] > -0.15 + e)
+            & (p[:, 1] < 0.15 - e)
+            & (p[:, 2] > 1.2 + e)
+            & (p[:, 2] < 2.4 - e)
+        )
         assert not np.any(inside)
 
 
@@ -111,17 +139,14 @@ class TestSlab:
 
 def _demo_building() -> Building:
     d = BuildingDefaults.from_config(_CFG)
-    b = Building(name="demo", position=Vec3(0, 0, 8.0),
-                 rotation=Quat.identity(), defaults=d)
+    b = Building(name="demo", position=Vec3(0, 0, 8.0), rotation=Quat.identity(), defaults=d)
     s0 = b.add_storey()
     south = s0.add_wall((0, 0), (8, 0))
     s0.add_wall((8, 0), (8, 6))
     s0.add_wall((8, 6), (0, 6))
     s0.add_wall((0, 6), (0, 0))
-    s0.add_opening(south.id, OpeningKind.DOOR, offset_m=3.5, width_m=0.9,
-                   head_m=2.0)
-    s0.add_opening(south.id, OpeningKind.WINDOW, offset_m=1.0, width_m=1.2,
-                   sill_m=1.0, head_m=2.2)
+    s0.add_opening(south.id, OpeningKind.DOOR, offset_m=3.5, width_m=0.9, head_m=2.0)
+    s0.add_opening(south.id, OpeningKind.WINDOW, offset_m=1.0, width_m=1.2, sill_m=1.0, head_m=2.2)
     b.set_foundation()
     b.set_roof()
     return b
@@ -148,7 +173,7 @@ class TestWholeBuilding:
         # Building origin at z=8 in world, but local mesh straddles z=0.
         b = _demo_building()
         mesh = mesh_building(b, _CFG)
-        assert mesh.positions[:, 2].min() < 1.0   # local, not offset by +8
+        assert mesh.positions[:, 2].min() < 1.0  # local, not offset by +8
 
 
 class TestDemoHouseDef:
@@ -173,8 +198,7 @@ class TestDemoHouseDef:
         # Storey 0 auto-detects three rooms (living / dining / kitchen) from
         # the spine wall + east half-wall topology.
         assert len(house.storeys[0].rooms) == 3
-        assert {r.tag for r in house.storeys[0].rooms} == {
-            "living", "dining", "kitchen"}
+        assert {r.tag for r in house.storeys[0].rooms} == {"living", "dining", "kitchen"}
         # Storey 1 carries one explicitly-authored (non-auto) room.
         assert len(house.storeys[1].rooms) == 1
         assert house.storeys[1].rooms[0].tag == "loft"

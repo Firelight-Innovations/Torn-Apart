@@ -101,7 +101,7 @@ def dump(path: str | Path) -> None:
     if isinstance(clock_state, dict):
         clock_state = _decode_bytes_keys(clock_state)
     print("  game_clock:")
-    for k, v in (clock_state.items() if isinstance(clock_state, dict) else []):
+    for k, v in clock_state.items() if isinstance(clock_state, dict) else []:
         print(f"    {k:<20} : {v}")
 
     # ---- Systems ----
@@ -131,9 +131,7 @@ def dump(path: str | Path) -> None:
             entry_count = f"ERROR decoding: {exc}"
 
         compression_pct = (
-            (1.0 - compressed_size / uncompressed_size) * 100.0
-            if uncompressed_size > 0
-            else 0.0
+            (1.0 - compressed_size / uncompressed_size) * 100.0 if uncompressed_size > 0 else 0.0
         )
 
         print(f"\n  [{save_key}]")

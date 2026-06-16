@@ -16,12 +16,12 @@ import math
 import numpy as np
 import pytest
 
-from fire_engine.core.math3d import Vec3, Quat
-
+from fire_engine.core.math3d import Quat, Vec3
 
 # ---------------------------------------------------------------------------
 # Vec3 — normalized() boundary
 # ---------------------------------------------------------------------------
+
 
 class TestVec3NormalizedBoundary:
     def test_zero_vector_raises(self):
@@ -65,6 +65,7 @@ class TestVec3NormalizedBoundary:
 # Vec3 — length / length_squared with extreme values
 # ---------------------------------------------------------------------------
 
+
 class TestVec3LengthExtremes:
     def test_length_squared_very_large_overflows_to_inf(self):
         """float32 overflows at ~3.4e38; a component of 1e20 makes x² ≈ 1e40 → inf.
@@ -96,6 +97,7 @@ class TestVec3LengthExtremes:
 # ---------------------------------------------------------------------------
 # Vec3 — lerp extrapolation and special endpoints
 # ---------------------------------------------------------------------------
+
 
 class TestVec3LerpBoundary:
     def test_lerp_t_negative_extrapolates(self):
@@ -132,6 +134,7 @@ class TestVec3LerpBoundary:
 # Vec3 — approx_eq eps boundary
 # ---------------------------------------------------------------------------
 
+
 class TestVec3ApproxEqBoundary:
     def test_just_inside_eps(self):
         """Component diff = eps exactly: abs(a-b) <= eps → True."""
@@ -147,6 +150,7 @@ class TestVec3ApproxEqBoundary:
 # ---------------------------------------------------------------------------
 # Quat — normalized() boundary
 # ---------------------------------------------------------------------------
+
 
 class TestQuatNormalizedBoundary:
     def test_zero_quat_raises(self):
@@ -172,6 +176,7 @@ class TestQuatNormalizedBoundary:
 # ---------------------------------------------------------------------------
 # Quat — from_axis_angle boundary
 # ---------------------------------------------------------------------------
+
 
 class TestQuatFromAxisAngleBoundary:
     def test_zero_axis_raises(self):
@@ -202,6 +207,7 @@ class TestQuatFromAxisAngleBoundary:
 # ---------------------------------------------------------------------------
 # Quat — slerp boundary
 # ---------------------------------------------------------------------------
+
 
 class TestQuatSlerpBoundary:
     def test_slerp_t0_exact_returns_a(self):
@@ -249,7 +255,7 @@ class TestQuatSlerpBoundary:
     def test_slerp_nearly_opposite_quats_stays_unit(self):
         """q and -q with a near-antipodal pair (dot very negative) → b is negated,
         then dot ≈ 1.0 → lerp path.  Result must be unit length."""
-        a = Quat.from_axis_angle(Vec3.UP, 0.0)   # identity: (1,0,0,0)
+        a = Quat.from_axis_angle(Vec3.UP, 0.0)  # identity: (1,0,0,0)
         # b is a rotation of ~170°; its negative has dot ~+1 with a
         b = Quat.from_axis_angle(Vec3.UP, math.pi * 0.95)
         result_pos = Quat.slerp(a, b, 0.5)
@@ -271,6 +277,7 @@ class TestQuatSlerpBoundary:
 # ---------------------------------------------------------------------------
 # Quat — rotate() boundary
 # ---------------------------------------------------------------------------
+
 
 class TestQuatRotateBoundary:
     def test_identity_rotate_returns_v(self):
@@ -298,6 +305,7 @@ class TestQuatRotateBoundary:
 # ---------------------------------------------------------------------------
 # Quat — from_euler/as_euler near gimbal singularities
 # ---------------------------------------------------------------------------
+
 
 class TestQuatEulerGimbalBoundary:
     def test_pitch_near_plus_90_round_trips_rotation(self):
@@ -333,6 +341,7 @@ class TestQuatEulerGimbalBoundary:
 # ---------------------------------------------------------------------------
 # Quat — approx_eq double-cover boundary
 # ---------------------------------------------------------------------------
+
 
 class TestQuatApproxEqBoundary:
     def test_q_and_neg_q_are_approx_equal(self):

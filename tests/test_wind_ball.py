@@ -21,7 +21,6 @@ from fire_engine.core.rng import set_world_seed
 from fire_engine.world.wind import BallParams, WindField, debug_ball_step
 from fire_engine.world.wind.debug import debug_ball_step as _direct_import  # name check
 
-
 SEED = 1337
 
 
@@ -31,13 +30,15 @@ def _field() -> WindField:
 
 
 def _params(ground_z: float = 8.0) -> BallParams:
-    return BallParams(ground_z=ground_z, radius_m=0.4, drag=2.5,
-                      gravity=9.81, friction=1.5, max_speed=25.0)
+    return BallParams(
+        ground_z=ground_z, radius_m=0.4, drag=2.5, gravity=9.81, friction=1.5, max_speed=25.0
+    )
 
 
 # ---------------------------------------------------------------------------
 # Pure integrator unit behaviour (no field)
 # ---------------------------------------------------------------------------
+
 
 def test_rests_on_ground_in_calm_air():
     """Zero wind → the ball sits at ground+radius and does not drift."""
@@ -48,9 +49,9 @@ def test_rests_on_ground_in_calm_air():
     wind = np.zeros(3)
     for _ in range(200):
         pos, vel = debug_ball_step(pos, vel, wind, 0.02, params)
-    assert pos[2] == rest_z                       # clamped to the plane
-    assert abs(pos[0]) < 1e-6 and abs(pos[1]) < 1e-6   # no horizontal drift
-    assert np.hypot(vel[0], vel[1]) < 1e-6        # friction settled it
+    assert pos[2] == rest_z  # clamped to the plane
+    assert abs(pos[0]) < 1e-6 and abs(pos[1]) < 1e-6  # no horizontal drift
+    assert np.hypot(vel[0], vel[1]) < 1e-6  # friction settled it
 
 
 def test_gust_pushes_ball_downwind():
@@ -59,11 +60,11 @@ def test_gust_pushes_ball_downwind():
     rest_z = params.ground_z + params.radius_m
     pos = np.array([0.0, 0.0, rest_z], dtype=np.float64)
     vel = np.zeros(3)
-    wind = np.array([6.0, 0.0, 0.0])              # +X gust, m/s
-    for _ in range(50):                           # ~1 s at 50 Hz
+    wind = np.array([6.0, 0.0, 0.0])  # +X gust, m/s
+    for _ in range(50):  # ~1 s at 50 Hz
         pos, vel = debug_ball_step(pos, vel, wind, 0.02, params)
-    assert pos[0] > 0.5                            # travelled downwind
-    assert abs(pos[1]) < 1e-6                      # no lateral drift
+    assert pos[0] > 0.5  # travelled downwind
+    assert abs(pos[1]) < 1e-6  # no lateral drift
     assert vel[0] > 0.0
 
 
@@ -73,7 +74,7 @@ def test_diagonal_wind_displaces_along_wind():
     rest_z = params.ground_z + params.radius_m
     pos = np.array([0.0, 0.0, rest_z], dtype=np.float64)
     vel = np.zeros(3)
-    wind = np.array([4.0, 3.0, 0.0])              # dir (0.8, 0.6)
+    wind = np.array([4.0, 3.0, 0.0])  # dir (0.8, 0.6)
     start = pos.copy()
     for _ in range(60):
         pos, vel = debug_ball_step(pos, vel, wind, 0.02, params)
@@ -112,6 +113,7 @@ def test_step_does_not_mutate_inputs():
 # Integration with a real WindField (the actual seam)
 # ---------------------------------------------------------------------------
 
+
 def test_ball_scoots_under_real_wind_field():
     """
     Step the ball against a real WindField (steady +X breeze) — it must end up
@@ -125,17 +127,20 @@ def test_ball_scoots_under_real_wind_field():
     rest_z = params.ground_z + params.radius_m
     pos = np.array([0.0, 0.0, rest_z], dtype=np.float64)
     vel = np.zeros(3)
-    sky = SimpleNamespace(wind_dir=(1.0, 0.0), wind_speed=8.0,
-                          rain_intensity=0.0, cloud_coverage=0.0,
-                          cloud_density=0.0)
+    sky = SimpleNamespace(
+        wind_dir=(1.0, 0.0),
+        wind_speed=8.0,
+        rain_intensity=0.0,
+        cloud_coverage=0.0,
+        cloud_density=0.0,
+    )
     start = pos.copy()
-    for i in range(400):                          # ~8 s at 50 Hz
+    for i in range(400):  # ~8 s at 50 Hz
         t = i * 0.02
-        field.update(0.02, t, sky, (float(pos[0]), float(pos[1]),
-                                    float(pos[2])))
+        field.update(0.02, t, sky, (float(pos[0]), float(pos[1]), float(pos[2])))
         v_wind = field.sample(pos[None])[0]
         pos, vel = debug_ball_step(pos, vel, v_wind, 0.02, params)
-        assert pos[2] == rest_z                   # never leaves the ground
+        assert pos[2] == rest_z  # never leaves the ground
         assert np.all(np.isfinite(pos))
 
     disp = pos[:2] - start[:2]
@@ -155,13 +160,16 @@ def test_storm_moves_ball_more_than_calm():
         rest_z = params.ground_z + params.radius_m
         pos = np.array([0.0, 0.0, rest_z], dtype=np.float64)
         vel = np.zeros(3)
-        sky = SimpleNamespace(wind_dir=(1.0, 0.0), wind_speed=wind_speed,
-                              rain_intensity=rain, cloud_coverage=cov,
-                              cloud_density=den)
+        sky = SimpleNamespace(
+            wind_dir=(1.0, 0.0),
+            wind_speed=wind_speed,
+            rain_intensity=rain,
+            cloud_coverage=cov,
+            cloud_density=den,
+        )
         for i in range(200):
             t = i * 0.02
-            field.update(0.02, t, sky, (float(pos[0]), float(pos[1]),
-                                        float(pos[2])))
+            field.update(0.02, t, sky, (float(pos[0]), float(pos[1]), float(pos[2])))
             v = field.sample(pos[None])[0]
             pos, vel = debug_ball_step(pos, vel, v, 0.02, params)
         return float(pos[0])

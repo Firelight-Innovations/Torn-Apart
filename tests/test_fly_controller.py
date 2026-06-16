@@ -15,25 +15,28 @@ TYPE_CHECKING. However fire_engine.world.component (imported at module level)
 DOES import fire_engine.world which may import panda3d depending on __init__.py.
 We probe this early with a try/import and skip the whole suite if needed.
 """
+
 from __future__ import annotations
 
 import math
 import types
-import pytest
+
 import numpy as np
+import pytest
 
 # ---------------------------------------------------------------------------
 # Headless import check  — skip entire module if panda3d leaks in
 # ---------------------------------------------------------------------------
 # We do this at collection time so we get one clear skip rather than 35 errors.
 try:
-    from fire_engine.render.component import Component           # noqa: F401 — probe
-    from fire_engine.render.gameobject import GameObject        # noqa: F401
-    from fire_engine.render.registry import ComponentRegistry, instantiate
     from fire_engine.core.clock import Clock
     from fire_engine.core.event_bus import EventBus
-    from fire_engine.core.math3d import Vec3, Quat
-    from fire_engine.simulation.player.fly_controller import FlyController, _PITCH_LIMIT
+    from fire_engine.core.math3d import Quat, Vec3
+    from fire_engine.render.component import Component  # noqa: F401 — probe
+    from fire_engine.render.gameobject import GameObject  # noqa: F401
+    from fire_engine.render.registry import ComponentRegistry, instantiate
+    from fire_engine.simulation.player.fly_controller import _PITCH_LIMIT, FlyController
+
     _IMPORT_OK = True
     _IMPORT_ERROR = None
 except ImportError as _e:
@@ -48,6 +51,7 @@ pytestmark = pytest.mark.skipif(
 # ---------------------------------------------------------------------------
 # Minimal InputState stub — exposes exactly the fields FlyController reads
 # ---------------------------------------------------------------------------
+
 
 def _inp(
     *,
@@ -81,6 +85,7 @@ def _inp(
 # Fixtures — mirrors test_gameobject.py exactly
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def reset_registry():
     """Isolate each test by clearing the registry before and after."""
@@ -106,6 +111,7 @@ def go_with_ctrl():
 # 1. Construction / defaults
 # ---------------------------------------------------------------------------
 
+
 class TestConstruction:
     def test_default_move_speed(self):
         ctrl = instantiate().add_component(FlyController)
@@ -121,7 +127,9 @@ class TestConstruction:
 
     def test_params_stored_as_float(self):
         """All three params are coerced through float() — pin this."""
-        ctrl = instantiate().add_component(FlyController, move_speed=7, sprint_mult=3, mouse_sensitivity=2)
+        ctrl = instantiate().add_component(
+            FlyController, move_speed=7, sprint_mult=3, mouse_sensitivity=2
+        )
         assert isinstance(ctrl.move_speed, float)
         assert isinstance(ctrl.sprint_mult, float)
         assert isinstance(ctrl.mouse_sensitivity, float)
@@ -161,6 +169,7 @@ class TestConstruction:
 # ---------------------------------------------------------------------------
 # 2. awake()
 # ---------------------------------------------------------------------------
+
 
 class TestAwake:
     def test_awake_reads_yaw_from_transform_rotation(self, clock):
@@ -204,6 +213,7 @@ class TestAwake:
 # 3. set_input_state()
 # ---------------------------------------------------------------------------
 
+
 class TestSetInputState:
     def test_set_input_state_stores_reference(self):
         ctrl = instantiate().add_component(FlyController)
@@ -223,6 +233,7 @@ class TestSetInputState:
 # ---------------------------------------------------------------------------
 # 4. update() — mouse-look
 # ---------------------------------------------------------------------------
+
 
 class TestMouseLook:
     """Mouse look only changes when mouse_captured=True."""
@@ -323,6 +334,7 @@ class TestMouseLook:
 # ---------------------------------------------------------------------------
 # 5. update() — movement
 # ---------------------------------------------------------------------------
+
 
 class TestMovement:
     """Movement always uses horizontal projections; vertical uses world Z."""
@@ -458,6 +470,7 @@ class TestMovement:
 # 6. _horizontal() static method
 # ---------------------------------------------------------------------------
 
+
 class TestHorizontal:
     def test_forward_vector_returns_forward(self):
         """Vec3.FORWARD (0,1,0) → normalized on XY = Vec3.FORWARD."""
@@ -497,19 +510,21 @@ class TestHorizontal:
 # 7. _PITCH_LIMIT constant
 # ---------------------------------------------------------------------------
 
+
 class TestPitchLimit:
     def test_pitch_limit_value(self):
         """_PITCH_LIMIT is exactly math.radians(89) (pin constant)."""
-        assert _PITCH_LIMIT == pytest.approx(math.radians(89.0), abs=1e-10)
+        assert pytest.approx(math.radians(89.0), abs=1e-10) == _PITCH_LIMIT
 
     def test_pitch_limit_less_than_half_pi(self):
         """_PITCH_LIMIT < π/2 (ensures we never hit the gimbal singularity)."""
-        assert _PITCH_LIMIT < math.pi / 2
+        assert math.pi / 2 > _PITCH_LIMIT
 
 
 # ---------------------------------------------------------------------------
 # 8. Determinism
 # ---------------------------------------------------------------------------
+
 
 class TestDeterminism:
     """Same inputs over N frames must reproduce identical transform state."""
@@ -518,7 +533,9 @@ class TestDeterminism:
         """Run a sequence of (InputState, dt) pairs on a fresh controller; return final state."""
         ComponentRegistry.clear()
         go = instantiate()
-        ctrl = go.add_component(FlyController, move_speed=10.0, sprint_mult=5.0, mouse_sensitivity=0.003)
+        ctrl = go.add_component(
+            FlyController, move_speed=10.0, sprint_mult=5.0, mouse_sensitivity=0.003
+        )
         for inp, dt in inputs_dts:
             ctrl.set_input_state(inp)
             ctrl.update(dt)
@@ -531,8 +548,8 @@ class TestDeterminism:
         """Two runs with identical input produce identical position and rotation."""
         sequence = [
             (_inp(mouse_captured=True, mouse_dx=5.0, mouse_dy=-2.0, move_forward=True), 0.016),
-            (_inp(mouse_captured=True, mouse_dx=-3.0, move_right=True, sprint=True),    0.016),
-            (_inp(move_up=True),                                                         0.016),
+            (_inp(mouse_captured=True, mouse_dx=-3.0, move_right=True, sprint=True), 0.016),
+            (_inp(move_up=True), 0.016),
         ]
         pos1, rot1 = self._run_sequence(sequence)
         pos2, rot2 = self._run_sequence(sequence)

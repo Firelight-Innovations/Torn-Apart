@@ -33,9 +33,8 @@ import pytest
 from fire_engine.core import EventBus, load_config
 from fire_engine.core.rng import set_world_seed
 from fire_engine.world.weather import WeatherSystem
-from fire_engine.world.weather.cells import CellKind, StormCell, day_regime
-from fire_engine.world.weather.cells import Regime
 from fire_engine.world.weather import humidity as H
+from fire_engine.world.weather.cells import CellKind, Regime, StormCell, day_regime
 
 HOUR = 3600.0
 DAY = 24 * HOUR
@@ -88,6 +87,7 @@ def _evening_shower(ws: WeatherSystem, day: int, *, peak: float = 1.0) -> None:
 # Behaviour: pre-dawn fog after evening rain, burning off after sunrise
 # ---------------------------------------------------------------------------
 
+
 class TestPreDawnFog:
     # Seed 7 has two consecutive high humidity-base days (3 and 4 ≈ 0.59), so a
     # late-evening shower on day 3 leaves the air muggy into the cool small hours.
@@ -132,12 +132,13 @@ class TestPreDawnFog:
         lw = ws.sample_local((0.0, 0.0), self.RAIN_DAY * DAY + 22 * HOUR)
         assert lw.humidity != 0.5
         assert 0.0 <= lw.humidity <= 1.0
-        assert lw.humidity > 0.6        # muggy after the shower
+        assert lw.humidity > 0.6  # muggy after the shower
 
 
 # ---------------------------------------------------------------------------
 # Wind kills the fog (gate closed)
 # ---------------------------------------------------------------------------
+
 
 class TestWindKillsFog:
     def test_same_humid_setup_no_fog_when_windy(self):
@@ -151,11 +152,10 @@ class TestWindKillsFog:
         windy = _ws(_windy_config(), 7)
         _evening_shower(windy, 3)
         lw = windy.sample_local((0.0, 0.0), t)
-        assert lw.wind_speed >= 3.0     # well above the fog-none threshold
+        assert lw.wind_speed >= 3.0  # well above the fog-none threshold
         # The wind gate is shut at this speed, so however humid the air is, no
         # emergent fog condenses — only the clear-air baseline remains.
-        assert H.wind_gate(np.array([lw.wind_speed]), windy._config)[0] == \
-            pytest.approx(0.0)
+        assert H.wind_gate(np.array([lw.wind_speed]), windy._config)[0] == pytest.approx(0.0)
         assert lw.fog_density == pytest.approx(_FOG_BASELINE, abs=1e-5)
 
     def test_wind_gate_monotonic_and_bounds(self):
@@ -164,7 +164,7 @@ class TestWindKillsFog:
         none = cfg.weather_fog_wind_none_ms
         speeds = np.linspace(0.0, none + 2.0, 50)
         gate = H.wind_gate(speeds, cfg)
-        assert np.all(np.diff(gate) <= 1e-12)            # non-increasing
+        assert np.all(np.diff(gate) <= 1e-12)  # non-increasing
         assert H.wind_gate(np.array([full - 0.1]), cfg)[0] == pytest.approx(1.0)
         assert H.wind_gate(np.array([none + 0.1]), cfg)[0] == pytest.approx(0.0)
 
@@ -172,6 +172,7 @@ class TestWindKillsFog:
 # ---------------------------------------------------------------------------
 # Dry day → no emergent fog
 # ---------------------------------------------------------------------------
+
 
 class TestDryDayNoFog:
     def test_high_pressure_dry_day_stays_at_baseline(self):
@@ -182,7 +183,7 @@ class TestDryDayNoFog:
         ws = _ws(cfg, seed)
         for tod in (0.0, 2.0, 4.0, 22.0):
             t = day * DAY + tod * HOUR
-            lw = ws.sample_local((5_000.0, 5_000.0), t)   # away from any cell
+            lw = ws.sample_local((5_000.0, 5_000.0), t)  # away from any cell
             assert lw.rain_intensity == 0.0
             assert lw.fog_density == pytest.approx(_FOG_BASELINE, abs=1e-5)
 
@@ -201,6 +202,7 @@ class TestDryDayNoFog:
 # ---------------------------------------------------------------------------
 # Determinism + cap
 # ---------------------------------------------------------------------------
+
 
 class TestDeterminismAndCap:
     def test_emergent_fog_pure_function(self):
@@ -223,8 +225,16 @@ class TestDeterminismAndCap:
         # so the baseline + emergent terms both push hard against the cap.
         _evening_shower(ws, 3, peak=1.0)
         ws._summoned.append(
-            StormCell("s:fog", CellKind.FOG_BANK, 3 * DAY + 20 * HOUR,
-                      (0.0, 0.0), 6 * HOUR, 2000.0, 1.0, (0.0, 0.0))
+            StormCell(
+                "s:fog",
+                CellKind.FOG_BANK,
+                3 * DAY + 20 * HOUR,
+                (0.0, 0.0),
+                6 * HOUR,
+                2000.0,
+                1.0,
+                (0.0, 0.0),
+            )
         )
         for tod in np.arange(20.0, 30.0, 0.25):
             t = 3 * DAY + tod * HOUR
@@ -234,9 +244,7 @@ class TestDeterminismAndCap:
     def test_emergent_fog_function_capped_inputs(self):
         cfg = load_config()
         # Saturated, freezing, dead-calm: maximal condensation × gate.
-        f = H.emergent_fog(
-            np.array([1.0]), np.array([-5.0]), np.array([0.0]), cfg
-        )[0]
+        f = H.emergent_fog(np.array([1.0]), np.array([-5.0]), np.array([0.0]), cfg)[0]
         assert f == pytest.approx(cfg.weather_fog_emergent_max)
 
 
@@ -244,32 +252,35 @@ class TestDeterminismAndCap:
 # Formula shape (clarity tests on the pure functions)
 # ---------------------------------------------------------------------------
 
+
 class TestFormulas:
     def test_saturation_rises_with_temperature(self):
         cfg = load_config()
         T = np.array([0.0, 5.0, 10.0, 20.0])
         h_sat = H.saturation_humidity(T, cfg)
-        assert np.all(np.diff(h_sat) >= 0.0)             # non-decreasing in T
+        assert np.all(np.diff(h_sat) >= 0.0)  # non-decreasing in T
         assert np.all(h_sat >= 0.5) and np.all(h_sat <= 1.0)
         # Cool pre-dawn saturates lower than the warm afternoon (fog-friendly).
-        assert H.saturation_humidity(np.array([4.0]), cfg)[0] < \
-            H.saturation_humidity(np.array([19.0]), cfg)[0]
+        assert (
+            H.saturation_humidity(np.array([4.0]), cfg)[0]
+            < H.saturation_humidity(np.array([19.0]), cfg)[0]
+        )
 
     def test_condense_fraction_monotonic(self):
         cfg = load_config()
         h_sat = np.full(40, 0.8)
         hum = np.linspace(0.6, 1.0, 40)
         cf = H.condense_fraction(hum, h_sat, cfg)
-        assert np.all(np.diff(cf) >= -1e-12)             # non-decreasing
-        assert cf[0] == pytest.approx(0.0)               # below saturation
-        assert cf[-1] == pytest.approx(1.0)              # well past saturation
+        assert np.all(np.diff(cf) >= -1e-12)  # non-decreasing
+        assert cf[0] == pytest.approx(0.0)  # below saturation
+        assert cf[-1] == pytest.approx(1.0)  # well past saturation
 
     def test_relative_humidity_rises_with_moisture(self):
         cfg = load_config()
         rr = np.array([0.0, 0.5, 1.0])
         wet = np.zeros(3)
         h = H.relative_humidity(rr, wet, 0.4, cfg)
-        assert np.all(np.diff(h) > 0.0)                  # more rain ⇒ more humid
+        assert np.all(np.diff(h) > 0.0)  # more rain ⇒ more humid
         assert np.all(h >= 0.0) and np.all(h <= 1.0)
         # The wetness term also lifts humidity.
         h_wet = H.relative_humidity(np.zeros(1), np.array([1.0]), 0.4, cfg)[0]

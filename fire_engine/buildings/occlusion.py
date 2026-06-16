@@ -101,7 +101,9 @@ class BuildingOccupancyRasterizer:
         lighting-volume test).  Logs once that occlusion is stubbed.
         """
         if not self._warned:
-            _log.debug("building light occlusion is a v1 no-op — buildings "
-                       "are lit but do not yet shadow the cascades")
+            _log.debug(
+                "building light occlusion is a v1 no-op — buildings "
+                "are lit but do not yet shadow the cascades"
+            )
             self._warned = True
         return  # v1: intentional no-op; see module docstring for the algorithm

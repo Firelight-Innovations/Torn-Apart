@@ -32,13 +32,14 @@ Example
     set_world_seed(1337)
     shape = bake_shape_noise(64)        # (64, 64, 64, 4) uint8, deterministic
 """
+
 from __future__ import annotations
 
 import numpy as np
 
 from fire_engine.core.rng import for_domain
 
-__all__ = ["bake_shape_noise", "bake_detail_noise"]
+__all__ = ["bake_detail_noise", "bake_shape_noise"]
 
 
 def _smoothstep(f: np.ndarray) -> np.ndarray:
@@ -59,10 +60,14 @@ def _value_octave(size: int, freq: int, rng: np.random.Generator) -> np.ndarray:
     def corner(ix, iy, iz):
         return grid[np.ix_(ix, iy, iz)]
 
-    g000 = corner(i0, i0, i0); g100 = corner(i1, i0, i0)
-    g010 = corner(i0, i1, i0); g110 = corner(i1, i1, i0)
-    g001 = corner(i0, i0, i1); g101 = corner(i1, i0, i1)
-    g011 = corner(i0, i1, i1); g111 = corner(i1, i1, i1)
+    g000 = corner(i0, i0, i0)
+    g100 = corner(i1, i0, i0)
+    g010 = corner(i0, i1, i0)
+    g110 = corner(i1, i1, i0)
+    g001 = corner(i0, i0, i1)
+    g101 = corner(i1, i0, i1)
+    g011 = corner(i0, i1, i1)
+    g111 = corner(i1, i1, i1)
     g00 = g000 + (g100 - g000) * fx
     g10 = g010 + (g110 - g010) * fx
     g01 = g001 + (g101 - g001) * fx
@@ -74,7 +79,7 @@ def _value_octave(size: int, freq: int, rng: np.random.Generator) -> np.ndarray:
 
 def _worley_octave(size: int, freq: int, rng: np.random.Generator) -> np.ndarray:
     """One tileable INVERTED-Worley octave (1 − dist-to-nearest feature)."""
-    feat = rng.random((freq, freq, freq, 3)).astype(np.float32)   # offset in cell
+    feat = rng.random((freq, freq, freq, 3)).astype(np.float32)  # offset in cell
     t = (np.arange(size, dtype=np.float32) + 0.5) / size * freq
     cell = np.floor(t).astype(np.intp)
     sx = t[:, None, None]
@@ -90,7 +95,7 @@ def _worley_octave(size: int, freq: int, rng: np.random.Generator) -> np.ndarray
             for oz in (-1, 0, 1):
                 czw = (cell + oz) % freq
                 ccz = (cell + oz).astype(np.float32)
-                fo = feat[np.ix_(cxw, cyw, czw)]            # (N,N,N,3)
+                fo = feat[np.ix_(cxw, cyw, czw)]  # (N,N,N,3)
                 fx = fo[..., 0] + ccx[:, None, None]
                 fy = fo[..., 1] + ccy[None, :, None]
                 fz = fo[..., 2] + ccz[None, None, :]
@@ -100,8 +105,9 @@ def _worley_octave(size: int, freq: int, rng: np.random.Generator) -> np.ndarray
     return (1.0 - w).astype(np.float32)
 
 
-def _worley_fbm(size: int, base_freq: int, octaves: int,
-                rng: np.random.Generator, gain: float = 0.5) -> np.ndarray:
+def _worley_fbm(
+    size: int, base_freq: int, octaves: int, rng: np.random.Generator, gain: float = 0.5
+) -> np.ndarray:
     """Sum of inverted-Worley octaves (freq doubles each octave); → [0,1]."""
     total = np.zeros((size, size, size), np.float32)
     amp = 1.0
@@ -117,8 +123,9 @@ def _worley_fbm(size: int, base_freq: int, octaves: int,
     return total / max(norm, 1e-6)
 
 
-def _value_fbm(size: int, base_freq: int, octaves: int,
-               rng: np.random.Generator, gain: float = 0.5) -> np.ndarray:
+def _value_fbm(
+    size: int, base_freq: int, octaves: int, rng: np.random.Generator, gain: float = 0.5
+) -> np.ndarray:
     total = np.zeros((size, size, size), np.float32)
     amp = 1.0
     norm = 0.0

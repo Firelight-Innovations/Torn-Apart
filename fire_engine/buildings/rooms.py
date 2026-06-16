@@ -133,8 +133,7 @@ def detect_room_polygons(
 
     def _heading(d: int) -> float:
         u, v = dart[d]
-        return math.atan2(node_xy[v][1] - node_xy[u][1],
-                          node_xy[v][0] - node_xy[u][0])
+        return math.atan2(node_xy[v][1] - node_xy[u][1], node_xy[v][0] - node_xy[u][0])
 
     # Sort each node's outgoing darts CCW by heading, and remember each dart's
     # position in its source node's order so we can step clockwise in O(1).

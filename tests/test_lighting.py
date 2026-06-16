@@ -19,24 +19,23 @@ Test coverage
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
-from fire_engine.core import EventBus, TerrainEditedEvent, ChunkLoadedEvent, load_config
+from fire_engine.core import ChunkLoadedEvent, EventBus, TerrainEditedEvent, load_config
 from fire_engine.core.rng import set_world_seed
-from fire_engine.world.terrain.chunk import Chunk
 from fire_engine.lighting import (
+    LIGHT_AMBIENT,
+    LIGHT_FULL,
     LightGrid,
-    occupancy_from_materials,
     SunlightComputer,
     make_light_sampler,
-    LIGHT_FULL,
-    LIGHT_AMBIENT,
+    occupancy_from_materials,
 )
-
+from fire_engine.world.terrain.chunk import Chunk
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_chunk(coord, solid_z_range=None):
     """Return a Chunk with optional solid fill in a Z range (local voxel indices)."""
@@ -61,6 +60,7 @@ class _FakeChunkProvider:
 # ---------------------------------------------------------------------------
 # occupancy_from_materials
 # ---------------------------------------------------------------------------
+
 
 class TestOccupancyFromMaterials:
     def test_all_air_returns_all_false(self):
@@ -119,6 +119,7 @@ class TestOccupancyFromMaterials:
 # LightGrid store
 # ---------------------------------------------------------------------------
 
+
 class TestLightGrid:
     def test_get_returns_none_before_set(self):
         lg = LightGrid()
@@ -133,7 +134,7 @@ class TestLightGrid:
         arr = np.full((16, 16, 16), 200, dtype=np.uint8)
         lg.set((1, 2, 3), arr)
         got = lg.get((1, 2, 3))
-        assert got is arr   # same object stored
+        assert got is arr  # same object stored
         assert lg.has_valid((1, 2, 3))
 
     def test_invalidate(self):
@@ -164,8 +165,8 @@ class TestLightGrid:
 # SunlightComputer — column pass
 # ---------------------------------------------------------------------------
 
-class TestColumnPass:
 
+class TestColumnPass:
     def _make_computer(self, chunks_dict):
         cfg = _config()
         bus = EventBus()
@@ -219,7 +220,7 @@ class TestColumnPass:
         """
         mat = np.zeros((32, 32, 32), dtype=np.uint8)
         # Light cell 8 = voxels 16..17 (z).
-        mat[:, :, 16:18] = 1   # fill voxels z=16,17 → light cell z=8 occupied
+        mat[:, :, 16:18] = 1  # fill voxels z=16,17 → light cell z=8 occupied
         chunk = Chunk((0, 0, 0), mat)
         sc, lg, _, _ = self._make_computer({(0, 0, 0): chunk})
         sc.recompute_column(0, 0)
@@ -228,9 +229,7 @@ class TestColumnPass:
         # Topmost cells (14, 15) have no occupancy at or above → LIGHT_FULL after blur.
         # The blur only blends ±1 cell, so cells far from the boundary remain pure.
         top_vals = arr[:, :, 14:16]
-        assert top_vals.min() == LIGHT_FULL, (
-            f"Expected LIGHT_FULL at top, got {top_vals.min()}"
-        )
+        assert top_vals.min() == LIGHT_FULL, f"Expected LIGHT_FULL at top, got {top_vals.min()}"
 
         # Bottommost cells (0, 1) are deep in shadow → LIGHT_AMBIENT.
         bot_vals = arr[:, :, 0:2]
@@ -267,8 +266,8 @@ class TestColumnPass:
 # Box blur
 # ---------------------------------------------------------------------------
 
-class TestBoxBlur:
 
+class TestBoxBlur:
     def _compute_blurred(self, mat):
         cfg = _config()
         bus = EventBus()
@@ -305,9 +304,7 @@ class TestBoxBlur:
         arr = self._compute_blurred(mat)
 
         # Look for an intermediate value: strictly between AMBIENT and FULL.
-        has_intermediate = (
-            (arr > LIGHT_AMBIENT) & (arr < LIGHT_FULL)
-        ).any()
+        has_intermediate = ((arr > LIGHT_AMBIENT) & (arr < LIGHT_FULL)).any()
         assert has_intermediate, (
             f"Expected a gradient (intermediate value between {LIGHT_AMBIENT} "
             f"and {LIGHT_FULL}) but got unique values: {np.unique(arr)}"
@@ -326,8 +323,8 @@ class TestBoxBlur:
 # Event invalidation
 # ---------------------------------------------------------------------------
 
-class TestEventInvalidation:
 
+class TestEventInvalidation:
     def test_terrain_edited_event_triggers_recompute_and_dirty(self):
         """
         Publishing a TerrainEditedEvent for a chunk should recompute its column
@@ -346,6 +343,7 @@ class TestEventInvalidation:
         # Simulate a terrain edit by publishing a TerrainEditedEvent.
         class _FakeBrush:
             pass
+
         bus.publish(TerrainEditedEvent(chunk_coords=(2, 3, 0), brush=_FakeBrush()))
 
         # Light should now be computed for this chunk.
@@ -382,11 +380,13 @@ class TestEventInvalidation:
         chunk0 = Chunk((1, 1, 0))
         chunk1 = Chunk((1, 1, 1))
         chunk2 = Chunk((1, 1, 2))
-        provider = _FakeChunkProvider({
-            (1, 1, 0): chunk0,
-            (1, 1, 1): chunk1,
-            (1, 1, 2): chunk2,
-        })
+        provider = _FakeChunkProvider(
+            {
+                (1, 1, 0): chunk0,
+                (1, 1, 1): chunk1,
+                (1, 1, 2): chunk2,
+            }
+        )
         sc = SunlightComputer(cfg, provider, lg, bus)
 
         # Clear dirty flags.
@@ -396,6 +396,7 @@ class TestEventInvalidation:
 
         class _FakeBrush:
             pass
+
         # Edit chunk1 — should dirty all three in the column.
         bus.publish(TerrainEditedEvent(chunk_coords=(1, 1, 1), brush=_FakeBrush()))
 
@@ -408,8 +409,8 @@ class TestEventInvalidation:
 # Determinism
 # ---------------------------------------------------------------------------
 
-class TestDeterminism:
 
+class TestDeterminism:
     def test_same_materials_same_light(self):
         """Same materials array → byte-identical light output."""
         set_world_seed(42)
@@ -458,8 +459,8 @@ class TestDeterminism:
 # make_light_sampler
 # ---------------------------------------------------------------------------
 
-class TestMakeLightSampler:
 
+class TestMakeLightSampler:
     def _fully_lit_setup(self):
         """Return a sampler backed by a chunk that is all-air (full sun)."""
         cfg = _config()
@@ -487,11 +488,14 @@ class TestMakeLightSampler:
         """Face centres in a fully lit (all air) chunk → light ≈ 1.0."""
         sampler, cfg = self._fully_lit_setup()
         # Face centres scattered across chunk (0,0,0): world coords [0, 16) m.
-        positions = np.array([
-            [0.5, 0.5, 15.5],   # near top of chunk
-            [8.0, 8.0, 8.0],    # mid chunk
-            [15.5, 15.5, 0.5],  # near bottom of chunk
-        ], dtype=np.float32)
+        positions = np.array(
+            [
+                [0.5, 0.5, 15.5],  # near top of chunk
+                [8.0, 8.0, 8.0],  # mid chunk
+                [15.5, 15.5, 0.5],  # near bottom of chunk
+            ],
+            dtype=np.float32,
+        )
         result = sampler(positions)
         assert result.shape == (3,)
         np.testing.assert_allclose(result, [1.0, 1.0, 1.0], atol=1e-6)
@@ -503,7 +507,7 @@ class TestMakeLightSampler:
         lg = LightGrid()
         # Solid entire top of chunk to cast a deep shadow on lower cells.
         mat = np.zeros((32, 32, 32), dtype=np.uint8)
-        mat[:, :, 28:32] = 1   # solid top 4 voxels = top 2 light cells
+        mat[:, :, 28:32] = 1  # solid top 4 voxels = top 2 light cells
         chunk = Chunk((0, 0, 0), mat)
         provider = _FakeChunkProvider({(0, 0, 0): chunk})
         sc = SunlightComputer(cfg, provider, lg, bus)
@@ -511,9 +515,12 @@ class TestMakeLightSampler:
         sampler = make_light_sampler(lg, cfg)
 
         # Deep shadow at the bottom: light cells z=0,1 (far from the blur boundary).
-        positions = np.array([
-            [0.5, 0.5, 0.5],   # world Z 0.5 m → light cell z=0 of chunk (0,0,0)
-        ], dtype=np.float32)
+        positions = np.array(
+            [
+                [0.5, 0.5, 0.5],  # world Z 0.5 m → light cell z=0 of chunk (0,0,0)
+            ],
+            dtype=np.float32,
+        )
         result = sampler(positions)
         expected = float(LIGHT_AMBIENT) / 255.0
         np.testing.assert_allclose(result, [expected], atol=0.05)
@@ -537,8 +544,8 @@ class TestMakeLightSampler:
         lg = LightGrid()
         # Set a custom array for chunk (0,0,0): gradient across Z light cells.
         arr = np.zeros((16, 16, 16), dtype=np.uint8)
-        arr[:, :, 0] = 40    # bottom cell
-        arr[:, :, 8] = 128   # mid cell
+        arr[:, :, 0] = 40  # bottom cell
+        arr[:, :, 8] = 128  # mid cell
         arr[:, :, 15] = 255  # top cell
         lg.set((0, 0, 0), arr)
 
@@ -549,11 +556,14 @@ class TestMakeLightSampler:
         # Cell z=0: world Z in [0, 1). Test at Z=0.5.
         # Cell z=8: world Z in [8, 9). Test at Z=8.5.
         # Cell z=15: world Z in [15, 16). Test at Z=15.5.
-        positions = np.array([
-            [0.5, 0.5, 0.5],    # cell (0,0,0) → value 40
-            [0.5, 0.5, 8.5],    # cell (0,0,8) → value 128
-            [0.5, 0.5, 15.5],   # cell (0,0,15) → value 255
-        ], dtype=np.float32)
+        positions = np.array(
+            [
+                [0.5, 0.5, 0.5],  # cell (0,0,0) → value 40
+                [0.5, 0.5, 8.5],  # cell (0,0,8) → value 128
+                [0.5, 0.5, 15.5],  # cell (0,0,15) → value 255
+            ],
+            dtype=np.float32,
+        )
         result = sampler(positions)
 
         np.testing.assert_allclose(result[0], 40.0 / 255.0, atol=1e-5)
@@ -574,10 +584,13 @@ class TestMakeLightSampler:
 
         # Chunk (0,0,0) world X in [0,16). Centre → X=8.
         # Chunk (1,0,0) world X in [16,32). Centre → X=24.
-        positions = np.array([
-            [8.0, 8.0, 8.0],   # chunk (0,0,0) → LIGHT_AMBIENT
-            [24.0, 8.0, 8.0],  # chunk (1,0,0) → LIGHT_FULL
-        ], dtype=np.float32)
+        positions = np.array(
+            [
+                [8.0, 8.0, 8.0],  # chunk (0,0,0) → LIGHT_AMBIENT
+                [24.0, 8.0, 8.0],  # chunk (1,0,0) → LIGHT_FULL
+            ],
+            dtype=np.float32,
+        )
         result = sampler(positions)
 
         np.testing.assert_allclose(result[0], LIGHT_AMBIENT / 255.0, atol=1e-5)

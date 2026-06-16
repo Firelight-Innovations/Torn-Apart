@@ -167,6 +167,7 @@ flowchart LR
     end
     render["render/  🟥 may import panda3d (was world/)"]
     buildings["buildings/"]
+    assets["assets/"]
     lighting["lighting/  🟥 may import panda3d"]
     resources["resources/"]
     procedural["procedural/"]
@@ -190,6 +191,8 @@ flowchart LR
     render --> panda3d
     buildings --> procedural
     buildings --> terrain
+    buildings --> assets
+    assets --> numpy
     terrain --> procedural
     terrain --> numpy
     sky --> weather
@@ -470,6 +473,13 @@ class Saveable(Protocol):
 - Load = regenerate baseline from seed → `apply_delta` per system. Un-deviated content costs ~0 bytes — this is what makes 10k NPCs saveable.
 - Deltas are plain dicts of primitives/arrays (no live object refs), so saves survive refactors and `tools/dump_save.py` can pretty-print any save for inspection.
 - Game code never touches encoding; only `SaveManager` knows it's msgpack+zlib.
+
+### 5.13 Asset / Prefab API (`assets/` — new 2026-06-16)
+A headless, general `.asset` file format that serialises a `GameObject` subtree (a "prefab") as a standalone, reusable, **human-readable JSON** file, decoupled from any world save. Buildings are consumer #1, but the format is generic — any `SceneObject` subtree round-trips. See `docs/systems/assets.md`.
+- `save_asset(path, prefab)` / `load_asset(path) -> Prefab`; `Prefab.from_store(store, root_id)` snapshots a subtree out of a `SceneObjectStore`, `Prefab.instantiate_into(store, *, at_transform)` materialises it back with asset-local ids remapped into the scene's id space (components written **verbatim** — kinds/component-types are opaque, so the package depends on neither the scene catalog nor `buildings/`).
+- On-disk: UTF-8 JSON (`indent=2`, `sort_keys=True`, trailing newline) → byte-stable git diffs; binary payloads are Base64 numpy blobs (`encode_array`/`decode_array`); versioned loader gates `fire_asset` and migrates older revisions.
+- **Identity = path** (relative to `assets/`); a `guid` field is reserved in the envelope for a future rename-safe layer but never generated in v1. Scenes link to an asset via a reserved `PrefabInstance` component (linked, not baked — editing the `.asset` updates every referencing scene); the component registration + scene-load resolver land with the consuming editor/buildings branch.
+- Convention: `assets/prefabs/*.asset` (generic) and `assets/buildings/*.asset` (generated-then-hand-edited buildings, which count as authored content).
 
 ---
 

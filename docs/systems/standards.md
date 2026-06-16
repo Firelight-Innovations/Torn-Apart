@@ -123,6 +123,22 @@ A module's test mirror is `tests/<path-under-source-root>/test_<stem>.py`
 (legacy flat `tests/test_<stem>.py` is also accepted), e.g.
 `fire_engine/core/rng.py` → `tests/core/test_rng.py`.
 
+Two narrow exemptions keep the structure gate consistent with the rest of the
+standards (both implemented as guards in `check_repo_structure.py`, not as
+`pyproject` limit changes — see DECISIONS.md, 2026-06-15):
+
+- **Sub-folder cap (`[6]`)** does not apply to the **source root itself**
+  (`fire_engine/`). It is the engine's subsystem index prescribed by
+  ARCHITECTURE/CLAUDE.md, not a leaf package the deep-&-narrow cap targets;
+  `check_docs.py` already exempts the root the same way. Every real sub-package
+  still enforces ≤5 sub-folders and ≤10 modules.
+- **Test mirror (`[17]`)** does not apply to a module that **imports panda3d**.
+  Hard Rule 1 confines panda3d to `render/`/`lighting/`, and the headless suite
+  excludes anything importing it — so such a module cannot have a headless
+  mirror; it is integration-verified at app launch (`tools/screenshot.py`).
+  The headless halves of those packages (GLSL-string builders, the pure object
+  model, the lighting math) do **not** import panda3d and still require mirrors.
+
 ### Documentation
 
 Every public module/class/function docstring carries a resolvable pointer:

@@ -36,14 +36,14 @@ def _fresh_registry():
     from fire_engine.procedural.registry import register, reset_registry
     from fire_engine.procedural.textures.ground.dirt_ground import DirtGroundDef
     from fire_engine.procedural.textures.ground.grass_ground import GrassGroundDef
-    from fire_engine.procedural.textures.sprites.grass_tuft import GrassTuftDef
+    from fire_engine.procedural.textures.ground.wasteland_ground import WastelandGroundDef
     from fire_engine.procedural.textures.sky.moon_surface import MoonSurfaceDef
     from fire_engine.procedural.textures.sky.night_sky import (
         NightSkyCubeDef,
         NightSkyDef,
     )
     from fire_engine.procedural.textures.sky.rain_streak import RainStreakDef
-    from fire_engine.procedural.textures.ground.wasteland_ground import WastelandGroundDef
+    from fire_engine.procedural.textures.sprites.grass_tuft import GrassTuftDef
 
     reset_registry()
     register(WastelandGroundDef())

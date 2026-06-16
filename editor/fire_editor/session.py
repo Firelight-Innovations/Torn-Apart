@@ -86,8 +86,14 @@ class EditorSession:
         numpy — never import ``world.terrain_shader`` here (it pulls panda3d).
         """
         if self._ground_lut is None:
-            from fire_engine.procedural.textures.ground.dirt_ground import DIRT_PALETTE, DIRT_THRESHOLDS
-            from fire_engine.procedural.textures.ground.grass_ground import GRASS_PALETTE, GRASS_THRESHOLDS
+            from fire_engine.procedural.textures.ground.dirt_ground import (
+                DIRT_PALETTE,
+                DIRT_THRESHOLDS,
+            )
+            from fire_engine.procedural.textures.ground.grass_ground import (
+                GRASS_PALETTE,
+                GRASS_THRESHOLDS,
+            )
             from fire_engine.procedural.textures.ground_lut import build_ground_lut
             from fire_engine.world.terrain import MATERIAL_DIRT, MATERIAL_GRASS
 

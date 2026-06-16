@@ -43,7 +43,6 @@ const webviewConfig = {
   entryPoints: [
     "src/webview/sceneView.ts",
     "src/webview/inspector.ts",
-    "src/webview/harnessBoot.ts",
   ],
   outdir: "media",
   minify: production,

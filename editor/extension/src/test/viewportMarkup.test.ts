@@ -1,7 +1,7 @@
 // Contract guard: every element id the viewport script dereferences via
 // getElementById must exist in the shared markup (VIEWPORT_BODY_HTML), so the
-// markup stays usable by BOTH the VS Code panel and the browser harness. The id
-// list is extracted from the actual sceneView.ts source so it can't drift.
+// VS Code panel always renders a complete viewport. The id list is extracted
+// from the actual sceneView.ts source so it can't drift.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";

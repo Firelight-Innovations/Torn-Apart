@@ -132,11 +132,14 @@ so Ctrl+S round-trips the opened file. Load the result in the game with
 **CLI:** `python -m fire_editor --port <p> [--host 127.0.0.1] [--log-level info]`
 — announces `{"event":"listening","port":N}` on stdout; logs to stderr.
 
-**Agent harness:** an agent can drive *and* visually verify the editor headlessly
-(no VS Code) via `fire_editor.EditorClient`/`spawn_daemon`, the
-`tools/editor_client.py` CLI (`serve` hosts a browser viewport that runs the same
-`sceneView.js` bundle), and `window.fireHarness`/`__fireSceneDebug` in that page.
-See `docs/systems/editor_harness.md`.
+**Agent access (no VS Code):** an AI agent drives the editor headlessly through
+**Python calls + screenshots** — there is no browser twin. Talk to the daemon via
+`fire_editor.EditorClient`/`spawn_daemon` or the `tools/editor_client.py` CLI
+(`serve` runs a long-lived headless daemon; every subcommand maps ~1:1 to an RPC
+method). To *see* the live-edited world, call `world.screenshot` (CLI:
+`editor_client.py screenshot`) — it renders the current session offscreen on a GPU
+and returns a PNG file path the agent can read back. See **Offscreen screenshots**
+below and `docs/systems/render.md` (`offscreen.py`).
 
 **Protocol — `editor/protocol/` (single source):**
 - `schema.json` — the one source of truth for the wire protocol.

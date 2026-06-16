@@ -602,7 +602,7 @@ let lastTime = performance.now();
 let lastFocusSent = 0;
 let fps = 0;
 
-// Place the camera deterministically (harness screenshots). Accepts an explicit
+// Place the camera deterministically. Accepts an explicit
 // position and either yaw/pitch or a look-at target (default: origin). Forces a
 // fresh stream-center so chunks load around the new pose.
 function applyCameraPose(p: {
@@ -629,8 +629,8 @@ function applyCameraPose(p: {
   lastCenterSent = new THREE.Vector3(Infinity, Infinity, Infinity);
 }
 
-// Numeric viewport state for harness assertions / Chrome MCP readbacks. Not used
-// by VS Code; harmless there. Read it with `window.__fireSceneDebug.snapshot()`.
+// Numeric viewport state for debug readbacks (e.g. the webview devtools console).
+// Read it with `window.__fireSceneDebug.snapshot()`.
 const fireSceneDebug = {
   snapshot() {
     return {

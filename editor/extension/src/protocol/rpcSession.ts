@@ -1,11 +1,8 @@
 // Transport-agnostic JSON-RPC 2.0 core for the Fire Editor protocol.
 //
-// This is the shared brain of both clients: the extension host's `client.ts`
-// wraps a Node `ws` socket and feeds frames in here; the browser viewport
-// harness (`webview/harnessBoot.ts`) wraps a native `WebSocket` and feeds the
-// same `RpcSession`. Keeping the request/response correlation, notification
-// fan-out and binary decode in one place means the harness speaks byte-for-byte
-// the same protocol as the real extension — no second implementation to drift.
+// The extension host's `client.ts` wraps a Node `ws` socket and feeds frames in
+// here. Keeping the request/response correlation, notification fan-out and
+// binary decode transport-agnostic means the socket layer stays a thin shim.
 //
 // No `ws` / `vscode` / DOM imports here: the caller owns the socket and pumps
 // `handleText` / `handleBinary` / `handleClose`; this module only sends via the

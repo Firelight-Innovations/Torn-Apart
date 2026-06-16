@@ -38,8 +38,10 @@ from __future__ import annotations
 import dataclasses
 import math
 import sys
+from collections.abc import Callable
 from functools import partial
 from pathlib import Path
+from typing import TYPE_CHECKING, Any, cast
 
 # --- Procedural content: importing the package auto-registers the
 #     "wasteland_ground" texture def (and any other built-ins). --------------
@@ -77,6 +79,18 @@ from fire_engine.world.terrain import (
     apply_brush,
     raycast_voxel,
 )
+
+if TYPE_CHECKING:
+    import numpy as np
+
+    from fire_engine.core.config import Config
+    from fire_engine.lighting.gpu import GpuLightingPipeline
+    from fire_engine.render.app import App
+    from fire_engine.scene import SceneRuntime
+    from fire_engine.world.sky import SkySystem, WeatherType
+
+    # Per-face light sampler (mesher contract): float32 (F,3) → float32 (F,).
+    LightSampler = Callable[[np.ndarray], np.ndarray]
 
 _log = get_logger("main")
 
@@ -117,7 +131,7 @@ _GI_PANEL_INTENSITY = 2.0  # HDR; a low white direct fill so the
 # closed white box blew out flat gray).
 
 
-def _gi_ground_lut_entries():
+def _gi_ground_lut_entries() -> dict[int, tuple[np.ndarray, np.ndarray]]:
     """
     Flat ``material id → (palette, thresholds)`` LUT rows for the GI test-room
     surfaces, so the ground-palette LUT colours materials 200–203 with their
@@ -134,7 +148,7 @@ def _gi_ground_lut_entries():
     """
     import numpy as np
 
-    entries = {}
+    entries: dict[int, tuple[np.ndarray, np.ndarray]] = {}
     for mid, rgb in _GI_TEST_ALBEDO.items():
         srgb = (np.clip(np.asarray(rgb, np.float32), 0.0, 1.0) ** (1.0 / 2.2) * 255.0 + 0.5).astype(
             np.uint8
@@ -158,7 +172,13 @@ _FLASHLIGHT_CONE_DEG = 38.0
 # ---------------------------------------------------------------------------
 
 
-def _cb_fire_explosion(app, chunk_manager, bus, lighting_pipeline_ref: list, light_sampler) -> None:
+def _cb_fire_explosion(
+    app: App,
+    chunk_manager: ChunkManager,
+    bus: EventBus,
+    lighting_pipeline_ref: list[GpuLightingPipeline | None],
+    light_sampler: LightSampler | None,
+) -> None:
     """Carve a SphereBrush(REMOVE) crater at the terrain under the camera ray.
 
     Builds the camera ray (origin = camera position, direction = camera
@@ -216,7 +236,7 @@ def _cb_fire_explosion(app, chunk_manager, bus, lighting_pipeline_ref: list, lig
     _log.info("Explosion at %s — %d chunk(s) cratered", hit.point, len(touched))
 
 
-def _cb_on_click(app, overlay_ref: list, fire_explosion_fn) -> None:
+def _cb_on_click(app: App, overlay_ref: list[Any], fire_explosion_fn: Callable[[], None]) -> None:
     """Left-click dispatch.
 
     Priority:
@@ -237,7 +257,7 @@ def _cb_on_click(app, overlay_ref: list, fire_explosion_fn) -> None:
     fire_explosion_fn()
 
 
-def _cb_on_save(save_manager, save_path: str) -> None:
+def _cb_on_save(save_manager: SaveManager, save_path: str) -> None:
     """F5 → save the world (edited chunks only) to the active save path."""
     try:
         save_manager.save(save_path)
@@ -246,7 +266,9 @@ def _cb_on_save(save_manager, save_path: str) -> None:
         _log.error("Save failed: %s", exc)
 
 
-def _cb_on_load(chunk_manager, save_manager, save_path: str, app) -> None:
+def _cb_on_load(
+    chunk_manager: ChunkManager, save_manager: SaveManager, save_path: str, app: App
+) -> None:
     """F9 → revert to the saved state.
 
     reset_to_baseline() first wipes ALL current edits back to the procedural
@@ -270,7 +292,9 @@ def _cb_on_load(chunk_manager, save_manager, save_path: str, app) -> None:
         app.camera_go.transform.position = scene_runtime.spawn_position
 
 
-def _cb_on_cycle_weather(weather_cycle: list, weather_index: list, sky_system) -> None:
+def _cb_on_cycle_weather(
+    weather_cycle: list[WeatherType | None], weather_index: list[int], sky_system: SkySystem
+) -> None:
     """F6 → force the next weather type in the cycle (None = natural)."""
     weather_index[0] = (weather_index[0] + 1) % len(weather_cycle)
     forced = weather_cycle[weather_index[0]]
@@ -286,7 +310,7 @@ def _cb_on_cycle_weather(weather_cycle: list, weather_index: list, sky_system) -
     )
 
 
-def _cb_on_toggle_time_scale(clock) -> None:
+def _cb_on_toggle_time_scale(clock: Clock) -> None:
     """F7 → toggle clock.game_time_scale between 60 (normal) and 1800 (fast)."""
     clock.game_time_scale = 1800.0 if clock.game_time_scale <= 60.0 else 60.0
     _log.info(
@@ -296,7 +320,7 @@ def _cb_on_toggle_time_scale(clock) -> None:
     )
 
 
-def _cb_on_jump_time(clock) -> None:
+def _cb_on_jump_time(clock: Clock) -> None:
     """F8 → jump the game clock forward 6 game-hours (wraps the day)."""
     new_tod = clock.game_time_of_day + 6.0 * 3600.0
     if new_tod >= 24.0 * 3600.0:
@@ -311,7 +335,7 @@ def _cb_on_jump_time(clock) -> None:
     )
 
 
-def _cb_on_drop_torch(app, lighting_pipeline_ref: list) -> None:
+def _cb_on_drop_torch(app: App, lighting_pipeline_ref: list[GpuLightingPipeline | None]) -> None:
     """L → drop a permanent torch light at the camera position."""
     lighting_pipeline = lighting_pipeline_ref[0]
     if lighting_pipeline is None:
@@ -327,7 +351,7 @@ def _cb_on_drop_torch(app, lighting_pipeline_ref: list) -> None:
     _log.info("Torch dropped at %s (%d light(s) active)", pos, lighting_pipeline.lights.count)
 
 
-def _cb_on_clear_lights(lighting_pipeline_ref: list) -> None:
+def _cb_on_clear_lights(lighting_pipeline_ref: list[GpuLightingPipeline | None]) -> None:
     """K → remove all dynamic lights."""
     lighting_pipeline = lighting_pipeline_ref[0]
     if lighting_pipeline is None:
@@ -336,7 +360,9 @@ def _cb_on_clear_lights(lighting_pipeline_ref: list) -> None:
     _log.info("Dynamic lights cleared")
 
 
-def _cb_on_toggle_flashlight(app, lighting_pipeline_ref: list, flashlight: dict) -> None:
+def _cb_on_toggle_flashlight(
+    app: App, lighting_pipeline_ref: list[GpuLightingPipeline | None], flashlight: dict[str, Any]
+) -> None:
     """F → toggle a camera-mounted flashlight (GPU backend only)."""
     lighting_pipeline = lighting_pipeline_ref[0]
     if lighting_pipeline is None:
@@ -358,12 +384,19 @@ def _cb_on_toggle_flashlight(app, lighting_pipeline_ref: list, flashlight: dict)
         radius=_FLASHLIGHT_RADIUS_M,
         cone_deg=_FLASHLIGHT_CONE_DEG,
     )
-    flashlight["id"] = lighting_pipeline.lights.add(light)
+    # LightSet.add is annotated PointLight | AreaLight but handles SpotLight at
+    # runtime (see LightSet.get / the SpotLight isinstance branch in lights.py).
+    flashlight["id"] = lighting_pipeline.lights.add(light)  # type: ignore[arg-type]
     flashlight["light"] = light
     _log.info("Flashlight ON")
 
 
-def _cb_follow_flashlight(task, app, lighting_pipeline_ref: list, flashlight: dict):
+def _cb_follow_flashlight(
+    task: Any,
+    app: App,
+    lighting_pipeline_ref: list[GpuLightingPipeline | None],
+    flashlight: dict[str, Any],
+) -> Any:
     """Per-frame: keep the flashlight on the camera (move/turn eps)."""
     light = flashlight["light"]
     if light is not None:
@@ -378,7 +411,10 @@ def _cb_follow_flashlight(task, app, lighting_pipeline_ref: list, flashlight: di
         if moved or turned:
             light.position = new_pos
             light.direction = new_dir
-            lighting_pipeline_ref[0].lights.notify_changed()
+            # This task is only scheduled when a pipeline exists (build_demo
+            # guards taskMgr.add behind `lighting_pipeline is not None`), and a
+            # live flashlight light implies it; the ref element is never None here.
+            lighting_pipeline_ref[0].lights.notify_changed()  # type: ignore[union-attr]
     return task.cont
 
 
@@ -432,7 +468,12 @@ def _ensure_dedicated_gpu() -> None:
         _log.warning("GPU preference registry write failed: %s", exc)
 
 
-def _prewarm_terrain(app, chunk_manager, sunlight, light_sampler) -> None:
+def _prewarm_terrain(
+    app: App,
+    chunk_manager: ChunkManager,
+    sunlight: SunlightComputer | None,
+    light_sampler: LightSampler | None,
+) -> None:
     """
     Pre-load chunks around spawn so the first rendered frame is not empty.
 
@@ -464,7 +505,7 @@ def _prewarm_terrain(app, chunk_manager, sunlight, light_sampler) -> None:
     app._stream_and_upload_terrain()
 
 
-def _load_proof_model(app) -> None:
+def _load_proof_model(app: App) -> None:
     """
     Load the test triangle fixture as proof the Resource Manager pipeline works.
 
@@ -485,7 +526,7 @@ def _load_proof_model(app) -> None:
         _log.warning("Proof model load skipped: %s", exc)
 
 
-def _log_renderer_info(app) -> None:
+def _log_renderer_info(app: App) -> None:
     """Log the active GPU renderer and warn if the integrated GPU is in use.
 
     Wrapped in try/except so a failed GSG query never crashes the boot.
@@ -503,7 +544,9 @@ def _log_renderer_info(app) -> None:
         _log.debug("Renderer query failed: %s", exc)
 
 
-def _build_gpu_pipeline(cfg, app, chunk_manager, bus):
+def _build_gpu_pipeline(
+    cfg: Config, app: App, chunk_manager: ChunkManager, bus: EventBus
+) -> GpuLightingPipeline:
     """Construct the GpuLightingPipeline and apply the terrain surface shader.
 
     Called only when ``cfg.lighting_backend == "gpu"``.  Patches the GI
@@ -541,7 +584,9 @@ def _build_gpu_pipeline(cfg, app, chunk_manager, bus):
     return lighting_pipeline
 
 
-def _do_boot_load(app, save_manager, scene_runtime, load_path: str) -> None:
+def _do_boot_load(
+    app: App, save_manager: SaveManager, scene_runtime: SceneRuntime, load_path: str
+) -> None:
     """Apply the ``--load`` save file after all systems are registered.
 
     Runs LAST so the visual factory has the overlay + lighting pipeline.
@@ -569,7 +614,7 @@ def build_demo(
     load_path: str | None = None,
     seed: int | None = None,
     headless: bool = False,
-):
+) -> App:
     """
     Boot the engine and wire the demo, returning the constructed ``App``.
 
@@ -666,7 +711,9 @@ def build_demo(
         "trees",
         (14.0, -5.0, 6.0),
         (34.0, 15.0, 14.0),
-        params={"species_mix": "tree_gnarled_oak:3,tree_dead:1"},
+        # species_mix is a string token parsed by zones.tree_placement; the
+        # store's params type is the numeric common case, so cast for this entry.
+        params=cast("dict[str, float]", {"species_mix": "tree_gnarled_oak:3,tree_dead:1"}),
     )
     # Flora volumes — wildflower sprites (world/flora_renderer.py) scattered
     # through the demo grass box, and a wider band of 3-D bushes
@@ -681,7 +728,7 @@ def build_demo(
         "bushes",
         (-12.0, -5.0, 6.0),
         (34.0, 25.0, 11.0),
-        params={"species_mix": "bush_scrub:2,bush_berry:1"},
+        params=cast("dict[str, float]", {"species_mix": "bush_scrub:2,bush_berry:1"}),
     )
     zone_store.mark_baseline()
 
@@ -728,7 +775,11 @@ def build_demo(
     # 8. Save manager — register terrain first (registration order matters),
     #    then the weather schedule (Saveable, save_key="weather").
     save_manager = SaveManager(cfg, clock)
-    save_manager.register(chunk_manager)
+    # ChunkManager satisfies Saveable at runtime; its get_delta/apply_delta use a
+    # concrete dict[tuple[int,int,int], ndarray] which is invariant-incompatible
+    # with the protocol's dict[str, Any] under --strict (a stub-narrowness issue,
+    # not a real mismatch — the delta is round-tripped opaquely by SaveManager).
+    save_manager.register(chunk_manager)  # type: ignore[arg-type]
     save_manager.register(sky_system.weather)
     save_manager.register(zone_store)
     save_manager.register(building_manager)
@@ -1066,7 +1117,7 @@ def build_demo(
     # F6 cycles a forced weather type (None = back to the natural schedule),
     # F7 toggles the game-time scale for day-cycle fast-forward, F8 jumps the
     # game clock forward 6 game-hours to snap to interesting skies.
-    weather_cycle: list = [
+    weather_cycle: list[WeatherType | None] = [
         WeatherType.CLEAR,
         WeatherType.CLOUDY,
         WeatherType.OVERCAST,
@@ -1079,10 +1130,10 @@ def build_demo(
 
     # The flashlight dict is a mutable container shared by the two callbacks so
     # one can read/write "id" and "light" that the other set.
-    flashlight: dict = {"id": None, "light": None}
+    flashlight: dict[str, Any] = {"id": None, "light": None}
     # lighting_pipeline_ref wraps lighting_pipeline so module-level callbacks
     # can read it without a closure (lighting_pipeline is not None only on GPU).
-    lighting_pipeline_ref: list = [lighting_pipeline]
+    lighting_pipeline_ref: list[GpuLightingPipeline | None] = [lighting_pipeline]
 
     fire_explosion = partial(
         _cb_fire_explosion, app, chunk_manager, bus, lighting_pipeline_ref, light_sampler
@@ -1096,7 +1147,7 @@ def build_demo(
     from fire_engine.render import DevOverlay
 
     overlay = DevOverlay(app) if DevOverlay is not None else None
-    overlay_ref: list = [overlay]
+    overlay_ref: list[Any] = [overlay]
     on_click = partial(_cb_on_click, app, overlay_ref, fire_explosion)
     on_save = partial(_cb_on_save, save_manager, save_path)
     on_load = partial(_cb_on_load, chunk_manager, save_manager, save_path, app)
@@ -1168,7 +1219,7 @@ def build_demo(
     return app
 
 
-def build_gi_test_room(app) -> tuple[float, float, float]:
+def build_gi_test_room(app: App) -> tuple[float, float, float]:
     """
     Build a Cornell-style GI test room ~14 m ahead of the camera (G key).
 
@@ -1211,9 +1262,14 @@ def build_gi_test_room(app) -> tuple[float, float, float]:
     z0 = (hit.point.z if hit is not None else cfg.ground_height_m) + 0.5
     cz = z0 + 2.25  # interior mid-height
 
-    room_touched: set = set()
+    room_touched: set[tuple[int, int, int]] = set()
 
-    def box(half: tuple, at: tuple, mode: BrushMode, material: int = 1):
+    def box(
+        half: tuple[float, float, float],
+        at: tuple[float, float, float],
+        mode: BrushMode,
+        material: int = 1,
+    ) -> None:
         room_touched.update(
             apply_brush(
                 BoxBrush(half_extents_m=Vec3(*half)),
@@ -1316,7 +1372,7 @@ def main() -> None:
             lod_pool.stop(join=True)
 
 
-def _to_ground_texture():
+def _to_ground_texture() -> Any:
     """
     Build the Panda3D ``wasteland_ground`` texture for the terrain.
 
@@ -1338,7 +1394,7 @@ def _to_ground_texture():
         return None
 
 
-def _to_material_textures(triples: bool = False):
+def _to_material_textures(triples: bool = False) -> dict[int, Any] | None:
     """
     Build the material id → Panda3D texture map for terrain rendering.
 
@@ -1381,11 +1437,11 @@ def _to_material_textures(triples: bool = False):
         emis_tex = to_panda_texture(black_emission_map())
         flat_n_tex = to_panda_texture(flat_normal_map())
 
-        def triple(def_name: str):
+        def triple(def_name: str) -> tuple[Any, Any, Any]:
             rgba = get_procedural(def_name)
             return (to_panda_texture(rgba), to_panda_texture(derive_normal_map(rgba)), emis_tex)
 
-        def flat_rgba(rgb_linear, alpha: int = 255) -> np.ndarray:
+        def flat_rgba(rgb_linear: tuple[float, float, float], alpha: int = 255) -> np.ndarray:
             """16×16 solid-colour RGBA from linear RGB (sRGB-encoded)."""
             srgb = (
                 np.clip(np.asarray(rgb_linear, np.float32), 0.0, 1.0) ** (1.0 / 2.2) * 255.0
@@ -1395,7 +1451,7 @@ def _to_material_textures(triples: bool = False):
             arr[..., 3] = alpha
             return arr
 
-        def flat_triple(material_id: int, emissive: bool = False):
+        def flat_triple(material_id: int, emissive: bool = False) -> tuple[Any, Any, Any]:
             alb = to_panda_texture(flat_rgba(_GI_TEST_ALBEDO[material_id]))
             em = to_panda_texture(flat_rgba((1.0, 0.92, 0.78))) if emissive else emis_tex
             return (alb, flat_n_tex, em)

@@ -22,7 +22,7 @@ import numpy as np
 # here so `from fire_engine.buildings.types import Foundation` still resolves.
 from fire_engine.buildings._impl.types import Foundation as Foundation
 from fire_engine.buildings._impl.types import RoofSlab as RoofSlab
-from fire_engine.buildings.enums import OpeningKind, WallKind
+from fire_engine.buildings.enums import OpeningKind, RoofKind, WallKind
 from fire_engine.core.config import Config
 
 if TYPE_CHECKING:
@@ -33,6 +33,7 @@ __all__ = [
     "Foundation",
     "Opening",
     "PlanPoint",
+    "RoofKind",
     "RoofSlab",
     "Room",
     "StairsStub",

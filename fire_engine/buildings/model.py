@@ -66,7 +66,7 @@ from typing import Any
 import numpy as np
 
 from fire_engine.buildings._impl.storey import Storey
-from fire_engine.buildings.enums import OpeningKind, WallKind
+from fire_engine.buildings.enums import OpeningKind, RoofKind, WallKind
 from fire_engine.buildings.types import (
     BuildingDefaults,
     Foundation,
@@ -87,6 +87,7 @@ __all__ = [
     "Opening",
     "OpeningKind",
     "PlanPoint",
+    "RoofKind",
     "RoofSlab",
     "Room",
     "StairsStub",
@@ -213,17 +214,35 @@ class Building:
         )
         return self.foundation
 
-    def set_roof(self, polygon: Any | None = None, thickness_m: float | None = None) -> RoofSlab:
+    def set_roof(
+        self,
+        polygon: Any | None = None,
+        thickness_m: float | None = None,
+        kind: RoofKind = RoofKind.FLAT,
+        pitch_deg: float = 30.0,
+        ridge_dir_rad: float = 0.0,
+        overhang_m: float = 0.0,
+    ) -> RoofSlab:
         """
-        Define the flat roof slab capping the top storey.
+        Define the roof capping the top storey (flat slab or a pitched shape).
 
         Parameters
         ----------
         polygon : array-like (N, 2) | None
             Simple CCW roof outline; ``None`` → same automatic footprint as
-            :meth:`set_foundation`.
+            :meth:`set_foundation`.  Pitched roofs are generated over this
+            outline's ridge-aligned bounding rectangle.
         thickness_m : float | None
-            Slab thickness; ``None`` → ``defaults.slab_thickness_m``.
+            Slab thickness / roof-plane depth; ``None`` → ``defaults.slab_thickness_m``.
+        kind : RoofKind
+            Roof shape (``FLAT`` default keeps the Iteration-1 flat slab;
+            ``SHED`` / ``GABLE`` / ``HIP`` are pitched).
+        pitch_deg : float
+            Slope of the roof planes from horizontal in degrees (pitched only).
+        ridge_dir_rad : float
+            Plan-space heading of the ridge line in radians, 0 = +x (pitched only).
+        overhang_m : float
+            Eave overhang beyond the outline in meters (pitched only).
 
         Docs: docs/systems/buildings.md
         """
@@ -233,6 +252,10 @@ class Building:
             thickness_m=(
                 self.defaults.slab_thickness_m if thickness_m is None else float(thickness_m)
             ),
+            kind=kind,
+            pitch_deg=float(pitch_deg),
+            ridge_dir_rad=float(ridge_dir_rad),
+            overhang_m=float(overhang_m),
         )
         return self.roof
 

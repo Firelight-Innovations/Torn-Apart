@@ -43,7 +43,9 @@ from __future__ import annotations
 
 import numpy as np
 
+from fire_engine.buildings._impl.roofs import add_roof
 from fire_engine.buildings._impl.seams import corner_filler_polys
+from fire_engine.buildings._impl.soup import Soup, _normalize
 from fire_engine.buildings.model import (
     Building,
     Storey,
@@ -51,7 +53,6 @@ from fire_engine.buildings.model import (
     _convex_hull,
     _pad_hull_outward,
 )
-from fire_engine.buildings.triangulate import triangulate_polygon
 from fire_engine.core.config import Config
 from fire_engine.world.terrain.meshing import MeshArrays
 
@@ -59,121 +60,8 @@ __all__ = ["mesh_building", "mesh_slab", "mesh_wall"]
 
 _EPS = 1e-9
 
-
-# ---------------------------------------------------------------------------
-# Triangle-soup accumulator
-# ---------------------------------------------------------------------------
-
-
-class _Soup:
-    """Accumulates outward-facing triangles, then bakes a MeshArrays."""
-
-    def __init__(self) -> None:
-        self._pos: list[np.ndarray] = []
-        self._nrm: list[np.ndarray] = []
-        self._uv: list[np.ndarray] = []
-
-    # -- quads: (Q,4,3) corners + (Q,3) outward normals --------------------
-    def add_quads(self, corners: np.ndarray, normals: np.ndarray) -> None:
-        q = corners.shape[0]
-        if q == 0:
-            return
-        corners = corners.astype(np.float64, copy=True)
-        n = _normalize(normals.astype(np.float64))
-        # Flip winding where the geometric normal opposes the desired one.
-        geo = np.cross(corners[:, 1] - corners[:, 0], corners[:, 3] - corners[:, 0])
-        flip = np.sum(geo * n, axis=1) < 0.0
-        corners[flip] = corners[flip][:, [0, 3, 2, 1], :]
-        # Per-corner UVs in meters along the two quad edges.
-        le1 = np.linalg.norm(corners[:, 1] - corners[:, 0], axis=1)
-        le2 = np.linalg.norm(corners[:, 3] - corners[:, 0], axis=1)
-        uv = np.zeros((q, 4, 2), dtype=np.float64)
-        uv[:, 1, 0] = le1
-        uv[:, 2, 0] = le1
-        uv[:, 2, 1] = le2
-        uv[:, 3, 1] = le2
-        # Two triangles (0,1,2) (0,2,3).
-        tri = corners[:, [0, 1, 2, 0, 2, 3], :].reshape(-1, 3)
-        tuv = uv[:, [0, 1, 2, 0, 2, 3], :].reshape(-1, 2)
-        self._pos.append(tri)
-        self._uv.append(tuv)
-        self._nrm.append(np.repeat(n, 6, axis=0))
-
-    # -- triangles: (T,3,3) verts + (T,3) outward normals ------------------
-    def add_tris(self, verts: np.ndarray, normals: np.ndarray) -> None:
-        t = verts.shape[0]
-        if t == 0:
-            return
-        verts = verts.astype(np.float64, copy=True)
-        n = _normalize(normals.astype(np.float64))
-        geo = np.cross(verts[:, 1] - verts[:, 0], verts[:, 2] - verts[:, 0])
-        flip = np.sum(geo * n, axis=1) < 0.0
-        verts[flip] = verts[flip][:, [0, 2, 1], :]
-        self._pos.append(verts.reshape(-1, 3))
-        self._uv.append(verts[:, :, :2].reshape(-1, 2))  # planar (x,y) UVs
-        self._nrm.append(np.repeat(n, 3, axis=0))
-
-    def build(self) -> MeshArrays:
-        if not self._pos:
-            z = np.zeros
-            return MeshArrays(
-                z((0, 3), np.float32),
-                z((0, 3), np.float32),
-                z((0, 2), np.float32),
-                z((0, 4), np.float32),
-                z((0,), np.uint32),
-                None,
-                3,
-            )
-        pos = np.concatenate(self._pos, axis=0).astype(np.float32)
-        nrm = np.concatenate(self._nrm, axis=0).astype(np.float32)
-        uv = np.concatenate(self._uv, axis=0).astype(np.float32)
-        col = np.ones((pos.shape[0], 4), dtype=np.float32)
-        idx = np.arange(pos.shape[0], dtype=np.uint32)
-        return MeshArrays(pos, nrm, uv, col, idx, None, 3)
-
-
-def _normalize(v: np.ndarray) -> np.ndarray:
-    ln = np.linalg.norm(v, axis=-1, keepdims=True)
-    ln[ln < _EPS] = 1.0
-    result: np.ndarray = v / ln
-    return result
-
-
-# ---------------------------------------------------------------------------
-# Slabs
-# ---------------------------------------------------------------------------
-
-
-def _add_slab(soup: _Soup, polygon: np.ndarray, z0: float, z1: float) -> None:
-    """Top + bottom faces (ear-clipped) and perimeter side quads."""
-    poly = np.asarray(polygon, dtype=np.float64)
-    if poly.shape[0] < 3:
-        return
-    tris = triangulate_polygon(poly)  # CCW (T,3) indices
-    if tris.shape[0]:
-        flat = poly[tris]  # (T,3,2)
-        top = np.dstack([flat, np.full(flat.shape[:2], z1)])
-        soup.add_tris(top, np.tile([0.0, 0.0, 1.0], (tris.shape[0], 1)))
-        bot = np.dstack([flat, np.full(flat.shape[:2], z0)])
-        soup.add_tris(bot, np.tile([0.0, 0.0, -1.0], (tris.shape[0], 1)))
-    # Side quads (one per polygon edge); outward normal = right of CCW edge.
-    p0 = poly
-    p1 = np.roll(poly, -1, axis=0)
-    e = p1 - p0
-    out = _normalize(np.stack([e[:, 1], -e[:, 0]], axis=1))
-    n = poly.shape[0]
-    corners = np.empty((n, 4, 3), dtype=np.float64)
-    corners[:, 0, :2] = p0
-    corners[:, 0, 2] = z0
-    corners[:, 1, :2] = p1
-    corners[:, 1, 2] = z0
-    corners[:, 2, :2] = p1
-    corners[:, 2, 2] = z1
-    corners[:, 3, :2] = p0
-    corners[:, 3, 2] = z1
-    normals = np.concatenate([out, np.zeros((n, 1))], axis=1)
-    soup.add_quads(corners, normals)
+# Back-compat alias: the soup accumulator now lives in _impl/soup.py.
+_Soup = Soup
 
 
 def mesh_slab(polygon: np.ndarray, z0: float, z1: float) -> MeshArrays:
@@ -181,8 +69,8 @@ def mesh_slab(polygon: np.ndarray, z0: float, z1: float) -> MeshArrays:
 
     Docs: docs/systems/buildings.md
     """
-    soup = _Soup()
-    _add_slab(soup, polygon, float(z0), float(z1))
+    soup = Soup()
+    soup.add_slab(np.asarray(polygon, dtype=np.float64), float(z0), float(z1))
     return soup.build()
 
 
@@ -423,7 +311,7 @@ def _add_corner_fillers(
     shared wall band.  Free wall ends keep their existing butt cap.
     """
     for hull, band in corner_filler_polys(storey, qpq, snap_eps):
-        _add_slab(soup, hull, z_bottom, z_bottom + band)
+        soup.add_slab(hull, z_bottom, z_bottom + band)
 
 
 def mesh_building(building: Building, cfg: Config) -> MeshArrays:
@@ -446,19 +334,18 @@ def mesh_building(building: Building, cfg: Config) -> MeshArrays:
     Docs: docs/systems/buildings.md
     """
     qpq = int(cfg.building_arc_segments_per_quarter)
-    soup = _Soup()
+    soup = Soup()
     for storey in building.storeys:
         base = building.storey_base_z(storey.index)
         z_floor0 = base
         z_floor1 = base + storey.slab_m
-        _add_slab(soup, _storey_footprint(building, storey), z_floor0, z_floor1)
+        soup.add_slab(_storey_footprint(building, storey), z_floor0, z_floor1)
         for wall in storey.walls:
             band = wall.height_m if wall.height_m is not None else storey.height_m - storey.slab_m
             _add_wall(soup, wall, z_floor1, z_floor1 + band, qpq)
         _add_corner_fillers(soup, storey, z_floor1, qpq, float(cfg.building_snap_eps_m))
     if building.foundation is not None:
-        _add_slab(soup, building.foundation.polygon, -building.foundation.depth_m, 0.0)
+        soup.add_slab(building.foundation.polygon, -building.foundation.depth_m, 0.0)
     if building.roof is not None:
-        top = building.total_height_m
-        _add_slab(soup, building.roof.polygon, top, top + building.roof.thickness_m)
+        add_roof(soup, building.roof, building.total_height_m, qpq)
     return soup.build()

@@ -70,6 +70,24 @@ class TestOpeningKind:
         assert issubclass(OpeningKind, enum.Enum)
 
 
+class TestRoofKind:
+    def test_has_four_members(self):
+        from fire_engine.buildings.enums import RoofKind
+
+        assert {k.value for k in RoofKind} == {"flat", "shed", "gable", "hip"}
+
+    def test_round_trip_via_value(self):
+        from fire_engine.buildings.enums import RoofKind
+
+        for member in RoofKind:
+            assert RoofKind(member.value) is member
+
+    def test_default_is_flat(self):
+        from fire_engine.buildings.enums import RoofKind
+
+        assert RoofKind.FLAT.value == "flat"
+
+
 class TestCrossEnumDistinction:
     def test_segment_and_window_are_different_types(self):
         # Enum members from different enums must not compare equal.
@@ -81,3 +99,4 @@ class TestCrossEnumDistinction:
 
         assert hasattr(m, "WallKind")
         assert hasattr(m, "OpeningKind")
+        assert hasattr(m, "RoofKind")

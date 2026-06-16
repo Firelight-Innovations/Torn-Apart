@@ -1,5 +1,5 @@
 # buildings._impl — System Doc
-keywords: buildings _impl, private implementation, storey, demo house, DemoHouseDef, Storey, one-public-class-per-module, split, implementation detail, seams, corner filler, filler post, corner_filler_polys, wall junction, gap, seam, Foundation, RoofSlab
+keywords: buildings _impl, private implementation, storey, demo house, DemoHouseDef, Storey, one-public-class-per-module, split, implementation detail, seams, corner filler, filler post, corner_filler_polys, wall junction, gap, seam, Foundation, RoofSlab, soup, Soup, triangle soup, add_prism, prism, slab, add_roof, roofs, pitched roof, gable, hip, shed, ridge, eave, overhang, RoofKind
 
 > Private sub-package of `fire_engine/buildings/`; all public symbols are re-exported from
 > the parent package.  Nothing here is part of the public API.
@@ -24,6 +24,16 @@ This sub-package has no public API surface.  All symbols are re-exported from th
   Returns one filler-post polygon + band height per junction node (the convex hull of the
   incident walls' ±thickness/2 offset corner points); the mesher extrudes each over the wall
   band so butt-jointed corners read as solid without the full cross-wall miter (Iteration 3).
+- `Soup` — defined in `buildings/_impl/soup.py`; **internal** triangle-soup accumulator shared by
+  the wall mesher and the roof generator. Methods: `add_quads` / `add_tris` (low level, auto-flip
+  winding to a supplied outward normal), `add_slab` (flat horizontal solid), `add_prism` (a planar
+  top polygon dropped vertically by a constant thickness — one pitched-roof panel with real depth),
+  `build` → `MeshArrays`. `buildings/meshing.py` keeps a `_Soup = Soup` back-compat alias.
+- `add_roof` — defined in `buildings/_impl/roofs.py`; **internal** pitched-roof generator. Dispatches
+  on `RoofKind`: `FLAT` → flat slab; `SHED` (one mono-pitch plane + side/end infill); `GABLE` (two
+  planes + central ridge + gable-end infill triangles); `HIP` (two trapezoids + two end triangles on
+  a shortened ridge). Built over the footprint's ridge-aligned bounding rectangle; eaves anchored at
+  the wall-top height, ridge raised by `halfspan·tan(pitch)`, `overhang_m` projecting eaves down-slope.
 
 ## Imports Allowed
 Same as the parent `buildings` package: `procedural`, `terrain`, `core`

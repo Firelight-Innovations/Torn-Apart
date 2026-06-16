@@ -154,6 +154,8 @@ class App(ShowBase):  # type: ignore[misc]  # panda3d ShowBase has no stubs; Any
     _headless: bool
     chunk_manager: Any
     light_sampler: Any
+    lod_streamer: Any
+    lod_pool: Any
     lighting_pipeline: Any
     sky_system: Any
     post_process: Any
@@ -229,6 +231,11 @@ class App(ShowBase):  # type: ignore[misc]  # panda3d ShowBase has no stubs; Any
         # Left None so the engine shell can run without terrain (tooling).
         self.chunk_manager = None  # ChunkManager | None
         self.light_sampler = None  # Callable | None
+        # Threaded terrain LOD (Rule 12): when set by main.py, the terrain
+        # upload step drives this off-thread streamer instead of the
+        # synchronous chunk_manager.stream_frame.  None keeps the sync path.
+        self.lod_streamer = None  # LodStreamer | None
+        self.lod_pool = None  # TerrainLodPool | None
         # GPU volumetric lighting (Phase 4 GPU backend) — set by main.py when
         # config.lighting_backend == "gpu".  Driven in step 6 of the frame
         # task; None keeps the legacy baked-vertex-light path.

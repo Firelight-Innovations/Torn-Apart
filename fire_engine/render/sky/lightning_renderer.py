@@ -69,6 +69,7 @@ from fire_engine.core import (
 )
 from fire_engine.render.component import Component
 from fire_engine.render.sky import lightning_shaders
+from fire_engine.render.sky._impl.cover_events import edited_chunk_columns
 from fire_engine.render.sky._impl.lightning_bolt import (
     _WIDTH_SCALE_M,
     add_flash_light,
@@ -176,6 +177,7 @@ class LightningRendererComponent(Component):
     _next_bolt: int
     _cover: RainCoverField | None
     _cover_committed: bool
+    _dirty_columns: set[tuple[int, int]]
     _recenter_threshold_m: float
     _sky_flash: float
 
@@ -200,9 +202,14 @@ class LightningRendererComponent(Component):
         self._pool: list[_Bolt] = []
         self._next_bolt: int = 0
 
-        # Cover heightmap (headless) for roof-aware strike Z.
+        # Cover heightmap (headless) for roof-aware strike Z.  Mirrors
+        # RainRendererComponent's budgeted-refold discipline: chunk/edit events
+        # mark columns dirty, and late_update refolds a small per-frame budget of
+        # them (never a full O(all-chunks) rebuild_all on every chunk load — that
+        # was the per-frame stall flagged in the profiler session).
         self._cover: RainCoverField | None = None
         self._cover_committed: bool = False
+        self._dirty_columns: set[tuple[int, int]] = set()
         self._recenter_threshold_m: float = 0.0
 
         # Sky/cloud flash pulse value bound on render each frame.
@@ -382,9 +389,9 @@ class LightningRendererComponent(Component):
         return float(cp.x), float(cp.y), float(cp.z)
 
     def _on_chunk_loaded(self, event: ChunkLoadedEvent) -> None:
-        """A chunk streamed in → force a cover rebuild next frame (roofs change)."""
-        self._cover_committed = False
+        """A chunk streamed in → mark its column dirty (refolded on a budget)."""
+        self._dirty_columns.add((int(event.coord[0]), int(event.coord[1])))
 
     def _on_terrain_edited(self, event: TerrainEditedEvent) -> None:
-        """A brush edit → force a cover rebuild next frame."""
-        self._cover_committed = False
+        """A brush edit → mark every touched chunk column dirty."""
+        self._dirty_columns.update(edited_chunk_columns(event))

@@ -74,6 +74,7 @@ from fire_engine.core import (
     get_logger,
 )
 from fire_engine.render.component import Component
+from fire_engine.render.sky._impl.cover_events import edited_chunk_columns
 from fire_engine.render.sky._impl.rain_build import (
     build_cylinders,
     build_particles,
@@ -364,12 +365,4 @@ class RainRendererComponent(Component):
 
     def _on_terrain_edited(self, event: TerrainEditedEvent) -> None:
         """A brush edit → refold every touched chunk column's cover."""
-        raw: tuple[int, ...] = event.chunk_coords
-        # chunk_coords is either a single (cx,cy,cz) flat tuple or a sequence.
-        # Detect the single-coord case (3 ints) and wrap it so the loop is uniform.
-        if len(raw) == 3 and all(isinstance(c, int) for c in raw):
-            seqs: tuple[tuple[int, ...], ...] = (raw,)
-        else:
-            seqs = tuple(raw[i : i + 3] for i in range(0, len(raw), 3))
-        for c in seqs:
-            self._dirty_columns.add((int(c[0]), int(c[1])))
+        self._dirty_columns.update(edited_chunk_columns(event))

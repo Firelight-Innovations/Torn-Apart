@@ -19,12 +19,17 @@ editor/
 # 1. daemon deps (in the repo .venv)
 pip install -r requirements.txt
 
-# 2. extension
-cd editor/extension && npm install && npm run compile
+# 2. open the REPO ROOT in VS Code / Cursor, press F5
+#    -> the "fire-editor: build" preLaunchTask runs `npm install`
+#       (deps live in editor/extension/node_modules, gitignored) then
+#       `npm run compile`, the Extension Development Host opens, the
+#       daemon auto-spawns, status bar shows "Fire Editor: connected"
+```
 
-# 3. open the REPO ROOT in VS Code / Cursor, press F5
-#    -> Extension Development Host opens, daemon auto-spawns,
-#       status bar shows "Fire Editor: connected"
+Pressing **F5** is enough on a fresh checkout — the launch task installs the
+extension's npm deps (`three`, `ws`) before bundling. To build by hand instead:
+```bash
+cd editor/extension && npm install && npm run compile
 ```
 
 ## Tests

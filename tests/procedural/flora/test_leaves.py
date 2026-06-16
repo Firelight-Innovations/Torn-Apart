@@ -220,21 +220,22 @@ class TestAttachmentInvariant:
         # nothing like the old ~0.8 m CA blob reach.
         assert dist.max() < 0.45
 
-    def test_explicit_max_offset_is_respected(self):
+    def test_leaf_base_anchors_on_bark(self):
+        # max_offset_m is deprecated: leaves now anchor their BASE exactly on
+        # the bark.  out_dir is unit, and base = center - out_dir*radius sits
+        # within a segment radius of the wood (it is literally on the surface).
         sk, limbs, twigs, rng = _fresh_oak(23)
         ids = np.concatenate([limbs, twigs])
-        cap = 0.08
         leaves = leaves_at_tips(
-            sk,
-            ids,
-            rng,
-            density=0.8,
-            leaf_size_m=(0.05, 0.07),
-            max_offset_m=cap,
-            max_leaves=2000,
+            sk, ids, rng, density=0.8, leaf_size_m=(0.05, 0.07), max_leaves=2000
         )
-        dist = _nearest_segment_distance(leaves.center, sk, ids)
-        assert (dist <= cap + 1e-5).all()
+        n = np.linalg.norm(leaves.out_dir, axis=1)
+        assert np.allclose(n, 1.0, atol=1e-4)
+        base = leaves.center - leaves.out_dir * leaves.radius[:, None]
+        dist = _nearest_segment_distance(base, sk, ids)
+        seg = np.unique(ids.astype(np.int64))
+        max_seg_r = float(max(sk.radius_start[seg].max(), sk.radius_end[seg].max()))
+        assert (dist <= max_seg_r + 1e-4).all()
 
 
 # ---------------------------------------------------------------------------
@@ -310,8 +311,11 @@ class TestSwayRange:
         sk, limbs, twigs, rng = _fresh_oak(13)
         self.leaves = leaves_at_tips(sk, np.concatenate([limbs, twigs]), rng, density=0.8)
 
-    def test_sway_not_below_085(self):
-        assert (self.leaves.sway >= 0.85).all()
+    def test_sway_tracks_branch_no_floor(self):
+        # Sway now TRACKS the host branch (no 0.85 floor) so leaves stay glued
+        # to the wood as it bends: inner-limb leaves sway less than tip leaves.
+        assert (self.leaves.sway >= 0.0).all()
+        assert self.leaves.sway.min() < 0.85
 
     def test_sway_not_above_1(self):
         assert (self.leaves.sway <= 1.0).all()
@@ -319,11 +323,12 @@ class TestSwayRange:
     def test_sway_finite(self):
         assert np.isfinite(self.leaves.sway).all()
 
-    def test_custom_sway_min_floor(self):
+    def test_sway_min_is_deprecated_no_floor(self):
+        # sway_min is accepted but ignored — a high value does NOT floor sway.
         sk, limbs, twigs, rng = _fresh_oak(13)
-        leaves = leaves_at_tips(sk, np.concatenate([limbs, twigs]), rng, density=0.8, sway_min=0.5)
-        assert (leaves.sway >= 0.5).all()
-        assert (leaves.sway <= 1.0).all()
+        leaves = leaves_at_tips(sk, np.concatenate([limbs, twigs]), rng, density=0.8, sway_min=0.95)
+        assert leaves.sway.min() < 0.95
+        assert (leaves.sway >= 0.0).all() and (leaves.sway <= 1.0).all()
 
 
 # ---------------------------------------------------------------------------
@@ -397,11 +402,13 @@ class TestEarlyExitConditions:
 
 
 class TestMaxLeavesCap:
-    def test_exactly_at_cap(self):
+    def test_at_or_below_cap(self):
+        # Grid thinning runs BEFORE the cap, so an over-subscribed canopy lands
+        # at (or just under) the cap, never over it.
         sk, limbs, twigs, rng = _fresh_oak(37)
         ids = np.concatenate([limbs, twigs])
         leaves = leaves_at_tips(sk, ids, rng, density=1.0, leaves_per_m=400, max_leaves=50)
-        assert leaves.n_leaves == 50
+        assert 40 <= leaves.n_leaves <= 50
 
     def test_cap_not_exceeded(self):
         for cap in (10, 25, 100):

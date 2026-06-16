@@ -150,15 +150,21 @@ count = round(density · leaves_per_m · Σ leaf-bearing-segment-length)   then 
 |---|---|
 | `density` (0.6) | overall count multiplier (`0` ⇒ empty).  Higher = fuller. |
 | `leaves_per_m` (60) | target leaves per metre of leaf-bearing wood, before `density`.  **Raise it for a denser canopy.** |
-| `max_leaves` (600) | deterministic thinning cap — YOUR vertex budget lever (4 verts/leaf).  May be a few thousand on a big tree (oak ships `1200`). |
-| `leaf_size_m` (0.09, 0.14) | per-leaf half-size — cards are 2× this across.  **Tune density via twigs + the knobs above, NOT by enlarging this.** |
-| `sway_min` (0.85) | wind-weight floor (foliage always rides gusts harder than wood). |
-| `max_offset_m` (None) | hard cap on how far a leaf may sit off the wood axis.  `None` → `segment_radius + 1.5·leaf_size` per leaf (the anti-floating guarantee). |
+| `max_leaves` (600) | deterministic cap — YOUR vertex budget lever (4 verts/leaf).  May be a few thousand on a big tree (oak ships `2400`). |
+| `leaf_size_m` (0.09, 0.14) | per-leaf half-size — cards are 2× this across.  Bigger cards cover more, but **tune density via twigs + `leaf_fill` first.** |
+| `leaf_fill` (1.6) | overlap-thinning grid density: cell edge = `median(2·leaf_r)/leaf_fill`, one leaf per cell.  **Higher ⇒ denser, more overlapping foliage** (oak ships `4.0`); lower ⇒ airy & see-through (scrub bush). |
 
-`cell_m`, `rounds`, `per_cell` are **legacy** knobs from the old
-cellular-automaton placement — still accepted for call-site compatibility
-but ignored, EXCEPT `rounds <= 0` (or `density <= 0`) still means "no
-foliage" ⇒ `Leaves.empty()`.  Don't feature them in new species.
+Leaves anchor their **base on the bark** and grow OUTWARD (`out_dir`), so a
+leaf is rooted to its branch and reads in a sensible direction — you don't
+position them, just choose how many (`density`/`leaves_per_m`) and how dense
+(`leaf_fill`).
+
+`cell_m`, `rounds`, `per_cell`, `sway_min`, `max_offset_m` are **legacy/
+deprecated** knobs — still accepted for call-site compatibility but ignored,
+EXCEPT `rounds <= 0` (or `density <= 0`) still means "no foliage" ⇒
+`Leaves.empty()`.  (Leaf sway now tracks the host branch automatically, and
+the base-on-bark anchor makes `max_offset_m` unnecessary.)  Don't feature
+them in new species.
 
 A leafless species returns `Leaves.empty()`.  The mesher gives every leaf
 its own upward-biased random orientation, so sunlight dapples the canopy

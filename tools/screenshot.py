@@ -186,6 +186,8 @@ def capture(
     pitch_deg: float = -35.0,
     yaw_deg: float = 0.0,
     height_m: float | None = None,
+    cam_x: float | None = None,
+    cam_y: float | None = None,
     stub_sky: bool = False,
     torch: bool = False,
     game_day: int | None = None,
@@ -251,9 +253,13 @@ def capture(
         Quat.from_axis_angle(Vec3.UP, math.radians(yaw_deg))
         * Quat.from_axis_angle(Vec3.RIGHT, math.radians(pitch_deg))
     ).normalized()
-    if height_m is not None:
+    if height_m is not None or cam_x is not None or cam_y is not None:
         pos = app.camera_go.transform.position
-        app.camera_go.transform.position = Vec3(pos.x, pos.y, float(height_m))
+        app.camera_go.transform.position = Vec3(
+            float(cam_x) if cam_x is not None else pos.x,
+            float(cam_y) if cam_y is not None else pos.y,
+            float(height_m) if height_m is not None else pos.z,
+        )
 
     if stub_sky:
         # Renderer-only path: swap the stub into the live SkyRendererComponent.
@@ -467,6 +473,12 @@ def main() -> None:
         help="camera height in meters (e.g. 110 = above clouds)",
     )
     parser.add_argument(
+        "--cam-x", type=float, default=None, help="camera world X (m); default keeps spawn X"
+    )
+    parser.add_argument(
+        "--cam-y", type=float, default=None, help="camera world Y (m); default keeps spawn Y"
+    )
+    parser.add_argument(
         "--stub-sky",
         action="store_true",
         help="swap a SkyState stub into the sky renderer (renderer-only debugging)",
@@ -515,6 +527,8 @@ def main() -> None:
         pitch_deg=args.pitch,
         yaw_deg=args.yaw,
         height_m=args.height,
+        cam_x=args.cam_x,
+        cam_y=args.cam_y,
         stub_sky=args.stub_sky,
         torch=args.torch,
         game_day=args.day,

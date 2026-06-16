@@ -102,9 +102,9 @@ class ScrubBushDef(TreeSpeciesDef):
             np.concatenate([stems, twigs]),
             rng,
             density=0.8,
-            leaf_size_m=(0.07, 0.11),
-            sway_min=0.8,
-            leaves_per_m=40.0,
-            max_leaves=220,
+            leaf_size_m=(0.06, 0.10),
+            leaves_per_m=60.0,
+            max_leaves=340,
+            leaf_fill=2.4,
         )
         return sk, leaves

@@ -114,9 +114,9 @@ class BerryBushDef(TreeSpeciesDef):
             np.concatenate([stems, sub]),
             rng,
             density=0.9,
-            leaf_size_m=(0.06, 0.10),
-            sway_min=0.75,
-            leaves_per_m=50.0,
-            max_leaves=300,
+            leaf_size_m=(0.07, 0.11),
+            leaves_per_m=95.0,
+            max_leaves=520,
+            leaf_fill=3.5,
         )
         return sk, leaves

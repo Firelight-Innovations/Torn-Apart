@@ -44,6 +44,7 @@ Profiler
 from fire_engine.core.clock import Clock
 from fire_engine.core.config import Config, load_config
 from fire_engine.core.event_bus import (
+    BuildingChangedEvent,
     ChunkLoadedEvent,
     ChunkUnloadedEvent,
     EventBus,
@@ -60,6 +61,7 @@ from fire_engine.core.profiler import Profiler, get_profiler, init_profiler
 from fire_engine.core.rng import for_domain, set_world_seed
 
 __all__ = [
+    "BuildingChangedEvent",
     "ChunkLoadedEvent",
     "ChunkUnloadedEvent",
     "Clock",

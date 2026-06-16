@@ -20,24 +20,41 @@ procedural registry:
 (Tree and bush sprites retired: 3-D trees/bushes live in
 ``procedural/flora/`` — see ``docs/content/tree_species_authoring.md``.)
 
-Additional textures can be added by creating a new module in this package and
-importing it here.  See ``docs/systems/procedural.md`` for the authoring guide.
+Texture def modules are organised into category sub-packages for the deep-and-
+narrow structure rule: ``ground/`` (dirt/grass/wasteland/plaster), ``sprites/``
+(dust/flower/grass-tuft/leaf) and ``sky/`` (moon/rain-streak/night-sky). Import
+a def's symbols from its sub-package, e.g.
+``from fire_engine.procedural.textures.ground.dirt_ground import DIRT_PALETTE``;
+the registry itself is keyed by def NAME, so ``get("dirt_ground")`` is unchanged.
+
+Docs: docs/systems/procedural.md
 """
 
-from fire_engine.procedural.textures import (
-    dirt_ground,  # registers "dirt_ground"
-    dust_mote,  # registers "dust_mote"
-    flower_sprite,  # registers "flower_sprite"
-    grass_ground,  # registers "grass_ground"
-    grass_tuft,  # registers "grass_tuft"
-    leaf_sprite,  # registers "leaf_sprite"
-    moon_surface,  # registers "moon_surface"
-    night_sky,  # registers "night_sky"
-    plaster_wall,  # registers "plaster_wall"
-    rain_streak,  # registers "rain_streak"
-    wasteland_ground,  # registers "wasteland_ground"
-)
+from __future__ import annotations
+
+# Import sub-packages first — triggers the @register_def decorators for all
+# built-ins so a bare ``import fire_engine.procedural`` registers everything.
+import fire_engine.procedural.textures.ground
+import fire_engine.procedural.textures.sky
+import fire_engine.procedural.textures.sprites  # noqa: F401  triggers sub-pkg @register_def
 from fire_engine.procedural.textures.base import ProceduralTextureDef, pixel_noise, value_noise
+from fire_engine.procedural.textures.ground import (
+    dirt_ground,
+    grass_ground,
+    plaster_wall,
+    wasteland_ground,
+)
+from fire_engine.procedural.textures.sky import (
+    moon_surface,
+    night_sky,
+    rain_streak,
+)
+from fire_engine.procedural.textures.sprites import (
+    dust_mote,
+    flower_sprite,
+    grass_tuft,
+    leaf_sprite,
+)
 
 __all__ = [
     "ProceduralTextureDef",

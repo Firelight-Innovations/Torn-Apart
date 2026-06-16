@@ -37,7 +37,6 @@ Preview with ``python tools/preview_tree.py tree_my_tree --obj --png``.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -65,48 +64,12 @@ from fire_engine.procedural.flora.skeleton import (
     validate_skeleton,
 )
 
+# TreeVariantSet lives in types.py (grouping module); re-exported here so all
+# historical import paths (from fire_engine.procedural.flora.species_def import
+# TreeVariantSet) remain valid.
+from fire_engine.procedural.flora.types import TreeVariantSet
+
 __all__ = ["TreeSpeciesDef", "TreeVariantSet"]
-
-
-@dataclass(frozen=True)
-class TreeVariantSet:
-    """
-    Everything the renderer needs to draw one species — registry-cached.
-
-    Attributes
-    ----------
-    name : str
-        The species def name (``"tree_gnarled_oak"`` …).
-    meshes : tuple[TreeMesh, ...]
-        The variant pool — unique per world seed; instances draw from it.
-    atlas : numpy.ndarray
-        ``(H, W, 4) uint8`` species texture (bark left half opaque, leaf
-        right half binary alpha) — bind once per species.
-    impostors : numpy.ndarray
-        ``(Hc, Wc × n_variants, 4) uint8`` far-LOD sprite atlas, one cell
-        per variant, trunk bases on the bottom row.  All cells share ONE
-        meters-per-texel scale (see ``impostor_height_m``).
-    max_height_m / max_radius_m : float
-        Pool-wide extents (m) — pad render bounds with these × max scale.
-    impostor_width_m / impostor_height_m : float
-        World size (m) of the impostor billboard quad: because the cells
-        share one scale, a quad of exactly this size, base at the trunk
-        base, overlays every variant's mesh at the crossfade.
-    """
-
-    name: str
-    meshes: tuple[TreeMesh, ...]
-    atlas: np.ndarray
-    impostors: np.ndarray
-    max_height_m: float
-    max_radius_m: float
-    impostor_width_m: float
-    impostor_height_m: float
-
-    @property
-    def n_variants(self) -> int:
-        """Variant pool size."""
-        return len(self.meshes)
 
 
 class TreeSpeciesDef(ProceduralDef):

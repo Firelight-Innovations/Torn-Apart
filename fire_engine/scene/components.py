@@ -34,8 +34,22 @@ Example::
 from __future__ import annotations
 
 import copy
-from dataclasses import dataclass, field
 from typing import Any
+
+from fire_engine.scene.types import ComponentSpec, FieldSpec
+
+# Re-export so every existing import path keeps working.
+__all__ = [
+    "COMPONENT_CATALOG",
+    "ComponentSpec",
+    "FieldSpec",
+    "catalog_payload",
+    "coerce_params",
+    "default_components_for_kind",
+    "default_params",
+    "is_known",
+    "make_component",
+]
 
 # Warm torch defaults for a Light component — the single source the game's
 # scene_visuals.SceneVisualFactory reads (it imports default_params("Light")),
@@ -43,49 +57,6 @@ from typing import Any
 _LIGHT_COLOR: tuple[float, float, float] = (1.0, 0.62, 0.28)
 _LIGHT_INTENSITY: float = 8.0
 _LIGHT_RADIUS_M: float = 16.0
-
-
-@dataclass(frozen=True)
-class FieldSpec:
-    """One editable parameter of a component.
-
-    Attributes:
-        name: Param key inside the component's ``params`` dict.
-        ui_type: How the inspector renders/edits it — one of
-            ``"float"``, ``"color"`` (rgb 0..1), ``"vec3"``, ``"enum"``, ``"bool"``.
-        default: Default value (floats for float, ``[r, g, b]`` for color/vec3,
-            a choice string for enum, a bool for bool).
-        min, max: Optional inclusive clamp for ``float`` fields.
-        choices: Allowed values for an ``enum`` field.
-        label: Human label for the inspector (defaults to ``name``).
-    """
-
-    name: str
-    ui_type: str
-    default: Any
-    min: float | None = None
-    max: float | None = None
-    choices: tuple[str, ...] = ()
-    label: str | None = None
-
-
-@dataclass(frozen=True)
-class ComponentSpec:
-    """A built-in component type.
-
-    Attributes:
-        type: Stable type id stored in each component dict's ``"type"``.
-        label: Inspector section title.
-        multiple: Whether an object may carry more than one of this type
-            (all current built-ins are singletons).
-        fields: Editable parameters, in display order.
-    """
-
-    type: str
-    label: str
-    multiple: bool
-    fields: tuple[FieldSpec, ...] = field(default_factory=tuple)
-
 
 COMPONENT_CATALOG: dict[str, ComponentSpec] = {
     "Mesh": ComponentSpec(

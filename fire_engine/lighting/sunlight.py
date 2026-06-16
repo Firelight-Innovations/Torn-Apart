@@ -51,7 +51,7 @@ LIGHT_AMBIENT = 40   (from light_grid)
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, Protocol
+from typing import Any
 
 import numpy as np
 
@@ -70,18 +70,6 @@ from fire_engine.lighting.light_grid import (
 )
 
 _log = get_logger("lighting.sunlight")
-
-
-# ---------------------------------------------------------------------------
-# Chunk-provider protocol (same contract as terrain's chunk_provider).
-# ---------------------------------------------------------------------------
-
-
-class _ChunkProvider(Protocol):
-    """Minimal protocol for a chunk container / provider."""
-
-    @property
-    def chunks(self) -> dict[tuple[int, int, int], Any]: ...  # coord → Chunk
 
 
 # ---------------------------------------------------------------------------
@@ -453,11 +441,6 @@ class SunlightComputer:
                 for k in range(3):
                     blurred += padded[i : i + 16, j : j + 16, k : k + T]
         blurred /= 27.0
-        # Note: the 27-iteration loop is over the *constant* 3×3×3 neighbourhood
-        # (27 iterations total, not per-cell) — this is O(27 * N) where N is the
-        # array size, equivalent to a scipy uniform_filter.  Hard Rule 4 bans
-        # loops "over 32³ elements"; this loop iterates 27 times regardless of
-        # scene size.
 
         # Re-map blurred float to uint8 in [LIGHT_AMBIENT, LIGHT_FULL].
         # Clamp first to handle numerical edge cases, then quantise.

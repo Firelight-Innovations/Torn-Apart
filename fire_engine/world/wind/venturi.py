@@ -57,12 +57,9 @@ No panda3d.  No per-voxel Python loops.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import numpy as np
 
-if TYPE_CHECKING:  # avoid an import cycle (worker imports venturi)
-    from fire_engine.world.wind.worker import VenturiJob, VenturiResult
+from fire_engine.world.wind.types import VenturiJob, VenturiResult
 
 __all__ = ["column_solid_fraction", "solve_venturi"]
 
@@ -264,9 +261,6 @@ def solve_venturi(job: VenturiJob) -> VenturiResult:
     >>> # res = solve_venturi(job)
     >>> # res.speedup.shape == (job.cells, job.cells)
     """
-    # Local import to dodge the worker<->venturi import cycle at module load.
-    from fire_engine.world.wind.worker import VenturiResult
-
     solid = column_solid_fraction(job).astype(np.float32)
     open_ = (1.0 - solid).astype(np.float32)
     passw = np.clip(open_, 0.05, 1.0).astype(np.float32)

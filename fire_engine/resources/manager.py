@@ -53,48 +53,9 @@ from typing import Any, Protocol, runtime_checkable
 
 import fire_engine.resources.loaders as _default_loaders_module
 
-# ---------------------------------------------------------------------------
-# Handle
-# ---------------------------------------------------------------------------
-
-
-class Handle:
-    """
-    A reference-counted wrapper around a loaded resource.
-
-    Attributes
-    ----------
-    resource : object
-        The raw loaded object (e.g. a Panda3D ``NodePath``, ``AudioSound``,
-        Pillow ``Image``, or whatever the registered loader returned).
-    path : str
-        Normalised path string used as the cache key.
-    refcount : int
-        Current reference count.  Starts at 0 on construction.  Call
-        ``ResourceManager.acquire(handle)`` to increment,
-        ``ResourceManager.release(handle)`` to decrement.
-
-    Example
-    -------
-        handle = manager.load("assets/models/player_hands.egg")
-        manager.acquire(handle)
-        obj = handle.resource   # live resource
-        manager.release(handle)
-    """
-
-    __slots__ = ("path", "refcount", "resource")
-
-    def __init__(self, resource: Any, path: str) -> None:
-        self.resource: Any = resource
-        self.path: str = path
-        self.refcount: int = 0
-
-    def __repr__(self) -> str:
-        return (
-            f"Handle(path={self.path!r}, refcount={self.refcount}, "
-            f"resource={type(self.resource).__name__})"
-        )
-
+# Handle (the reference-counted resource wrapper) lives in resources/types.py;
+# re-exported here so `from fire_engine.resources.manager import Handle` resolves.
+from fire_engine.resources.types import Handle as Handle
 
 # ---------------------------------------------------------------------------
 # LoadersModule protocol — for type-safe injection in tests

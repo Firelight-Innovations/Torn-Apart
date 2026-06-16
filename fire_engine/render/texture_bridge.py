@@ -126,7 +126,7 @@ def to_panda_cubemap(faces: np.ndarray) -> Texture:
     Upload a 6-face RGBA cube map (e.g. ``procedural.get("night_sky_cube")``).
 
     The input must follow the OpenGL cube-map convention produced by
-    ``procedural.textures.night_sky.cube_face_directions``: face order
+    ``procedural.textures.sky.night_sky.cube_face_directions``: face order
     +X, −X, +Y, −Y, +Z, −Z and array row 0 = the ``tc = −1`` texel row.
     Pages upload in that exact order with NO vertical flip (GL cube faces
     are t-down, unlike regular GL textures — flipping here would mirror

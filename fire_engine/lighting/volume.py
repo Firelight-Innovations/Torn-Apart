@@ -41,13 +41,15 @@ True
 
 from __future__ import annotations
 
-import threading
-from collections import OrderedDict
-from dataclasses import dataclass
-from typing import Any, Protocol, runtime_checkable
+from typing import Any
 
 import numpy as np
 
+from fire_engine.lighting._impl.cache import ChunkBlockCache
+from fire_engine.lighting._impl.protocols import (
+    GeometryOccupancyProvider,
+)
+from fire_engine.lighting._impl.types import GeometryVolume
 from fire_engine.lighting.occluders import TreeOccluderSet, splat_tree_occluders
 from fire_engine.lighting.palette import MaterialPalette
 
@@ -61,61 +63,6 @@ __all__ = [
     "pack_volume",
     "window_chunk_span",
 ]
-
-
-@runtime_checkable
-class GeometryOccupancyProvider(Protocol):
-    """
-    Structural hook letting a NON-terrain geometry system (buildings, future
-    props) splat its solids into the lighting cascades so the GPU marches see
-    and shadow them — without lighting importing that system or vice versa
-    (the Protocol is structural; nothing imports across the boundary).
-
-    A provider rasterizes into the already-assembled volume arrays in place,
-    **max-combining** occupancy the same way :func:`splat_tree_occluders` does:
-    write a cell's occupancy alpha (and bounce albedo) only where it would
-    *raise* the existing value, so terrain solids always win over a building
-    cell that happens to overlap a hill.
-
-    Implementations must be deterministic and must touch only cells inside the
-    window (``origin_cell`` … ``origin_cell + cells`` per axis); cells outside
-    their own geometry are left untouched (so ``providers=()`` — and providers
-    whose geometry misses the window — leave the output byte-identical).
-
-    Thread-safety: a provider may be called from the async cascade-assembly
-    worker, so it must read an immutable snapshot of its geometry, never live
-    mutable state.  (v1's building provider is a documented no-op; live
-    snapshot wiring is future scope — see ``buildings/occlusion.py``.)
-    """
-
-    def rasterize_occupancy(
-        self,
-        origin_cell: tuple[int, int, int],
-        cells: int,
-        cell_m: float,
-        albedo_occ: np.ndarray,
-        emission: np.ndarray,
-    ) -> None:
-        """
-        Splat this provider's geometry into ``albedo_occ`` / ``emission``.
-
-        Parameters
-        ----------
-        origin_cell : tuple[int, int, int]
-            Window origin in light cells (integer cell coords).
-        cells : int
-            Window edge length in cells (arrays are ``(cells,)*3 (+,4)``).
-        cell_m : float
-            Cell edge in meters (cascade resolution).
-        albedo_occ : np.ndarray
-            ``uint8 (cells, cells, cells, 4)`` — RGB bounce albedo + A
-            occupancy; mutate in place, max-combining occupancy.
-        emission : np.ndarray
-            ``uint8 (cells, cells, cells, 4)`` — emissive RGB (÷EMISSION_SCALE)
-            for self-lit surfaces (e.g. future glowing windows); usually
-            untouched.
-        """
-        ...  # pragma: no cover
 
 
 # Emission is HDR (a torch glow is ~2.0) but stored in uint8 textures; values
@@ -249,37 +196,6 @@ class VolumeWindow:
                 self.origin_cell = self._desired_origin(camera_pos)
                 return True
         return False
-
-
-@dataclass
-class GeometryVolume:
-    """
-    Packed world-geometry block for one cascade, ready for GPU upload.
-
-    Attributes
-    ----------
-    albedo_occ : numpy.ndarray
-        ``uint8 (N, N, N, 4)`` indexed ``[x, y, z]``: RGB = surface albedo
-        (linear, 0–255), A = **solid sub-voxel fraction ×255**: the fraction
-        of the cell's ``k³`` terrain voxels that are solid, rounded to a byte.
-        At cascade 0 (``cell_m == voxel_size``, ``k == 1``) this is exactly
-        255 (solid) or 0 (air), identical to a binary occupancy flag.  At the
-        coarse cascades it is a partial value, so a hollow room reads air
-        (A == 0) in its interior and only its 1-voxel walls read partly-solid
-        — the GPU probes no longer treat a hollow box as a solid block.
-    emission : numpy.ndarray
-        ``uint8 (N, N, N, 4)``: RGB = emitted radiance / ``EMISSION_SCALE``
-        (clipped to 255), A unused (255).
-    origin_cell : tuple[int, int, int]
-        World cell index of texel (0,0,0) at assembly time.
-    cell_m : float
-        Cell edge in meters.
-    """
-
-    albedo_occ: np.ndarray
-    emission: np.ndarray
-    origin_cell: tuple[int, int, int]
-    cell_m: float
 
 
 def _downsample_chunk_block(mats: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
@@ -529,125 +445,3 @@ def pack_volume(arr: np.ndarray) -> bytes:
     """
     data = np.ascontiguousarray(np.transpose(arr, (2, 1, 0, 3))[..., [2, 1, 0, 3]])
     return data.tobytes()
-
-
-class ChunkBlockCache:
-    """
-    Thread-safe LRU cache of per-chunk downsampled geometry mini-blocks.
-
-    Reassembling a coarse cascade re-downsamples every intersecting chunk's
-    material array from scratch — at ``light_c2_cell_m`` = 8 m cells the far
-    cascade's 512 m window touches tens of thousands of chunk coords, and a
-    full recenter re-folds all their ``uint8 (32,32,32)`` arrays each time,
-    which on the assembly worker outruns the recenter interval.  This cache
-    stores, per ``(chunk coord, cell_m)``, the chunk's
-    ``(material_id, solid_count)`` mini-block (the output of
-    ``_downsample_chunk_block``) so a recenter that re-reads the same chunk
-    copies the block instead of recomputing it.  A 16 m chunk yields a
-    ``2×2×2`` block at 8 m cells (``8×8×8`` at 2 m cells), so the entries are
-    tiny.
-
-    Thread-safety
-    -------------
-    The assembly worker thread reads + populates the cache (via
-    :func:`assemble_geometry`) while the main thread invalidates edited chunks.
-    All access is guarded by a single :class:`threading.Lock`; the blocks are
-    small so a coarse lock is fine.  Stored blocks are immutable
-    (``WRITEABLE`` cleared); :func:`assemble_geometry` slices but never mutates
-    them, so a hit can safely hand out a reference without copying.
-
-    Palette dependency
-    ------------------
-    The cached mini-blocks are material ids + solid counts — **palette-
-    independent** — so a palette change does NOT invalidate them (the palette
-    is applied after the cache, on the assembled material array).  The cache
-    *is* keyed only by chunk coord + cell size and assumes one terrain
-    voxel→chunk geometry per run; terrain edits invalidate per-chunk via
-    :meth:`invalidate`.
-
-    Eviction
-    --------
-    Bounded LRU: at most ``max_entries`` ``(coord, cell_m)`` entries
-    (default 4096).  Each entry is a few hundred bytes to a few KB, so the cap
-    bounds the cache to single-digit MB.  The least-recently-used entry is
-    evicted on overflow.
-
-    Parameters
-    ----------
-    max_entries : int, default 4096
-        Hard cap on stored ``(coord, cell_m)`` mini-blocks.
-
-    Example
-    -------
-    >>> cache = ChunkBlockCache(max_entries=8192)
-    >>> vol = assemble_geometry(win, chunks, palette, 32, 0.5, cache=cache)
-    >>> cache.invalidate((cx, cy, cz))   # after a terrain edit in that chunk
-    """
-
-    def __init__(self, max_entries: int = 4096) -> None:
-        self.max_entries = int(max_entries)
-        # key: (coord, cell_m) -> (material_id, solid_count) read-only arrays.
-        self._store: OrderedDict[tuple[Any, ...], tuple[np.ndarray, np.ndarray]] = OrderedDict()
-        self._lock = threading.Lock()
-
-    def get(
-        self,
-        coord: tuple[int, int, int],
-        cell_m: float,
-    ) -> tuple[np.ndarray, np.ndarray] | None:
-        """
-        Return the cached ``(material_id, solid_count)`` mini-block for
-        ``(coord, cell_m)``, or ``None`` on a miss.  Marks the entry MRU.
-
-        The returned arrays are read-only views into the cache — callers must
-        not mutate them (``assemble_geometry`` only slices/copies out of them).
-        """
-        key = (coord, float(cell_m))
-        with self._lock:
-            blk = self._store.get(key)
-            if blk is not None:
-                self._store.move_to_end(key)
-            return blk
-
-    def put(
-        self,
-        coord: tuple[int, int, int],
-        cell_m: float,
-        block: tuple[np.ndarray, np.ndarray],
-    ) -> None:
-        """
-        Store a chunk's mini-block, evicting the LRU entry past the cap.
-
-        The arrays are frozen read-only (their ``WRITEABLE`` flag is cleared)
-        so a later :meth:`get` can hand out references without copying.
-        """
-        mat, cnt = block
-        mat.setflags(write=False)
-        cnt.setflags(write=False)
-        key = (coord, float(cell_m))
-        with self._lock:
-            self._store[key] = (mat, cnt)
-            self._store.move_to_end(key)
-            while len(self._store) > self.max_entries:
-                self._store.popitem(last=False)  # evict LRU
-
-    def invalidate(self, coord: tuple[int, int, int]) -> None:
-        """
-        Drop every cached mini-block for ``coord`` (all cell sizes).
-
-        Call when a terrain edit changes that chunk's material array so the
-        next reassembly recomputes the affected blocks.
-        """
-        with self._lock:
-            for key in [k for k in self._store if k[0] == coord]:
-                del self._store[key]
-
-    def clear(self) -> None:
-        """Drop all cached blocks (e.g. on world reload)."""
-        with self._lock:
-            self._store.clear()
-
-    def __len__(self) -> int:
-        """Number of cached ``(coord, cell_m)`` entries."""
-        with self._lock:
-            return len(self._store)

@@ -33,8 +33,6 @@ Example::
 
 from __future__ import annotations
 
-import copy
-from dataclasses import dataclass, field
 from typing import Any
 
 from fire_engine.scene.components import (
@@ -44,81 +42,27 @@ from fire_engine.scene.components import (
     is_known,
     make_component,
 )
+from fire_engine.scene.types import (
+    _ZERO,
+    QuatT,
+    SceneError,
+    SceneObject,
+    Vec3T,
+)
+
+# Re-export support types so every existing import path keeps working.
+__all__ = [
+    "KINDS",
+    "QuatT",
+    "SceneError",
+    "SceneObject",
+    "SceneObjectStore",
+    "Vec3T",
+]
 
 # Object kinds the editor can place. "empty" is a bare transform (a grouping
 # node, like an empty Unity GameObject); the rest carry a default visual gizmo.
 KINDS: frozenset[str] = frozenset({"empty", "cube", "sphere", "light", "spawn"})
-
-Vec3T = tuple[float, float, float]
-QuatT = tuple[float, float, float, float]  # (w, x, y, z)
-
-_IDENTITY_QUAT: QuatT = (1.0, 0.0, 0.0, 0.0)
-_ONE: Vec3T = (1.0, 1.0, 1.0)
-_ZERO: Vec3T = (0.0, 0.0, 0.0)
-
-
-class SceneError(ValueError):
-    """Invalid scene operation (unknown id/kind, or a reparent that would cycle)."""
-
-
-@dataclass
-class SceneObject:
-    """One node in the authoring hierarchy.
-
-    Attributes:
-        id: Stable integer id, unique within a session (monotonic counter).
-        name: Display name (not required unique).
-        kind: One of :data:`KINDS`.
-        parent: Parent object id, or ``None`` for a root.
-        position: Local translation in meters ``(x, y, z)``, Z-up.
-        rotation: Local rotation quaternion ``(w, x, y, z)``.
-        scale: Local scale factors ``(x, y, z)``.
-        components: Built-in components beyond the Transform — each a dict
-            ``{"type", "enabled", "params"}`` (see
-            :mod:`fire_engine.scene.components`). ``kind`` seeds these on
-            creation; thereafter the list is the source of truth for visuals.
-            The Transform is intrinsic (the TRS fields) and is NOT in this list.
-    """
-
-    id: int
-    name: str
-    kind: str
-    parent: int | None = None
-    position: Vec3T = _ZERO
-    rotation: QuatT = _IDENTITY_QUAT
-    scale: Vec3T = _ONE
-    components: list[dict[str, Any]] = field(default_factory=list)
-
-    def to_dict(self) -> dict[str, Any]:
-        """Wire/serialisation form: plain JSON-friendly primitives."""
-        return {
-            "id": self.id,
-            "name": self.name,
-            "kind": self.kind,
-            "parent": self.parent,
-            "position": list(self.position),
-            "rotation": list(self.rotation),
-            "scale": list(self.scale),
-            "components": copy.deepcopy(self.components),
-        }
-
-    @staticmethod
-    def from_dict(d: dict[str, Any]) -> SceneObject:
-        kind = str(d["kind"])
-        # Migration seam (the ONLY one): pre-component saves lack "components",
-        # so synthesise the kind's defaults. New saves carry them verbatim.
-        raw = d.get("components")
-        components = default_components_for_kind(kind) if raw is None else copy.deepcopy(list(raw))
-        return SceneObject(
-            id=int(d["id"]),
-            name=str(d["name"]),
-            kind=kind,
-            parent=None if d.get("parent") is None else int(d["parent"]),
-            position=tuple(float(v) for v in d.get("position", _ZERO)),  # type: ignore[arg-type]
-            rotation=tuple(float(v) for v in d.get("rotation", _IDENTITY_QUAT)),  # type: ignore[arg-type]
-            scale=tuple(float(v) for v in d.get("scale", _ONE)),  # type: ignore[arg-type]
-            components=components,
-        )
 
 
 class SceneObjectStore:

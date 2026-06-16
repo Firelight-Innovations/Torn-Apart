@@ -38,12 +38,9 @@ from __future__ import annotations
 
 import queue
 import threading
-from dataclasses import dataclass
-from typing import Any
 
 from fire_engine.core import get_logger
-from fire_engine.lighting.occluders import TreeOccluderSet
-from fire_engine.lighting.palette import MaterialPalette
+from fire_engine.lighting._impl.types import AssemblyJob, AssemblyResult
 from fire_engine.lighting.volume import (
     ChunkBlockCache,
     VolumeWindow,
@@ -59,77 +56,6 @@ __all__ = [
     "CascadeAssemblyWorker",
     "assemble_packed",
 ]
-
-
-@dataclass(frozen=True)
-class AssemblyJob:
-    """
-    One cascade-volume reassembly request.
-
-    Attributes
-    ----------
-    cascade_index : int
-        Which cascade (0 or 1) this volume is for.
-    origin_cell : tuple[int, int, int]
-        Window origin (in cells) the volume is assembled for — committed to the
-        cascade window only when the result is uploaded.
-    cells, cell_m : int, float
-        Window dimensions (texels per axis, meters per cell).
-    chunk_size, voxel_size : int, float
-        Terrain constants for the slice/downsample math.
-    materials : dict[tuple[int, int, int], numpy.ndarray]
-        Snapshot of ``uint8 (S, S, S)`` material arrays for the chunks the
-        gather will read (coord → array).  Built on the main thread.
-    palette : MaterialPalette
-        Immutable material → albedo/emission lookup (safe to share read-only).
-    seq : int
-        Monotonic id; lets the consumer drop a superseded result.
-    occluders : TreeOccluderSet | None
-        Static tree/bush occluder snapshot splatted into the volume (see
-        ``lighting/occluders.py``).  Immutable struct-of-arrays — safe to
-        share read-only across the thread boundary.  ``None`` → chunks only.
-    trunk_occ : float
-        Trunk splat opacity (``config.light_tree_trunk_occ``).
-    canopy_gain : float
-        Multiplier on the per-instance leaf-derived canopy extinction
-        (``config.light_tree_canopy_extinction_gain``).
-    """
-
-    cascade_index: int
-    origin_cell: tuple[int, int, int]
-    cells: int
-    cell_m: float
-    chunk_size: int
-    voxel_size: float
-    materials: dict[tuple[int, int, int], Any]
-    palette: MaterialPalette
-    seq: int
-    occluders: TreeOccluderSet | None = None
-    trunk_occ: float = 0.0
-    canopy_gain: float = 0.0
-
-
-@dataclass(frozen=True)
-class AssemblyResult:
-    """
-    A finished cascade volume, packed and ready for ``Texture.set_ram_image``.
-
-    Attributes
-    ----------
-    cascade_index : int
-    origin_cell : tuple[int, int, int]
-        The origin the volume was assembled for (commit this to the window).
-    albedo_bytes, emis_bytes : bytes
-        Page-major BGRA 3-D-texture RAM images (see ``volume.pack_volume``).
-    seq : int
-        Echoes the job's ``seq``.
-    """
-
-    cascade_index: int
-    origin_cell: tuple[int, int, int]
-    albedo_bytes: bytes
-    emis_bytes: bytes
-    seq: int
 
 
 def assemble_packed(

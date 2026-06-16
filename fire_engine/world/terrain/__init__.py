@@ -30,15 +30,10 @@ See ``docs/systems/terrain.md`` for the full contract (padding rule,
 light_sampler contract, chunk_provider contract, Saveable delta format).
 """
 
-from fire_engine.world.terrain.brush import (
-    BoxBrush,
-    BrushMode,
-    CylinderBrush,
-    SphereBrush,
-    apply_brush,
-)
+from fire_engine.world.terrain.brush import apply_brush
 from fire_engine.world.terrain.chunk import Chunk
 from fire_engine.world.terrain.chunk_manager import ChunkManager
+from fire_engine.world.terrain.enums import BrushMode
 from fire_engine.world.terrain.generation import (
     MATERIAL_DIRT,
     MATERIAL_GRASS,
@@ -49,6 +44,7 @@ from fire_engine.world.terrain.meshing import WORLD_FLOOR_SOLID, MeshArrays, bui
 from fire_engine.world.terrain.rain_cover import OPEN_SKY_Z, RainCoverField
 from fire_engine.world.terrain.raycast import Hit, raycast_voxel
 from fire_engine.world.terrain.surface_nets import NEIGHBOR_OFFSETS_26, build_mesh_faceted
+from fire_engine.world.terrain.types import BoxBrush, CylinderBrush, SphereBrush
 
 __all__ = [
     "MATERIAL_DIRT",

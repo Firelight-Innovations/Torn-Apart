@@ -24,19 +24,21 @@ the same seed spawn bit-identical cells, so saves store nothing for natural
 weather.  Summoned cells (M8) are the only saved deviation.
 
 Units: meters, game seconds (1 game hour = 3600 s), m/s.
+
+Docs: docs/systems/world.weather.md
 """
 
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from enum import StrEnum
 from typing import TYPE_CHECKING
 
 import numpy as np
 
 from fire_engine.core.config import Config
 from fire_engine.core.rng import for_domain
+from fire_engine.world.weather.types import CellKind, Regime  # re-exported below
 
 if TYPE_CHECKING:
     from fire_engine.world.weather.synoptic import Synoptic
@@ -70,34 +72,10 @@ def _smoothstep(x: float, lo: float, hi: float) -> float:
     return t * t * (3.0 - 2.0 * t)
 
 
-class CellKind(StrEnum):
-    """
-    The four kinds of storm cell.  ``str`` mixin so ``.value`` round-trips
-    through saves and event payloads as a plain string.
-
-    SHOWER
-        Light-to-moderate rain, no lightning.
-    THUNDERSTORM
-        Heavy rain + lightning (M7) + a strong core gust; biased larger.
-    CLOUD_BANK
-        Clouds only — coverage/density, no precipitation.
-    FOG_BANK
-        Ground fog — raises the local fog coefficient, little cloud cover.
-    """
-
-    SHOWER = "shower"
-    THUNDERSTORM = "thunderstorm"
-    CLOUD_BANK = "cloud_bank"
-    FOG_BANK = "fog_bank"
-
-
-class Regime(StrEnum):
-    """Per-day synoptic regime — sets ambient sky and the cell spawn mix."""
-
-    HIGH_PRESSURE = "high_pressure"
-    MIXED = "mixed"
-    FRONTAL = "frontal"
-
+# CellKind and Regime are defined in types.py and re-exported here for
+# backward-compatible imports (``from fire_engine.world.weather.cells import CellKind``).
+# The structure checker counts only ``class X:`` *definitions*, so these
+# re-exports do not count toward the one-class limit.
 
 #: Stable kind order for the per-regime spawn distributions below.
 _KIND_ORDER: tuple[CellKind, ...] = (

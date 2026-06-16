@@ -45,7 +45,7 @@ def _gen(name: str, seed: int, **params) -> np.ndarray:
     """Generate a texture def fresh under a given world seed (bypasses the
     registry cache so seed changes actually re-generate)."""
     set_world_seed(seed)
-    from fire_engine.procedural.textures.flower_sprite import FlowerSpriteDef
+    from fire_engine.procedural.textures.sprites.flower_sprite import FlowerSpriteDef
 
     cls = {"flower_sprite": FlowerSpriteDef}[name]
     return cls().generate(for_domain("procedural", name), **params)

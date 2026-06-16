@@ -41,8 +41,8 @@ from typing import Any
 from panda3d.core import NodePath, Shader
 
 from fire_engine.core.shader_source import load_glsl
-from fire_engine.procedural.textures.dirt_ground import DIRT_PALETTE, DIRT_THRESHOLDS
-from fire_engine.procedural.textures.grass_ground import GRASS_PALETTE, GRASS_THRESHOLDS
+from fire_engine.procedural.textures.ground.dirt_ground import DIRT_PALETTE, DIRT_THRESHOLDS
+from fire_engine.procedural.textures.ground.grass_ground import GRASS_PALETTE, GRASS_THRESHOLDS
 from fire_engine.procedural.textures.ground_lut import build_ground_lut
 from fire_engine.render.texture_bridge import to_field_texture
 from fire_engine.world.terrain.generation import MATERIAL_DIRT, MATERIAL_GRASS

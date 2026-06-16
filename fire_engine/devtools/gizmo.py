@@ -22,82 +22,36 @@ Conventions
 - Rotations compose in world space: ``new = axis_delta * start`` (premultiply),
   matching :class:`~fire_engine.core.math3d.Quat` semantics.
 
+Enum and support-type definitions live in :mod:`fire_engine.devtools.enums`
+(GizmoMode, HandleType) and :mod:`fire_engine.devtools.types` (Handle,
+DragState); they are re-exported here to preserve every historical import path.
+
 No panda3d imports — headless-testable.
+
+Docs: docs/systems/devtools.md
 """
 
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
-from enum import Enum
 
 import numpy as np
 
 from fire_engine.core.math3d import Quat, Vec3
+from fire_engine.devtools.enums import GizmoMode, HandleType
+from fire_engine.devtools.types import DragState, Handle
 
-
-class GizmoMode(Enum):
-    """Which manipulator is active (mirrors Unity's W/E/R tools)."""
-
-    TRANSLATE = "translate"
-    ROTATE = "rotate"
-    SCALE = "scale"
-
-
-class HandleType(Enum):
-    """
-    The kind of handle a ray can grab.
-
-    AXIS    — a single-axis arrow (translate) or stalk (scale).
-    PLANE   — a two-axis square (translate on the plane whose *normal* is ``axis``).
-    RING    — a rotation ring in the plane whose *normal* is ``axis``.
-    UNIFORM — the centre cube (uniform scale on all axes; ``axis`` ignored).
-    """
-
-    AXIS = "axis"
-    PLANE = "plane"
-    RING = "ring"
-    UNIFORM = "uniform"
-
-
-@dataclass(frozen=True)
-class Handle:
-    """
-    One grabbable part of the gizmo.
-
-    Parameters
-    ----------
-    type : HandleType
-    axis : int
-        ``0=X / 1=Y / 2=Z``.  For PLANE/RING it is the plane's *normal* axis;
-        for UNIFORM it is unused (always 0).
-    """
-
-    type: HandleType
-    axis: int
-
-
-@dataclass
-class DragState:
-    """
-    Captured reference pose for an in-progress drag (returned by :meth:`Gizmo.begin`).
-
-    Holds the object's pose at grab time plus the one reference quantity the
-    handle needs (axis parameter, plane point, ring angle, or radial distance),
-    so :func:`update_drag` can compute an absolute new pose each frame.
-    """
-
-    mode: GizmoMode
-    handle: Handle
-    pivot: Vec3
-    size: float
-    start_position: Vec3
-    start_rotation: Quat
-    start_scale: Vec3
-    ref_scalar: float = 0.0
-    ref_point: np.ndarray | None = None
-    ref_angle: float = 0.0
-    ref_dist: float = 0.0
+# Re-export so `from fire_engine.devtools.gizmo import GizmoMode` etc. keep working.
+__all__ = [
+    "DragState",
+    "Gizmo",
+    "GizmoMode",
+    "Handle",
+    "HandleType",
+    "closest_on_axis",
+    "ray_plane_intersect",
+    "update_drag",
+]
 
 
 # ---------------------------------------------------------------------------

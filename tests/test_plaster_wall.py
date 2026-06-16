@@ -9,7 +9,7 @@ reset_registry) so it never perturbs the global registry other tests rely on.
 import numpy as np
 
 from fire_engine.core.rng import for_domain
-from fire_engine.procedural.textures.plaster_wall import (
+from fire_engine.procedural.textures.ground.plaster_wall import (
     PLASTER_PALETTE,
     PlasterWallDef,
 )

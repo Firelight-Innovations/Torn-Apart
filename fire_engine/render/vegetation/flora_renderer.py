@@ -43,14 +43,12 @@ from typing import Any
 
 # Panda3D imports allowed in world/ per ARCHITECTURE §3.
 from panda3d.core import (
-    BoundingBox,
     Geom,
     GeomNode,
     GeomTriangles,
     GeomVertexData,
     GeomVertexFormat,
     GeomVertexWriter,
-    LPoint3,
     LVecBase2f,
     LVecBase3f,
     NodePath,
@@ -64,19 +62,21 @@ from fire_engine.core import (
 )
 from fire_engine.render.component import Component
 from fire_engine.render.vegetation import flora_shaders
-
-# Weather → sway mapping shared with grass so the scalar fallback moves all
-# vegetation in lockstep (flora scales it per kind via u_sway_gain).
-from fire_engine.render.vegetation.grass_renderer import (
+from fire_engine.render.vegetation._impl.zone_renderer import (
     _GUST_FREQ_MIN,
-    _GUST_FREQ_PER_WIND,
-    _GUST_FREQ_RAIN,
     _SWAY_BASE_MIN_M,
-    _SWAY_BASE_WIND_M,
     _SWAY_GUST_MIN_M,
-    _SWAY_GUST_RAIN_M,
-    _SWAY_GUST_WIND_M,
-    _WIND_SPEED_MAX,
+    init_zone_renderer,
+    set_volume_bounds,
+    subscribe_terrain_events,
+    sync_sway_uniforms,
+    unsubscribe_terrain_events,
+)
+from fire_engine.render.vegetation._impl.zone_renderer import (
+    on_chunk_loaded as _on_chunk_loaded_impl,
+)
+from fire_engine.render.vegetation._impl.zone_renderer import (
+    on_terrain_edited as _on_terrain_edited_impl,
 )
 from fire_engine.zones import (
     bake_grass_height_field,
@@ -158,6 +158,22 @@ class FloraRendererComponent(Component):
     Units: meters, seconds, radians.  World-space Z-up.
     """
 
+    # Class-level annotations for attributes set by init_zone_renderer and
+    # accessed by zone_renderer helpers (mypy --strict requires these).
+    base: Any
+    sky_system: Any
+    zone_store: Any
+    chunk_provider: Any
+    lighting_pipeline: Any
+    bus: Any
+    _root: NodePath | None
+    _shader: Shader | None
+    _kind_roots: dict[str, NodePath]
+    _volume_nodes: dict[tuple[str, int], NodePath]
+    _dirty_fields: set[tuple[str, int]]
+    _store_version_built: int
+    _time_s: float
+
     def __init__(
         self,
         base: Any = None,
@@ -168,21 +184,17 @@ class FloraRendererComponent(Component):
         bus: Any = None,
     ) -> None:
         super().__init__()
-        self.base = base
-        self.sky_system = sky_system
-        self.zone_store = zone_store
-        self.chunk_provider = chunk_provider
-        self.lighting_pipeline = lighting_pipeline
-        self.bus = bus
-
-        self._root: NodePath | None = None
-        self._shader: Shader | None = None
+        init_zone_renderer(
+            self, base, sky_system, zone_store, chunk_provider, lighting_pipeline, bus
+        )
+        self._root = None
+        self._shader = None
         self._kind_roots: dict[str, NodePath] = {}
         self._kind_geoms: dict[str, Geom] = {}
-        self._volume_nodes: dict[tuple[str, int], NodePath] = {}
-        self._dirty_fields: set[tuple[str, int]] = set()
-        self._store_version_built: int = -1
-        self._time_s: float = 0.0
+        self._volume_nodes = {}
+        self._dirty_fields = set()
+        self._store_version_built = -1
+        self._time_s = 0.0
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -246,16 +258,12 @@ class FloraRendererComponent(Component):
             self._kind_roots[kind.tag] = kroot
 
         self._build_volumes()
-
-        if self.bus is not None:
-            self.bus.subscribe(TerrainEditedEvent, self._on_terrain_edited)
-            self.bus.subscribe(ChunkLoadedEvent, self._on_chunk_loaded)
+        subscribe_terrain_events(self)
 
     def late_update(self, dt: float) -> None:
         """Sync scalar sway uniforms; rebuild/re-bake what changed."""
         if self._root is None:
             return
-        self._time_s += dt
 
         if self.zone_store.version != self._store_version_built:
             self._build_volumes()
@@ -264,28 +272,11 @@ class FloraRendererComponent(Component):
                 self._rebake_field(key)
             self._dirty_fields.clear()
 
-        st = getattr(self.sky_system, "state", None) if self.sky_system is not None else None
-        if st is not None:
-            wind = float(st.wind_speed)
-            rain = float(st.rain_intensity)
-            wn = max(0.0, min(wind / _WIND_SPEED_MAX, 1.0))
-            self._root.set_shader_input(
-                "u_wind_dir", LVecBase2f(float(st.wind_dir[0]), float(st.wind_dir[1]))
-            )
-            self._root.set_shader_input("u_sway_base", _SWAY_BASE_MIN_M + _SWAY_BASE_WIND_M * wn)
-            self._root.set_shader_input(
-                "u_sway_gust", _SWAY_GUST_MIN_M + _SWAY_GUST_WIND_M * wn + _SWAY_GUST_RAIN_M * rain
-            )
-            self._root.set_shader_input(
-                "u_gust_freq", _GUST_FREQ_MIN + _GUST_FREQ_PER_WIND * wind + _GUST_FREQ_RAIN * rain
-            )
-        self._root.set_shader_input("u_time_s", self._time_s)
+        sync_sway_uniforms(self, dt)
 
     def on_destroy(self) -> None:
         """Detach all flora nodes and unsubscribe from the bus."""
-        if self.bus is not None:
-            self.bus.unsubscribe(TerrainEditedEvent, self._on_terrain_edited)
-            self.bus.unsubscribe(ChunkLoadedEvent, self._on_chunk_loaded)
+        unsubscribe_terrain_events(self)
         if self._root is not None:
             self._root.remove_node()
             self._root = None
@@ -297,13 +288,10 @@ class FloraRendererComponent(Component):
     # ------------------------------------------------------------------
 
     def _on_terrain_edited(self, event: TerrainEditedEvent) -> None:
-        coords: Any = event.chunk_coords
-        if isinstance(coords, tuple) and len(coords) == 3 and isinstance(coords[0], int):
-            coords = (coords,)
-        self._mark_dirty_for_coords(coords)
+        _on_terrain_edited_impl(self, event)
 
     def _on_chunk_loaded(self, event: ChunkLoadedEvent) -> None:
-        self._mark_dirty_for_coords((event.coord,))
+        _on_chunk_loaded_impl(self, event)
 
     def _mark_dirty_for_coords(self, coords: Any) -> None:
         """Queue a height-field re-bake for volumes touching these chunks."""
@@ -356,21 +344,7 @@ class FloraRendererComponent(Component):
                 # bounds recomputation (Panda3D would cull by the base
                 # Geom's tiny origin bounds otherwise).
                 pad = height * (kind.scale_min + kind.scale_span) + _BOUNDS_PAD_M
-                geom_node.set_bounds(
-                    BoundingBox(
-                        LPoint3(
-                            vol.min_corner[0] - pad,
-                            vol.min_corner[1] - pad,
-                            vol.min_corner[2] - pad,
-                        ),
-                        LPoint3(
-                            vol.max_corner[0] + pad,
-                            vol.max_corner[1] + pad,
-                            vol.max_corner[2] + pad,
-                        ),
-                    )
-                )
-                geom_node.set_final(True)
+                set_volume_bounds(geom_node, vol, pad)
                 self._volume_nodes[(kind.tag, vol.id)] = node
                 total += count
 

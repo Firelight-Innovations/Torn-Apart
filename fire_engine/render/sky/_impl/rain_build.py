@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from panda3d.core import (
-    BoundingBox,
     ColorBlendAttrib,
     Geom,
     GeomNode,
@@ -26,7 +25,6 @@ from panda3d.core import (
     GeomVertexData,
     GeomVertexFormat,
     GeomVertexWriter,
-    LPoint3,
     LVecBase2f,
     LVecBase3f,
     SamplerState,
@@ -36,6 +34,7 @@ from panda3d.core import (
 )
 
 from fire_engine.core.rng import for_domain
+from fire_engine.render._impl.quad import build_unit_quad, setup_additive_instanced_node
 from fire_engine.render.sky import rain_shaders
 
 if TYPE_CHECKING:
@@ -74,30 +73,6 @@ def _rain_hash_seed() -> int:
     ``for_domain("rain", "particles")``.  Bounded to ``[0, 2**31)`` (Panda3D
     passes shader-input ints as signed)."""
     return int(for_domain("rain", "particles").integers(0, 2**31))
-
-
-def _build_streak_quad() -> Geom:
-    """Shared unit streak quad (xy ∈ {-1,+1}, z=0, UV 0–1) drawn N times."""
-    fmt = GeomVertexFormat.get_v3t2()
-    vdata = GeomVertexData("rain_quad", fmt, Geom.UH_static)
-    vdata.set_num_rows(4)
-    vw = GeomVertexWriter(vdata, "vertex")
-    tw = GeomVertexWriter(vdata, "texcoord")
-    corners = (
-        (-1.0, -1.0, 0.0, 0.0),
-        (1.0, -1.0, 1.0, 0.0),
-        (1.0, 1.0, 1.0, 1.0),
-        (-1.0, 1.0, 0.0, 1.0),
-    )
-    for x, y, u, v in corners:
-        vw.add_data3(x, y, 0.0)
-        tw.add_data2(u, v)
-    tris = GeomTriangles(Geom.UH_static)
-    tris.add_vertices(0, 1, 2)
-    tris.add_vertices(0, 2, 3)
-    geom = Geom(vdata)
-    geom.add_primitive(tris)
-    return geom
 
 
 def _build_cylinder(radius_m: float, height_m: float, segments: int) -> GeomNode:
@@ -175,7 +150,7 @@ def build_particles(self_obj: RainRendererComponent, cfg: Any) -> None:
         fragment=rain_shaders.RAIN_PARTICLE_FRAGMENT,
     )
     geom_node = GeomNode("rain_particles")
-    geom_node.add_geom(_build_streak_quad())
+    geom_node.add_geom(build_unit_quad("rain_quad"))
     # Parent under terrain_root so wind/fog/camera + the weather-map contract
     # (bound on render, inherited by terrain_root) all arrive automatically.
     node = self_obj.base.terrain_root.attach_new_node(geom_node)
@@ -195,19 +170,9 @@ def build_particles(self_obj: RainRendererComponent, cfg: Any) -> None:
     # IS inherited from terrain_root, so it needs no rebind).
     node.set_shader_input("u_time_s", 0.0)
 
-    node.set_transparency(TransparencyAttrib.M_none)
-    node.set_attrib(
-        ColorBlendAttrib.make(
-            ColorBlendAttrib.M_add, ColorBlendAttrib.O_incoming_alpha, ColorBlendAttrib.O_one
-        )
-    )
-    node.set_depth_write(False)
-    node.set_bin("fixed", 0)
-    node.set_two_sided(True)
-
-    big = 1.0e9
-    geom_node.set_bounds(BoundingBox(LPoint3(-big, -big, -big), LPoint3(big, big, big)))
-    geom_node.set_final(True)
+    # Additive glow; infinite bounding box so the shader-positioned instances
+    # are never culled by the base quad's origin bounds.
+    setup_additive_instanced_node(node, geom_node)
     self_obj._particle_node = node
 
 

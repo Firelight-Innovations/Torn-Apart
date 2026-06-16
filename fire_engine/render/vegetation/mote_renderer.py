@@ -62,17 +62,14 @@ from typing import Any
 
 # Panda3D imports allowed in world/ per ARCHITECTURE §3.
 from panda3d.core import (
-    BoundingBox,
-    ColorBlendAttrib,
     GeomNode,
-    LPoint3,
     NodePath,
     Shader,
-    TransparencyAttrib,
 )
 
 from fire_engine.core import get_logger
 from fire_engine.core.rng import for_domain
+from fire_engine.render._impl.quad import setup_additive_instanced_node as _setup_additive
 from fire_engine.render.component import Component
 from fire_engine.render.vegetation import mote_shaders
 from fire_engine.render.vegetation._impl.leaf_litter import LeafLitterComponent
@@ -158,23 +155,9 @@ class DustMoteComponent(Component):
 
         # Additive glow: depth-test ON (motes hide behind terrain) but
         # depth-write OFF (no sorting needed — additive is order-independent).
-        node.set_transparency(TransparencyAttrib.M_none)
-        node.set_attrib(
-            ColorBlendAttrib.make(
-                ColorBlendAttrib.M_add, ColorBlendAttrib.O_incoming_alpha, ColorBlendAttrib.O_one
-            )
-        )
-        node.set_depth_write(False)
-        node.set_bin("fixed", 0)
-        node.set_two_sided(True)
-
-        # Instances are positioned in the shader (camera-anchored lattice), so
-        # the box wanders with the camera; Panda3D would cull by the base quad's
-        # origin bounds.  Give it an effectively-infinite box + set_final so it
-        # never culls the whole node.  (Per-mote off-screen specks cost ~nothing.)
-        big = 1.0e9
-        geom_node.set_bounds(BoundingBox(LPoint3(-big, -big, -big), LPoint3(big, big, big)))
-        geom_node.set_final(True)
+        # Instances are positioned in the shader — give the node an infinite
+        # bounding box so Panda3D never culls by the base quad's origin bounds.
+        _setup_additive(node, geom_node)
         self._node = node
 
         _log.info(

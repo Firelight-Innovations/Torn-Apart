@@ -10,10 +10,8 @@ from __future__ import annotations
 from typing import Any
 
 from panda3d.core import (
-    BoundingBox,
     Geom,
     GeomNode,
-    LPoint3,
     LVecBase3f,
     NodePath,
     Shader,
@@ -23,6 +21,7 @@ from panda3d.core import (
 from fire_engine.core import get_logger
 from fire_engine.render.component import Component
 from fire_engine.render.vegetation import mote_shaders
+from fire_engine.render.vegetation._impl.zone_renderer import set_volume_bounds
 from fire_engine.zones import leaf_hash_seed, leaf_instance_count
 
 __all__ = ["LeafLitterComponent"]
@@ -159,17 +158,7 @@ class LeafLitterComponent(Component):
             # the node the volume box padded by the carry reach + leaf size, and
             # stop bounds recomputation (grass culling caveat).
             pad = _LEAF_CARRY_PAD_M + float(cfg.wind_leaf_size_m)
-            geom_node.set_bounds(
-                BoundingBox(
-                    LPoint3(
-                        vol.min_corner[0] - pad, vol.min_corner[1] - pad, vol.min_corner[2] - pad
-                    ),
-                    LPoint3(
-                        vol.max_corner[0] + pad, vol.max_corner[1] + pad, vol.max_corner[2] + pad
-                    ),
-                )
-            )
-            geom_node.set_final(True)
+            set_volume_bounds(geom_node, vol, pad)
             self._volume_nodes[vol.id] = node
             total += count
 

@@ -14,6 +14,8 @@ names are re-exported from the appropriate top-level core module:
     ``resolve_graphics_preset``   → ``fire_engine.core.config``
   - ``NullScope``, ``frame_time_stats``
     (and profiler internals)      → ``fire_engine.core.profiler``
+  - ``QueueWorker``               → ``fire_engine.core._impl.worker``
+    (imported directly by subclasses in world/wind and lighting)
 
 Docs: docs/systems/core.md
 """

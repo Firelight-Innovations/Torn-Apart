@@ -5,6 +5,10 @@ LeafLitterComponent): billboard quad geometry and procedural texture loading.
 Factored here to avoid a circular import between mote_renderer and
 _impl.leaf_litter (both need the helpers; neither can import the other).
 
+The quad geometry is delegated to ``render._impl.quad.build_unit_quad``
+(shared with the rain renderer) and re-exported under the legacy name so
+call sites need no changes.
+
 Docs: docs/systems/render.vegetation.md
 """
 
@@ -12,13 +16,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from panda3d.core import (
-    Geom,
-    GeomTriangles,
-    GeomVertexData,
-    GeomVertexFormat,
-    GeomVertexWriter,
-)
+from panda3d.core import Geom
+
+from fire_engine.render._impl.quad import build_unit_quad
 
 __all__ = ["build_quad_geom", "mote_texture"]
 
@@ -31,27 +31,11 @@ def build_quad_geom() -> Geom:
     tumble rotation for leaves), so one tiny 4-vertex / 2-triangle Geom is the
     base for every instance — a fixed handful of vertices, never a per-particle
     array.
+
+    Delegates to ``render._impl.quad.build_unit_quad`` with the legacy
+    ``"mote_quad"`` profiler label preserved.
     """
-    fmt = GeomVertexFormat.get_v3t2()
-    vdata = GeomVertexData("mote_quad", fmt, Geom.UH_static)
-    vdata.set_num_rows(4)
-    vw = GeomVertexWriter(vdata, "vertex")
-    tw = GeomVertexWriter(vdata, "texcoord")
-    corners = (
-        (-1.0, -1.0, 0.0, 0.0),
-        (1.0, -1.0, 1.0, 0.0),
-        (1.0, 1.0, 1.0, 1.0),
-        (-1.0, 1.0, 0.0, 1.0),
-    )
-    for x, y, u, v in corners:
-        vw.add_data3(x, y, 0.0)
-        tw.add_data2(u, v)
-    tris = GeomTriangles(Geom.UH_static)
-    tris.add_vertices(0, 1, 2)
-    tris.add_vertices(0, 2, 3)
-    geom = Geom(vdata)
-    geom.add_primitive(tris)
-    return geom
+    return build_unit_quad("mote_quad")
 
 
 def mote_texture(name: str) -> Any:

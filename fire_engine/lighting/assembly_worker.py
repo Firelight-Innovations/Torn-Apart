@@ -36,10 +36,8 @@ so worker output is byte-identical to a synchronous ``assemble_geometry`` +
 
 from __future__ import annotations
 
-import queue
-import threading
-
 from fire_engine.core import get_logger
+from fire_engine.core._impl.worker import QueueWorker
 from fire_engine.lighting._impl.types import AssemblyJob, AssemblyResult
 from fire_engine.lighting.volume import (
     ChunkBlockCache,
@@ -97,7 +95,7 @@ def assemble_packed(
     )
 
 
-class CascadeAssemblyWorker:
+class CascadeAssemblyWorker(QueueWorker[AssemblyJob, AssemblyResult]):
     """
     Single background thread that assembles + packs cascade volumes.
 
@@ -125,41 +123,26 @@ class CascadeAssemblyWorker:
     """
 
     def __init__(self, *, cache_max_entries: int = 4096) -> None:
-        self._in: queue.Queue[AssemblyJob | None] = queue.Queue()
-        self._out: queue.Queue[AssemblyResult] = queue.Queue()
-        self._thread: threading.Thread | None = None
-        self._pending = 0
+        super().__init__("CascadeAssemblyWorker")
         self.block_cache = ChunkBlockCache(max_entries=cache_max_entries)
 
-    # ------------------------------------------------------------------
+    def _process(self, job: AssemblyJob) -> AssemblyResult:
+        return assemble_packed(job, cache=self.block_cache)
 
-    def start(self) -> None:
-        """Spawn the worker thread (idempotent)."""
-        if self._thread is not None:
-            return
-        self._thread = threading.Thread(target=self._run, name="CascadeAssemblyWorker", daemon=True)
-        self._thread.start()
-
-    def submit(self, job: AssemblyJob) -> None:
-        """Enqueue a reassembly job (main thread)."""
-        self._pending += 1
-        self._in.put(job)
-
-    def drain_results(self) -> list[AssemblyResult]:
-        """Pop and return all finished results (main thread, non-blocking)."""
-        out: list[AssemblyResult] = []
-        while True:
-            try:
-                res = self._out.get_nowait()
-            except queue.Empty:
-                break
-            self._pending -= 1
-            out.append(res)
-        return out
-
-    def pending(self) -> int:
-        """Jobs submitted but not yet drained."""
-        return self._pending
+    def _on_error(self, job: AssemblyJob) -> None:
+        _log.exception("Cascade assembly failed (cascade %d, seq %d)", job.cascade_index, job.seq)
+        # Post a failure sentinel (empty bytes) so the consumer can
+        # clear its in-flight flag and retry — a raised job must not
+        # leave the cascade stuck forever.
+        self._out.put(
+            AssemblyResult(
+                cascade_index=job.cascade_index,
+                origin_cell=job.origin_cell,
+                albedo_bytes=b"",
+                emis_bytes=b"",
+                seq=job.seq,
+            )
+        )
 
     def invalidate_chunk(self, coord: tuple[int, int, int]) -> None:
         """
@@ -171,38 +154,3 @@ class CascadeAssemblyWorker:
     def clear_cache(self) -> None:
         """Drop the entire block cache (e.g. world reload).  Thread-safe."""
         self.block_cache.clear()
-
-    def stop(self, *, join: bool = True, timeout: float = 2.0) -> None:
-        """Signal the worker to exit and (optionally) join it."""
-        if self._thread is None:
-            return
-        self._in.put(None)  # sentinel
-        if join:
-            self._thread.join(timeout=timeout)
-        self._thread = None
-
-    # ------------------------------------------------------------------
-
-    def _run(self) -> None:
-        while True:
-            job = self._in.get()
-            if job is None:  # sentinel → shutdown
-                break
-            try:
-                self._out.put(assemble_packed(job, cache=self.block_cache))
-            except Exception:
-                _log.exception(
-                    "Cascade assembly failed (cascade %d, seq %d)", job.cascade_index, job.seq
-                )
-                # Post a failure sentinel (empty bytes) so the consumer can
-                # clear its in-flight flag and retry — a raised job must not
-                # leave the cascade stuck forever.
-                self._out.put(
-                    AssemblyResult(
-                        cascade_index=job.cascade_index,
-                        origin_cell=job.origin_cell,
-                        albedo_bytes=b"",
-                        emis_bytes=b"",
-                        seq=job.seq,
-                    )
-                )

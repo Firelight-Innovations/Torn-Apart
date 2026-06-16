@@ -84,19 +84,20 @@ from fire_engine.render.vegetation._impl.tree_build import (
     rebuild_volume as _rebuild_volume,
 )
 from fire_engine.render.vegetation._impl.tree_occluders import push_occluders as _push_occluders
-
-# Weather → sway mapping shared with grass/flora so the scalar fallback
-# moves all vegetation in lockstep (scaled per kind via u_sway_gain).
-from fire_engine.render.vegetation.grass_renderer import (
+from fire_engine.render.vegetation._impl.zone_renderer import (
     _GUST_FREQ_MIN,
-    _GUST_FREQ_PER_WIND,
-    _GUST_FREQ_RAIN,
     _SWAY_BASE_MIN_M,
-    _SWAY_BASE_WIND_M,
     _SWAY_GUST_MIN_M,
-    _SWAY_GUST_RAIN_M,
-    _SWAY_GUST_WIND_M,
-    _WIND_SPEED_MAX,
+    init_zone_renderer,
+    subscribe_terrain_events,
+    sync_sway_uniforms,
+    unsubscribe_terrain_events,
+)
+from fire_engine.render.vegetation._impl.zone_renderer import (
+    on_chunk_loaded as _on_chunk_loaded_impl,
+)
+from fire_engine.render.vegetation._impl.zone_renderer import (
+    on_terrain_edited as _on_terrain_edited_impl,
 )
 
 __all__ = ["TreeRendererComponent"]
@@ -157,8 +158,14 @@ class TreeRendererComponent(Component):
     Units: meters, seconds, radians.  World-space Z-up.
     """
 
-    # Class-level annotations for attributes accessed by _impl helpers
-    # (mypy --strict requires these even though __init__ sets them).
+    # Class-level annotations for attributes set by init_zone_renderer and
+    # accessed by _impl helpers (mypy --strict requires these).
+    base: Any
+    sky_system: Any
+    zone_store: Any
+    chunk_provider: Any
+    lighting_pipeline: Any
+    bus: Any
     _root: NodePath | None
     _mesh_shader: Shader | None
     _impostor_shader: Shader | None
@@ -185,13 +192,9 @@ class TreeRendererComponent(Component):
         bus: Any = None,
     ) -> None:
         super().__init__()
-        self.base = base
-        self.sky_system = sky_system
-        self.zone_store = zone_store
-        self.chunk_provider = chunk_provider
-        self.lighting_pipeline = lighting_pipeline
-        self.bus = bus
-
+        init_zone_renderer(
+            self, base, sky_system, zone_store, chunk_provider, lighting_pipeline, bus
+        )
         self._root = None
         self._mesh_shader = None
         self._impostor_shader = None
@@ -278,16 +281,12 @@ class TreeRendererComponent(Component):
             self._kind_roots[kind.tag] = kroot
 
         _build_volumes_fn(self)
-
-        if self.bus is not None:
-            self.bus.subscribe(TerrainEditedEvent, self._on_terrain_edited)
-            self.bus.subscribe(ChunkLoadedEvent, self._on_chunk_loaded)
+        subscribe_terrain_events(self)
 
     def late_update(self, dt: float) -> None:
         """Sync scalar sway uniforms; rebuild/re-bake what changed."""
         if self._root is None:
             return
-        self._time_s += dt
 
         if self.zone_store.version != self._store_version_built:
             _build_volumes_fn(self)
@@ -296,28 +295,11 @@ class TreeRendererComponent(Component):
                 _rebuild_volume(self, key)
             self._dirty_volumes.clear()
 
-        st = getattr(self.sky_system, "state", None) if self.sky_system is not None else None
-        if st is not None:
-            wind = float(st.wind_speed)
-            rain = float(st.rain_intensity)
-            wn = max(0.0, min(wind / _WIND_SPEED_MAX, 1.0))
-            self._root.set_shader_input(
-                "u_wind_dir", LVecBase2f(float(st.wind_dir[0]), float(st.wind_dir[1]))
-            )
-            self._root.set_shader_input("u_sway_base", _SWAY_BASE_MIN_M + _SWAY_BASE_WIND_M * wn)
-            self._root.set_shader_input(
-                "u_sway_gust", _SWAY_GUST_MIN_M + _SWAY_GUST_WIND_M * wn + _SWAY_GUST_RAIN_M * rain
-            )
-            self._root.set_shader_input(
-                "u_gust_freq", _GUST_FREQ_MIN + _GUST_FREQ_PER_WIND * wind + _GUST_FREQ_RAIN * rain
-            )
-        self._root.set_shader_input("u_time_s", self._time_s)
+        sync_sway_uniforms(self, dt)
 
     def on_destroy(self) -> None:
         """Detach all tree nodes and unsubscribe from the bus."""
-        if self.bus is not None:
-            self.bus.unsubscribe(TerrainEditedEvent, self._on_terrain_edited)
-            self.bus.unsubscribe(ChunkLoadedEvent, self._on_chunk_loaded)
+        unsubscribe_terrain_events(self)
         if self._root is not None:
             self._root.remove_node()
             self._root = None
@@ -336,13 +318,10 @@ class TreeRendererComponent(Component):
     # ------------------------------------------------------------------
 
     def _on_terrain_edited(self, event: TerrainEditedEvent) -> None:
-        coords: Any = event.chunk_coords
-        if isinstance(coords, tuple) and len(coords) == 3 and isinstance(coords[0], int):
-            coords = (coords,)
-        self._mark_dirty_for_coords(coords)
+        _on_terrain_edited_impl(self, event)
 
     def _on_chunk_loaded(self, event: ChunkLoadedEvent) -> None:
-        self._mark_dirty_for_coords((event.coord,))
+        _on_chunk_loaded_impl(self, event)
 
     def _mark_dirty_for_coords(self, coords: Any) -> None:
         """Queue a placement re-bake for volumes touching these chunks."""

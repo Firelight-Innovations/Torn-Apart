@@ -42,12 +42,10 @@ Docs: docs/systems/world.wind.md
 
 from __future__ import annotations
 
-import queue
-import threading
-
 import numpy as np
 
 from fire_engine.core import get_logger
+from fire_engine.core._impl.worker import QueueWorker
 from fire_engine.world.wind.types import VenturiJob, VenturiResult
 from fire_engine.world.wind.venturi import solve_venturi
 
@@ -77,7 +75,7 @@ def _identity_result(job: VenturiJob) -> VenturiResult:
     )
 
 
-class VenturiWorker:
+class VenturiWorker(QueueWorker[VenturiJob, VenturiResult]):
     """
     Single background thread that solves terrain-venturi correction grids.
 
@@ -108,63 +106,15 @@ class VenturiWorker:
     """
 
     def __init__(self) -> None:
-        self._in: queue.Queue[VenturiJob | None] = queue.Queue()
-        self._out: queue.Queue[VenturiResult] = queue.Queue()
-        self._thread: threading.Thread | None = None
-        self._pending = 0
+        super().__init__("WindVenturiWorker")
 
-    # ------------------------------------------------------------------
+    def _process(self, job: VenturiJob) -> VenturiResult:
+        return solve_venturi(job)
 
-    def start(self) -> None:
-        """Spawn the worker thread (idempotent)."""
-        if self._thread is not None:
-            return
-        self._thread = threading.Thread(target=self._run, name="WindVenturiWorker", daemon=True)
-        self._thread.start()
-
-    def submit(self, job: VenturiJob) -> None:
-        """Enqueue a venturi-solve job (main thread)."""
-        self._pending += 1
-        self._in.put(job)
-
-    def drain_results(self) -> list[VenturiResult]:
-        """Pop and return all finished results (main thread, non-blocking)."""
-        out: list[VenturiResult] = []
-        while True:
-            try:
-                res = self._out.get_nowait()
-            except queue.Empty:
-                break
-            self._pending -= 1
-            out.append(res)
-        return out
-
-    def pending(self) -> int:
-        """Jobs submitted but not yet drained."""
-        return self._pending
-
-    def stop(self, *, join: bool = True, timeout: float = 2.0) -> None:
-        """Signal the worker to exit and (optionally) join it."""
-        if self._thread is None:
-            return
-        self._in.put(None)  # sentinel
-        if join:
-            self._thread.join(timeout=timeout)
-        self._thread = None
-
-    # ------------------------------------------------------------------
-
-    def _run(self) -> None:
-        while True:
-            job = self._in.get()
-            if job is None:  # sentinel → shutdown
-                break
-            try:
-                self._out.put(solve_venturi(job))
-            except Exception:
-                _log.exception("Venturi solve failed (origin %r, seq %d)", job.origin_cell, job.seq)
-                # Post a valid IDENTITY result so the consumer never starves —
-                # a raised job must not leave the field stuck without a
-                # correction grid forever (mirrors the assembly worker's
-                # failure-sentinel discipline, but with a harmless identity).
-                self._out.put(_identity_result(job))
+    def _on_error(self, job: VenturiJob) -> None:
+        _log.exception("Venturi solve failed (origin %r, seq %d)", job.origin_cell, job.seq)
+        # Post a valid IDENTITY result so the consumer never starves —
+        # a raised job must not leave the field stuck without a
+        # correction grid forever (mirrors the assembly worker's
+        # failure-sentinel discipline, but with a harmless identity).
+        self._out.put(_identity_result(job))

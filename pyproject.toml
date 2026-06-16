@@ -53,6 +53,14 @@ exclude = [
     ".mypy_cache", ".ruff_cache", "node_modules",
 ]
 
+# Git-hygiene gate (no stale merged branches linger — see
+# docs/systems/standards.md#git-hygiene). Deleting branches once their work is on
+# the default branch keeps `git branch -a` and the GitHub branch list clean.
+[tool.firelight.git]
+default_branches = ["master", "main"]  # never flagged; the merge baseline
+check_remotes = true                   # also flag merged origin/* tracking refs
+protected = []                         # extra branch-name globs never flagged (e.g. "release/*")
+
 # ---------------------------------------------------------------------------
 # Ruff — linter AND formatter (owns formatting, import sort, dead imports/vars,
 # commented-out code, complexity, perf, numpy lints).

@@ -1,5 +1,5 @@
 # standards — System Doc
-keywords: standards gate, code quality, ruff, mypy, pylint, vulture, coverage, pytest-cov, branch coverage, hypothesis, mkdocs, mkdocstrings, structure check, deep narrow, max modules, max subdirs, max lines, one public class per module, docs pointer, Docs:, dead doc link, keywords line, H2 schema, pre-commit, ratchet, check_repo_structure, check_docs, standards_config, firelight, vulture_whitelist, delegate sub-agent
+keywords: standards gate, code quality, ruff, mypy, pylint, vulture, coverage, pytest-cov, branch coverage, hypothesis, mkdocs, mkdocstrings, structure check, deep narrow, max modules, max subdirs, max lines, one public class per module, docs pointer, Docs:, dead doc link, keywords line, H2 schema, pre-commit, ratchet, check_repo_structure, check_docs, check_git_hygiene, git hygiene, stale branches, merged branch cleanup, tidy git log, standards_config, firelight, vulture_whitelist, delegate sub-agent
 
 > The machine-enforced standards gate. One doc per code package; this one
 > documents `tools/check_repo_structure.py`, `tools/check_docs.py`,
@@ -38,12 +38,15 @@ Custom checks (no off-the-shelf tool covers these):
 - `tools/check_repo_structure.py` — `collect_violations(cfg)`, `main()`.
   Enforces standards 6, 7, 10, 11, 17.
 - `tools/check_docs.py` — `collect_violations(cfg)`, `main()`. Enforces 12, 13.
+- `tools/check_git_hygiene.py` — `collect_violations(cfg)`, `main()`. Flags stale
+  merged branches (returns `None` when it skips). Enforces git hygiene.
 
 Pytest gates (each fails independently):
 
 - `tests/standards/test_code_quality.py` — ruff lint, ruff format, mypy, pylint, vulture.
 - `tests/standards/test_repo_structure.py` — runs `check_repo_structure.py`.
 - `tests/standards/test_docs.py` — runs `check_docs.py` + `mkdocs build --strict`.
+- `tests/standards/test_git_hygiene.py` — runs `check_git_hygiene.py`.
 - `tests/standards/test_coverage.py` — branch-coverage ratchet (marker `coverage`).
 
 ### Toolchain
@@ -89,6 +92,9 @@ the checks.
 | `source_roots` | `["fire_engine"]` | which trees are walked |
 | `grouping_modules` | `events.py, types.py, …` | §C exemption from one-public-class |
 | `exclude` | `.git, .venv, saves, assets, …` | paths skipped by all custom checks |
+| `git.default_branches` | `["master", "main"]` | git hygiene — merge baseline, never flagged |
+| `git.check_remotes` | `true` | git hygiene — also flag merged `origin/*` refs |
+| `git.protected` | `[]` | git hygiene — extra branch globs never flagged |
 
 Invariants: the checks are pure `O(tree)` walks with no side effects; same tree
 → same verdict (deterministic). The structure/docs mirroring is **layout-driven**
@@ -132,6 +138,28 @@ def apply_brush(...) -> None:
 A package's doc is its dotted full path: `fire_engine/world/terrain/` →
 `docs/systems/world.terrain.md`, carrying the full H2 schema and a
 `keywords:` line.
+
+### Git hygiene
+
+```bash
+python tools/check_git_hygiene.py         # no stale merged branches lingering
+```
+
+Keeps the branch list tidy so the next agent isn't wading through dead branches.
+A branch is flagged when it is fully merged into the default branch — by ancestry
+(ordinary merge / fast-forward) **or** by patch-id (`git cherry`, which catches
+squash- and rebase-merges that leave no ancestry link) — yet still exists. The
+current branch and `git.default_branches` are never flagged; add `git.protected`
+globs (e.g. `release/*`) for long-lived branches that should survive merge. The
+gate prints `SKIP` and passes outside a git work tree, on a shallow clone, or
+when no default branch resolves (so a CI checkout never fails spuriously). Fix by
+deleting the branches:
+
+```bash
+git branch -d <branch>            # local (already merged)
+git push origin --delete <branch> # remote
+git remote prune origin           # drop stale remote-tracking refs
+```
 
 ### Integration
 

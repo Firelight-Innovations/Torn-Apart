@@ -59,6 +59,9 @@ class StandardsConfig:
     coverage_fail_under: float
     grouping_modules: tuple[str, ...]
     exclude: tuple[str, ...] = field(default_factory=tuple)
+    git_default_branches: tuple[str, ...] = ("master", "main")
+    git_check_remotes: bool = True
+    git_protected: tuple[str, ...] = field(default_factory=tuple)
 
     def is_excluded(self, path: Path) -> bool:
         """Return ``True`` if ``path`` falls under any configured exclude prefix.
@@ -88,6 +91,7 @@ def load_config(pyproject: Path | None = None) -> StandardsConfig:
     with path.open("rb") as fh:
         data = tomllib.load(fh)
     fl = data["tool"]["firelight"]
+    git = fl.get("git", {})
     return StandardsConfig(
         source_roots=tuple(fl["source_roots"]),
         test_root=str(fl["test_root"]),
@@ -98,6 +102,9 @@ def load_config(pyproject: Path | None = None) -> StandardsConfig:
         coverage_fail_under=float(fl.get("coverage_fail_under", 0.0)),
         grouping_modules=tuple(fl.get("grouping_modules", ())),
         exclude=tuple(fl.get("exclude", ())),
+        git_default_branches=tuple(git.get("default_branches", ("master", "main"))),
+        git_check_remotes=bool(git.get("check_remotes", True)),
+        git_protected=tuple(git.get("protected", ())),
     )
 
 

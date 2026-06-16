@@ -13,7 +13,15 @@ profiling/
 .ruff_cache/
 .coverage
 coverage.xml
-site/                       # mkdocs build output
+# mkdocs build output
+site/
+
+# Session scratch / analysis artifacts (underscore-prefixed dumps, workflow
+# scripts, ad-hoc run logs) — not source, keep them out of the working tree.
+tools/out/_*
+tools/out/wf_*.js
+/run_out.txt
+/run_err.txt
 
 # Fire Editor (VS Code / Cursor extension)
 editor/extension/node_modules/

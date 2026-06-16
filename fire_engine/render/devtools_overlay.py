@@ -28,18 +28,20 @@ camera.py, per the world-layer boundary.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import contextlib
+import math
+from typing import TYPE_CHECKING, Any, ClassVar
 
-from direct.gui import DirectGuiGlobals as DGG  # type: ignore[import]
+from direct.gui import DirectGuiGlobals as DGG
 
-# Panda3D imports are allowed in world/ per ARCHITECTURE §3.
-from direct.gui.DirectGui import (  # type: ignore[import]
+# Panda3D imports are allowed in render/ per ARCHITECTURE §3.
+from direct.gui.DirectGui import (
     DirectButton,
     DirectEntry,
     DirectFrame,
     DirectLabel,
 )
-from panda3d.core import (  # type: ignore[import]
+from panda3d.core import (
     LineSegs,
     LQuaternionf,
     NodePath,
@@ -54,16 +56,20 @@ from fire_engine.devtools import (
     CallbackTool,
     ClockTool,
     DevToolsManager,
+    DragState,
     Field,
     FieldKind,
     Gizmo,
     GizmoMode,
+    Handle,
     InspectorTool,
+    Panel,
     PerformanceTool,
     Section,
     is_chunk,
     update_drag,
 )
+from fire_engine.lighting.lights import AreaLight
 from fire_engine.render.registry import instantiate
 from fire_engine.world.terrain import raycast_voxel
 
@@ -140,11 +146,17 @@ class DevOverlay:
         # gracefully if the sky API shifts.
         sky = getattr(app, "sky_system", None)
         if sky is not None:
+            _sky_ref = sky
+            _clock_ref = app._clock
+
+            def _build_env() -> tuple[list[Section], list[Button]]:
+                return self._build_environment(_sky_ref, _clock_ref)
+
             self.manager.register_tool(
                 CallbackTool(
                     "environment",
                     "Environment",
-                    lambda s=sky: self._build_environment(s, app._clock),
+                    _build_env,
                 )
             )
 
@@ -171,24 +183,28 @@ class DevOverlay:
         # Transform gizmo panel (Move / Rotate / Scale / Off) — switches the
         # active manipulator for the selected object.
         self.manager.register_tool(CallbackTool("gizmo", "Gizmo", self._build_gizmo_panel))
+
+        def _spawn_cube_action() -> None:
+            self.spawn_cube()
+
         self.actions = ActionsTool(
             "World",
             {
-                "Spawn Cube": self.spawn_cube,
+                "Spawn Cube": _spawn_cube_action,
                 "Toggle Emissive": self.toggle_emissive,
             },
         )
         self.manager.register_tool(self.actions)
 
         # Widget bookkeeping ------------------------------------------------
-        self._widgets: list[object] = []  # DirectGui items to destroy on rebuild
-        self._updaters: list = []  # per-frame value refreshers
-        self._last_sig: tuple | None = None  # (tool_id, revision) signature
+        self._widgets: list[Any] = []  # DirectGui items to destroy on rebuild
+        self._updaters: list[Any] = []  # per-frame value refreshers
+        self._last_sig: tuple[Any, ...] | None = None  # (tool_id, revision) signature
         self._outline_np: NodePath | None = None
 
         # Transform gizmo state -------------------------------------------
         self._gizmo_mode: GizmoMode | None = GizmoMode.TRANSLATE
-        self._gizmo_drag = None  # DragState | None (active drag)
+        self._gizmo_drag: DragState | None = None  # active drag
         self._gizmo_go: GameObject | None = None
         self._gizmo_np: NodePath | None = None
 
@@ -197,15 +213,15 @@ class DevOverlay:
         self._spawn_count = 0
         # Emissive props: GameObject -> (light_id, AreaLight) registered on
         # the GPU lighting pipeline (the cube becomes an emissive box light).
-        self._emissive: dict[GameObject, tuple[int, object]] = {}
+        self._emissive: dict[GameObject, tuple[int, AreaLight]] = {}
 
         # Weather-cycle state for the Environment panel (None = natural schedule).
-        self._weather_types: list = []
+        self._weather_types: list[Any] = []
         self._wx = 0
         try:
             from fire_engine.world.sky import WeatherType
 
-            self._weather_types = list(WeatherType) + [None]
+            self._weather_types = [*list(WeatherType), None]
             self._wx = len(self._weather_types) - 1
         except Exception:
             pass
@@ -220,21 +236,24 @@ class DevOverlay:
     # Performance providers (panda3d-backed; kept out of the headless tool)
     # ------------------------------------------------------------------
 
-    def _perf_providers(self) -> dict:
-        base = self._base
+    def _perf_providers(self) -> dict[str, Any]:  # Callable[[], object] values
         app = self._app
 
         def fps() -> str:
-            return f"{globalClock.get_average_frame_rate():.1f}"  # noqa: F821
+            from panda3d.core import ClockObject
+
+            return f"{ClockObject.get_global_clock().get_average_frame_rate():.1f}"
 
         def frame_ms() -> str:
-            return f"{globalClock.get_dt() * 1000.0:.1f} ms"  # noqa: F821
+            from panda3d.core import ClockObject
 
-        def chunks() -> object:
+            return f"{ClockObject.get_global_clock().get_dt() * 1000.0:.1f} ms"
+
+        def chunks() -> int:
             cm = getattr(app, "chunk_manager", None)
             return len(cm.chunks) if cm is not None else 0
 
-        def objects() -> object:
+        def objects() -> int:
             from fire_engine.render.registry import _STATE
 
             return len(_STATE.objects)
@@ -245,7 +264,7 @@ class DevOverlay:
                 return "(none)"
             name = getattr(go, "name", None)
             if name is not None:
-                return name
+                return str(name)
             coord = getattr(go, "coord", None)  # a picked terrain chunk
             return f"Chunk {tuple(coord)}" if coord is not None else repr(go)
 
@@ -261,7 +280,7 @@ class DevOverlay:
     # Environment panel (day/night + weather) — built defensively
     # ------------------------------------------------------------------
 
-    def _build_environment(self, sky, clock):
+    def _build_environment(self, sky: Any, clock: Any) -> tuple[list[Section], list[Button]]:
         """
         Build the Environment panel: editable time-of-day / time-scale plus a
         live read-out of the current weather and sky parameters, with a single
@@ -274,19 +293,15 @@ class DevOverlay:
         def get_tod_hours() -> float:
             return float(getattr(clock, "game_time_of_day", 0.0)) / 3600.0
 
-        def set_tod_hours(h) -> None:
-            try:
+        def set_tod_hours(h: Any) -> None:
+            with contextlib.suppress(Exception):
                 clock.game_time_of_day = (float(h) % 24.0) * 3600.0
-            except Exception:
-                pass
 
-        def set_scale(v) -> None:
-            try:
+        def set_scale(v: Any) -> None:
+            with contextlib.suppress(Exception):
                 clock.game_time_scale = float(v)
-            except Exception:
-                pass
 
-        def state_attr(name):
+        def state_attr(name: str) -> Any:
             st = getattr(sky, "state", None)
             return getattr(st, name, None) if st is not None else None
 
@@ -294,7 +309,7 @@ class DevOverlay:
 
         def weather_name() -> str:
             cur = getattr(weather, "current", None)
-            return getattr(cur, "value", "?") if cur is not None else "?"
+            return str(getattr(cur, "value", "?")) if cur is not None else "?"
 
         sections = [
             Section(
@@ -323,27 +338,32 @@ class DevOverlay:
                 [
                     Field("weather", FieldKind.LABEL, weather_name),
                     Field(
-                        "cloud cover", FieldKind.LABEL, lambda: _fmt(state_attr("cloud_coverage"))
+                        "cloud cover",
+                        FieldKind.LABEL,
+                        lambda: _fmt(state_attr("cloud_coverage")),
                     ),
                     Field("fog /m", FieldKind.LABEL, lambda: _fmt(state_attr("fog_density"))),
                     Field("rain", FieldKind.LABEL, lambda: _fmt(state_attr("rain_intensity"))),
                 ],
             ),
         ]
-        buttons = []
+        buttons: list[Button] = []
         if weather is not None and hasattr(weather, "force_weather"):
-            buttons.append(Button("Cycle Weather", lambda w=weather: self._cycle_weather(w)))
+            _weather_ref = weather
+
+            def _do_cycle() -> None:
+                self._cycle_weather(_weather_ref)
+
+            buttons.append(Button("Cycle Weather", _do_cycle))
         return sections, buttons
 
-    def _cycle_weather(self, weather) -> None:
+    def _cycle_weather(self, weather: Any) -> None:
         """Advance the forced-weather override one step (last step = natural)."""
         if not self._weather_types:
             return
         self._wx = (self._wx + 1) % len(self._weather_types)
-        try:
+        with contextlib.suppress(Exception):
             weather.force_weather(self._weather_types[self._wx])
-        except Exception:
-            pass
 
     # ------------------------------------------------------------------
     # M8 — Weather Control panel (spatial summon API + nearest-cell readout)
@@ -361,92 +381,98 @@ class DevOverlay:
         tod = float(getattr(clk, "game_time_of_day", 0.0))
         return day * 86400.0 + tod
 
-    def _build_weather_control(self):
+    def _wx_local_class(self) -> str:
+        """Read-out: local weather class from the WeatherSystem (guarded)."""
+        try:
+            return str(getattr(self._weather.current, "value", "?"))  # type: ignore[union-attr]
+        except Exception:
+            return "?"
+
+    def _wx_local_sample(self) -> Any:
+        """Return the local WeatherSample at the camera position (guarded)."""
+        try:
+            return self._weather.sample_local(  # type: ignore[union-attr]
+                self._camera_xy(), self._time_abs()
+            )
+        except Exception:
+            return None
+
+    def _wx_nearest(self) -> tuple[Any, float, float, float] | None:
+        """(cell, dist_m, bearing_deg, eta_s) for the nearest active cell."""
+        try:
+            w = self._weather
+            cells = list(w.cells)  # type: ignore[union-attr]
+            if not cells:
+                return None
+            t = self._time_abs()
+            px, py = self._camera_xy()
+            import numpy as _np
+
+            cell = cells[0]  # already nearest-first
+            c = cell.center(t, w.synoptic)  # type: ignore[union-attr]
+            dx, dy = float(c[0]) - px, float(c[1]) - py
+            dist = float(_np.hypot(dx, dy))
+            bearing = (math.degrees(math.atan2(dx, dy))) % 360.0  # 0=+Y(N)
+            eta = float(w.cell_eta_s(cell, t, (px, py)))  # type: ignore[union-attr]
+            return cell, dist, bearing, eta
+        except Exception:
+            return None
+
+    def _build_weather_control(self) -> tuple[list[Section], list[Button]]:
         """
         Build the "Weather Control" panel: summon buttons + a live read-out of
         the local weather class and the nearest cell's kind / distance / bearing
         / ETA.  Every engine access is guarded so a weather-API shift degrades to
         blanks rather than crashing the overlay.
         """
-        w = self._weather
-
-        def local_class() -> str:
-            try:
-                return getattr(w.current, "value", "?")
-            except Exception:
-                return "?"
-
-        def _local_sample():
-            try:
-                return w.sample_local(self._camera_xy(), self._time_abs())
-            except Exception:
-                return None
-
-        def humidity() -> str:
-            lw = _local_sample()
-            return _fmt(getattr(lw, "humidity", None)) if lw else "?"
-
-        def wetness() -> str:
-            lw = _local_sample()
-            return _fmt(getattr(lw, "wetness", None)) if lw else "?"
-
-        def _nearest():
-            """(cell, dist_m, bearing_deg, eta_s) for the nearest active cell."""
-            try:
-                cells = list(w.cells)
-                if not cells:
-                    return None
-                t = self._time_abs()
-                px, py = self._camera_xy()
-                import numpy as _np
-
-                cell = cells[0]  # already nearest-first
-                c = cell.center(t, w.synoptic)
-                dx, dy = float(c[0]) - px, float(c[1]) - py
-                dist = float(_np.hypot(dx, dy))
-                bearing = (math.degrees(math.atan2(dx, dy))) % 360.0  # 0=+Y(N)
-                eta = float(w.cell_eta_s(cell, t, (px, py)))
-                return cell, dist, bearing, eta
-            except Exception:
-                return None
-
-        def near_kind() -> str:
-            n = _nearest()
-            return getattr(n[0].kind, "value", "?") if n else "(none)"
-
-        def near_dist() -> str:
-            n = _nearest()
-            return f"{n[1]:.0f} m" if n else "-"
-
-        def near_bearing() -> str:
-            n = _nearest()
-            return f"{n[2]:.0f} deg" if n else "-"
-
-        def near_eta() -> str:
-            n = _nearest()
-            if not n:
-                return "-"
-            eta = n[3]
-            if not math.isfinite(eta):
-                return "receding"
-            return f"{eta / 60.0:.1f} min"
-
         sections = [
             Section(
                 "Local",
                 [
-                    Field("class", FieldKind.LABEL, local_class),
-                    Field("humidity", FieldKind.LABEL, humidity),
-                    Field("wetness", FieldKind.LABEL, wetness),
+                    Field("class", FieldKind.LABEL, self._wx_local_class),
+                    Field(
+                        "humidity",
+                        FieldKind.LABEL,
+                        lambda: (
+                            _fmt(getattr(self._wx_local_sample(), "humidity", None))
+                            if self._wx_local_sample()
+                            else "?"
+                        ),
+                    ),
+                    Field(
+                        "wetness",
+                        FieldKind.LABEL,
+                        lambda: (
+                            _fmt(getattr(self._wx_local_sample(), "wetness", None))
+                            if self._wx_local_sample()
+                            else "?"
+                        ),
+                    ),
                 ],
             ),
             Section(
                 "Nearest cell",
                 [
-                    Field("kind", FieldKind.LABEL, near_kind),
-                    Field("distance", FieldKind.LABEL, near_dist),
-                    Field("bearing", FieldKind.LABEL, near_bearing),
-                    Field("ETA", FieldKind.LABEL, near_eta),
+                    Field(
+                        "kind",
+                        FieldKind.LABEL,
+                        lambda: (
+                            str(getattr(n[0].kind, "value", "?"))
+                            if (n := self._wx_nearest())
+                            else "(none)"
+                        ),
+                    ),
+                    Field(
+                        "distance",
+                        FieldKind.LABEL,
+                        lambda: f"{n[1]:.0f} m" if (n := self._wx_nearest()) else "-",
+                    ),
+                    Field(
+                        "bearing",
+                        FieldKind.LABEL,
+                        lambda: f"{n[2]:.0f} deg" if (n := self._wx_nearest()) else "-",
+                    ),
+                    Field("ETA", FieldKind.LABEL, self._wx_near_eta),
                 ],
             ),
         ]
@@ -458,22 +484,28 @@ class DevOverlay:
         ]
         return sections, buttons
 
+    def _wx_near_eta(self) -> str:
+        """ETA string for the nearest weather cell (guarded)."""
+        n = self._wx_nearest()
+        if not n:
+            return "-"
+        eta = n[3]
+        if not math.isfinite(eta):
+            return "receding"
+        return f"{eta / 60.0:.1f} min"
+
     def _summon(self, method_name: str) -> None:
         """Call a WeatherSystem summon wrapper aimed at the camera."""
         w = self._weather
         if w is None:
             return
-        try:
+        with contextlib.suppress(Exception):
             getattr(w, method_name)(time_abs=self._time_abs(), player_pos=self._camera_xy())
-        except Exception:
-            pass
 
     def _clear_skies(self) -> None:
         """Clear summoned cells + suppress the current natural weather."""
-        try:
-            self._weather.clear_all()
-        except Exception:
-            pass
+        with contextlib.suppress(Exception):
+            self._weather.clear_all()  # type: ignore[union-attr]
 
     def _summon_cell_at_camera(self) -> None:
         """Debug key (K): stamp a synthetic thunderstorm right at the camera."""
@@ -535,7 +567,7 @@ class DevOverlay:
         except Exception:
             pass
 
-    def _raycast_ground(self, origin, direction):
+    def _raycast_ground(self, origin: Vec3, direction: Vec3) -> Vec3 | None:
         """World point where a ray hits terrain, or ``None`` (voxel raycast)."""
         cm = getattr(self._app, "chunk_manager", None)
         if cm is None:
@@ -543,7 +575,8 @@ class DevOverlay:
         hit = raycast_voxel(origin, direction, cm.get_or_create, max_distance_m=_TERRAIN_RAY_MAX_M)
         if hit is None:
             return None
-        return getattr(hit, "world_point", None) or getattr(hit, "point", None)
+        result: Vec3 | None = getattr(hit, "world_point", None) or getattr(hit, "point", None)
+        return result
 
     def _toggle_rain_cover_overlay(self) -> None:
         """
@@ -579,7 +612,7 @@ class DevOverlay:
         except Exception:
             self._rain_cover_np = None
 
-    def _rain_cover_field(self):
+    def _rain_cover_field(self) -> Any:
         """Locate the headless ``RainCoverField`` owned by the rain component."""
         rain_go = getattr(self._app, "rain_go", None)
         if rain_go is None:
@@ -671,7 +704,7 @@ class DevOverlay:
         self.manager.selection.set(self._pick_chunk(origin, direction))
         return True
 
-    def _cursor_ray(self):
+    def _cursor_ray(self) -> tuple[Vec3, Vec3] | None:
         """
         World-space ray ``(origin, direction)`` through the mouse cursor, or
         ``None`` when the window has no mouse.  ``direction`` is the near→far
@@ -691,7 +724,7 @@ class DevOverlay:
         direction = Vec3(far_w.x - near_w.x, far_w.y - near_w.y, far_w.z - near_w.z)
         return origin, direction
 
-    def _pick_chunk(self, origin: Vec3, direction: Vec3):
+    def _pick_chunk(self, origin: Vec3, direction: Vec3) -> Any:
         """
         Voxel-raycast the terrain under a click and return the hit ``Chunk``.
 
@@ -712,7 +745,7 @@ class DevOverlay:
     # Transform gizmo (Unity-style move / rotate / scale manipulator)
     # ------------------------------------------------------------------
 
-    def _build_gizmo_panel(self):
+    def _build_gizmo_panel(self) -> tuple[list[Section], list[Button]]:
         """Build the Gizmo panel: a current-mode read-out + tool buttons."""
 
         def mode_label() -> str:
@@ -749,7 +782,7 @@ class DevOverlay:
             return None
         return go
 
-    def _gizmo_pivot_size(self, go) -> tuple[Vec3, float]:
+    def _gizmo_pivot_size(self, go: Any) -> tuple[Vec3, float]:
         """Gizmo pivot (object origin) + a camera-distance-scaled world size."""
         pivot = go.transform.local_position
         cam = self._app.camera_go.transform.position
@@ -764,7 +797,7 @@ class DevOverlay:
         not also re-select or deselect.
         """
         go = self._gizmo_target()
-        if go is None:
+        if go is None or self._gizmo_mode is None:
             return False
         pivot, size = self._gizmo_pivot_size(go)
         giz = Gizmo(pivot, size, self._gizmo_mode)
@@ -812,56 +845,115 @@ class DevOverlay:
         elif ray is not None and self._base.mouseWatcherNode.get_over_region() is None:
             # Hover highlight when not dragging and not over a panel.
             pivot, size = self._gizmo_pivot_size(go)
-            hovered = Gizmo(pivot, size, self._gizmo_mode).pick(ray[0], ray[1])
+            if self._gizmo_mode is not None:
+                hovered = Gizmo(pivot, size, self._gizmo_mode).pick(ray[0], ray[1])
 
         pivot, size = self._gizmo_pivot_size(go)
         self._draw_gizmo(pivot, size, self._gizmo_mode, hovered)
 
     # -- gizmo geometry -------------------------------------------------
 
-    _AXIS_DIR = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
-    _AXIS_COL = ((1.0, 0.35, 0.35, 1.0), (0.4, 1.0, 0.4, 1.0), (0.45, 0.6, 1.0, 1.0))
-    _HL_COL = (1.0, 1.0, 0.3, 1.0)
-    _OTHER_AXES = {0: (1, 2), 1: (2, 0), 2: (0, 1)}
+    _AXIS_DIR: ClassVar[
+        tuple[
+            tuple[float, float, float],
+            tuple[float, float, float],
+            tuple[float, float, float],
+        ]
+    ] = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
+    _AXIS_COL: ClassVar[
+        tuple[
+            tuple[float, float, float, float],
+            tuple[float, float, float, float],
+            tuple[float, float, float, float],
+        ]
+    ] = ((1.0, 0.35, 0.35, 1.0), (0.4, 1.0, 0.4, 1.0), (0.45, 0.6, 1.0, 1.0))
+    _HL_COL: ClassVar[tuple[float, float, float, float]] = (1.0, 1.0, 0.3, 1.0)
+    _OTHER_AXES: ClassVar[dict[int, tuple[int, int]]] = {0: (1, 2), 1: (2, 0), 2: (0, 1)}
 
-    def _draw_gizmo(self, pivot, size, mode, hovered) -> None:
+    def _gizmo_axis_col(
+        self, i: int, htype: Any, hovered: Handle | None
+    ) -> tuple[float, float, float, float]:
+        """Return the per-axis colour (highlighted when the handle is hovered)."""
+        from fire_engine.devtools import HandleType
+
+        hot = (
+            hovered is not None
+            and hovered.type == htype
+            and (htype == HandleType.UNIFORM or hovered.axis == i)
+        )
+        return self._HL_COL if hot else self._AXIS_COL[i]
+
+    def _draw_gizmo_axes(
+        self,
+        ls: Any,
+        px: float,
+        py: float,
+        pz: float,
+        size: float,
+        hovered: Handle | None,
+    ) -> None:
+        """Draw the three axis arrows with cross-tip markers (translate + scale)."""
+        from fire_engine.devtools import HandleType
+
+        for i, a in enumerate(self._AXIS_DIR):
+            ls.set_color(*self._gizmo_axis_col(i, HandleType.AXIS, hovered))
+            ex, ey, ez = px + a[0] * size, py + a[1] * size, pz + a[2] * size
+            ls.move_to(px, py, pz)
+            ls.draw_to(ex, ey, ez)
+            j, k = self._OTHER_AXES[i]
+            t = size * 0.12
+            jd, kd = self._AXIS_DIR[j], self._AXIS_DIR[k]
+            for sgn in (t, -t):
+                ls.move_to(ex, ey, ez)
+                ls.draw_to(ex + jd[0] * sgn, ey + jd[1] * sgn, ez + jd[2] * sgn)
+                ls.move_to(ex, ey, ez)
+                ls.draw_to(ex + kd[0] * sgn, ey + kd[1] * sgn, ez + kd[2] * sgn)
+
+    def _draw_gizmo_rings(
+        self,
+        ls: Any,
+        px: float,
+        py: float,
+        pz: float,
+        size: float,
+        hovered: Handle | None,
+    ) -> None:
+        """Draw three rotation rings (one per axis)."""
+        from fire_engine.devtools import HandleType
+
+        seg = 48
+        for i in range(3):
+            ls.set_color(*self._gizmo_axis_col(i, HandleType.RING, hovered))
+            j, k = self._OTHER_AXES[i]
+            jd, kd = self._AXIS_DIR[j], self._AXIS_DIR[k]
+            for n in range(seg + 1):
+                ang = 2.0 * math.pi * n / seg
+                cj, ck = math.cos(ang) * size, math.sin(ang) * size
+                x = px + jd[0] * cj + kd[0] * ck
+                y = py + jd[1] * cj + kd[1] * ck
+                z = pz + jd[2] * cj + kd[2] * ck
+                (ls.move_to if n == 0 else ls.draw_to)(x, y, z)
+
+    def _draw_gizmo(
+        self,
+        pivot: Vec3,
+        size: float,
+        mode: GizmoMode | None,
+        hovered: Handle | None,
+    ) -> None:
         from fire_engine.devtools import HandleType
 
         ls = LineSegs("gizmo")
         ls.set_thickness(2.5)
         px, py, pz = pivot.x, pivot.y, pivot.z
 
-        def is_hot(htype, axis) -> bool:
-            return (
-                hovered is not None
-                and hovered.type == htype
-                and (htype == HandleType.UNIFORM or hovered.axis == axis)
-            )
-
-        def axis_col(i, htype):
-            return self._HL_COL if is_hot(htype, i) else self._AXIS_COL[i]
-
         if mode in (GizmoMode.TRANSLATE, GizmoMode.SCALE):
-            for i, a in enumerate(self._AXIS_DIR):
-                ls.set_color(*axis_col(i, HandleType.AXIS))
-                ex, ey, ez = px + a[0] * size, py + a[1] * size, pz + a[2] * size
-                ls.move_to(px, py, pz)
-                ls.draw_to(ex, ey, ez)
-                # Tip marker: a small cross (translate arrowhead / scale knob).
-                j, k = self._OTHER_AXES[i]
-                t = size * 0.12
-                jd = self._AXIS_DIR[j]
-                kd = self._AXIS_DIR[k]
-                for sgn in (t, -t):
-                    ls.move_to(ex, ey, ez)
-                    ls.draw_to(ex + jd[0] * sgn, ey + jd[1] * sgn, ez + jd[2] * sgn)
-                    ls.move_to(ex, ey, ez)
-                    ls.draw_to(ex + kd[0] * sgn, ey + kd[1] * sgn, ez + kd[2] * sgn)
+            self._draw_gizmo_axes(ls, px, py, pz, size, hovered)
 
         if mode == GizmoMode.TRANSLATE:
             lo, hi = size * 0.2, size * 0.45
             for i in range(3):
-                ls.set_color(*(self._HL_COL if is_hot(HandleType.PLANE, i) else self._AXIS_COL[i]))
+                ls.set_color(*self._gizmo_axis_col(i, HandleType.PLANE, hovered))
                 j, k = self._OTHER_AXES[i]
                 jd, kd = self._AXIS_DIR[j], self._AXIS_DIR[k]
                 corners = [(lo, lo), (hi, lo), (hi, hi), (lo, hi), (lo, lo)]
@@ -872,33 +964,15 @@ class DevOverlay:
                     (ls.move_to if n == 0 else ls.draw_to)(x, y, z)
 
         if mode == GizmoMode.SCALE:
-            ls.set_color(
-                *(
-                    self._HL_COL
-                    if (hovered is not None and hovered.type == HandleType.UNIFORM)
-                    else (0.9, 0.9, 0.9, 1.0)
-                )
-            )
+            uni_hot = hovered is not None and hovered.type == HandleType.UNIFORM
+            ls.set_color(*(self._HL_COL if uni_hot else (0.9, 0.9, 0.9, 1.0)))
             c = size * 0.1
             box = [(-c, -c), (c, -c), (c, c), (-c, c), (-c, -c)]
             for n, (dx, dz) in enumerate(box):
                 (ls.move_to if n == 0 else ls.draw_to)(px + dx, py, pz + dz)
 
         if mode == GizmoMode.ROTATE:
-            import math as _math
-
-            seg = 48
-            for i in range(3):
-                ls.set_color(*(self._HL_COL if is_hot(HandleType.RING, i) else self._AXIS_COL[i]))
-                j, k = self._OTHER_AXES[i]
-                jd, kd = self._AXIS_DIR[j], self._AXIS_DIR[k]
-                for n in range(seg + 1):
-                    ang = 2.0 * _math.pi * n / seg
-                    cj, ck = _math.cos(ang) * size, _math.sin(ang) * size
-                    x = px + jd[0] * cj + kd[0] * ck
-                    y = py + jd[1] * cj + kd[1] * ck
-                    z = pz + jd[2] * cj + kd[2] * ck
-                    (ls.move_to if n == 0 else ls.draw_to)(x, y, z)
+            self._draw_gizmo_rings(ls, px, py, pz, size, hovered)
 
         node = self._base.render.attach_new_node(ls.create())
         node.set_light_off()
@@ -963,8 +1037,6 @@ class DevOverlay:
             pipeline.lights.remove(light_id)
             np_.clear_color_scale()
             return
-        from fire_engine.lighting.lights import AreaLight
-
         bounds = np_.get_tight_bounds()
         p = go.transform.position
         center = (p.x, p.y, p.z)
@@ -992,7 +1064,7 @@ class DevOverlay:
         change-detected internally, so static props cost nothing.
         """
         pipeline = getattr(self._app, "lighting_pipeline", None)
-        boxes: list = []
+        boxes: list[tuple[tuple[float, float, float], tuple[float, float, float]]] = []
         lights_dirty = False
         for go, np_ in self._spawned.items():
             p = go.transform.position
@@ -1012,7 +1084,7 @@ class DevOverlay:
             if em is not None:
                 light = em[1]
                 center = ((mn.x + mx.x) * 0.5, (mn.y + mx.y) * 0.5, (mn.z + mx.z) * 0.5)
-                if any(abs(a - b) > 0.01 for a, b in zip(center, light.center)):
+                if any(abs(a - b) > 0.01 for a, b in zip(center, light.center, strict=True)):
                     light.center = center
                     light.half_extents = (
                         max((mx.x - mn.x) * 0.5, 0.05),
@@ -1029,7 +1101,7 @@ class DevOverlay:
     # Per-frame task
     # ------------------------------------------------------------------
 
-    def _task(self, task):
+    def _task(self, task: Any) -> Any:
         self._sync_spawned()
 
         if not self.manager.enabled:
@@ -1070,7 +1142,7 @@ class DevOverlay:
             return  # selection has no drawable box (e.g. the camera)
         self._draw_box(*box)
 
-    def _selection_aabb(self, go):
+    def _selection_aabb(self, go: Any) -> tuple[Any, Any] | None:
         """
         World-space AABB ``(min, max)`` to outline for the current selection.
 
@@ -1089,7 +1161,7 @@ class DevOverlay:
             return None
         return sel.world_aabb()
 
-    def _draw_box(self, bmin, bmax) -> None:
+    def _draw_box(self, bmin: Any, bmax: Any) -> None:
         x0, y0, z0 = float(bmin[0]), float(bmin[1]), float(bmin[2])
         x1, y1, z1 = float(bmax[0]), float(bmax[1]), float(bmax[2])
         corners = [
@@ -1136,10 +1208,8 @@ class DevOverlay:
 
     def _clear_widgets(self) -> None:
         for w in self._widgets:
-            try:
+            with contextlib.suppress(Exception):
                 w.destroy()
-            except Exception:
-                pass
         self._widgets.clear()
         self._updaters.clear()
 
@@ -1161,23 +1231,22 @@ class DevOverlay:
                 left_z = self._build_panel(panel, parent, x, left_z, width)
                 left_z -= _ROW_H * 0.6
 
-    def _build_panel(self, panel, parent, x: float, z: float, width: float) -> float:
+    def _build_panel(self, panel: Panel, parent: Any, x: float, z: float, width: float) -> float:
         """Render one panel starting at ``z``; return the z below the panel."""
         top = z
-        rows: list = []  # deferred widget creation so the bg frame sits behind
+        rows: list[tuple[str, Any]] = []  # deferred widget creation so the bg frame sits behind
 
         # Title
         rows.append(("title", panel.title))
         for section in panel.sections:
             if section.title:
                 rows.append(("section", section.title))
-            for fld in section.fields:
-                rows.append(("field", fld))
+            rows.extend(("field", fld) for fld in section.fields)
         if panel.buttons:
             rows.append(("buttons", panel.buttons))
 
         # Background frame (sized to the row count) — created first so it's behind.
-        n_rows = sum(1 if kind != "buttons" else 1 for kind, _ in rows)
+        n_rows = len(rows)
         height = n_rows * _ROW_H + 0.04
         bg = DirectFrame(
             parent=parent,
@@ -1204,7 +1273,15 @@ class DevOverlay:
     # Row widgets
     # ------------------------------------------------------------------
 
-    def _mk_label(self, parent, x: float, z: float, text: str, fg, scale: float):
+    def _mk_label(
+        self,
+        parent: Any,
+        x: float,
+        z: float,
+        text: str,
+        fg: Any,
+        scale: float,
+    ) -> DirectLabel:
         lbl = DirectLabel(
             parent=parent,
             text=str(text),
@@ -1217,7 +1294,7 @@ class DevOverlay:
         self._widgets.append(lbl)
         return lbl
 
-    def _mk_field(self, parent, x: float, z: float, fld, width: float) -> None:
+    def _mk_field(self, parent: Any, x: float, z: float, fld: Field, width: float) -> None:
         # Field name on the left.
         self._mk_label(parent, x + 0.01, z, fld.label, _VALUE_FG, _TEXT_SCALE * 0.9)
         vx = x + _LABEL_COL
@@ -1226,7 +1303,7 @@ class DevOverlay:
             val_lbl = self._mk_label(
                 parent, vx, z, _fmt(fld.get()), (0.7, 0.9, 0.7, 1.0), _TEXT_SCALE * 0.9
             )
-            self._updaters.append(lambda l=val_lbl, f=fld: l.__setitem__("text", _fmt(f.get())))
+            self._updaters.append(lambda lbl=val_lbl, f=fld: lbl.__setitem__("text", _fmt(f.get())))
             return
 
         if fld.kind == FieldKind.BOOL:
@@ -1247,30 +1324,42 @@ class DevOverlay:
             return
 
         if fld.kind == FieldKind.VEC3:
-            entries = []
-            for i in range(3):
-                e = self._mk_entry(parent, vx + i * 0.15, z, width=4)
-                entries.append(e)
-
-            def submit(_=None, f=fld, es=entries):
-                try:
-                    vals = tuple(float(e.get()) for e in es)
-                except ValueError:
-                    return
-                f.set(vals)
-
-            for e in entries:
-                # Commit on Enter AND on click-off (focus out), so an edit is
-                # never silently discarded by leaving the box.
-                e["command"] = submit
-                e["focusOutCommand"] = submit
-            self._updaters.append(lambda es=entries, f=fld: self._refresh_vec3(es, f))
+            self._mk_field_vec3(parent, vx, z, fld)
             return
 
         # FLOAT / INT / STRING — single entry
+        self._mk_field_scalar(parent, vx, z, fld)
+
+    def _mk_field_vec3(self, parent: Any, vx: float, z: float, fld: Field) -> None:
+        """Build a three-component VEC3 entry row and wire up submit + refresh."""
+        entries: list[DirectEntry] = []
+        for i in range(3):
+            e = self._mk_entry(parent, vx + i * 0.15, z, width=4)
+            entries.append(e)
+
+        def submit(_: Any = None, f: Field = fld, es: list[DirectEntry] = entries) -> None:
+            if f.set is None:
+                return
+            try:
+                vals = tuple(float(e.get()) for e in es)
+            except ValueError:
+                return
+            f.set(vals)
+
+        for e in entries:
+            # Commit on Enter AND on click-off (focus out), so an edit is
+            # never silently discarded by leaving the box.
+            e["command"] = submit
+            e["focusOutCommand"] = submit
+        self._updaters.append(lambda es=entries, f=fld: self._refresh_vec3(es, f))
+
+    def _mk_field_scalar(self, parent: Any, vx: float, z: float, fld: Field) -> None:
+        """Build a single-value entry row (FLOAT / INT / STRING) and wire it up."""
         entry = self._mk_entry(parent, vx, z, width=8)
 
-        def submit_scalar(_=None, f=fld, e=entry):
+        def submit_scalar(_: Any = None, f: Field = fld, e: DirectEntry = entry) -> None:
+            if f.set is None:
+                return
             txt = e.get()
             try:
                 if f.kind == FieldKind.INT:
@@ -1287,7 +1376,7 @@ class DevOverlay:
         entry["focusOutCommand"] = submit_scalar
         self._updaters.append(lambda e=entry, f=fld: self._refresh_scalar(e, f))
 
-    def _mk_entry(self, parent, x: float, z: float, width: int) -> DirectEntry:
+    def _mk_entry(self, parent: Any, x: float, z: float, width: int) -> DirectEntry:
         e = DirectEntry(
             parent=parent,
             scale=_ENTRY_SCALE,
@@ -1302,7 +1391,7 @@ class DevOverlay:
         self._widgets.append(e)
         return e
 
-    def _mk_buttons(self, parent, x: float, z: float, buttons) -> None:
+    def _mk_buttons(self, parent: Any, x: float, z: float, buttons: list[Button]) -> None:
         bx = x + 0.02
         for b in buttons:
             btn = DirectButton(
@@ -1344,14 +1433,14 @@ class DevOverlay:
         except Exception:
             return False
 
-    def _refresh_scalar(self, entry: DirectEntry, fld) -> None:
+    def _refresh_scalar(self, entry: DirectEntry, fld: Field) -> None:
         if self._is_focused(entry):
             return
         entry.set(_fmt(fld.get()))
 
-    def _refresh_vec3(self, entries, fld) -> None:
+    def _refresh_vec3(self, entries: list[DirectEntry], fld: Field) -> None:
         vals = fld.get()
-        for e, v in zip(entries, vals):
+        for e, v in zip(entries, vals, strict=False):
             if self._is_focused(e):
                 continue
             e.set(_fmt(float(v)))

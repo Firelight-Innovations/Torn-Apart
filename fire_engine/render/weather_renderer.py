@@ -91,7 +91,7 @@ from __future__ import annotations
 from typing import Any
 
 # Panda3D imports allowed in world/ per ARCHITECTURE §3.
-from panda3d.core import (  # type: ignore[import]
+from panda3d.core import (
     LVecBase2f,
     SamplerState,
     Texture,
@@ -251,6 +251,8 @@ class WeatherMapComponent(Component):
 
     def _reraster(self, center_x: float, center_y: float) -> None:
         """Raster around (center_x, center_y), upload, and commit the origin."""
+        assert self._map is not None  # invariant: guarded in late_update before call
+        assert self._tex is not None  # invariant: guarded in late_update before call
         weather = getattr(self.sky_system, "weather", None)
         if weather is None:
             return

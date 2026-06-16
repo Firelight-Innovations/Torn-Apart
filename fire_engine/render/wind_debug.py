@@ -44,7 +44,7 @@ from typing import Any
 import numpy as np
 
 # Panda3D imports allowed in world/ per ARCHITECTURE §3.
-from panda3d.core import (  # type: ignore[import]
+from panda3d.core import (
     GeomNode,
     NodePath,
 )

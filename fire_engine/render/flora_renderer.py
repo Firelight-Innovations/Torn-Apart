@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any
 
 # Panda3D imports allowed in world/ per ARCHITECTURE §3.
-from panda3d.core import (  # type: ignore[import]
+from panda3d.core import (
     BoundingBox,
     Geom,
     GeomNode,
@@ -297,7 +297,7 @@ class FloraRendererComponent(Component):
     # ------------------------------------------------------------------
 
     def _on_terrain_edited(self, event: TerrainEditedEvent) -> None:
-        coords = event.chunk_coords
+        coords: Any = event.chunk_coords
         if isinstance(coords, tuple) and len(coords) == 3 and isinstance(coords[0], int):
             coords = (coords,)
         self._mark_dirty_for_coords(coords)
@@ -305,7 +305,7 @@ class FloraRendererComponent(Component):
     def _on_chunk_loaded(self, event: ChunkLoadedEvent) -> None:
         self._mark_dirty_for_coords((event.coord,))
 
-    def _mark_dirty_for_coords(self, coords) -> None:
+    def _mark_dirty_for_coords(self, coords: Any) -> None:
         """Queue a height-field re-bake for volumes touching these chunks."""
         if self.base is None:
             return
@@ -389,14 +389,14 @@ class FloraRendererComponent(Component):
         self._upload_field(node, vol)
         _log.debug("Flora height field re-baked for %s volume %d", tag, vol_id)
 
-    def _upload_field(self, node: NodePath, vol) -> None:
+    def _upload_field(self, node: NodePath, vol: Any) -> None:
         """Bake the volume's height field and bind it as u_height_field."""
         from fire_engine.render.texture_bridge import to_field_texture
 
         field = bake_grass_height_field(vol, self.chunk_provider.chunks, self.base._config)
         node.set_shader_input("u_height_field", to_field_texture(field))
 
-    def _sprite_texture(self, kind: _FloraKind):
+    def _sprite_texture(self, kind: _FloraKind) -> Any:
         """The kind's procedural sprite atlas as a Panda3D texture (nearest)."""
         from fire_engine.procedural import get as get_procedural
         from fire_engine.render.texture_bridge import to_panda_texture

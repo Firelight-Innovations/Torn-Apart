@@ -90,7 +90,7 @@ class GameObject:
         self.active_self: bool = True
 
         self.transform: Transform = Transform()
-        self.transform.game_object = self
+        self.transform.game_object = self  # type: ignore[assignment]  # Transform.game_object slot starts as None; type widened by GameObject
 
         self._components: list[Component] = []
 
@@ -119,7 +119,7 @@ class GameObject:
     # Component management
     # ------------------------------------------------------------------
 
-    def add_component(self, t: type[T], **kwargs) -> T:
+    def add_component(self, t: type[T], **kwargs: object) -> T:
         """
         Construct a component of type *t*, attach it, and schedule awake/start.
 
@@ -182,11 +182,11 @@ class GameObject:
         """
         for c in self._components:
             if type(c) is t:
-                return c  # type: ignore[return-value]
+                return c
         # fallback: check subclasses too (isinstance)
         for c in self._components:
             if isinstance(c, t):
-                return c  # type: ignore[return-value]
+                return c
         return None
 
     def get_components(self, t: type[T]) -> list[T]:
@@ -201,7 +201,7 @@ class GameObject:
         -------
         list[T] — may be empty.
         """
-        return [c for c in self._components if isinstance(c, t)]  # type: ignore[misc]
+        return [c for c in self._components if isinstance(c, t)]
 
     def get_component_in_children(self, t: type[T]) -> T | None:
         """

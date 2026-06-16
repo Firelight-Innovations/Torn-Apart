@@ -58,7 +58,7 @@ from typing import Any
 import numpy as np
 
 # Panda3D imports are allowed in world/ per ARCHITECTURE §3.
-from panda3d.core import (  # type: ignore[import]
+from panda3d.core import (
     ColorBlendAttrib,
     Fog,
     Geom,
@@ -70,6 +70,7 @@ from panda3d.core import (  # type: ignore[import]
     LVecBase2f,
     LVecBase3f,
     LVecBase4f,
+    NodePath,
     SamplerState,
     Shader,
     Texture,
@@ -155,7 +156,7 @@ def _make_geom_node(
     vdata.set_num_rows(n_verts)
     varray = vdata.modify_array(0)
     view = memoryview(varray).cast("B")
-    view[:] = memoryview(block).cast("B")
+    view[:] = memoryview(block.data).cast("B")
 
     prim = GeomTriangles(Geom.UH_static)
     prim.set_index_type(GeomEnums.NT_uint32)
@@ -163,7 +164,7 @@ def _make_geom_node(
     iarray = prim.modify_vertices()
     iarray.set_num_rows(int(idx.shape[0]))
     iview = memoryview(iarray).cast("B")
-    iview[:] = memoryview(idx).cast("B")
+    iview[:] = memoryview(idx.data).cast("B")
 
     geom = Geom(vdata)
     geom.add_primitive(prim)
@@ -172,7 +173,9 @@ def _make_geom_node(
     return node
 
 
-def _load_or_bake_cloud_noise(seed: int, shape_size: int, detail_size: int):
+def _load_or_bake_cloud_noise(
+    seed: int, shape_size: int, detail_size: int
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Load the baked volumetric-cloud noise volumes, baking + caching on a miss.
 
@@ -191,14 +194,16 @@ def _load_or_bake_cloud_noise(seed: int, shape_size: int, detail_size: int):
     cache_dir = Path("saves") / "cloud_cache"
     version = 1
 
-    def _load_or(kind: str, size: int, baker) -> np.ndarray:
+    from collections.abc import Callable
+
+    def _load_or(kind: str, size: int, baker: Callable[[int], np.ndarray]) -> np.ndarray:
         path = cache_dir / f"{kind}_{seed}_{size}_v{version}.npy"
         try:
             if path.exists():
-                return np.load(path)
+                return np.asarray(np.load(path))
         except Exception as exc:
             _log.warning("cloud noise cache read failed (%s); rebaking", exc)
-        arr = baker(size)
+        arr: np.ndarray = baker(size)
         try:
             cache_dir.mkdir(parents=True, exist_ok=True)
             np.save(path, arr)
@@ -406,8 +411,8 @@ class SkyRendererComponent(Component):
         self._wind_y_m: float = 0.0
 
         # Scene-graph nodes (built in start())
-        self._dome_np = None
-        self._cloud_np = None
+        self._dome_np: NodePath | None = None
+        self._cloud_np: NodePath | None = None
         self._fog: Fog | None = None
 
         # Shooting-star animation state
@@ -744,6 +749,7 @@ class SkyRendererComponent(Component):
 
     def _update_dome(self, st: Any, cx: float, cy: float, cz: float) -> None:
         """Follow the camera (translation only) and push the dome uniforms."""
+        assert self._dome_np is not None  # invariant: guarded in late_update before call
         dome = self._dome_np
         dome.set_pos(cx, cy, cz)  # NEVER parented under the camera: world-oriented
 
@@ -808,6 +814,7 @@ class SkyRendererComponent(Component):
         animates over ~1.2 real seconds and only spawns while
         ``star_visibility > 0.5``.
         """
+        assert self._dome_np is not None  # invariant: guarded in late_update before call
         dome = self._dome_np
         # Animate the active streak.
         if self._ss_progress >= 0.0:

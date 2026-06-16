@@ -60,7 +60,7 @@ from typing import Any
 import numpy as np
 
 # Panda3D imports allowed in world/ per ARCHITECTURE §3.
-from panda3d.core import (  # type: ignore[import]
+from panda3d.core import (
     BoundingBox,
     ColorBlendAttrib,
     Geom,
@@ -183,7 +183,7 @@ def _build_cylinder(radius_m: float, height_m: float, segments: int) -> GeomNode
     return node
 
 
-def _rain_streak_texture():
+def _rain_streak_texture() -> Texture:
     """The ``rain_streak`` procedural texture, repeat-wrapped + linear-filtered."""
     from fire_engine.procedural import get as get_procedural
     from fire_engine.render.texture_bridge import to_panda_texture
@@ -250,7 +250,7 @@ class RainRendererComponent(Component):
         # Render nodes.
         self._particle_node: NodePath | None = None
         self._cyl_root: NodePath | None = None
-        self._cyl_layers: list = []  # (NodePath, scroll_mult)
+        self._cyl_layers: list[tuple[NodePath, float]] = []  # (NodePath, scroll_mult)
         self._cyl_scroll: list[float] = []
         self._cyl_visible: bool = False
 
@@ -367,6 +367,8 @@ class RainRendererComponent(Component):
 
     def _refresh_cover(self, cam: tuple[float, float, float]) -> None:
         """Recenter on a threshold crossing, else refold a budget of columns."""
+        assert self._cover is not None  # invariant: guarded in late_update before call
+        assert self._cover_tex is not None  # invariant: guarded in late_update before call
         cover = self._cover
         chunks = (
             getattr(self.chunk_provider, "chunks", {}) if self.chunk_provider is not None else {}
@@ -403,6 +405,8 @@ class RainRendererComponent(Component):
 
     def _bind_cover_uniforms(self) -> None:
         """Bind the cover texture + origin/cell/cells on the active rain node(s)."""
+        assert self._cover is not None  # invariant: always set before bind is called
+        assert self._cover_tex is not None  # invariant: always set before bind is called
         ox, oy = self._cover.origin_m
         for node in self._rain_nodes():
             node.set_shader_input("u_rain_height_tex", self._cover_tex)
@@ -511,6 +515,7 @@ class RainRendererComponent(Component):
         self._cyl_visible = False
 
     def _update_cylinders(self, cam: tuple[float, float, float], dt: float) -> None:
+        assert self._cyl_root is not None  # invariant: only called in cylinder mode after build
         st = getattr(self.sky_system, "state", None)
         ri = float(getattr(st, "rain_intensity", 0.0)) if st is not None else 0.0
         if ri < _RAIN_HIDE_THRESHOLD:
@@ -554,14 +559,14 @@ class RainRendererComponent(Component):
 
     def _on_terrain_edited(self, event: TerrainEditedEvent) -> None:
         """A brush edit → refold every touched chunk column's cover."""
-        coords = event.chunk_coords
-        if (
-            isinstance(coords, tuple)
-            and len(coords) == 3
-            and all(isinstance(c, int) for c in coords)
-        ):
-            coords = (coords,)
-        for c in coords:
+        raw: tuple[int, ...] = event.chunk_coords
+        # chunk_coords is either a single (cx,cy,cz) flat tuple or a sequence of them.
+        # Detect the single-coord case (3 ints) and wrap it so the loop is uniform.
+        if len(raw) == 3 and all(isinstance(c, int) for c in raw):
+            seqs: tuple[tuple[int, ...], ...] = (raw,)
+        else:
+            seqs = tuple(raw[i : i + 3] for i in range(0, len(raw), 3))
+        for c in seqs:
             self._dirty_columns.add((int(c[0]), int(c[1])))
 
 

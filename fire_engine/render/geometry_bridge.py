@@ -17,8 +17,10 @@ then copy the index buffer once.
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
-from panda3d.core import (  # type: ignore[import]
+from panda3d.core import (
     Geom,
     GeomEnums,
     GeomNode,
@@ -43,7 +45,7 @@ _STAGE_EMISSION = TextureStage("ta_emission")
 _STAGE_EMISSION.set_sort(2)
 
 
-def make_material_state(entry) -> RenderState:
+def make_material_state(entry: Any) -> RenderState:
     """
     Build the per-material Geom RenderState from a texture entry.
 
@@ -63,7 +65,7 @@ def make_material_state(entry) -> RenderState:
         return RenderState.make_empty()
     if isinstance(entry, tuple):
         attrib = TextureAttrib.make()
-        for stage, tex in zip((_STAGE_ALBEDO, _STAGE_NORMAL, _STAGE_EMISSION), entry):
+        for stage, tex in zip((_STAGE_ALBEDO, _STAGE_NORMAL, _STAGE_EMISSION), entry, strict=False):
             if tex is not None:
                 attrib = attrib.add_on_stage(stage, tex)
         return RenderState.make(attrib)
@@ -95,7 +97,7 @@ def make_vertex_format() -> GeomVertexFormat:
     return GeomVertexFormat.register_format(fmt)
 
 
-def to_geom(mesh) -> Geom:
+def to_geom(mesh: Any) -> Geom:
     """
     Build a Panda3D ``Geom`` from terrain ``MeshArrays`` with bulk writes only.
 
@@ -141,7 +143,7 @@ def to_geom(mesh) -> Geom:
         # ONE bulk write of the whole vertex buffer.
         varray = vdata.modify_array(0)
         view = memoryview(varray).cast("B")
-        view[:] = memoryview(interleaved).cast("B")
+        view[:] = memoryview(interleaved).cast("B")  # type: ignore[arg-type]  # ndarray is a Buffer at runtime; no stub for it
 
     prim = GeomTriangles(Geom.UH_static)
     if n_verts > 0 and mesh.indices.shape[0] > 0:
@@ -151,7 +153,7 @@ def to_geom(mesh) -> Geom:
         iarray.set_num_rows(int(idx.shape[0]))
         # ONE bulk write of the whole index buffer via the array's buffer protocol.
         iview = memoryview(iarray).cast("B")
-        iview[:] = memoryview(idx).cast("B")
+        iview[:] = memoryview(idx).cast("B")  # type: ignore[arg-type]  # ndarray is a Buffer at runtime; no stub for it
 
     geom = Geom(vdata)
     geom.add_primitive(prim)
@@ -175,9 +177,9 @@ def _face_indices(face_count: int, verts_per_face: int) -> np.ndarray:
 
 
 def to_geom_node(
-    mesh,
+    mesh: Any,
     name: str = "terrain_chunk",
-    material_textures: dict | None = None,
+    material_textures: dict[int, Any] | None = None,
 ) -> GeomNode:
     """
     Wrap a chunk mesh in a named ``GeomNode``, optionally split per material.

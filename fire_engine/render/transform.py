@@ -437,10 +437,7 @@ class Transform:
         up_ref = up
         if abs(fwd.dot(up_ref)) > 0.999:
             # Use an alternate up reference
-            if abs(fwd.dot(Vec3.FORWARD)) < 0.999:
-                up_ref = Vec3.FORWARD
-            else:
-                up_ref = Vec3.RIGHT
+            up_ref = Vec3.FORWARD if abs(fwd.dot(Vec3.FORWARD)) < 0.999 else Vec3.RIGHT
 
         # Build orthonormal basis: in Z-up space forward=+Y, right=+X, up=+Z
         # right = fwd × up_ref  (cross: (Y)×(Z) = +X in right-hand system)

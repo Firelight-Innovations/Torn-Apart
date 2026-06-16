@@ -41,7 +41,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from panda3d.core import (  # type: ignore[import]
+from panda3d.core import (
     FrameBufferProperties,
     LPoint2f,
     LPoint3f,
@@ -89,21 +89,21 @@ class PostProcessPipeline:
         self.config = config
         self.enabled: bool = bool(getattr(config, "gfx_post_process", True))
 
-        self._manager = None
+        self._manager: Any | None = None
         self.hdr_color_tex: Texture | None = None
         self.depth_tex: Texture | None = None
-        self._final_quad = None
+        self._final_quad: Any | None = None
         # Passes that should run between the scene render and the composite
         # (bloom/flare/god-rays insert here).  Each entry is a NodePath card.
-        self._mid_passes: list = []
+        self._mid_passes: list[Any] = []
         self._bloom_dummy: Texture | None = None
         # Keep refs so the render-target textures aren't GC'd.
-        self._bloom_textures: list = []
+        self._bloom_textures: list[Any] = []
         self.bloom_tex: Texture | None = None
         self.flare_tex: Texture | None = None
         self.godray_tex: Texture | None = None
-        self._composite_quad = None
-        self._godray_quad = None
+        self._composite_quad: Any | None = None
+        self._godray_quad: Any | None = None
 
         if not self.enabled:
             _log.info(
@@ -126,7 +126,7 @@ class PostProcessPipeline:
     # ------------------------------------------------------------------
 
     def _build(self) -> None:
-        from direct.filter.FilterManager import FilterManager  # type: ignore[import]
+        from direct.filter.FilterManager import FilterManager
 
         manager = FilterManager(self.base.win, self.base.cam)
 
@@ -207,6 +207,8 @@ class PostProcessPipeline:
         threshold = float(getattr(cfg, "gfx_bloom_threshold", 1.0))
         knee = float(getattr(cfg, "gfx_bloom_knee", 0.5))
 
+        assert self._manager is not None  # set in _build before _build_bloom is called
+
         # Downsample chain: div 2, 4, 8, … (each level halves resolution).
         down_tex: list[Texture] = []
         src = hdr_tex
@@ -267,6 +269,7 @@ class PostProcessPipeline:
         cfg = self.config
         if not bool(getattr(cfg, "gfx_lens_flare", True)):
             return
+        assert self._manager is not None  # set in _build before _build_flare is called
         tex = Texture("lens_flare")
         quad = self._manager.renderQuadInto("lens_flare", div=4, colortex=tex)
         if quad is None:
@@ -304,6 +307,7 @@ class PostProcessPipeline:
         cfg = self.config
         if not bool(getattr(cfg, "gfx_god_rays", True)):
             return
+        assert self._manager is not None  # set in _build before _build_godrays is called
         tex = Texture("god_rays")
         quad = self._manager.renderQuadInto("god_rays", div=2, colortex=tex)
         if quad is None:
@@ -337,6 +341,7 @@ class PostProcessPipeline:
         quad.
         """
         cfg = self.config
+        assert self._manager is not None  # set in _build before _build_composite is called
         comp_sh = Shader.make(
             Shader.SL_GLSL,
             vertex=post_shaders.POST_FULLSCREEN_VERTEX,
@@ -455,6 +460,7 @@ class PostProcessPipeline:
 
     def _update_godray_sun(self) -> None:
         """Project the sun to screen space for the god-ray radial scatter."""
+        assert self._godray_quad is not None  # caller (update) guards this
         base = self.base
         sky = getattr(base, "sky_system", None)
         st = getattr(sky, "state", None) if sky is not None else None

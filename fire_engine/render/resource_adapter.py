@@ -40,7 +40,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 # Panda3D imports are ALLOWED here — this module lives in world/
-from panda3d.core import Loader as P3DLoader  # type: ignore[import]
+from panda3d.core import Loader as P3DLoader
 
 if TYPE_CHECKING:
     from fire_engine.resources.manager import ResourceManager
@@ -82,7 +82,7 @@ def _get_global_loader() -> P3DLoader:
             "Ensure a ShowBase (or App) instance has been created before "
             "calling resource_adapter loaders."
         )
-    return global_loader  # type: ignore[return-value]
+    return global_loader
 
 
 def _load_model(path: str) -> Any:
@@ -108,7 +108,7 @@ def _load_model(path: str) -> Any:
     IOError / RuntimeError
         If the file does not exist or Panda3D cannot parse it.
     """
-    from panda3d.core import Filename  # type: ignore[import]
+    from panda3d.core import Filename
 
     p3d_loader = _get_global_loader()
     # Use fromOsSpecific so absolute Windows paths (C:\...) are interpreted
@@ -188,7 +188,7 @@ def _load_texture_image(path: str) -> Any:
     IOError
         If the file cannot be opened.
     """
-    from PIL import Image  # type: ignore[import]
+    from PIL import Image
 
     img = Image.open(path).convert("RGBA")
     return {
@@ -233,7 +233,7 @@ def register_panda_loaders(resource_manager: ResourceManager) -> None:
         h = acquire(load("assets/models/landmark_church.egg"))
         nodepath = h.resource   # Panda3D NodePath
     """
-    import fire_engine.resources.loaders as _loaders
+    _loaders = resource_manager._loaders  # honours the IoC contract; may be a test fake
 
     # --- 3D models ---
     _loaders.register_loader(".egg", _load_model)

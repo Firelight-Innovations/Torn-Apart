@@ -149,8 +149,8 @@ class TreeOccluderSet:
         height_m: float,
         canopy_r_m: float,
         canopy_sigma: float = 0.25,
-        bark_rgb: tuple = _DEFAULT_BARK_RGB,
-        leaf_rgb: tuple = _DEFAULT_LEAF_RGB,
+        bark_rgb: tuple[float, float, float] = _DEFAULT_BARK_RGB,
+        leaf_rgb: tuple[float, float, float] = _DEFAULT_LEAF_RGB,
     ) -> TreeOccluderSet:
         """One-instance set (tests / tools)."""
         f = np.float32

@@ -30,10 +30,10 @@ Example
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 # Panda3D imports are allowed in world/ per ARCHITECTURE §3
-from panda3d.core import LPoint3f, LQuaternionf  # type: ignore[import]
+from panda3d.core import LPoint3f, LQuaternionf
 
 from fire_engine.render.component import Component
 
@@ -65,7 +65,7 @@ class CameraComponent(Component):
 
     __slots__ = ("base",)
 
-    def __init__(self, base=None) -> None:
+    def __init__(self, base: Any = None) -> None:
         super().__init__()
         self.base = base  # Panda3D ShowBase instance
 

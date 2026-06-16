@@ -310,7 +310,7 @@ class LightSet:
                 out[n, 7] = LIGHT_TYPE_SPOT
                 d = np.asarray(li.direction, np.float32)
                 norm = float(np.linalg.norm(d))
-                out[n, 8:11] = d / norm if norm > 1e-6 else np.float32((0.0, 0.0, -1.0))
+                out[n, 8:11] = d / norm if norm > 1e-6 else np.asarray((0.0, 0.0, -1.0), np.float32)
                 out[n, 11] = math.cos(math.radians(li.cone_deg) * 0.5)
             else:
                 out[n, 0:3] = li.position

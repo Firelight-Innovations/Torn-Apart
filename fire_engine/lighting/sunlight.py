@@ -51,7 +51,7 @@ LIGHT_AMBIENT = 40   (from light_grid)
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Protocol
+from typing import Any, Protocol
 
 import numpy as np
 
@@ -81,7 +81,7 @@ class _ChunkProvider(Protocol):
     """Minimal protocol for a chunk container / provider."""
 
     @property
-    def chunks(self) -> dict: ...  # coord → Chunk
+    def chunks(self) -> dict[tuple[int, int, int], Any]: ...  # coord → Chunk
 
 
 # ---------------------------------------------------------------------------
@@ -320,7 +320,7 @@ class SunlightComputer:
     def __init__(
         self,
         config: Config,
-        chunk_provider,
+        chunk_provider: Any,
         light_grid: LightGrid,
         bus: EventBus,
     ) -> None:
@@ -352,7 +352,7 @@ class SunlightComputer:
         Marks all chunks in each affected column ``dirty = True`` so
         ``ChunkManager.stream_frame`` remeshes them.
         """
-        coords = event.chunk_coords
+        coords: Any = event.chunk_coords
         # chunk_coords may be a single tuple or a frozenset / set of tuples.
         if isinstance(coords, tuple) and len(coords) == 3 and isinstance(coords[0], int):
             columns = {(coords[0], coords[1])}
@@ -410,7 +410,7 @@ class SunlightComputer:
 
         # Build per-chunk occupancy.
         chunk_occ = []
-        for _, coord, chunk in column_chunks:
+        for _, _coord, chunk in column_chunks:
             occ = occupancy_from_materials(chunk.materials)  # (16,16,16) bool
             chunk_occ.append(occ)
 
@@ -435,7 +435,6 @@ class SunlightComputer:
 
         # Map: shadowed → LIGHT_AMBIENT, unshadowed → LIGHT_FULL.
         light_float = np.where(shadow, float(LIGHT_AMBIENT), float(LIGHT_FULL))
-        # shape (16, 16, T), float64
 
         # ------------------------------------
         # Box blur: 3×3×3 uniform filter.
@@ -468,7 +467,7 @@ class SunlightComputer:
         # ------------------------------------
         # Split back into per-chunk arrays.
         # ------------------------------------
-        for chunk_idx, (cz, coord, _) in enumerate(column_chunks):
+        for chunk_idx, (_cz, coord, _) in enumerate(column_chunks):
             z_start = chunk_idx * g
             z_end = z_start + g
             arr = np.ascontiguousarray(light_uint8[:, :, z_start:z_end])  # (16,16,16)

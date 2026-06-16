@@ -254,10 +254,7 @@ class ExposureMeter:
 
         dt = float(dt)
         if dt > 0.0 and target != self._exposure:
-            if tau <= 1e-6:
-                blend = 1.0
-            else:
-                blend = 1.0 - math.exp(-dt / tau)
+            blend = 1.0 if tau <= 1e-6 else 1.0 - math.exp(-dt / tau)
             blend = min(max(blend, 0.0), 1.0)
             log_cur = math.log(self._exposure)
             log_tgt = math.log(target)
@@ -338,11 +335,11 @@ class ExposureMeter:
             if chunk is None:
                 continue  # unloaded == air
             mask = inv == i
-            l = flat_loc[mask]
-            solid[mask] = chunk.materials[l[:, 0], l[:, 1], l[:, 2]] != 0
+            loc = flat_loc[mask]
+            solid[mask] = chunk.materials[loc[:, 0], loc[:, 1], loc[:, 2]] != 0
 
         blocked = solid.reshape(_RAY_DIRS.shape[0], _N_STEPS).any(axis=1)
-        return (~blocked).astype(np.float64)
+        return np.asarray((~blocked).astype(np.float64))
 
     @staticmethod
     def _light_luminance(cam: np.ndarray, lights_packed: tuple[np.ndarray, int] | None) -> float:

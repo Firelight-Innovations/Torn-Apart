@@ -74,24 +74,24 @@ from fire_engine.lighting.volume import (
 # explicitly: ``from fire_engine.lighting.gpu import GpuLightingPipeline``.
 
 __all__ = [
+    "EMISSION_SCALE",
+    "LIGHT_AMBIENT",
+    "LIGHT_FULL",
+    "AreaLight",
+    "ChunkBlockCache",
+    "GeometryVolume",
     # legacy CPU backend (lighting_backend = "cpu")
     "LightGrid",
-    "occupancy_from_materials",
-    "LIGHT_FULL",
-    "LIGHT_AMBIENT",
-    "SunlightComputer",
-    "make_light_sampler",
-    # GPU volumetric backend — headless halves
-    "PointLight",
-    "AreaLight",
     "LightSet",
     "MaterialPalette",
-    "build_default_palette",
-    "VolumeWindow",
-    "GeometryVolume",
-    "assemble_geometry",
-    "ChunkBlockCache",
-    "EMISSION_SCALE",
+    # GPU volumetric backend — headless halves
+    "PointLight",
+    "SunlightComputer",
     "TreeOccluderSet",
+    "VolumeWindow",
+    "assemble_geometry",
+    "build_default_palette",
+    "make_light_sampler",
+    "occupancy_from_materials",
     "splat_tree_occluders",
 ]

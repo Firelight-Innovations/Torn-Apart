@@ -42,7 +42,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 # Panda3D imports allowed in world/ per ARCHITECTURE §3.
-from panda3d.core import PStatClient, PStatCollector  # type: ignore[import]
+from panda3d.core import PStatClient, PStatCollector
 
 from fire_engine.core.log import get_logger
 

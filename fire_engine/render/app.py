@@ -60,12 +60,13 @@ Example
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 # Panda3D imports allowed in world/ per ARCHITECTURE §3
-from direct.showbase.ShowBase import ShowBase  # type: ignore[import]
-from panda3d.core import (  # type: ignore[import]
+from direct.showbase.ShowBase import ShowBase
+from panda3d.core import (
     AntialiasAttrib,
+    ClockObject,
     NodePath,
     WindowProperties,
 )
@@ -78,6 +79,8 @@ if TYPE_CHECKING:
     from fire_engine.core.clock import Clock
     from fire_engine.core.config import Config
     from fire_engine.core.event_bus import EventBus
+    from fire_engine.render.profiler_bridge import PStatsBridge
+    from fire_engine.render.profiler_overlay import ProfilerOverlay
 
 
 # ---------------------------------------------------------------------------
@@ -126,7 +129,7 @@ class InputState:
 # ---------------------------------------------------------------------------
 
 
-class App(ShowBase):
+class App(ShowBase):  # type: ignore[misc]  # panda3d ShowBase has no stubs; Any base is expected
     """
     Panda3D ShowBase wrapper — owns the window, frame loop, and input collection.
 
@@ -169,7 +172,7 @@ class App(ShowBase):
         # already non-power-of-two 3-D volumes), so disable padding when
         # post-processing is on.  Must run before the GSG is created.
         if getattr(config, "gfx_post_process", True):
-            from panda3d.core import loadPrcFileData  # type: ignore[import]
+            from panda3d.core import loadPrcFileData
 
             loadPrcFileData("torn-apart-hdr", "textures-power-2 none")
         # MSAA must be requested BEFORE the window is opened (framebuffer
@@ -193,8 +196,8 @@ class App(ShowBase):
         # overlay / PStats bridge are constructed only when enabled (see
         # _setup_profiler, called after the window + camera exist).
         self._profiler = init_profiler(config)
-        self._profiler_overlay = None  # ProfilerOverlay | None (F3)
-        self._profiler_bridge = None  # PStatsBridge | None
+        self._profiler_overlay: ProfilerOverlay | None = None  # F3 in-game overlay
+        self._profiler_bridge: PStatsBridge | None = None
         self._snapshot_path: str | None = None
         self._snapshot_interval_s = float(getattr(config, "profiler_snapshot_interval_s", 1.0))
         self._last_snapshot_t = 0.0
@@ -434,7 +437,7 @@ class App(ShowBase):
             self.win.move_pointer(0, cx, cy)
             self._skip_mouse_delta = False
 
-    def windowEvent(self, win) -> None:
+    def windowEvent(self, win: Any) -> None:
         """
         Handle Panda3D window events (focus, resize, close).
 
@@ -485,7 +488,7 @@ class App(ShowBase):
     # Frame task
     # ------------------------------------------------------------------
 
-    def _frame_task(self, task):
+    def _frame_task(self, task: Any) -> Any:
         """
         Main per-frame driver.
 
@@ -506,7 +509,7 @@ class App(ShowBase):
         # now known) and resets the per-frame accumulators.  No-op when off.
         prof.begin_frame()
 
-        real_dt = globalClock.get_dt()  # Panda3D's frame time  # noqa: F821
+        real_dt = float(ClockObject.get_global_clock().get_dt())  # Panda3D's frame time
 
         # 1. Input
         with prof.scope("Input"):
@@ -605,13 +608,16 @@ class App(ShowBase):
 
         bucket = _STATE.buckets.get(FlyController, [])
         for ctrl in bucket:
-            ctrl.set_input_state(self.input_state)
+            if isinstance(ctrl, FlyController):
+                ctrl.set_input_state(self.input_state)
 
     # ------------------------------------------------------------------
     # Terrain rendering (Phase 3 integration)
     # ------------------------------------------------------------------
 
-    def setup_terrain_rendering(self, ground_texture=None, material_textures=None) -> None:
+    def setup_terrain_rendering(
+        self, ground_texture: Any = None, material_textures: Any = None
+    ) -> None:
         """
         Configure the terrain render state once at boot.
 

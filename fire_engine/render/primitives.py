@@ -13,9 +13,10 @@ Sizes are normalised so a GameObject with ``local_scale == 1`` renders as a
 from __future__ import annotations
 
 import math
+from typing import Any
 
 # Panda3D imports allowed in world/ per ARCHITECTURE §3.
-from panda3d.core import (  # type: ignore[import]
+from panda3d.core import (
     Geom,
     GeomNode,
     GeomTriangles,
@@ -105,7 +106,7 @@ def make_sphere_node(name: str, radius_m: float = 0.5) -> NodePath:
     return NodePath(node)
 
 
-def load_cube_model(loader) -> NodePath | None:
+def load_cube_model(loader: Any) -> NodePath | None:
     """
     Load Panda3D's stock cube model with the ``box`` fallback.
 

@@ -32,7 +32,7 @@ Usage
 from __future__ import annotations
 
 import numpy as np
-from panda3d.core import SamplerState, Texture  # type: ignore[import]
+from panda3d.core import SamplerState, Texture
 
 __all__ = [
     "to_data_texture_f32",

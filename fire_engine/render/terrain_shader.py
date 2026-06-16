@@ -36,7 +36,9 @@ for editor syntax highlighting + LSP support.
 
 from __future__ import annotations
 
-from panda3d.core import NodePath, Shader  # type: ignore[import]
+from typing import Any
+
+from panda3d.core import NodePath, Shader
 
 from fire_engine.core.shader_source import load_glsl
 from fire_engine.procedural.textures.dirt_ground import DIRT_PALETTE, DIRT_THRESHOLDS
@@ -54,11 +56,11 @@ TERRAIN_FRAGMENT = load_glsl(__file__, "terrain.frag")
 
 def apply_terrain_shader(
     terrain_root: NodePath,
-    pipeline,
+    pipeline: Any,
     *,
     seed: float = 0.0,
     texels_per_m: float = 16.0,
-    extra_materials=None,
+    extra_materials: Any = None,
 ) -> None:
     """
     Compile and apply the volumetric terrain shader to ``terrain_root``.

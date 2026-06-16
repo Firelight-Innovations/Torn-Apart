@@ -77,10 +77,11 @@ Example (wired by main.py)
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 # Panda3D imports allowed in world/ per ARCHITECTURE §3.
-from panda3d.core import (  # type: ignore[import]
+from panda3d.core import (
     LVecBase2f,
     SamplerState,
     Texture,
@@ -306,10 +307,8 @@ class WindSystemComponent(Component):
             self.bus.unsubscribe(TerrainEditedEvent, self._on_terrain_edited)
             self.bus.unsubscribe(ChunkLoadedEvent, self._on_chunk_loaded)
         if self.worker is not None:
-            try:
+            with contextlib.suppress(Exception):
                 self.worker.stop(join=True)
-            except Exception:
-                pass
             self.worker = None
         self._tex = None
 

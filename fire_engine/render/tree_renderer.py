@@ -59,7 +59,7 @@ from typing import Any
 import numpy as np
 
 # Panda3D imports allowed in world/ per ARCHITECTURE §3.
-from panda3d.core import (  # type: ignore[import]
+from panda3d.core import (
     BoundingBox,
     Geom,
     GeomNode,
@@ -195,7 +195,7 @@ class TreeRendererComponent(Component):
         # — merged + pushed to the pipeline so the light cascades see trees.
         self._volume_occluders: dict[tuple[str, int], TreeOccluderSet] = {}
         # Per-species mean (bark_rgb, leaf_rgb) splat colours from the atlas.
-        self._species_occ_rgb: dict[str, tuple] = {}
+        self._species_occ_rgb: dict[str, tuple[Any, Any]] = {}
         # Per-species leaf-derived canopy extinction (per meter, scale 1.0).
         self._species_sigma: dict[str, float] = {}
 
@@ -319,7 +319,7 @@ class TreeRendererComponent(Component):
     # ------------------------------------------------------------------
 
     def _on_terrain_edited(self, event: TerrainEditedEvent) -> None:
-        coords = event.chunk_coords
+        coords: Any = event.chunk_coords
         if isinstance(coords, tuple) and len(coords) == 3 and isinstance(coords[0], int):
             coords = (coords,)
         self._mark_dirty_for_coords(coords)
@@ -327,7 +327,7 @@ class TreeRendererComponent(Component):
     def _on_chunk_loaded(self, event: ChunkLoadedEvent) -> None:
         self._mark_dirty_for_coords((event.coord,))
 
-    def _mark_dirty_for_coords(self, coords) -> None:
+    def _mark_dirty_for_coords(self, coords: Any) -> None:
         """Queue a placement re-bake for volumes touching these chunks."""
         if self.base is None:
             return
@@ -358,7 +358,7 @@ class TreeRendererComponent(Component):
         for kind in _TREE_KINDS:
             for vol in self.zone_store.volumes(kind.tag):
                 self._build_volume(kind, vol)
-                nodes = self._volume_nodes.get((kind.tag, vol.id), ())
+                nodes = self._volume_nodes.get((kind.tag, vol.id), [])
                 total_nodes += len(nodes)
 
         for nodes in self._volume_nodes.values():
@@ -383,7 +383,7 @@ class TreeRendererComponent(Component):
         self._push_occluders()
         _log.debug("Tree volume %d (%s) re-baked", vol_id, tag)
 
-    def _build_volume(self, kind: _TreeKind, vol) -> None:
+    def _build_volume(self, kind: _TreeKind, vol: Any) -> None:
         """Bake one volume's placements and create its mesh+impostor draws."""
         from fire_engine.procedural import get as get_procedural
         from fire_engine.render.texture_bridge import to_data_texture_f32
@@ -525,7 +525,7 @@ class TreeRendererComponent(Component):
         sets = [s for s in self._volume_occluders.values() if s.count]
         self.lighting_pipeline.set_static_occluders(TreeOccluderSet.merge(sets) if sets else None)
 
-    def _species_canopy_sigma(self, name: str, vs) -> float:
+    def _species_canopy_sigma(self, name: str, vs: Any) -> float:
         """
         Per-meter canopy extinction for a species at scale 1.0.
 
@@ -551,7 +551,7 @@ class TreeRendererComponent(Component):
             self._species_sigma[name] = sigma
         return sigma
 
-    def _species_splat_rgb(self, name: str, vs) -> tuple:
+    def _species_splat_rgb(self, name: str, vs: Any) -> tuple[Any, Any]:
         """
         Mean linear bark/leaf splat colours for a species, from its atlas.
 
@@ -577,7 +577,7 @@ class TreeRendererComponent(Component):
     # Cached species resources (geoms + textures upload once per species)
     # ------------------------------------------------------------------
 
-    def _mesh_geom(self, name: str, variant: int, vs) -> Geom:
+    def _mesh_geom(self, name: str, variant: int, vs: Any) -> Geom:
         """The species' variant mesh as a Geom (uploaded once, shared)."""
         key = (name, variant)
         geom = self._mesh_geoms.get(key)
@@ -588,7 +588,7 @@ class TreeRendererComponent(Component):
             self._mesh_geoms[key] = geom
         return geom
 
-    def _impostor_geom(self, name: str, vs) -> Geom:
+    def _impostor_geom(self, name: str, vs: Any) -> Geom:
         """Crossed-quad billboard sized to the species' impostor raster."""
         geom = self._impostor_geoms.get(name)
         if geom is None:
@@ -596,7 +596,7 @@ class TreeRendererComponent(Component):
             self._impostor_geoms[name] = geom
         return geom
 
-    def _species_atlas(self, name: str, vs) -> Texture:
+    def _species_atlas(self, name: str, vs: Any) -> Texture:
         """The species' bark/leaf atlas as a nearest-filtered texture."""
         tex = self._atlas_tex.get(name)
         if tex is None:
@@ -606,7 +606,7 @@ class TreeRendererComponent(Component):
             self._atlas_tex[name] = tex
         return tex
 
-    def _species_impostor(self, name: str, vs) -> Texture:
+    def _species_impostor(self, name: str, vs: Any) -> Texture:
         """The species' impostor sprite strip as a texture."""
         tex = self._impostor_tex.get(name)
         if tex is None:

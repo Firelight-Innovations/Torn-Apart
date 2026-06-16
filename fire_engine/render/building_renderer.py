@@ -33,7 +33,7 @@ from __future__ import annotations
 from typing import Any
 
 # Panda3D imports allowed in world/ per ARCHITECTURE §3.
-from panda3d.core import (  # type: ignore[import]
+from panda3d.core import (
     LQuaternionf,
     NodePath,
     Shader,
@@ -199,6 +199,7 @@ class BuildingRendererComponent(Component):
         if mesh.positions.shape[0] == 0:
             return
         geom_node = to_geom_node(mesh, name=f"building_{building_id}")
+        assert self._root is not None
         node = self._root.attach_new_node(geom_node)
         node.set_shader(self._shader)
         if self._albedo is not None:

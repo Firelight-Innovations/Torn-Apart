@@ -32,12 +32,12 @@ Example (wired by main.py when ``config.lighting_backend == "gpu"``)
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 # panda3d imports are allowed in lighting/ (ARCHITECTURE §3).
-from panda3d.core import (  # type: ignore[import]
+from panda3d.core import (
     LVecBase2f,
     LVecBase3f,
     LVecBase3i,
@@ -292,8 +292,8 @@ class GpuLightingPipeline:
     def __init__(
         self,
         config: Config,
-        base,
-        chunk_provider,
+        base: Any,
+        chunk_provider: Any,
         bus: EventBus,
         palette: MaterialPalette | None = None,
         *,
@@ -323,8 +323,8 @@ class GpuLightingPipeline:
         self._tree_occ_stale: set[int] = set()
         # Non-terrain geometry occupancy providers (buildings, future props).
         # Store-only in v1 — see :meth:`register_geometry_provider`.
-        self._geometry_providers: list = []
-        self._box_uniforms: tuple | None = None  # cached LVecBase4f lists
+        self._geometry_providers: list[Any] = []
+        self._box_uniforms: tuple[Any, ...] | None = None  # cached LVecBase4f lists
         # Auto-exposure (eye adaptation): headless meter; `exposure` is the
         # final tonemap exposure consumed by the terrain + sky shaders.
         self.exposure_meter = ExposureMeter(config)
@@ -452,7 +452,7 @@ class GpuLightingPipeline:
         self._edited_coords: set[tuple[int, int, int]] = set()
         self._force_all_dirty = True  # first frame: build everything
         self._load_dirty_timer = 0.0
-        self._last_sun: tuple | None = None  # (sun_dir, sun_rad, moon, sky)
+        self._last_sun: tuple[Any, ...] | None = None  # (sun_dir, sun_rad, moon, sky)
         bus.subscribe(TerrainEditedEvent, self._on_terrain_edited)
         bus.subscribe(ChunkLoadedEvent, self._on_chunk_loaded)
 
@@ -476,7 +476,7 @@ class GpuLightingPipeline:
         """Brush edit → reassemble the affected cascades immediately."""
         coords = event.chunk_coords
         if isinstance(coords, tuple) and len(coords) == 3 and isinstance(coords[0], int):
-            edited = (coords,)
+            edited: tuple[Any, ...] = (coords,)
         else:
             edited = tuple(coords)
         self._pending_coords.update(edited)
@@ -498,7 +498,7 @@ class GpuLightingPipeline:
         """True when any pending chunk overlaps the window's world box."""
         return self._any_coord_hits(self._pending_coords, window)
 
-    def _any_coord_hits(self, coords, window: VolumeWindow) -> bool:
+    def _any_coord_hits(self, coords: Any, window: VolumeWindow) -> bool:
         """True when any coord in ``coords`` overlaps the window's world box."""
         if window.origin_cell is None:
             return True
@@ -516,7 +516,7 @@ class GpuLightingPipeline:
     # Per-frame driver
     # ------------------------------------------------------------------
 
-    def update(self, camera_pos, sky_state: SkyState | None, dt: float) -> None:
+    def update(self, camera_pos: Any, sky_state: SkyState | None, dt: float) -> None:
         """
         Advance the GPU lighting one frame.
 
@@ -570,7 +570,10 @@ class GpuLightingPipeline:
             self._drain_assembly_results()
 
         # 2. Celestial / sky change detection (affects every cascade).
-        if self._last_sun is None or any(_changed(a, b) for a, b in zip(sun, self._last_sun)):
+        sun_changed = self._last_sun is None or any(
+            _changed(a, b) for a, b in zip(sun, self._last_sun, strict=True)
+        )
+        if sun_changed:
             for casc in self.cascades:
                 casc.needs_inject = True
             self._last_sun = sun
@@ -603,50 +606,7 @@ class GpuLightingPipeline:
         #    fields, so there is nothing to run on quiet frames: steady-state
         #    per-frame GPU lighting cost is the froxel fog alone.
         if any(c.needs_inject for c in self.cascades):
-            pos_r = [LVecBase4f(*packed[i, 0:4]) for i in range(glsl.MAX_LIGHTS)]
-            col_t = [LVecBase4f(*packed[i, 4:8]) for i in range(glsl.MAX_LIGHTS)]
-            ext = [LVecBase4f(*packed[i, 8:12]) for i in range(glsl.MAX_LIGHTS)]
-            sun_dir, sun_rad, moon_dir, moon_rad, sky_amb = sun
-            for casc in self.cascades:
-                if not casc.needs_inject:
-                    continue
-                casc.needs_inject = False
-                n = casc.inject_np
-                n.set_shader_input("u_sun_dir", LVecBase3f(*sun_dir))
-                n.set_shader_input("u_sun_radiance", LVecBase3f(*sun_rad))
-                n.set_shader_input("u_moon_dir", LVecBase3f(*moon_dir))
-                n.set_shader_input("u_moon_radiance", LVecBase3f(*moon_rad))
-                n.set_shader_input("u_sky_ambient", LVecBase3f(*sky_amb))
-                n.set_shader_input("u_bounce", float(self._config.light_bounce_strength))
-                n.set_shader_input("u_num_lights", int(count))
-                n.set_shader_input("u_light_pos_r", pos_r)
-                n.set_shader_input("u_light_col_t", col_t)
-                n.set_shader_input("u_light_ext", ext)
-                n.set_shader_input("u_num_boxes", n_boxes)
-                n.set_shader_input("u_box_min", box_min)
-                n.set_shader_input("u_box_max", box_max)
-                n.set_shader_input("u_origin_m", LVecBase3f(*casc.origin_m()))
-                n.set_shader_input("u_cell_m", float(casc.cell_m))
-                groups = (_groups(casc.cells, 4),) * 3
-                engine.dispatch_compute(groups, n.get_attrib(ShaderAttrib), gsg)
-                # 5. Gather (ray-marched GI) over the fresh source field.
-                #    Iteration 1 carries sky + first bounce; iteration 2 lets
-                #    the feedback term add sky→wall→floor and second-bounce
-                #    colour (it reads iteration 1's output).
-                for _ in range(self._gi_iters):
-                    gn = casc.gather_np[casc.ping]  # ping → pong
-                    gn.set_shader_input("u_sky_ambient", LVecBase3f(*sky_amb))
-                    gn.set_shader_input("u_origin_m", LVecBase3f(*casc.origin_m()))
-                    engine.dispatch_compute(groups, gn.get_attrib(ShaderAttrib), gsg)
-                    casc.ping ^= 1
-                # 5b. Smooth (air-masked de-noise of the ray component) —
-                #     completes the gather's 8-phase ray-fan tile so the
-                #     blotch/confetti noise of disagreeing neighbour fans
-                #     averages out; contact GI stays voxel-crisp.
-                for _ in range(self._gi_smooth):
-                    sm = casc.smooth_np[casc.ping]  # ping → pong
-                    engine.dispatch_compute(groups, sm.get_attrib(ShaderAttrib), gsg)
-                    casc.ping ^= 1
+            self._inject_and_gather(sun, packed, count, box_min, box_max, n_boxes, engine, gsg)
 
         # 6. Froxel fog.
         if self.fog_enabled:
@@ -715,7 +675,7 @@ class GpuLightingPipeline:
         # first assembly automatically.
         self._tree_occ_stale = {c.index for c in self.cascades if c.window.origin_cell is not None}
 
-    def register_geometry_provider(self, provider) -> None:
+    def register_geometry_provider(self, provider: Any) -> None:
         """
         Register a non-terrain :class:`~fire_engine.lighting.volume.GeometryOccupancyProvider`
         (e.g. the building occlusion rasterizer) so it can splat its solids
@@ -737,7 +697,7 @@ class GpuLightingPipeline:
         """
         self._geometry_providers.append(provider)
 
-    def geometry_providers(self) -> tuple:
+    def geometry_providers(self) -> tuple[Any, ...]:
         """The registered geometry providers (store-only in v1)."""
         return tuple(self._geometry_providers)
 
@@ -781,7 +741,7 @@ class GpuLightingPipeline:
             self._assemble_and_upload_sync(casc)  # sets needs_inject = True
         self._edited_coords.clear()
 
-    def _schedule_assembly(self, camera_pos) -> None:
+    def _schedule_assembly(self, camera_pos: Any) -> None:
         """
         Submit reassembly jobs for cascades that moved or whose terrain changed.
 
@@ -831,7 +791,7 @@ class GpuLightingPipeline:
             self._pending_coords.clear()
             self._load_dirty_timer = 0.0
 
-    def _submit_assembly(self, casc: _Cascade, origin_cell) -> None:
+    def _submit_assembly(self, casc: _Cascade, origin_cell: Any) -> None:
         """Snapshot the chunks a reassembly will read and enqueue the job."""
         coords = window_chunk_span(
             origin_cell,
@@ -864,6 +824,7 @@ class GpuLightingPipeline:
         if self._threaded:
             casc._assembly_inflight = True
             casc._pending_seq = self._assembly_seq
+            assert self._assembly_worker is not None
             self._assembly_worker.submit(job)
         else:
             # Inline (tooling/tests): assemble + commit immediately.
@@ -876,7 +837,7 @@ class GpuLightingPipeline:
         for res in self._assembly_worker.drain_results():
             self._commit_assembly_result(res)
 
-    def _commit_assembly_result(self, res) -> None:
+    def _commit_assembly_result(self, res: Any) -> None:
         """Upload one finished volume and advance its committed window origin."""
         casc = self.cascades[res.cascade_index]
         if self._threaded and res.seq != casc._pending_seq:
@@ -935,7 +896,62 @@ class GpuLightingPipeline:
 
     # ------------------------------------------------------------------
 
-    def _dispatch_fog(self, camera_pos, sun, sky_state, engine, gsg) -> None:
+    def _inject_and_gather(
+        self,
+        sun: Any,
+        packed: Any,
+        count: int,
+        box_min: Any,
+        box_max: Any,
+        n_boxes: int,
+        engine: Any,
+        gsg: Any,
+    ) -> None:
+        """Run injection + GI gather for every cascade that needs it."""
+        pos_r = [LVecBase4f(*packed[i, 0:4]) for i in range(glsl.MAX_LIGHTS)]
+        col_t = [LVecBase4f(*packed[i, 4:8]) for i in range(glsl.MAX_LIGHTS)]
+        ext = [LVecBase4f(*packed[i, 8:12]) for i in range(glsl.MAX_LIGHTS)]
+        sun_dir, sun_rad, moon_dir, moon_rad, sky_amb = sun
+        for casc in self.cascades:
+            if not casc.needs_inject:
+                continue
+            casc.needs_inject = False
+            n = casc.inject_np
+            n.set_shader_input("u_sun_dir", LVecBase3f(*sun_dir))
+            n.set_shader_input("u_sun_radiance", LVecBase3f(*sun_rad))
+            n.set_shader_input("u_moon_dir", LVecBase3f(*moon_dir))
+            n.set_shader_input("u_moon_radiance", LVecBase3f(*moon_rad))
+            n.set_shader_input("u_sky_ambient", LVecBase3f(*sky_amb))
+            n.set_shader_input("u_bounce", float(self._config.light_bounce_strength))
+            n.set_shader_input("u_num_lights", int(count))
+            n.set_shader_input("u_light_pos_r", pos_r)
+            n.set_shader_input("u_light_col_t", col_t)
+            n.set_shader_input("u_light_ext", ext)
+            n.set_shader_input("u_num_boxes", n_boxes)
+            n.set_shader_input("u_box_min", box_min)
+            n.set_shader_input("u_box_max", box_max)
+            n.set_shader_input("u_origin_m", LVecBase3f(*casc.origin_m()))
+            n.set_shader_input("u_cell_m", float(casc.cell_m))
+            groups = (_groups(casc.cells, 4),) * 3
+            engine.dispatch_compute(groups, n.get_attrib(ShaderAttrib), gsg)
+            # 5. Gather (ray-marched GI) over the fresh source field.
+            for _ in range(self._gi_iters):
+                gn = casc.gather_np[casc.ping]  # ping → pong
+                gn.set_shader_input("u_sky_ambient", LVecBase3f(*sky_amb))
+                gn.set_shader_input("u_origin_m", LVecBase3f(*casc.origin_m()))
+                engine.dispatch_compute(groups, gn.get_attrib(ShaderAttrib), gsg)
+                casc.ping ^= 1
+            # 5b. Smooth (air-masked de-noise of the ray component).
+            for _ in range(self._gi_smooth):
+                sm = casc.smooth_np[casc.ping]  # ping → pong
+                engine.dispatch_compute(groups, sm.get_attrib(ShaderAttrib), gsg)
+                casc.ping ^= 1
+
+    # ------------------------------------------------------------------
+
+    def _dispatch_fog(
+        self, camera_pos: Any, sun: Any, sky_state: Any, engine: Any, gsg: Any
+    ) -> None:
         """Fill + integrate the froxel volume for this frame's camera."""
         sun_dir, sun_rad, moon_dir, moon_rad, sky_amb = sun
         cam = self._base.camera
@@ -967,6 +983,7 @@ class GpuLightingPipeline:
         sn.set_shader_input("u_sky_ambient", LVecBase3f(*sky_amb))
         sn.set_shader_input("u_c1_radiance", c1.radiance_current)
         sn.set_shader_input("u_c1_origin_m", LVecBase3f(*c1.origin_m()))
+        assert self._box_uniforms is not None
         box_min, box_max, n_boxes = self._box_uniforms
         sn.set_shader_input("u_num_boxes", n_boxes)
         sn.set_shader_input("u_box_min", box_min)
@@ -1089,7 +1106,7 @@ class GpuLightingPipeline:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _sky_inputs(sky_state: SkyState | None) -> tuple:
+    def _sky_inputs(sky_state: SkyState | None) -> tuple[Any, ...]:
         """
         Extract (sun_dir, sun_radiance, moon_dir, moon_radiance, sky_ambient)
         from a SkyState, with graceful fallbacks for older SkyState versions
@@ -1137,6 +1154,6 @@ def _groups(n: int, local: int) -> int:
     return (n + local - 1) // local
 
 
-def _changed(a, b, eps: float = 0.004) -> bool:
+def _changed(a: Any, b: Any, eps: float = 0.004) -> bool:
     """True when two float tuples differ beyond ``eps`` on any component."""
-    return any(abs(float(x) - float(y)) > eps for x, y in zip(a, b))
+    return any(abs(float(x) - float(y)) > eps for x, y in zip(a, b, strict=True))

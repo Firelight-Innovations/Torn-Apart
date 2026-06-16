@@ -71,7 +71,8 @@ def occupancy_from_materials(materials: np.ndarray) -> np.ndarray:
     s = n // 2  # light grid edge = 16 when n = 32
     # Reshape to (s, 2, s, 2, s, 2): axes = (cx, dx, cy, dy, cz, dz)
     # max over the three sub-axes (1, 3, 5) collapses each 2×2×2 block.
-    return materials.reshape(s, 2, s, 2, s, 2).max(axis=(1, 3, 5)) > 0
+    result: np.ndarray = materials.reshape(s, 2, s, 2, s, 2).max(axis=(1, 3, 5)) > 0
+    return result
 
 
 class LightGrid:

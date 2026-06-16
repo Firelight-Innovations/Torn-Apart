@@ -30,11 +30,11 @@ Example
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 # Panda3D imports allowed in world/ per ARCHITECTURE §3.
-from direct.gui.OnscreenText import OnscreenText  # type: ignore[import]
-from panda3d.core import (  # type: ignore[import]
+from direct.gui.OnscreenText import OnscreenText
+from panda3d.core import (
     LineSegs,
     NodePath,
     TextNode,
@@ -86,7 +86,7 @@ class ProfilerOverlay:
     hidden (early return) and throttled to ``profiler_overlay_hz`` when shown.
     """
 
-    def __init__(self, base, profiler: Profiler, config: Config) -> None:
+    def __init__(self, base: Any, profiler: Profiler, config: Config) -> None:
         self._base = base
         self._prof = profiler
         self._budget = float(getattr(config, "profiler_frame_budget_ms", 5.0))
@@ -214,12 +214,11 @@ class ProfilerOverlay:
             self._t_hitch.setFg(_RED if h["count"] else _DIM)
 
         # Lines 4+: top-N scopes by mean ms.
-        lines = []
-        for s in snap["scopes"][:_TOP_N_SCOPES]:
-            lines.append(
-                f"{s['name']:<28} {s['mean_ms']:6.2f} ms "
-                f"({s['pct_of_frame']:3.0f}%)  x{s['calls_per_frame']:.0f}"
-            )
+        lines = [
+            f"{s['name']:<28} {s['mean_ms']:6.2f} ms "
+            f"({s['pct_of_frame']:3.0f}%)  x{s['calls_per_frame']:.0f}"
+            for s in snap["scopes"][:_TOP_N_SCOPES]
+        ]
         self._t_scopes.setText("\n".join(lines) if lines else "(no scopes yet)")
         self._t_scopes.setFg(_WHITE)
 

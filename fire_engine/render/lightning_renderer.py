@@ -46,7 +46,7 @@ import math
 from typing import Any
 
 # Panda3D imports allowed in world/ per ARCHITECTURE §3.
-from panda3d.core import (  # type: ignore[import]
+from panda3d.core import (
     BoundingBox,
     ColorBlendAttrib,
     Geom,
@@ -532,8 +532,8 @@ class LightningRendererComponent(Component):
         if cover is None or not self._cover_committed:
             return None
         ox, oy = cover.origin_m
-        col = int(math.floor((x - ox) / cover.cell_m))
-        row = int(math.floor((y - oy) / cover.cell_m))
+        col = math.floor((x - ox) / cover.cell_m)
+        row = math.floor((y - oy) / cover.cell_m)
         if 0 <= col < cover.cells and 0 <= row < cover.cells:
             z = float(cover.height[row, col])
             if z > OPEN_SKY_Z * 0.5:  # a real solid voxel (not the sentinel)

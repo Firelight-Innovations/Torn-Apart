@@ -44,7 +44,7 @@ from __future__ import annotations
 import threading
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 import numpy as np
 
@@ -194,7 +194,7 @@ class VolumeWindow:
         """World edge length of the window box in meters."""
         return self.cells * self.cell_m
 
-    def _desired_origin(self, camera_pos) -> tuple[int, int, int]:
+    def _desired_origin(self, camera_pos: Any) -> tuple[int, int, int]:
         """Snapped origin that centres the window on ``camera_pos``."""
         out = []
         for c in (camera_pos[0], camera_pos[1], camera_pos[2]):
@@ -203,7 +203,7 @@ class VolumeWindow:
             out.append(snapped)
         return (out[0], out[1], out[2])
 
-    def needs_recenter(self, camera_pos) -> bool:
+    def needs_recenter(self, camera_pos: Any) -> bool:
         """
         True when the camera has drifted past the hysteresis margin (or the
         window was never placed) — i.e. a reassembly *should* be scheduled.
@@ -223,7 +223,7 @@ class VolumeWindow:
                 return True
         return False
 
-    def recenter(self, camera_pos) -> bool:
+    def recenter(self, camera_pos: Any) -> bool:
         """
         Follow the camera; return True when the window moved.
 
@@ -309,9 +309,30 @@ def _downsample_chunk_block(mats: np.ndarray, k: int) -> tuple[np.ndarray, np.nd
     return material_id, solid_count
 
 
+def _get_chunk_block(
+    coord: tuple[int, int, int],
+    chunk: Any,
+    k: int,
+    cell_m: float,
+    cache: ChunkBlockCache | None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return the ``(material_id, solid_count)`` mini-block for one chunk.
+
+    Checks the cache first; falls back to computing and storing in cache.
+    """
+    use_cache = cache is not None and k > 1
+    blk = cache.get(coord, cell_m) if use_cache else None  # type: ignore[union-attr]  # guarded by use_cache
+    if blk is None:
+        mats = getattr(chunk, "materials", chunk)
+        blk = _downsample_chunk_block(mats, k)
+        if use_cache:
+            cache.put(coord, cell_m, blk)  # type: ignore[union-attr]  # guarded by use_cache
+    return blk
+
+
 def assemble_geometry(
     window: VolumeWindow,
-    chunks: dict,
+    chunks: dict[Any, Any],
     palette: MaterialPalette,
     chunk_size: int,
     voxel_size: float,
@@ -397,7 +418,7 @@ def assemble_geometry(
         raise ValueError(
             f"cell_m ({window.cell_m}) must be an integer multiple of voxel_size ({voxel_size})"
         )
-    k = int(round(k))
+    k = round(k)
     n = window.cells
     cells_per_chunk = chunk_size // k  # window cells per chunk edge
     if cells_per_chunk * k != chunk_size:
@@ -419,20 +440,7 @@ def assemble_geometry(
                 chunk = chunks.get(coord)
                 if chunk is None:
                     continue
-                # Per-chunk mini-blocks downsampled to this cell size.  A cache
-                # hit reuses them; a miss computes + stores them.  Only caches
-                # the coarse cascades (k > 1): at k == 1 the "block" aliases the
-                # live chunk array, and there's no downsample cost to amortise.
-                use_cache = cache is not None and k > 1
-                blk = cache.get(coord, window.cell_m) if use_cache else None
-                if blk is None:
-                    # Accept either a chunk object (.materials) or a bare
-                    # ndarray snapshot (async assembly worker passes the latter).
-                    mats = getattr(chunk, "materials", chunk)
-                    blk = _downsample_chunk_block(mats, k)
-                    if use_cache:
-                        cache.put(coord, window.cell_m, blk)
-                chunk_mat, chunk_cnt = blk
+                chunk_mat, chunk_cnt = _get_chunk_block(coord, chunk, k, window.cell_m, cache)
                 # Chunk extent in window-cell coordinates.
                 c0 = (ccx * cells_per_chunk, ccy * cells_per_chunk, ccz * cells_per_chunk)
                 # Overlap range in absolute cell coords.
@@ -498,15 +506,14 @@ def window_chunk_span(
         All ``(cx, cy, cz)`` chunk coords overlapping the window box.  Pure /
         deterministic; no chunk lookups (caller filters against loaded chunks).
     """
-    k = int(round(cell_m / voxel_size))
+    k = round(cell_m / voxel_size)
     cells_per_chunk = chunk_size // k
     lo = [int(np.floor(o / cells_per_chunk)) for o in origin_cell]
     hi = [int(np.floor((o + cells - 1) / cells_per_chunk)) for o in origin_cell]
     out: list[tuple[int, int, int]] = []
     for ccx in range(lo[0], hi[0] + 1):
         for ccy in range(lo[1], hi[1] + 1):
-            for ccz in range(lo[2], hi[2] + 1):
-                out.append((ccx, ccy, ccz))
+            out.extend((ccx, ccy, ccz) for ccz in range(lo[2], hi[2] + 1))
     return out
 
 
@@ -580,7 +587,7 @@ class ChunkBlockCache:
     def __init__(self, max_entries: int = 4096) -> None:
         self.max_entries = int(max_entries)
         # key: (coord, cell_m) -> (material_id, solid_count) read-only arrays.
-        self._store: OrderedDict[tuple, tuple[np.ndarray, np.ndarray]] = OrderedDict()
+        self._store: OrderedDict[tuple[Any, ...], tuple[np.ndarray, np.ndarray]] = OrderedDict()
         self._lock = threading.Lock()
 
     def get(

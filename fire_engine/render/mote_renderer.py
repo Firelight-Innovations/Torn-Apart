@@ -56,7 +56,7 @@ from __future__ import annotations
 from typing import Any
 
 # Panda3D imports allowed in world/ per ARCHITECTURE §3.
-from panda3d.core import (  # type: ignore[import]
+from panda3d.core import (
     BoundingBox,
     ColorBlendAttrib,
     Geom,
@@ -107,7 +107,6 @@ def _build_quad_geom() -> Geom:
     vdata.set_num_rows(4)
     vw = GeomVertexWriter(vdata, "vertex")
     tw = GeomVertexWriter(vdata, "texcoord")
-    # (-1,-1) (1,-1) (1,1) (-1,1)
     corners = (
         (-1.0, -1.0, 0.0, 0.0),
         (1.0, -1.0, 1.0, 0.0),
@@ -125,10 +124,10 @@ def _build_quad_geom() -> Geom:
     return geom
 
 
-def _mote_texture(name: str):
+def _mote_texture(name: str) -> Any:
     """The procedural ``name`` texture as a Panda3D texture (linear-filtered
     so the soft dust falloff / leaf edges don't look chunky billboarded)."""
-    from panda3d.core import SamplerState  # type: ignore[import]
+    from panda3d.core import SamplerState
 
     from fire_engine.procedural import get as get_procedural
     from fire_engine.render.texture_bridge import to_panda_texture
@@ -348,6 +347,7 @@ class LeafLitterComponent(Component):
             node.remove_node()
         self._volume_nodes.clear()
 
+        assert self._root is not None
         cfg = self.base._config
         total = 0
         for vol in self.zone_store.volumes("trees"):

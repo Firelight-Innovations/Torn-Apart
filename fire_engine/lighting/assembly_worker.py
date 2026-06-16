@@ -39,6 +39,7 @@ from __future__ import annotations
 import queue
 import threading
 from dataclasses import dataclass
+from typing import Any
 
 from fire_engine.core import get_logger
 from fire_engine.lighting.occluders import TreeOccluderSet
@@ -100,7 +101,7 @@ class AssemblyJob:
     cell_m: float
     chunk_size: int
     voxel_size: float
-    materials: dict
+    materials: dict[tuple[int, int, int], Any]
     palette: MaterialPalette
     seq: int
     occluders: TreeOccluderSet | None = None

@@ -70,14 +70,19 @@ def stream_and_upload_terrain(self_obj: App) -> None:
     Drive chunk streaming and sync produced meshes to the scene graph.
 
     Per frame (when a ``chunk_manager`` is injected):
-      1. ``stream_frame(camera_pos, light_sampler)`` — loads/meshes ≤2 chunks
-         near the camera and remeshes dirty (edited/relit) chunks, populating
-         ``pending_meshes`` and ``unloaded_this_frame``.
-      2. Drain ``pending_meshes``: convert each ``MeshArrays`` to a GeomNode
-         (bulk-write Geom) and parent it under ``terrain_root``.  Mesh
-         positions are absolute world meters, so the NodePath is placed at the
-         origin (no offset).  Any existing NodePath for that coord is detached
-         first (remesh replaces stale geometry).
+      1. Stream around the camera.  If an async ``lod_streamer`` is wired,
+         ``lod_streamer.stream_frame(camera_pos)`` drains finished off-thread
+         meshes into ``pending_meshes`` and submits fresh jobs (Hard Rule 12);
+         otherwise the synchronous ``cm.stream_frame(camera_pos, light_sampler)``
+         meshes ≤2 chunks on the main thread (baked-light / editor path).  Both
+         populate ``pending_meshes`` and ``unloaded_this_frame``.
+      2. Drain ``pending_meshes`` **nearest-first**, uploading at most
+         ``config.lod_max_uploads_per_frame`` this frame (leftovers wait for the
+         next frame, capping per-frame GPU upload cost): convert each
+         ``MeshArrays`` to a GeomNode (bulk-write Geom) and parent it under
+         ``terrain_root``.  Mesh positions are absolute world meters, so the
+         NodePath is placed at the origin (no offset).  Any existing NodePath
+         for that coord is detached first (remesh replaces stale geometry).
       3. Drain ``unloaded_this_frame``: detach + forget those coords' Geoms.
 
     All scene-graph writes are bulk Geom uploads (Hard Rule 7); no per-vertex
@@ -94,11 +99,26 @@ def stream_and_upload_terrain(self_obj: App) -> None:
     # constructs a bare App.
     from fire_engine.render.bridges.geometry_bridge import to_geom_node
 
-    # 1. Stream around the camera (light_sampler may be None → full-bright).
-    cm.stream_frame(self_obj.camera_go.transform.position, self_obj.light_sampler)
+    pos = self_obj.camera_go.transform.position
 
-    # 2. Upload freshly produced meshes.  Copy keys first: we mutate the dict.
-    for coord in list(cm.pending_meshes.keys()):
+    # 1. Stream around the camera.  Async streamer (off-thread meshing) when
+    #    wired; else the synchronous main-thread path (light_sampler may be
+    #    None → full-bright).
+    if getattr(self_obj, "lod_streamer", None) is not None:
+        self_obj.lod_streamer.stream_frame(pos)
+    else:
+        cm.stream_frame(pos, self_obj.light_sampler)
+
+    # 2. Upload freshly produced meshes, nearest-first, capped per frame.
+    #    Leftovers stay in pending_meshes for a later frame.
+    ccx, ccy, ccz = (int(v) for v in cm.camera_chunk(pos))
+
+    def _dist2(coord: tuple[int, int, int]) -> int:
+        return (coord[0] - ccx) ** 2 + (coord[1] - ccy) ** 2 + (coord[2] - ccz) ** 2
+
+    max_uploads = int(cm.config.lod_max_uploads_per_frame)
+    ready = sorted(cm.pending_meshes.keys(), key=_dist2)[:max_uploads]
+    for coord in ready:
         mesh = cm.pending_meshes.pop(coord)
         # Replace any stale NodePath for this coord (remesh after a brush edit).
         old = self_obj._chunk_nodes.pop(coord, None)

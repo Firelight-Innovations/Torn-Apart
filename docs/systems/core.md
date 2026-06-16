@@ -347,6 +347,10 @@ dataclass default.  Instantiate via `load_config(path)`.
 | `mesh_style` | str | "faceted" | Terrain mesher: "faceted" (flat-shaded surface nets — the Daggerfall-ish semi-smooth look, default) or "blocky" (classic culled-face cubes). |
 | `facet_shade_strength` | float | 0.25 | [0,1] strength of the faceted mesher's normal-based facet accent shading (0 = off). |
 | `ground_texels_per_m` | float | 16.0 | Virtual texels per world meter for the GPU terrain shader's world-space procedural ground pattern (non-repeating pixel art); ~16 → 0.0625 m texels matching the voxel grid. |
+| `lod_streaming_enabled` | bool | true | Use the off-thread `LodStreamer` path (`world/terrain/lod/streamer.py`) instead of the synchronous `ChunkManager.stream_frame`. Scheduling only — mesh output is byte-identical either way. |
+| `lod_worker_threads` | int | 4 | Worker thread count for `TerrainLodPool` (off-main-thread chunk meshing, Hard Rule 12). |
+| `lod_submit_per_frame` | int | 16 | Max chunk mesh jobs the `LodStreamer` submits per `stream_frame` (dirty-first, then nearest missing). |
+| `lod_max_uploads_per_frame` | int | 8 | Max finished meshes uploaded to the scene graph per frame (nearest-first); leftovers wait for the next frame. |
 
 ### Lighting fields (from `[lighting]` table)
 

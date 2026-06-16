@@ -12,10 +12,9 @@ Responsibilities
   loaded for a camera position (XY radius + a fixed Z band).  Independently
   testable, no side effects.
 - ``stream_frame(camera_pos)`` — load/generate/mesh **at most 2 chunks per
-  frame** (nearest-first), unload chunks beyond ``radius + 1`` (hysteresis so
-  chunks don't thrash at the boundary).  Publishes ``ChunkLoadedEvent`` /
-  ``ChunkUnloadedEvent``.  Stores produced ``MeshArrays`` in ``pending_meshes``
-  for the World layer to upload via ``world/geometry_bridge.py``.
+  frame** (nearest-first), unload beyond ``radius + 1`` (hysteresis) via
+  ``_unload_far``.  Publishes ``ChunkLoadedEvent`` / ``ChunkUnloadedEvent``.
+  Stores produced ``MeshArrays`` in ``pending_meshes`` for the World layer.
 - ``get_or_create(coord)`` — the provider used by brush/raycast.
 - ``Saveable`` — ``get_delta()`` returns ``{coord: materials}`` for edited
   chunks only; ``apply_delta(delta)`` overlays saved materials onto freshly
@@ -285,16 +284,15 @@ class ChunkManager:
         ``stream_frame``'s 2-chunk budget is sized for background world
         loading; a brush edit (explosion crater) routed through it appears
         over several frames — and until a border neighbour remeshes, the
-        faces the edit newly exposed in it don't exist yet, so the player
-        sees a hole through the world.  Call this right after ``apply_brush``
-        with its returned coord set to make the whole edit appear the same
+        newly-exposed faces in it don't exist yet, so the player sees a hole
+        through the world.  Call this right after ``apply_brush`` with its
+        returned coord set to make the whole edit appear the same
         frame (typical cost: 1–4 chunks ≈ 10–30 ms, an acceptable one-frame
         hitch for a discrete edit).
 
         Remeshes every still-``dirty`` loaded chunk in ``coords`` plus their
-        26-neighbourhood (``apply_brush`` border-flags neighbours as plain
-        ``dirty``).  Untouched dirty chunks elsewhere (e.g. an F9 load) stay
-        on the budgeted ``stream_frame`` path.
+        26-neighbourhood.  Untouched dirty chunks elsewhere (e.g. an F9 load)
+        stay on the budgeted ``stream_frame`` path.
 
         Parameters
         ----------
@@ -340,15 +338,13 @@ class ChunkManager:
         Behaviour
         ---------
         - **Re-meshes dirty loaded chunks FIRST** (within the 2-chunk budget):
-          dirty means a brush edit or a relight the player is looking at, so
-          it must never be starved by world loading.  (With ~1.2k chunks in
-          the desired set, loading takes hundreds of frames — if loads ran
-          first, a crater would stay invisible for minutes.)
-        - Then loads + meshes the desired but not-yet-loaded chunks with the
-          remaining budget, nearest-first.
-        - Unloads loaded chunks beyond ``view_distance_chunks + 1`` (XY) —
-          hysteresis prevents boundary thrash.  Edited chunks are kept in the
-          delta via ``get_delta`` regardless (they are still removed from RAM).
+          dirty means a brush edit/relight the player is looking at, so it must
+          never be starved by world loading (loading the ~1.2k-chunk desired
+          set takes hundreds of frames).
+        - Then loads + meshes the nearest not-yet-loaded desired chunks with the
+          remaining budget.
+        - Unloads via :meth:`_unload_far` (hysteresis prevents boundary thrash;
+          edited chunks stay in the save delta via ``get_delta`` regardless).
         Docs: docs/systems/world.terrain.md
         """
         self.unloaded_this_frame = []
@@ -383,6 +379,16 @@ class ChunkManager:
                 budget -= 1
 
         # 3. Unload chunks beyond radius + 1 (hysteresis).
+        self._unload_far((ccx, ccy, ccz))
+
+    def _unload_far(self, camera_chunk: tuple[int, int, int]) -> None:
+        """Unload chunks beyond ``view_distance_chunks + 1`` (XY) / the Z band.
+
+        Drops them from ``self.chunks`` + ``pending_meshes``, records them in
+        ``unloaded_this_frame``, publishes ``ChunkUnloadedEvent``.  Shared by the
+        sync ``stream_frame`` and the async ``LodStreamer``. Docs: docs/systems/world.terrain.md
+        """
+        ccx, ccy, ccz = camera_chunk
         r = int(self.config.view_distance_chunks) + 1
         to_unload = []
         for coord in self.chunks:
@@ -427,9 +433,8 @@ class ChunkManager:
 
         Notes
         -----
-        Only *loaded* chunks are reset.  Unloaded chunks already hold no edits in
-        RAM — they regenerate from seed (baseline) on their next
-        ``get_or_create``, so they need no explicit reset.
+        Only *loaded* chunks are reset.  Unloaded chunks hold no edits in RAM —
+        they regenerate from seed on their next ``get_or_create`` (no reset).
 
         No window / GPU required; headless-testable.
         Docs: docs/systems/world.terrain.md

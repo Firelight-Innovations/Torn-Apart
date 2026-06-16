@@ -27,11 +27,24 @@ All symbols below are re-exported from `fire_engine.world.terrain.lod` (`__init_
 | `LodResult(coord, mesh, seq)` | Frozen result: the produced `MeshArrays`, the originating `coord`, and `seq`. |
 | `build_lod_mesh(job) -> LodResult` | PURE transform: rebuild `Chunk`, run the configured mesher (`light_sampler=None`), wrap as `LodResult`. |
 | `TerrainLodPool(n_workers)` | `WorkerPool[LodJob, LodResult]` subclass; `start`/`submit`/`drain_results`/`pending`/`stop`. `_process` runs `build_lod_mesh`; `_on_error` posts an empty-mesh sentinel. |
+| `LodStreamer(chunk_manager, pool, config)` | Async streaming driver (`streamer.py`). `stream_frame(camera_pos)` drains finished meshes into `chunk_manager.pending_meshes` and submits a bounded batch of fresh jobs (dirty-first, then nearest missing). Owns the per-coord `seq` staleness map. Off-thread counterpart of `ChunkManager.stream_frame`; no panda3d. |
+
+## Streaming (`LodStreamer`)
+
+`LodStreamer` (in `terrain/lod/streamer.py`) is the integration that turns the pure pool into an async replacement for `ChunkManager.stream_frame`. It is the ONE place that owns the snapshot/`seq` plumbing the rest of the package deliberately omits. Each `stream_frame(camera_pos)`:
+
+1. **Drains** `pool.drain_results()`: a `LodResult` is kept only if `coord in chunk_manager.chunks` **and** `result.seq == self._node_seq[coord]` (the latest submitted seq for that coord). Kept meshes go into `chunk_manager.pending_meshes`; stale/unloaded results are dropped. Newest-wins, order-independent.
+2. Resets `unloaded_this_frame`, computes `desired_set` + `camera_chunk`.
+3. **Submits** up to `config.lod_submit_per_frame` jobs: **dirty loaded chunks first** (nearest-first), then **nearest missing desired** chunks (`get_or_create` + publish `ChunkLoadedEvent`). For each, it builds a job via `_make_job` (which bumps `seq`, records `_node_seq[coord]`, copies `materials` and copies each non-`str` neighbour array from `ChunkManager._neighbor_materials`/`_neighbor_solids`), `pool.submit(job)`, and clears `chunk.dirty` (so it isn't resubmitted next frame — a later brush re-dirties → fresh `seq` → newest wins).
+4. Calls `ChunkManager._unload_far(camera_chunk)` (shared with the sync path), then prunes `_node_seq` of any coord no longer loaded.
+
+The synchronous `ChunkManager.stream_frame` path stays intact (backward-compat for the headless suite + the baked-light/editor case). `app_terrain.stream_and_upload_terrain` branches to `LodStreamer` when `app.lod_streamer is not None`, and budgets the upload drain to `config.lod_max_uploads_per_frame` nearest-first.
 
 ## Imports Allowed
 
-- `fire_engine.core` (logger) and `fire_engine.core._impl.worker_pool` (`WorkerPool` base).
+- `fire_engine.core` (logger, `ChunkLoadedEvent`) and `fire_engine.core._impl.worker_pool` (`WorkerPool` base).
 - `fire_engine.world.terrain.chunk` (`Chunk`), `fire_engine.world.terrain.meshing` (`MeshArrays`, `build_mesh`), `fire_engine.world.terrain.surface_nets` (`build_mesh_faceted`).
+- `LodStreamer` additionally references `ChunkManager` and `Config` (under `TYPE_CHECKING` only, to avoid an import cycle) and reads `Config.lod_submit_per_frame`.
 - **Never** panda3d (Hard Rule 1). No imports from `render/`, `lighting/`, or `simulation/`.
 
 ## Events

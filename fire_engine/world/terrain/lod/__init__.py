@@ -17,10 +17,16 @@ meshing runs on a worker pool).  It owns:
   synchronously.
 - :class:`TerrainLodPool` — the :class:`~fire_engine.core._impl.worker_pool.WorkerPool`
   subclass that fans :class:`LodJob`\\ s across N worker threads.
+- :class:`LodStreamer` — the async streaming driver: each frame it drains finished
+  meshes from a :class:`TerrainLodPool` into the ``ChunkManager``'s
+  ``pending_meshes`` and submits a bounded batch of fresh jobs (dirty-first, then
+  nearest missing), owning the per-coord ``seq`` staleness authority.  It is the
+  off-thread counterpart of ``ChunkManager.stream_frame``.
 
-The snapshot/seq plumbing in ``chunk_manager.py`` (which copies the arrays and
-assigns ``seq``) is integration and lives elsewhere; this package is the
-independently-testable core.
+The neighbour-snapshotting still lives in ``chunk_manager.py``
+(``_neighbor_materials`` / ``_neighbor_solids``); :class:`LodStreamer` copies what
+those return and assigns the ``seq``.  ``build_lod_mesh`` + the pool remain the
+independently-testable, panda3d-free core.
 
 Docs: docs/systems/world.terrain.lod.md
 """
@@ -29,6 +35,7 @@ from __future__ import annotations
 
 from fire_engine.world.terrain.lod.job import build_lod_mesh
 from fire_engine.world.terrain.lod.pool import TerrainLodPool
+from fire_engine.world.terrain.lod.streamer import LodStreamer
 from fire_engine.world.terrain.lod.types import LodJob, LodResult
 
-__all__ = ["LodJob", "LodResult", "TerrainLodPool", "build_lod_mesh"]
+__all__ = ["LodJob", "LodResult", "LodStreamer", "TerrainLodPool", "build_lod_mesh"]

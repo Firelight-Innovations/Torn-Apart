@@ -11,6 +11,8 @@ rain over mere cloud cover).
 :class:`WeatherType` keeps the **exact** string values the old Markov system
 used (``"clear"``…``"storm"``) so every existing consumer — devtools, F6
 cycling, save deltas — keeps working unchanged.
+
+Docs: docs/systems/world.weather.md
 """
 
 from __future__ import annotations
@@ -24,11 +26,13 @@ if TYPE_CHECKING:  # avoid a runtime import cycle
 __all__ = ["WeatherType", "classify"]
 
 
-class WeatherType(str, Enum):
+class WeatherType(str, Enum):  # noqa: UP042 — test_weather_classify pins str() == "WeatherType.X" behavior
     """
     Discrete weather label.  ``str`` mixin so ``.value`` round-trips through
     saves and :class:`WeatherChangedEvent` payloads as a plain string.  Values
     are identical to the legacy Markov system — do not renumber.
+
+    Docs: docs/systems/world.weather.md
     """
 
     CLEAR = "clear"
@@ -66,6 +70,8 @@ def classify(lw: LocalWeather) -> WeatherType:
     >>> from fire_engine.world.weather.system import LocalWeather
     >>> classify(LocalWeather(0.9, 0.9, 0.0, 0.8, (1.0, 0.0), 11.0)).value
     'storm'
+
+    Docs: docs/systems/world.weather.md
     """
     if lw.fog_density > 0.008:
         return WeatherType.FOG

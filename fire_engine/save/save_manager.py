@@ -99,22 +99,29 @@ Example
 
     # Load (fresh world same seed — baseline regen happens inside apply_delta)
     sm.load("saves/quick.ta")
+
+Docs: docs/systems/save.md
 """
 
 from __future__ import annotations
 
-import hashlib
 import os
 import zlib
 from pathlib import Path
 from typing import Any
 
-import msgpack
-import numpy as np
+import msgpack  # type: ignore[import-untyped]  # msgpack has no py.typed or stubs
 
 from fire_engine.core.clock import Clock
 from fire_engine.core.config import Config
 from fire_engine.core.log import get_logger
+from fire_engine.save._codec import (
+    compute_config_digest,
+    decode_delta,
+    decode_value,
+    encode_delta,
+    encode_value,
+)
 from fire_engine.save.saveable import Saveable, SaveIncompatibleError
 
 _log = get_logger("save.save_manager")
@@ -122,181 +129,15 @@ _log = get_logger("save.save_manager")
 # Bump this only when the on-disk layout changes in a backward-incompatible way.
 _FORMAT_VERSION: int = 1
 
-# blake2b digest size in bytes for the config digest (16 bytes = 32 hex chars).
-_CONFIG_DIGEST_SIZE: int = 16
-
-
 # ---------------------------------------------------------------------------
-# Config digest
+# Re-exports for backward-compatible private import paths
+# (tests historically import these private names directly from save_manager)
 # ---------------------------------------------------------------------------
-
-
-def _compute_config_digest(config: Config) -> str:
-    """
-    Compute a stable blake2b hex digest of the config fields that affect
-    world generation / save compatibility.
-
-    Fields included: ``world_seed``, ``voxel_size``, ``chunk_size``,
-    ``light_grid_scale``.  Debug flags and view_distance_chunks are excluded
-    (changing them does not invalidate a save file).
-
-    Parameters
-    ----------
-    config : Config
-        The current engine config.
-
-    Returns
-    -------
-    str
-        32-character lowercase hex string.
-    """
-    canonical = (
-        f"{config.world_seed}:{config.voxel_size}:{config.chunk_size}:{config.light_grid_scale}"
-    )
-    return hashlib.blake2b(
-        canonical.encode("ascii"),
-        digest_size=_CONFIG_DIGEST_SIZE,
-    ).hexdigest()
-
-
-# ---------------------------------------------------------------------------
-# Numpy + tuple-key msgpack encoding
-# ---------------------------------------------------------------------------
-
-_NDARRAY_TAG = "__ndarray__"
-_DELTA_KV_TAG = "__delta_type__"
-
-
-def _encode_value(obj: Any) -> Any:
-    """
-    Recursively encode a value so it is msgpack-serialisable.
-
-    Transforms:
-    - ``numpy.ndarray`` → ``[_NDARRAY_TAG, dtype_str, shape_list, raw_bytes]``
-    - ``dict`` with non-string keys → ``{_DELTA_KV_TAG: "kv_pairs", "pairs": [...]}``
-    - ``dict`` with string keys → encode values recursively
-    - ``list`` / ``tuple`` → encode elements recursively (tuples become lists)
-    - primitives (int, float, str, bool, None) → pass through
-
-    Parameters
-    ----------
-    obj : Any
-        The object to encode.
-
-    Returns
-    -------
-    Any
-        A msgpack-serialisable representation.
-    """
-    if isinstance(obj, np.ndarray):
-        return [_NDARRAY_TAG, str(obj.dtype), list(obj.shape), obj.tobytes()]
-    if isinstance(obj, dict):
-        # Check if any key is non-string (e.g. tuple key for chunk coords)
-        if obj and not all(isinstance(k, str) for k in obj):
-            pairs = [[_encode_value(k), _encode_value(v)] for k, v in obj.items()]
-            return {_DELTA_KV_TAG: "kv_pairs", "pairs": pairs}
-        return {k: _encode_value(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
-        return [_encode_value(x) for x in obj]
-    # Primitives: int, float, str, bool, None, bytes
-    return obj
-
-
-def _decode_value(obj: Any) -> Any:
-    """
-    Recursively decode a value produced by :func:`_encode_value`.
-
-    Inverse transforms:
-    - ``[_NDARRAY_TAG, ...]`` → ``numpy.ndarray``
-    - ``{_DELTA_KV_TAG: "kv_pairs", ...}`` → dict with tuple keys
-    - dicts with string keys → decode values recursively
-    - lists → decode elements recursively
-
-    Parameters
-    ----------
-    obj : Any
-        Object as decoded from msgpack.
-
-    Returns
-    -------
-    Any
-        The original Python / numpy value.
-    """
-    if isinstance(obj, list):
-        # Check for numpy array tag
-        if (
-            len(obj) == 4
-            and isinstance(obj[0], (str, bytes))
-            and (obj[0] == _NDARRAY_TAG or obj[0] == _NDARRAY_TAG.encode())
-        ):
-            tag, dtype_str, shape, raw = obj
-            if isinstance(dtype_str, bytes):
-                dtype_str = dtype_str.decode()
-            return np.frombuffer(raw, dtype=np.dtype(dtype_str)).reshape(shape)
-        return [_decode_value(x) for x in obj]
-    if isinstance(obj, dict):
-        # Decode bytes keys (msgpack may return bytes for string keys)
-        decoded_dict: dict = {}
-        for k, v in obj.items():
-            if isinstance(k, bytes):
-                k = k.decode()
-            decoded_dict[k] = v
-        obj = decoded_dict
-
-        delta_type = obj.get(_DELTA_KV_TAG)
-        if delta_type == "kv_pairs":
-            result: dict = {}
-            for pair in obj["pairs"]:
-                key = _decode_value(pair[0])
-                val = _decode_value(pair[1])
-                # If key decoded to a list (was a tuple), convert to tuple
-                if isinstance(key, list):
-                    key = tuple(int(x) for x in key)
-                result[key] = val
-            return result
-        return {k: _decode_value(v) for k, v in obj.items()}
-    return obj
-
-
-def _encode_delta(delta: dict) -> bytes:
-    """
-    Encode a system delta dict to msgpack bytes.
-
-    Parameters
-    ----------
-    delta : dict
-        As returned by ``Saveable.get_delta()``.
-
-    Returns
-    -------
-    bytes
-        Raw msgpack-encoded bytes (not compressed).
-    """
-    encoded = _encode_value(delta)
-    return msgpack.packb(encoded, use_bin_type=True)
-
-
-def _decode_delta(data: bytes) -> dict:
-    """
-    Decode a system delta from raw msgpack bytes.
-
-    Parameters
-    ----------
-    data : bytes
-        As produced by :func:`_encode_delta`.
-
-    Returns
-    -------
-    dict
-        The original delta as passed to :func:`_encode_delta`.
-    """
-    raw = msgpack.unpackb(data, raw=False)
-    return _decode_value(raw)
-
-
-# ---------------------------------------------------------------------------
-# SaveManager
-# ---------------------------------------------------------------------------
+_compute_config_digest = compute_config_digest  # backward-compat re-export
+_encode_delta = encode_delta  # backward-compat re-export
+_decode_delta = decode_delta  # backward-compat re-export
+_encode_value = encode_value  # backward-compat re-export
+_decode_value = decode_value  # backward-compat re-export
 
 
 class SaveManager:
@@ -364,6 +205,8 @@ class SaveManager:
     >>> sm.register(cm)
     >>> sm.save("/tmp/test.ta")
     >>> sm.load("/tmp/test.ta")
+
+    Docs: docs/systems/save.md
     """
 
     def __init__(self, config: Config, clock: Clock) -> None:
@@ -388,6 +231,8 @@ class SaveManager:
         ------
         TypeError
             If ``saveable`` does not satisfy the Saveable protocol.
+
+        Docs: docs/systems/save.md
         """
         if not isinstance(saveable, Saveable):
             raise TypeError(
@@ -397,7 +242,7 @@ class SaveManager:
         self._saveables.append(saveable)
         _log.debug("Registered saveable %r", saveable.save_key)
 
-    def save(self, path: str | os.PathLike) -> None:
+    def save(self, path: str | os.PathLike[str]) -> None:
         """
         Save the world to disk as a header + compressed per-system delta blobs.
 
@@ -431,6 +276,8 @@ class SaveManager:
         ------
         OSError
             If the parent directory is not writable.
+
+        Docs: docs/systems/save.md
         """
         path = Path(path)
         tmp_path = path.with_suffix(path.suffix + ".tmp")
@@ -439,7 +286,7 @@ class SaveManager:
         header = {
             "format_version": _FORMAT_VERSION,
             "world_seed": self.config.world_seed,
-            "config_digest": _compute_config_digest(self.config),
+            "config_digest": compute_config_digest(self.config),
             "game_clock": self.clock.get_state(),
         }
 
@@ -447,7 +294,7 @@ class SaveManager:
         systems: dict[str, bytes] = {}
         for sv in self._saveables:
             delta = sv.get_delta()
-            raw_msgpack = _encode_delta(delta)
+            raw_msgpack = encode_delta(delta)
             compressed = zlib.compress(raw_msgpack)
             systems[sv.save_key] = compressed
             _log.debug(
@@ -471,7 +318,7 @@ class SaveManager:
 
         _log.info("Saved world to %s (%d bytes)", path, len(data))
 
-    def load(self, path: str | os.PathLike) -> None:
+    def load(self, path: str | os.PathLike[str]) -> None:
         """
         Load a save file, validate the header, and apply deltas.
 
@@ -501,6 +348,8 @@ class SaveManager:
             If the save cannot be loaded (version / seed / digest mismatch).
         FileNotFoundError
             If ``path`` does not exist.
+
+        Docs: docs/systems/save.md
         """
         path = Path(path)
         raw_data = path.read_bytes()
@@ -512,7 +361,7 @@ class SaveManager:
 
         header_raw = envelope.get("header", {})
         if isinstance(header_raw, dict):
-            header: dict = {
+            header: dict[str, Any] = {
                 (k.decode() if isinstance(k, bytes) else k): v for k, v in header_raw.items()
             }
         else:
@@ -543,7 +392,7 @@ class SaveManager:
             )
 
         saved_digest = header.get("config_digest")
-        current_digest = _compute_config_digest(self.config)
+        current_digest = compute_config_digest(self.config)
         if saved_digest != current_digest:
             raise SaveIncompatibleError(
                 f"Save file config_digest={saved_digest!r} does not match the "
@@ -557,7 +406,7 @@ class SaveManager:
         # 1. Restore clock from header (authoritative per §4a.4).
         clock_state_raw = header.get("game_clock", {})
         if isinstance(clock_state_raw, dict):
-            clock_state: dict = {
+            clock_state: dict[str, Any] = {
                 (k.decode() if isinstance(k, bytes) else k): v for k, v in clock_state_raw.items()
             }
         else:
@@ -574,7 +423,7 @@ class SaveManager:
                 )
                 continue
             decompressed = zlib.decompress(blob)
-            delta = _decode_delta(decompressed)
+            delta = decode_delta(decompressed)
             sv.apply_delta(delta)
             _log.debug(
                 "load: applied delta for %r (%d entries)",

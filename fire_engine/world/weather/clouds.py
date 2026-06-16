@@ -53,17 +53,23 @@ size the three-band renderer can actually express without a ninth code.)
 
 Units: altitudes/thicknesses in **meters (world Z)**, all weights/scales 0–1
 or 1/m as noted.  Z-up.
+
+Docs: docs/systems/world.weather.md
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import Enum
+from typing import cast
 
 import numpy as np
 
 from fire_engine.core.config import Config
-from fire_engine.world.weather.cells import Regime
+from fire_engine.world.weather.types import (  # re-exported below
+    CloudBand,
+    CloudGenus,
+    CloudLayers,
+    Regime,
+)
 
 __all__ = [
     "BAND_HIGH",
@@ -76,45 +82,9 @@ __all__ = [
     "cloud_layers",
 ]
 
-
-class CloudGenus(str, Enum):
-    """
-    The WMO cloud genera this model expresses.  ``str`` mixin so ``.value``
-    round-trips through events/UI as a plain string (mirrors the
-    :class:`~fire_engine.world.weather.CellKind` / :class:`WeatherType` convention).
-
-    The genera are grouped by altitude band (see :data:`BAND_OF`):
-
-    CIRRUS / CIRROSTRATUS
-        **High** band (~6–8 km scaled): thin, ice-crystal clouds.  CIRRUS is
-        wispy stretched streaks; CIRROSTRATUS is a full-sky thin veil.
-    ALTOCUMULUS / ALTOSTRATUS
-        **Mid** band (~2.5–4 km scaled): ALTOCUMULUS is broken lumpy patches,
-        ALTOSTRATUS a featureless grey mid-level sheet.
-    STRATOCUMULUS / STRATUS / CUMULUS / CUMULONIMBUS
-        **Low** band (~0.5–2 km scaled): STRATOCUMULUS lumpy low sheet,
-        STRATUS a flat low sheet (also the rain-layer / nimbostratus role at
-        high precip), CUMULUS fair-weather → towering heaps, CUMULONIMBUS the
-        storm tower with a dark rain base and an anvil top.
-    """
-
-    CIRRUS = "cirrus"
-    CIRROSTRATUS = "cirrostratus"
-    ALTOCUMULUS = "altocumulus"
-    ALTOSTRATUS = "altostratus"
-    STRATOCUMULUS = "stratocumulus"
-    STRATUS = "stratus"
-    CUMULUS = "cumulus"
-    CUMULONIMBUS = "cumulonimbus"
-
-
-class CloudBand(int, Enum):
-    """Altitude band a genus lives in.  ``int`` so it indexes layer arrays."""
-
-    HIGH = 0
-    MID = 1
-    LOW = 2
-
+# CloudGenus, CloudBand, and CloudLayers are defined in types.py and
+# re-exported here for backward-compatible imports.  The structure checker
+# counts only ``class X:`` *definitions*; these imports do not count.
 
 #: Stable band index constants (also the GPU band order: 0=high, 1=mid, 2=low).
 BAND_HIGH: int = int(CloudBand.HIGH)
@@ -134,62 +104,7 @@ BAND_OF: dict[CloudGenus, CloudBand] = {
 }
 
 
-@dataclass(frozen=True)
-class CloudLayers:
-    """
-    Per-band layer parameters for one weather sample — what the renderer needs
-    to draw three altitude bands with genus-appropriate look.
-
-    All arrays are length-3, indexed by :class:`CloudBand` (0=high, 1=mid,
-    2=low), so the whole struct is a fixed-shape, GPU-friendly bundle.  A band
-    with ``coverage[b] == 0`` is simply not drawn.
-
-    Attributes
-    ----------
-    genus_high, genus_mid, genus_low : CloudGenus
-        The dominant genus chosen for each band (the band's *name*; the
-        renderer reads the numeric params, this is for UI / tests / docs).
-    base_altitude_m : np.ndarray, shape (3,), float64
-        World-Z base altitude (meters) of each band's cloud slab.  Strictly
-        increasing (low < mid < high) — an invariant the tests pin.
-    thickness_m : np.ndarray, shape (3,), float64
-        Vertical thickness (meters) of each band's slab.
-    coverage : np.ndarray, shape (3,), float64
-        0–1 sky-fill weight per band: how much of that band is filled.  This
-        is the per-band coverage the renderer thresholds against.
-    density : np.ndarray, shape (3,), float64
-        0–1 opacity per band (high cirrus is thin → low; low storm → high).
-    detail_scale : np.ndarray, shape (3,), float64
-        Relative turbulence / detail frequency per band (cirrus stretched and
-        smooth → low; cumulus billowy → high).  A multiplier on the renderer's
-        base noise frequency.
-
-    Example
-    -------
-    >>> from fire_engine.core import load_config
-    >>> from fire_engine.world.weather.cells import Regime
-    >>> L = cloud_layers(0.9, 0.9, 1.0, Regime.FRONTAL, load_config())
-    >>> L.genus_low.value
-    'cumulonimbus'
-    >>> bool(L.base_altitude_m[0] > L.base_altitude_m[2])   # high above low
-    True
-    """
-
-    genus_high: CloudGenus
-    genus_mid: CloudGenus
-    genus_low: CloudGenus
-    base_altitude_m: np.ndarray
-    thickness_m: np.ndarray
-    coverage: np.ndarray
-    density: np.ndarray
-    detail_scale: np.ndarray
-
-    def genus_for_band(self, band: CloudBand | int) -> CloudGenus:
-        """The chosen genus for *band* (0=high, 1=mid, 2=low)."""
-        return (self.genus_high, self.genus_mid, self.genus_low)[int(band)]
-
-
-def _smoothstep(x: np.ndarray, lo: float, hi: float) -> np.ndarray:
+def _smoothstep(x: float | np.ndarray, lo: float, hi: float) -> np.ndarray:
     """Vectorised Hermite smoothstep clamped to [0, 1]."""
     if hi <= lo:
         return np.where(np.asarray(x) < lo, 0.0, 1.0)
@@ -198,11 +113,11 @@ def _smoothstep(x: np.ndarray, lo: float, hi: float) -> np.ndarray:
 
 
 def classify_genus(
-    coverage,
-    density,
-    precip,
+    coverage: float | np.ndarray,
+    density: float | np.ndarray,
+    precip: float | np.ndarray,
     regime: Regime,
-):
+) -> tuple[CloudGenus, CloudGenus, CloudGenus] | tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Discrete dominant genus per band from a continuous weather sample.
 
@@ -244,6 +159,8 @@ def classify_genus(
     Returns
     -------
     tuple | (ndarray, ndarray, ndarray) — (high, mid, low) genus per band.
+
+    Docs: docs/systems/world.weather.md
     """
     cov = np.asarray(coverage, dtype=np.float64)
     den = np.asarray(density, dtype=np.float64)
@@ -349,12 +266,15 @@ def cloud_layers(
     True
     >>> float(L.density[0]) < 0.5         # cirrus is always thin
     True
+
+    Docs: docs/systems/world.weather.md
     """
     cov = float(np.clip(coverage, 0.0, 1.0))
     den = float(np.clip(density, 0.0, 1.0))
     pre = float(np.clip(precip, 0.0, 1.0))
 
-    g_high, g_mid, g_low = classify_genus(cov, den, pre, regime)
+    _genus = cast(tuple[CloudGenus, CloudGenus, CloudGenus], classify_genus(cov, den, pre, regime))
+    g_high, g_mid, g_low = _genus
     base_alt, thick = _band_altitudes(config)
 
     w_high = float(config.cloud_genera_high_cov_weight)

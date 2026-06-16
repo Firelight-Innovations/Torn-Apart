@@ -53,6 +53,8 @@ Example
     assert t.ticks == 1
 
     ComponentRegistry.clear()           # reset for next test
+
+Docs: docs/systems/render.md
 """
 
 from __future__ import annotations
@@ -82,13 +84,12 @@ if TYPE_CHECKING:
     from fire_engine.core.clock import Clock
     from fire_engine.render.component import Component
     from fire_engine.render.gameobject import GameObject
+    from fire_engine.render.transform import Transform
 
 T = TypeVar("T")
 
 
-# ---------------------------------------------------------------------------
 # _RegistryState — all mutable singleton state in one object (easy to clear)
-# ---------------------------------------------------------------------------
 
 
 class _RegistryState:
@@ -114,9 +115,7 @@ class _RegistryState:
 _STATE: _RegistryState = _RegistryState()
 
 
-# ---------------------------------------------------------------------------
 # ComponentRegistry — public singleton facade
-# ---------------------------------------------------------------------------
 
 
 class _ComponentRegistry:
@@ -129,9 +128,7 @@ class _ComponentRegistry:
     Thread-safety: single-threaded only (Python GIL keeps frame loop safe).
     """
 
-    # ------------------------------------------------------------------
     # Internal scheduling (called by GameObject)
-    # ------------------------------------------------------------------
 
     def _schedule_awake(self, component: Component) -> None:
         """Add a newly created component to the pending-awake queue."""
@@ -148,9 +145,7 @@ class _ComponentRegistry:
         """Schedule a component for end-of-frame teardown."""
         _STATE.pending_destroy_components.append(component)
 
-    # ------------------------------------------------------------------
     # Main run_frame
-    # ------------------------------------------------------------------
 
     def run_frame(self, clock: Clock) -> None:
         """
@@ -172,8 +167,22 @@ class _ComponentRegistry:
         6. Deferred destroy flush               — on_disable + on_destroy
         """
         dt = clock.dt
-        prof = get_profiler()
 
+        self._flush_awake_and_start()
+
+        # -- 3–4. update / late_update -------------------------------------
+        self._dispatch_phase("Update", dt)
+        self._dispatch_phase("LateUpdate", dt)
+
+        # -- 5. fixed_update (driven by clock accumulator) -----------------
+        for fixed_dt in clock.fixed_steps():
+            self._dispatch_phase("FixedUpdate", fixed_dt)
+
+        # -- 6. Deferred destroy -------------------------------------------
+        self._flush_destroy()
+
+    def _flush_awake_and_start(self) -> None:
+        """Flush pending-awake and pending-start queues (steps 1–2 of run_frame)."""
         # -- 1. Awake + on_enable -----------------------------------------
         # Snapshot the queue so components added inside awake() go to NEXT frame.
         awake_batch = _STATE.pending_awake[:]
@@ -196,37 +205,37 @@ class _ComponentRegistry:
                 comp.start()
                 comp._started = True
 
-        # -- 3. update -----------------------------------------------------
-        # One profiler scope per component TYPE bucket so the per-frame
-        # breakdown shows exactly which component kind is hot (e.g.
-        # "Update:WeatherMapComponent").  scope() is a no-op when the profiler
-        # is disabled, so this costs a bool check + a cached dict lookup.
+    def _dispatch_phase(self, phase: str, dt: float) -> None:
+        """
+        Dispatch one lifecycle phase to every active component in each bucket.
+
+        One profiler scope per component TYPE bucket so the per-frame breakdown
+        shows exactly which component kind is hot (e.g. "Update:WeatherMapComponent").
+        scope() is a no-op when the profiler is disabled, costing only a bool check
+        and a cached dict lookup.
+
+        Parameters
+        ----------
+        phase : str — lifecycle method name ("Update", "LateUpdate", "FixedUpdate").
+        dt    : float — delta time in seconds for this phase.
+        """
+        prof = get_profiler()
         for t, bucket in list(_STATE.buckets.items()):
             bucket_snap = bucket[:]
-            with prof.scope(_scope_name("Update", t)):
+            with prof.scope(_scope_name(phase, t)):
                 for comp in bucket_snap:
                     if self._is_active(comp):
-                        comp.update(dt)
+                        self._call_phase(phase, comp, dt)
 
-        # -- 4. late_update ------------------------------------------------
-        for t, bucket in list(_STATE.buckets.items()):
-            bucket_snap = bucket[:]
-            with prof.scope(_scope_name("LateUpdate", t)):
-                for comp in bucket_snap:
-                    if self._is_active(comp):
-                        comp.late_update(dt)
-
-        # -- 5. fixed_update (driven by clock accumulator) -----------------
-        for fixed_dt in clock.fixed_steps():
-            for t, bucket in list(_STATE.buckets.items()):
-                bucket_snap = bucket[:]
-                with prof.scope(_scope_name("FixedUpdate", t)):
-                    for comp in bucket_snap:
-                        if self._is_active(comp):
-                            comp.fixed_update(fixed_dt)
-
-        # -- 6. Deferred destroy -------------------------------------------
-        self._flush_destroy()
+    @staticmethod
+    def _call_phase(phase: str, comp: Component, dt: float) -> None:
+        """Call the appropriate lifecycle method on *comp* for *phase*."""
+        if phase == "Update":
+            comp.update(dt)
+        elif phase == "LateUpdate":
+            comp.late_update(dt)
+        else:
+            comp.fixed_update(dt)
 
     def _is_active(self, comp: Component) -> bool:
         """Return True if the component should tick this frame."""
@@ -268,16 +277,14 @@ class _ComponentRegistry:
             if go in _STATE.objects:
                 _STATE.objects.remove(go)
 
-    # ------------------------------------------------------------------
     # Module-level Unity statics
-    # ------------------------------------------------------------------
 
     def instantiate(
         self,
         template: GameObject | None = None,
-        position: Vec3 = None,
-        rotation: Quat = None,
-        parent: object | None = None,
+        position: Vec3 | None = None,
+        rotation: Quat | None = None,
+        parent: Transform | None = None,
     ) -> GameObject:
         """
         Create (and register) a new GameObject, optionally copying a template.
@@ -405,9 +412,7 @@ class _ComponentRegistry:
         """
         return [go for go in _STATE.objects if go.tag == tag]
 
-    # ------------------------------------------------------------------
     # Test isolation
-    # ------------------------------------------------------------------
 
     def clear(self) -> None:
         """
@@ -423,9 +428,7 @@ class _ComponentRegistry:
         _STATE = _RegistryState()
 
 
-# ---------------------------------------------------------------------------
 # Module-level singleton
-# ---------------------------------------------------------------------------
 
 ComponentRegistry: _ComponentRegistry = _ComponentRegistry()
 
@@ -434,9 +437,9 @@ ComponentRegistry: _ComponentRegistry = _ComponentRegistry()
 
 def instantiate(
     template: GameObject | None = None,
-    position: Vec3 = None,
-    rotation: Quat = None,
-    parent=None,
+    position: Vec3 | None = None,
+    rotation: Quat | None = None,
+    parent: Transform | None = None,
 ) -> GameObject:
     """
     Create a new GameObject at *position* with *rotation*.
@@ -447,6 +450,8 @@ def instantiate(
     Returns
     -------
     GameObject
+
+    Docs: docs/systems/render.md
     """
     return ComponentRegistry.instantiate(
         template=template,
@@ -456,20 +461,28 @@ def instantiate(
     )
 
 
-def destroy(obj_or_component, delay: float = 0.0) -> None:
+def destroy(obj_or_component: GameObject | Component, delay: float = 0.0) -> None:
     """
     Schedule destruction of a GameObject or Component at end of frame.
 
     Delegates to ComponentRegistry.destroy.
+
+    Docs: docs/systems/render.md
     """
     ComponentRegistry.destroy(obj_or_component, delay=delay)
 
 
 def find_with_tag(tag: str) -> GameObject | None:
-    """Return the first registered GameObject with the given tag, or None."""
+    """Return the first registered GameObject with the given tag, or None.
+
+    Docs: docs/systems/render.md
+    """
     return ComponentRegistry.find_with_tag(tag)
 
 
 def find_objects_with_tag(tag: str) -> list[GameObject]:
-    """Return all registered GameObjects with the given tag."""
+    """Return all registered GameObjects with the given tag.
+
+    Docs: docs/systems/render.md
+    """
     return ComponentRegistry.find_objects_with_tag(tag)

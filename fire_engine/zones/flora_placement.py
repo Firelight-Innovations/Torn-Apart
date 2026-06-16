@@ -39,6 +39,8 @@ Example
     attrs = fp.flora_instance_attribs(np.arange(count), seed,
                                       vol.min_corner, vol.max_corner,
                                       n_variants=4)
+
+Docs: docs/systems/zones.md
 """
 
 from __future__ import annotations
@@ -88,6 +90,8 @@ def flora_hash_seed(volume: ZoneVolume, kind: str) -> int:
         The flora volume.
     kind : str
         One of :data:`FLORA_KINDS` (``"flowers"``).
+
+    Docs: docs/systems/zones.md
     """
     return int(for_domain("zones", "flora", kind, volume.id).integers(0, 2**31))
 
@@ -108,6 +112,8 @@ def flora_instance_count(volume: ZoneVolume, config: Config, kind: str) -> int:
     >>> v = ZoneVolume(1, "flowers", (0.0, 0.0, 0.0), (20.0, 20.0, 8.0))
     >>> flora_instance_count(v, Config(), "flowers")  # 400 m² × 1.5
     600
+
+    Docs: docs/systems/zones.md
     """
     density_field, max_field = _KIND_CONFIG[kind]
     density = float(volume.params.get("density", getattr(config, density_field)))
@@ -155,6 +161,8 @@ def flora_instance_attribs(
         ``"rot"`` yaw radians [0, 2π), ``"scale"`` size multiplier,
         ``"phase"`` sway phase radians [0, 2π), ``"variant"`` atlas cell
         index (int32, ``h5 % n_variants``).
+
+    Docs: docs/systems/zones.md
     """
     i = np.asarray(indices).astype(np.uint32, copy=False)
     h0 = hash_lowbias32(i ^ np.uint32(seed))

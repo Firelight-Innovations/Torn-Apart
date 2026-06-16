@@ -21,13 +21,20 @@ The region spans ``cells · cell_m`` meters centered on the supplied position;
 texel ``(row, col)`` covers the center of its cell (half-texel offset).
 
 Units: meters, game seconds.
+
+Docs: docs/systems/world.weather.md
 """
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from fire_engine.core.config import Config
+
+if TYPE_CHECKING:
+    from fire_engine.world.weather.system import WeatherSystem
 
 __all__ = ["MAP_CHANNELS", "WeatherMap"]
 
@@ -60,6 +67,8 @@ class WeatherMap:
     >>> raster = wm.rasterize(ws, center_xy=(0.0, 0.0), t_abs=12 * 3600.0)
     >>> raster.shape, raster.dtype
     ((128, 128, 4), dtype('float32'))
+
+    Docs: docs/systems/world.weather.md
     """
 
     def __init__(self, config: Config) -> None:
@@ -80,6 +89,8 @@ class WeatherMap:
         np.ndarray — shape ``(cells*cells, 2)`` in row-major ``(row=Y, col=X)``
         order, so reshaping a result back to ``(cells, cells)`` matches
         :meth:`rasterize`'s layout.
+
+        Docs: docs/systems/world.weather.md
         """
         xs = center_xy[0] + self._offsets  # (N,) along X
         ys = center_xy[1] + self._offsets  # (N,) along Y
@@ -88,7 +99,7 @@ class WeatherMap:
 
     def rasterize(
         self,
-        system,
+        system: WeatherSystem,
         center_xy: tuple[float, float],
         t_abs: float,
     ) -> np.ndarray:
@@ -106,6 +117,8 @@ class WeatherMap:
         np.ndarray — shape ``(cells, cells, 4)`` float32, channels in
         :data:`MAP_CHANNELS` order.  Pure function of (system seed, center,
         t_abs): the result does not depend on when it is called.
+
+        Docs: docs/systems/world.weather.md
         """
         pts = self.texel_centers(center_xy)
         cov, den, rain, fog, _ = system.sample_fields(pts, t_abs)

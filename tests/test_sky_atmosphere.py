@@ -144,7 +144,7 @@ class TestMoonSurface:
         # Other test modules reset the procedural registry; make sure the
         # moon def is registered regardless of test order.
         from fire_engine.procedural import registry
-        from fire_engine.procedural.textures.moon_surface import MoonSurfaceDef
+        from fire_engine.procedural.textures.sky.moon_surface import MoonSurfaceDef
 
         if "moon_surface" not in registry._registry:
             registry.register(MoonSurfaceDef())

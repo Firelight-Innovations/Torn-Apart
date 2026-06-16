@@ -363,7 +363,7 @@ class TestDeltaRoundTrip:
         cm = _make_cm(cfg)
         _carve(cm)
         delta = cm.get_delta()
-        for coord, arr in delta.items():
+        for _coord, arr in delta.items():
             assert isinstance(arr, np.ndarray)
             assert arr.dtype == np.uint8
             assert arr.shape == (32, 32, 32)

@@ -37,7 +37,7 @@ def _drive(prof: Profiler, frames: int = 6) -> None:
 def test_pstats_bridge_mirrors_scopes_and_counters():
     """The bridge lazily creates a PStatCollector per scope/counter name."""
     pytest.importorskip("panda3d.core")
-    from fire_engine.render.profiler_bridge import PStatsBridge
+    from fire_engine.render.bridges.profiler_bridge import PStatsBridge
 
     prof = Profiler(enabled=True, history_frames=32, hitch_window=8)
     bridge = PStatsBridge(prof, connect=False)  # no server needed
@@ -62,7 +62,7 @@ def test_overlay_builds_toggles_and_refreshes():
 
     base = ShowBase()
     try:
-        from fire_engine.render.profiler_overlay import ProfilerOverlay
+        from fire_engine.render.bridges.profiler_overlay import ProfilerOverlay
 
         prof = Profiler(enabled=True, history_frames=64, hitch_window=8)
         cfg = Config(profiler_enabled=True, profiler_overlay_hz=1000.0)

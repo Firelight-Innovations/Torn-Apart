@@ -26,6 +26,8 @@ Example
     house = mgr.add(get_def("building_demo_house"))   # clone + id + event
     mgr.mark_baseline()                                # boot set = baseline
     save_manager.register(mgr)                         # joins F5/F9 saves
+
+Docs: docs/systems/buildings.md
 """
 
 from __future__ import annotations
@@ -61,6 +63,8 @@ class BuildingManager:
     >>> b = mgr.add(spec)            # doctest: +SKIP
     >>> mgr.get(b.id) is b           # doctest: +SKIP
     True
+
+    Docs: docs/systems/buildings.md
     """
 
     save_key: str = "buildings"
@@ -71,7 +75,7 @@ class BuildingManager:
         self._buildings: dict[int, Building] = {}
         self._next_id: int = 1
         self.version: int = 0
-        self._baseline: list[dict] | None = None
+        self._baseline: list[dict[str, Any]] | None = None
 
     # ------------------------------------------------------------------
     # Mutation
@@ -82,6 +86,8 @@ class BuildingManager:
         Clone ``spec``, assign it a fresh world id, register it, and publish a
         ``"added"`` :class:`BuildingChangedEvent`.  Returns the managed clone
         (not ``spec``) — mutate the return value, never the argument.
+
+        Docs: docs/systems/buildings.md
         """
         clone = Building.from_dict(spec.to_dict())
         clone.id = self._next_id
@@ -93,7 +99,10 @@ class BuildingManager:
 
     def remove(self, building_id: int) -> bool:
         """Remove a building by id; publish ``"removed"`` with its last bounds.
-        Returns True when it existed."""
+        Returns True when it existed.
+
+        Docs: docs/systems/buildings.md
+        """
         b = self._buildings.pop(building_id, None)
         if b is None:
             return False
@@ -110,6 +119,8 @@ class BuildingManager:
         Raises
         ------
         KeyError — no building with this id.
+
+        Docs: docs/systems/buildings.md
         """
         b = self._buildings.get(building_id)
         if b is None:
@@ -122,11 +133,17 @@ class BuildingManager:
     # ------------------------------------------------------------------
 
     def get(self, building_id: int) -> Building | None:
-        """The managed building with this id, or None."""
+        """The managed building with this id, or None.
+
+        Docs: docs/systems/buildings.md
+        """
         return self._buildings.get(building_id)
 
     def buildings(self) -> tuple[Building, ...]:
-        """All managed buildings, ordered by id."""
+        """All managed buildings, ordered by id.
+
+        Docs: docs/systems/buildings.md
+        """
         return tuple(self._buildings[k] for k in sorted(self._buildings))
 
     # ------------------------------------------------------------------
@@ -140,10 +157,12 @@ class BuildingManager:
         Call once at boot after placing the world's default/procedural
         buildings — :meth:`get_delta` then returns ``{}`` until something
         actually changes, so an untouched world costs ~0 save bytes.
+
+        Docs: docs/systems/buildings.md
         """
         self._baseline = self._snapshot()
 
-    def get_delta(self) -> dict:
+    def get_delta(self) -> dict[str, Any]:
         """
         Full building list when it deviates from the baseline, else ``{}``.
 
@@ -152,17 +171,21 @@ class BuildingManager:
         dict
             ``{}`` when unchanged; otherwise ``{"version": 1, "next_id": int,
             "buildings": [building.to_dict(), ...]}``.
+
+        Docs: docs/systems/buildings.md
         """
         snap = self._snapshot()
         if self._baseline is not None and snap == self._baseline:
             return {}
         return {"version": _DELTA_VERSION, "next_id": int(self._next_id), "buildings": snap}
 
-    def apply_delta(self, delta: dict) -> None:
+    def apply_delta(self, delta: dict[str, Any]) -> None:
         """
         Replace the building set with the saved one and republish ``"added"``
         for each so the renderer rebuilds.  An empty delta means "baseline
         saved unchanged" — the fresh boot set already IS the baseline.
+
+        Docs: docs/systems/buildings.md
         """
         if not delta:
             return
@@ -185,7 +208,7 @@ class BuildingManager:
 
     # ------------------------------------------------------------------
 
-    def _snapshot(self) -> list[dict]:
+    def _snapshot(self) -> list[dict[str, Any]]:
         """Serialised, id-ordered building list (comparison + delta payload)."""
         return [b.to_dict() for b in self.buildings()]
 

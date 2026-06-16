@@ -252,7 +252,6 @@ class TestGrassInstanceCount:
         a zero-area (X or Y extent == 0) volume cannot be constructed — it
         raises ValueError.  Pinning this constraint as a characterisation test
         so we notice if the validation is ever relaxed."""
-        cfg = Config()
         with pytest.raises(ValueError):
             ZoneVolume(1, "grass", (0.0, 0.0, 0.0), (0.0, 10.0, 4.0))
 

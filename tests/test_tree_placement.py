@@ -80,7 +80,7 @@ class TestPlacement:
         assert np.allclose(inst.z, 6.0 + 64.0 / 254.0 * 8.0, atol=1e-4)
 
     def test_sentinel_drops_instances(self, setup):
-        cfg, vol, chunks = setup
+        cfg, vol, _chunks = setup
         inst = bake_tree_instances(vol, cfg, {}, MIX, POOLS, "trees")
         assert inst.count == 0  # nothing loaded → no ground
 
@@ -99,7 +99,7 @@ class TestPlacement:
         assert capped.count == 5
 
     def test_species_and_variant_assignment(self, setup):
-        cfg, vol, chunks = setup
+        cfg, _vol, chunks = setup
         big = ZoneVolume(3, "trees", (0.0, 0.0, 6.0), (64.0, 32.0, 14.0), params={"density": 0.3})
         chunks = _flat_chunks(cfg, [(cx, cy, 0) for cx in range(0, 4) for cy in range(0, 2)])
         inst = bake_tree_instances(big, cfg, chunks, MIX, POOLS, "trees")

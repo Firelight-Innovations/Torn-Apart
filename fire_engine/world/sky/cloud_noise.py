@@ -31,6 +31,8 @@ Example
 
     set_world_seed(1337)
     shape = bake_shape_noise(64)        # (64, 64, 64, 4) uint8, deterministic
+
+Docs: docs/systems/world.sky.md
 """
 
 from __future__ import annotations
@@ -43,7 +45,7 @@ __all__ = ["bake_detail_noise", "bake_shape_noise"]
 
 
 def _smoothstep(f: np.ndarray) -> np.ndarray:
-    return f * f * (3.0 - 2.0 * f)
+    return np.asarray(f * f * (3.0 - 2.0 * f))
 
 
 def _value_octave(size: int, freq: int, rng: np.random.Generator) -> np.ndarray:
@@ -57,8 +59,8 @@ def _value_octave(size: int, freq: int, rng: np.random.Generator) -> np.ndarray:
     fy = f[None, :, None]
     fz = f[None, None, :]
 
-    def corner(ix, iy, iz):
-        return grid[np.ix_(ix, iy, iz)]
+    def corner(ix: np.ndarray, iy: np.ndarray, iz: np.ndarray) -> np.ndarray:
+        return np.asarray(grid[np.ix_(ix, iy, iz)])
 
     g000 = corner(i0, i0, i0)
     g100 = corner(i1, i0, i0)
@@ -74,7 +76,7 @@ def _value_octave(size: int, freq: int, rng: np.random.Generator) -> np.ndarray:
     g11 = g011 + (g111 - g011) * fx
     g0 = g00 + (g10 - g00) * fy
     g1 = g01 + (g11 - g01) * fy
-    return g0 + (g1 - g0) * fz
+    return np.asarray(g0 + (g1 - g0) * fz)
 
 
 def _worley_octave(size: int, freq: int, rng: np.random.Generator) -> np.ndarray:
@@ -164,6 +166,8 @@ def bake_shape_noise(size: int = 64) -> np.ndarray:
     numpy.ndarray
         ``(size, size, size, 4)`` uint8, channel order RGBA, indexed
         ``[z, y, x, c]``.
+
+    Docs: docs/systems/world.sky.md
     """
     rng = for_domain("sky", "cloud_shape")
     perlin = _value_fbm(size, 4, 4, rng)
@@ -197,6 +201,8 @@ def bake_detail_noise(size: int = 32) -> np.ndarray:
     -------
     numpy.ndarray
         ``(size, size, size, 4)`` uint8, RGBA, indexed ``[z, y, x, c]``.
+
+    Docs: docs/systems/world.sky.md
     """
     rng = for_domain("sky", "cloud_detail")
     out = np.empty((size, size, size, 4), np.uint8)

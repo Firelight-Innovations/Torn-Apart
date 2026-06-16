@@ -10,6 +10,8 @@ vertices (dozens, not thousands — flagged per Hard Rule 4); the ear test
 The single public function returns triangle index triples into the *input*
 polygon's vertices so callers can place those vertices at any z without
 re-running the triangulation.
+
+Docs: docs/systems/buildings.md
 """
 
 from __future__ import annotations
@@ -20,7 +22,8 @@ __all__ = ["triangulate_polygon"]
 
 
 def _signed_area(poly: np.ndarray) -> float:
-    x, y = poly[:, 0], poly[:, 1]
+    x: np.ndarray = poly[:, 0]
+    y: np.ndarray = poly[:, 1]
     return 0.5 * float(np.sum(x * np.roll(y, -1) - np.roll(x, -1) * y))
 
 
@@ -32,7 +35,8 @@ def _points_in_triangle(pts: np.ndarray, a: np.ndarray, b: np.ndarray, c: np.nda
     d2 = (c[0] - b[0]) * (pts[:, 1] - b[1]) - (c[1] - b[1]) * (pts[:, 0] - b[0])
     d3 = (a[0] - c[0]) * (pts[:, 1] - c[1]) - (a[1] - c[1]) * (pts[:, 0] - c[0])
     eps = 1e-12
-    return (d1 > eps) & (d2 > eps) & (d3 > eps)
+    mask: np.ndarray = (d1 > eps) & (d2 > eps) & (d3 > eps)
+    return mask
 
 
 def triangulate_polygon(polygon: np.ndarray) -> np.ndarray:
@@ -51,16 +55,15 @@ def triangulate_polygon(polygon: np.ndarray) -> np.ndarray:
     np.ndarray
         ``uint32 (T, 3)`` triangle indices into ``polygon`` (``T = N - 2`` for
         a clean simple polygon; fewer if degenerate vertices are skipped).
+
+    Docs: docs/systems/buildings.md
     """
     poly = np.asarray(polygon, dtype=np.float64)
     n = poly.shape[0]
     if n < 3:
         return np.empty((0, 3), dtype=np.uint32)
     # Work CCW so a positive cross product means a convex corner.
-    if _signed_area(poly) < 0.0:
-        order = list(range(n - 1, -1, -1))
-    else:
-        order = list(range(n))
+    order = list(range(n - 1, -1, -1)) if _signed_area(poly) < 0.0 else list(range(n))
 
     tris: list[tuple[int, int, int]] = []
     idx = order[:]  # remaining vertex indices (CCW)
@@ -89,6 +92,5 @@ def triangulate_polygon(polygon: np.ndarray) -> np.ndarray:
         tris.append((idx[0], idx[1], idx[2]))
     elif len(idx) > 3:
         # Degenerate fallback: triangle fan from the first remaining vertex.
-        for k in range(1, len(idx) - 1):
-            tris.append((idx[0], idx[k], idx[k + 1]))
+        tris.extend((idx[0], idx[k], idx[k + 1]) for k in range(1, len(idx) - 1))
     return np.array(tris, dtype=np.uint32)

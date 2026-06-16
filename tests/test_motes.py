@@ -36,12 +36,12 @@ def _gen(name: str, seed: int, **params) -> np.ndarray:
     set_world_seed(seed)
     if name == "dust_mote":
         from fire_engine.core.rng import for_domain
-        from fire_engine.procedural.textures.dust_mote import DustMoteDef
+        from fire_engine.procedural.textures.sprites.dust_mote import DustMoteDef
 
         return DustMoteDef().generate(for_domain("procedural", "dust_mote"), **params)
     if name == "leaf_sprite":
         from fire_engine.core.rng import for_domain
-        from fire_engine.procedural.textures.leaf_sprite import LeafSpriteDef
+        from fire_engine.procedural.textures.sprites.leaf_sprite import LeafSpriteDef
 
         return LeafSpriteDef().generate(for_domain("procedural", "leaf_sprite"), **params)
     raise ValueError(name)
@@ -215,8 +215,8 @@ class TestNoPandaLeak:
     def test_dust_and_leaf_defs_headless(self):
         root = pathlib.Path(__file__).resolve().parent.parent / "fire_engine"
         targets = [
-            root / "procedural" / "textures" / "dust_mote.py",
-            root / "procedural" / "textures" / "leaf_sprite.py",
+            root / "procedural" / "textures" / "sprites" / "dust_mote.py",
+            root / "procedural" / "textures" / "sprites" / "leaf_sprite.py",
             root / "zones" / "grass_placement.py",
         ]
         for path in targets:

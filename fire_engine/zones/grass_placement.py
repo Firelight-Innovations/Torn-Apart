@@ -31,18 +31,28 @@ Example
     attrs = gp.instance_attribs(np.arange(count), seed,
                                 vol.min_corner, vol.max_corner)
     field = gp.bake_grass_height_field(vol, chunk_manager.chunks, cfg)
+
+Docs: docs/systems/zones.md
 """
 
 from __future__ import annotations
 
 import math
 from collections.abc import Mapping
+from typing import Protocol
 
 import numpy as np
 
 from fire_engine.core import Config
 from fire_engine.core.rng import for_domain
 from fire_engine.zones.volume import ZoneVolume
+
+
+class _ChunkLike(Protocol):
+    """Structural contract for chunk objects: exposes a voxel materials array."""
+
+    materials: np.ndarray
+
 
 __all__ = [
     "HEIGHT_SENTINEL",
@@ -86,6 +96,8 @@ def hash_lowbias32(x: np.ndarray) -> np.ndarray:
     -------
     numpy.ndarray
         uint32 array of hashed values, same shape.
+
+    Docs: docs/systems/zones.md
     """
     x = np.asarray(x).astype(np.uint32, copy=True)
     x ^= x >> np.uint32(16)
@@ -124,6 +136,8 @@ def instance_attribs(
         ``"x"``/``"y"`` world-space blade base positions (float32, meters),
         ``"rot"`` yaw in radians [0, 2π), ``"scale"`` size multiplier
         [0.7, 1.3), ``"phase"`` sway phase in radians [0, 2π).
+
+    Docs: docs/systems/zones.md
     """
     i = np.asarray(indices).astype(np.uint32, copy=False)
     h0 = hash_lowbias32(i ^ np.uint32(seed))
@@ -154,6 +168,8 @@ def grass_hash_seed(volume: ZoneVolume) -> int:
     Derived through ``for_domain("zones", "grass", volume.id)`` (Hard Rule 2)
     so the same world seed + volume id always places identical grass.
     Bounded to [0, 2**31) — Panda3D shader inputs pass it as a signed int.
+
+    Docs: docs/systems/zones.md
     """
     return int(for_domain("zones", "grass", volume.id).integers(0, 2**31))
 
@@ -174,6 +190,8 @@ def grass_instance_count(volume: ZoneVolume, config: Config) -> int:
     ...                params={"density": 8.0})
     >>> grass_instance_count(v, Config())
     800
+
+    Docs: docs/systems/zones.md
     """
     density = float(volume.params.get("density", config.grass_density_per_m2))
     count = int(volume.area_xy_m2 * max(density, 0.0))
@@ -191,6 +209,8 @@ def leaf_hash_seed(volume: ZoneVolume) -> int:
     feeds for grass.  Derived through ``for_domain("wind", "leaves", volume.id)``
     (Hard Rule 2) so the same world seed + volume id always scatters identical
     litter.  Bounded to ``[0, 2**31)`` (Panda3D passes it as a signed int).
+
+    Docs: docs/systems/zones.md
     """
     return int(for_domain("wind", "leaves", volume.id).integers(0, 2**31))
 
@@ -213,6 +233,8 @@ def leaf_instance_count(volume: ZoneVolume, config: Config) -> int:
     >>> v = ZoneVolume(1, "trees", (0.0, 0.0, 0.0), (20.0, 20.0, 8.0))
     >>> leaf_instance_count(v, Config())          # 400 m² × 0.15
     60
+
+    Docs: docs/systems/zones.md
     """
     density = float(volume.params.get("leaf_density", config.wind_leaf_density_per_m2))
     count = int(volume.area_xy_m2 * max(density, 0.0))
@@ -221,7 +243,7 @@ def leaf_instance_count(volume: ZoneVolume, config: Config) -> int:
 
 def bake_grass_height_field(
     volume: ZoneVolume,
-    chunks: Mapping[tuple[int, int, int], object],
+    chunks: Mapping[tuple[int, int, int], _ChunkLike],
     config: Config,
 ) -> np.ndarray:
     """
@@ -255,14 +277,16 @@ def bake_grass_height_field(
     numpy.ndarray
         ``uint8 (H, W, 4)`` with ``H`` texel rows along +Y and ``W`` columns
         along +X.  Deterministic for identical inputs.
+
+    Docs: docs/systems/zones.md
     """
     n = int(config.chunk_size)
     vs = float(config.voxel_size)
     x0, y0, z0 = volume.min_corner
     x1, y1, z1 = volume.max_corner
 
-    W = max(1, int(math.ceil((x1 - x0) / vs)))
-    H = max(1, int(math.ceil((y1 - y0) / vs)))
+    W = max(1, math.ceil((x1 - x0) / vs))
+    H = max(1, math.ceil((y1 - y0) / vs))
 
     # Global voxel index of each texel column (sampled at texel centres).
     vox_x = np.floor((x0 + (np.arange(W) + 0.5) * vs) / vs).astype(np.int64)
@@ -273,8 +297,8 @@ def bake_grass_height_field(
     # spans [z0/vs − 1, z1/vs − 1].
     cxs = np.unique(vox_x // n)
     cys = np.unique(vox_y // n)
-    kz_lo = int(math.floor(z0 / vs)) - 1
-    kz_hi = int(math.ceil(z1 / vs))
+    kz_lo = math.floor(z0 / vs) - 1
+    kz_hi = math.ceil(z1 / vs)
     czs = range(kz_lo // n, kz_hi // n + 1)
 
     best_z = np.full((H, W), -np.inf, dtype=np.float64)

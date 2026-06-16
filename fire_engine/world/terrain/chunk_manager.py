@@ -28,9 +28,13 @@ The manager produces ``MeshArrays`` (pure numpy) and records them in
 touches the scene graph.  The World layer drains ``pending_meshes`` each frame,
 calls ``world/geometry_bridge.to_geom`` on each, and uploads the Geom.  This
 keeps terrain fully headless-testable (Hard Rule 1).
+Docs: docs/systems/world.terrain.md
 """
 
 from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Any
 
 import numpy as np
 
@@ -107,6 +111,7 @@ class ChunkManager:
     >>> from fire_engine.core.math3d import Vec3
     >>> cm.stream_frame(Vec3(0, 0, 20))   # loads up to 2 chunks
     >>> chunk = cm.get_or_create((0, 0, 0))
+    Docs: docs/systems/world.terrain.md
     """
 
     save_key: str = "terrain"
@@ -121,12 +126,12 @@ class ChunkManager:
         self._n = int(config.chunk_size)
         self._vs = float(config.voxel_size)
 
-    # ------------------------------------------------------------------
     # Coordinate helpers
-    # ------------------------------------------------------------------
 
     def camera_chunk(self, camera_pos: Vec3) -> tuple[int, int, int]:
-        """Chunk coordinate containing ``camera_pos`` (world meters)."""
+        """Chunk coordinate containing ``camera_pos`` (world meters).
+        Docs: docs/systems/world.terrain.md
+        """
         p = camera_pos.to_numpy()
         return (
             int(np.floor(p[0] / self._chunk_m)),
@@ -146,6 +151,7 @@ class ChunkManager:
         -------
         set[tuple[int,int,int]]
             The desired-loaded chunk coordinate set.
+        Docs: docs/systems/world.terrain.md
         """
         ccx, ccy, ccz = self.camera_chunk(camera_pos)
         r = int(self.config.view_distance_chunks)
@@ -156,9 +162,7 @@ class ChunkManager:
                     out.add((ccx + dx, ccy + dy, ccz + dz))
         return out
 
-    # ------------------------------------------------------------------
     # Provider (for brush / raycast)
-    # ------------------------------------------------------------------
 
     def get_or_create(self, coord: tuple[int, int, int]) -> Chunk:
         """
@@ -167,6 +171,7 @@ class ChunkManager:
         This is the ``chunk_provider`` contract used by ``apply_brush`` and
         ``raycast_voxel``.  The chunk is added to ``self.chunks`` but NOT
         meshed here (meshing is the streaming budget's job).
+        Docs: docs/systems/world.terrain.md
         """
         chunk = self.chunks.get(coord)
         if chunk is None:
@@ -184,11 +189,11 @@ class ChunkManager:
     def __call__(self, coord: tuple[int, int, int]) -> Chunk:
         return self.get_or_create(coord)
 
-    # ------------------------------------------------------------------
     # Meshing
-    # ------------------------------------------------------------------
 
-    def _neighbor_solids(self, coord: tuple[int, int, int]) -> dict:
+    def _neighbor_solids(
+        self, coord: tuple[int, int, int]
+    ) -> dict[tuple[int, int, int], np.ndarray | str]:
         """
         Build the ``neighbor_solids`` dict for meshing ``coord``.
 
@@ -197,7 +202,7 @@ class ChunkManager:
         the world-floor Z band, where the sentinel forces a solid pad.
         """
         cx, cy, cz = coord
-        out: dict = {}
+        out: dict[tuple[int, int, int], np.ndarray | str] = {}
         for d in _FACE_DIRS:
             ncoord = (cx + d[0], cy + d[1], cz + d[2])
             nb = self.chunks.get(ncoord)
@@ -207,7 +212,9 @@ class ChunkManager:
                 out[d] = WORLD_FLOOR_SOLID
         return out
 
-    def _neighbor_materials(self, coord: tuple[int, int, int]) -> dict:
+    def _neighbor_materials(
+        self, coord: tuple[int, int, int]
+    ) -> dict[tuple[int, int, int], np.ndarray | str]:
         """
         Build the ``neighbor_materials`` dict (all 26 offsets) for faceted
         meshing of ``coord``.
@@ -226,7 +233,7 @@ class ChunkManager:
         faces naturally.
         """
         cx, cy, cz = coord
-        out: dict = {}
+        out: dict[tuple[int, int, int], np.ndarray | str] = {}
         for off in NEIGHBOR_OFFSETS_26:
             ncoord = (cx + off[0], cy + off[1], cz + off[2])
             nb = self.chunks.get(ncoord)
@@ -236,7 +243,11 @@ class ChunkManager:
                 out[off] = generate_chunk(ncoord, self.config)
         return out
 
-    def mesh_chunk(self, coord: tuple[int, int, int], light_sampler=None) -> MeshArrays:
+    def mesh_chunk(
+        self,
+        coord: tuple[int, int, int],
+        light_sampler: Callable[[np.ndarray], np.ndarray] | None = None,
+    ) -> MeshArrays:
         """
         Build (and store in ``pending_meshes``) the mesh for a loaded chunk.
 
@@ -247,6 +258,7 @@ class ChunkManager:
         ``"faceted"`` (default) → ``build_mesh_faceted`` (flat-shaded surface
         nets, per-face materials); ``"blocky"`` → the classic culled-face
         cube mesher ``build_mesh``.
+        Docs: docs/systems/world.terrain.md
         """
         chunk = self.get_or_create(coord)
         if getattr(self.config, "mesh_style", "faceted") == "blocky":
@@ -262,7 +274,11 @@ class ChunkManager:
         chunk.dirty = False
         return mesh
 
-    def remesh_edited(self, coords, light_sampler=None) -> int:
+    def remesh_edited(
+        self,
+        coords: Any,
+        light_sampler: Callable[[np.ndarray], np.ndarray] | None = None,
+    ) -> int:
         """
         Remesh brush-edited chunks NOW, bypassing the streaming budget.
 
@@ -291,10 +307,11 @@ class ChunkManager:
         -------
         int
             Number of chunks remeshed (into ``pending_meshes``).
+        Docs: docs/systems/world.terrain.md
         """
         pending: set[tuple[int, int, int]] = set()
         for c in coords:
-            for off in ((0, 0, 0),) + NEIGHBOR_OFFSETS_26:
+            for off in ((0, 0, 0), *NEIGHBOR_OFFSETS_26):
                 n = (c[0] + off[0], c[1] + off[1], c[2] + off[2])
                 ch = self.chunks.get(n)
                 if ch is not None and ch.dirty:
@@ -303,11 +320,13 @@ class ChunkManager:
             self.mesh_chunk(c, light_sampler)
         return len(pending)
 
-    # ------------------------------------------------------------------
     # Streaming
-    # ------------------------------------------------------------------
 
-    def stream_frame(self, camera_pos: Vec3, light_sampler=None) -> None:
+    def stream_frame(
+        self,
+        camera_pos: Vec3,
+        light_sampler: Callable[[np.ndarray], np.ndarray] | None = None,
+    ) -> None:
         """
         Stream one frame: load/mesh ≤2 chunks nearest the camera, unload far.
 
@@ -330,12 +349,13 @@ class ChunkManager:
         - Unloads loaded chunks beyond ``view_distance_chunks + 1`` (XY) —
           hysteresis prevents boundary thrash.  Edited chunks are kept in the
           delta via ``get_delta`` regardless (they are still removed from RAM).
+        Docs: docs/systems/world.terrain.md
         """
         self.unloaded_this_frame = []
         desired = self.desired_set(camera_pos)
         ccx, ccy, ccz = self.camera_chunk(camera_pos)
 
-        def dist2(coord):
+        def dist2(coord: tuple[int, int, int]) -> int:
             return (coord[0] - ccx) ** 2 + (coord[1] - ccy) ** 2 + (coord[2] - ccz) ** 2
 
         budget = _MAX_LOADS_PER_FRAME
@@ -378,9 +398,7 @@ class ChunkManager:
             self.unloaded_this_frame.append(coord)
             self.bus.publish(ChunkUnloadedEvent(coord=coord))
 
-    # ------------------------------------------------------------------
     # Baseline reset (revert edits before re-applying a save delta)
-    # ------------------------------------------------------------------
 
     def reset_to_baseline(self) -> None:
         """
@@ -414,6 +432,7 @@ class ChunkManager:
         ``get_or_create``, so they need no explicit reset.
 
         No window / GPU required; headless-testable.
+        Docs: docs/systems/world.terrain.md
         """
         for coord, chunk in self.chunks.items():
             if not chunk.edited:
@@ -424,11 +443,9 @@ class ChunkManager:
             # Drop stale mesh so the world re-uploads after the remesh.
             self.pending_meshes.pop(coord, None)
 
-    # ------------------------------------------------------------------
     # Saveable protocol
-    # ------------------------------------------------------------------
 
-    def get_delta(self) -> dict:
+    def get_delta(self) -> dict[tuple[int, int, int], np.ndarray]:
         """
         Return the save delta: ``{coord_tuple: materials_uint8_array}``.
 
@@ -440,12 +457,13 @@ class ChunkManager:
         Returns
         -------
         dict[tuple[int,int,int], numpy.ndarray]
+        Docs: docs/systems/world.terrain.md
         """
         return {
             coord: chunk.materials.copy() for coord, chunk in self.chunks.items() if chunk.edited
         }
 
-    def apply_delta(self, delta: dict) -> None:
+    def apply_delta(self, delta: dict[tuple[int, int, int], np.ndarray]) -> None:
         """
         Overlay saved chunk materials after baseline regeneration.
 
@@ -458,6 +476,7 @@ class ChunkManager:
         ----------
         delta : dict[tuple[int,int,int], numpy.ndarray]
             As produced by :meth:`get_delta`.
+        Docs: docs/systems/world.terrain.md
         """
         for coord, materials in delta.items():
             coord_t = (int(coord[0]), int(coord[1]), int(coord[2]))

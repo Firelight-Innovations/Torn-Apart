@@ -37,6 +37,8 @@ Example
     # each frame:
     mult = meter.update(camera_pos, sky_state, chunks, lights.pack(64), dt)
     effective_exposure = cfg.light_exposure * mult
+
+Docs: docs/systems/lighting.md
 """
 
 from __future__ import annotations
@@ -160,6 +162,8 @@ class ExposureMeter:
                             light_set.pack(cfg.light_max_point_lights),
                             dt=0.016)
         shader_exposure = cfg.light_exposure * mult
+
+    Docs: docs/systems/lighting.md
     """
 
     def __init__(self, config: Any) -> None:
@@ -188,6 +192,8 @@ class ExposureMeter:
 
         Multiply into ``config.light_exposure`` before tonemapping.
         Always within ``[min(exposure_min, 1.0), max(exposure_max, 1.0)]``.
+
+        Docs: docs/systems/lighting.md
         """
         return self._exposure
 
@@ -238,6 +244,8 @@ class ExposureMeter:
             mult = meter.update(cam.get_pos(), sky.state,
                                 chunk_manager.chunks, light_set.pack(64),
                                 globalClock.get_dt())
+
+        Docs: docs/systems/lighting.md
         """
         if not self._enabled or sky_state is None:
             target = 1.0
@@ -254,10 +262,7 @@ class ExposureMeter:
 
         dt = float(dt)
         if dt > 0.0 and target != self._exposure:
-            if tau <= 1e-6:
-                blend = 1.0
-            else:
-                blend = 1.0 - math.exp(-dt / tau)
+            blend = 1.0 if tau <= 1e-6 else 1.0 - math.exp(-dt / tau)
             blend = min(max(blend, 0.0), 1.0)
             log_cur = math.log(self._exposure)
             log_tgt = math.log(target)
@@ -338,11 +343,11 @@ class ExposureMeter:
             if chunk is None:
                 continue  # unloaded == air
             mask = inv == i
-            l = flat_loc[mask]
-            solid[mask] = chunk.materials[l[:, 0], l[:, 1], l[:, 2]] != 0
+            loc = flat_loc[mask]
+            solid[mask] = chunk.materials[loc[:, 0], loc[:, 1], loc[:, 2]] != 0
 
         blocked = solid.reshape(_RAY_DIRS.shape[0], _N_STEPS).any(axis=1)
-        return (~blocked).astype(np.float64)
+        return np.asarray((~blocked).astype(np.float64))
 
     @staticmethod
     def _light_luminance(cam: np.ndarray, lights_packed: tuple[np.ndarray, int] | None) -> float:

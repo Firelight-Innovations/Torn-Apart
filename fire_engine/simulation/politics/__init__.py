@@ -6,6 +6,10 @@ Economy (war disrupts routes) and AI (allegiance, morale).
 Imports allowed (ARCHITECTURE.md §4a.2): procedural, core.
 """
 
+from __future__ import annotations
+
+import numpy as np
+
 __all__ = ["FactionDef"]
 
 
@@ -15,7 +19,7 @@ class FactionDef:
     Implement in a later session per ARCHITECTURE.md §5.10.
     """
 
-    def generate(self, rng, **params):
+    def generate(self, rng: np.random.Generator, **params: object) -> None:
         raise NotImplementedError(
             "FactionDef.generate is future scope — see ARCHITECTURE.md §5.10 "
             "(Politics API). Not part of Session 1."

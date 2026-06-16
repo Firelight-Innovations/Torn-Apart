@@ -35,14 +35,17 @@ is correct regardless of how the corners were listed.
 Vectorized throughout (Hard Rule 4): the only Python loops iterate walls,
 storeys and openings (a building has dozens, not thousands); every per-vertex
 array is numpy.  Determinism: no RNG — identical buildings mesh byte-identically.
+
+Docs: docs/systems/buildings.md
 """
 
 from __future__ import annotations
 
 import numpy as np
 
-from fire_engine.buildings.model import Building, Wall, _convex_hull
+from fire_engine.buildings.model import Building, Storey, Wall, _convex_hull
 from fire_engine.buildings.triangulate import triangulate_polygon
+from fire_engine.core.config import Config
 from fire_engine.world.terrain.meshing import MeshArrays
 
 __all__ = ["mesh_building", "mesh_slab", "mesh_wall"]
@@ -126,7 +129,8 @@ class _Soup:
 def _normalize(v: np.ndarray) -> np.ndarray:
     ln = np.linalg.norm(v, axis=-1, keepdims=True)
     ln[ln < _EPS] = 1.0
-    return v / ln
+    result: np.ndarray = v / ln
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +170,10 @@ def _add_slab(soup: _Soup, polygon: np.ndarray, z0: float, z1: float) -> None:
 
 
 def mesh_slab(polygon: np.ndarray, z0: float, z1: float) -> MeshArrays:
-    """Mesh a single horizontal slab between ``z0`` and ``z1`` (meters)."""
+    """Mesh a single horizontal slab between ``z0`` and ``z1`` (meters).
+
+    Docs: docs/systems/buildings.md
+    """
     soup = _Soup()
     _add_slab(soup, polygon, float(z0), float(z1))
     return soup.build()
@@ -214,6 +221,8 @@ def mesh_wall(
         ``z_bottom``.
     arc_segments_per_quarter : int
         Arc tessellation density (``Config.building_arc_segments_per_quarter``).
+
+    Docs: docs/systems/buildings.md
     """
     soup = _Soup()
     _add_wall(soup, wall, float(z_bottom), float(z_top), int(arc_segments_per_quarter))
@@ -271,8 +280,8 @@ def _add_wall(soup: _Soup, wall: Wall, zb: float, zt: float, qpq: int) -> None:
         in_z = (z_mid > zb + op.sill_m + _EPS) & (z_mid < zb + op.head_m - _EPS)
         hole |= in_s[:, None] & in_z[None, :]
 
-    soup.add_quads(*_panel_grid(front, offv, s_mid, zlev, hole, outward=True))
-    soup.add_quads(*_panel_grid(back, -offv, s_mid, zlev, hole, outward=False))
+    soup.add_quads(*_panel_grid(front, offv, s_mid, zlev, hole))
+    soup.add_quads(*_panel_grid(back, -offv, s_mid, zlev, hole))
 
     # ---- reveals around each opening -------------------------------------
     for op in wall.openings:
@@ -301,16 +310,18 @@ def _panel_grid(
     s_mid: np.ndarray,
     zlev: np.ndarray,
     hole: np.ndarray,
-    outward: bool,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Build the solid panel quads of one wall face (front or back)."""
-    m = face.shape[0]
-    nz = zlev.shape[0]
+    """Build the solid panel quads of one wall face (front or back).
+
+    The outward normal direction is carried by the SIGN of ``offv`` (the front
+    face passes ``offv``, the back face passes ``-offv``), so no separate
+    orientation flag is needed.
+    """
     keep = ~hole  # (m-1, nz-1)
     ki, ji = np.nonzero(keep)
     q = ki.shape[0]
     corners = np.empty((q, 4, 3), dtype=np.float64)
-    # corner (k,j),(k+1,j),(k+1,j+1),(k,j+1)
+    # Corners in order: bottom-left, bottom-right, top-right, top-left.
     corners[:, 0, :2] = face[ki]
     corners[:, 0, 2] = zlev[ji]
     corners[:, 1, :2] = face[ki + 1]
@@ -376,7 +387,7 @@ def _cap_strip(
 # ---------------------------------------------------------------------------
 
 
-def _storey_footprint(building: Building, storey) -> np.ndarray:
+def _storey_footprint(building: Building, storey: Storey) -> np.ndarray:
     """Convex-hull footprint of a storey's walls for its floor slab."""
     if storey.walls:
         xy = np.concatenate([w.tessellate(8) for w in storey.walls], axis=0)
@@ -386,7 +397,7 @@ def _storey_footprint(building: Building, storey) -> np.ndarray:
     return np.empty((0, 2), dtype=np.float64)
 
 
-def mesh_building(building: Building, cfg) -> MeshArrays:
+def mesh_building(building: Building, cfg: Config) -> MeshArrays:
     """
     Mesh an entire building into one building-local triangle soup.
 
@@ -402,6 +413,8 @@ def mesh_building(building: Building, cfg) -> MeshArrays:
     MeshArrays
         Building-LOCAL positions (the renderer applies the node transform);
         ``colors`` flat white, ``face_materials=None``, ``verts_per_face=3``.
+
+    Docs: docs/systems/buildings.md
     """
     qpq = int(cfg.building_arc_segments_per_quarter)
     soup = _Soup()

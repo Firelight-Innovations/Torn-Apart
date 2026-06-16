@@ -18,6 +18,8 @@ The per-segment branch loop runs over *tens* of elements with vectorized
 work inside each bounding box (a bounded recipe loop, not per-pixel
 iteration — Hard Rule 4); the leaf pass is a fully-vectorized point
 scatter + diamond dilation because leaves number in the hundreds.
+
+Docs: docs/systems/procedural.flora.md
 """
 
 from __future__ import annotations
@@ -79,6 +81,8 @@ def rasterize_impostor(
     -------
     numpy.ndarray
         ``(cell_wh[1], cell_wh[0], 4) uint8`` with binary alpha.
+
+    Docs: docs/systems/procedural.flora.md
     """
     W, H = int(cell_wh[0]), int(cell_wh[1])
     bark_palette = np.asarray(bark_palette, dtype=np.uint8)
@@ -181,6 +185,8 @@ def impostor_atlas(cells: list[np.ndarray]) -> np.ndarray:
     -------
     numpy.ndarray
         ``(H, W × len(cells), 4) uint8``.
+
+    Docs: docs/systems/procedural.flora.md
     """
     if not cells:
         raise ValueError("impostor_atlas: no cells")

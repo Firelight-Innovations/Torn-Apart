@@ -53,16 +53,15 @@ shared state, no time.  Same chunks + origin + config ⇒ bit-identical result, 
 the worker thread or called inline in a test.
 
 No panda3d.  No per-voxel Python loops.
+
+Docs: docs/systems/world.wind.md
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import numpy as np
 
-if TYPE_CHECKING:  # avoid an import cycle (worker imports venturi)
-    from fire_engine.world.wind.worker import VenturiJob, VenturiResult
+from fire_engine.world.wind.types import VenturiJob, VenturiResult
 
 __all__ = ["column_solid_fraction", "solve_venturi"]
 
@@ -94,7 +93,7 @@ def _neighbor_mean4(a: np.ndarray) -> np.ndarray:
     down = p[2:, 1:-1]
     left = p[1:-1, :-2]
     right = p[1:-1, 2:]
-    return (up + down + left + right) * 0.25
+    return np.asarray((up + down + left + right) * 0.25)
 
 
 def _box_blur3(a: np.ndarray) -> np.ndarray:
@@ -135,23 +134,24 @@ def column_solid_fraction(job: VenturiJob) -> np.ndarray:
     -------
     numpy.ndarray
         ``float32 (cells, cells)`` indexed ``[x, y]`` in ``0..1``.
+
+    Docs: docs/systems/world.wind.md
     """
     n = int(job.cells)
     cell_m = float(job.cell_m)
     voxel = float(job.voxel_size)
     S = int(job.chunk_size)
-    chunk_m = S * voxel
 
     vpc = cell_m / voxel  # voxels per wind-cell edge
     if abs(vpc - round(vpc)) > 1e-9 or vpc < 1:
         raise ValueError(f"cell_m ({cell_m}) must be an integer multiple of voxel_size ({voxel})")
-    vpc = int(round(vpc))  # 8 at the defaults
+    vpc = round(vpc)  # 8 at the defaults
 
     ox_cell, oy_cell = job.origin_cell  # wind cells
     # World corner of wind cell (0,0), in voxel indices on the global voxel
     # grid (voxel v spans world [v*voxel, (v+1)*voxel)).
-    vx0 = int(round(ox_cell * cell_m / voxel))
-    vy0 = int(round(oy_cell * cell_m / voxel))
+    vx0 = round(ox_cell * cell_m / voxel)
+    vy0 = round(oy_cell * cell_m / voxel)
 
     z_lo, z_hi = job.ground_band
     # Global voxel-z range covering the band (inclusive of partial top voxel).
@@ -264,10 +264,9 @@ def solve_venturi(job: VenturiJob) -> VenturiResult:
     -------
     >>> # res = solve_venturi(job)
     >>> # res.speedup.shape == (job.cells, job.cells)
-    """
-    # Local import to dodge the worker<->venturi import cycle at module load.
-    from fire_engine.world.wind.worker import VenturiResult
 
+    Docs: docs/systems/world.wind.md
+    """
     solid = column_solid_fraction(job).astype(np.float32)
     open_ = (1.0 - solid).astype(np.float32)
     passw = np.clip(open_, 0.05, 1.0).astype(np.float32)
@@ -279,7 +278,8 @@ def solve_venturi(job: VenturiJob) -> VenturiResult:
     crowd = solid.copy()
     iters = max(int(job.venturi_iters), 0)
     for _ in range(iters):
-        crowd = (1.0 - _CROWD_DIFFUSE) * crowd + _CROWD_DIFFUSE * _neighbor_mean4(crowd)
+        blended = (1.0 - _CROWD_DIFFUSE) * crowd + _CROWD_DIFFUSE * _neighbor_mean4(crowd)
+        crowd = np.asarray(blended, dtype=np.float32)
     crowd = crowd.astype(np.float32)
 
     # --- Speed-up: an OPEN cell in a crowded neighbourhood is a pinch -------

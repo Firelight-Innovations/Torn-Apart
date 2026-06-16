@@ -203,7 +203,7 @@ def test_inspector_rotation_is_euler_degrees_view():
     )
     # Set 90° heading (about +Z); stored as a quaternion, read back ~90.
     rot.set((90.0, 0.0, 0.0))
-    h, p, r = rot.get()
+    h, _p, _r = rot.get()
     assert h == pytest.approx(90.0, abs=1e-3)
     # forward (+Y) rotated 90° about +Z → −X, confirming it stored as a real rotation.
     assert go.transform.forward.approx_eq(Vec3(-1, 0, 0), eps=1e-5)

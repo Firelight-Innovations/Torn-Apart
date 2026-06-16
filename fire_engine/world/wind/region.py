@@ -24,6 +24,8 @@ Units & conventions
 
 No panda3d.  No per-cell Python loops.
 
+Docs: docs/systems/world.wind.md
+
 Example
 -------
 >>> region = WindRegion(cells=64, cell_m=4.0, snap_cells=8, margin_cells=8)
@@ -36,6 +38,8 @@ False
 """
 
 from __future__ import annotations
+
+from collections.abc import Sequence
 
 import numpy as np
 
@@ -79,6 +83,8 @@ class WindRegion:
     >>> # Player is within half a tile of the centre on both axes.
     >>> abs(100.0 - (ox + 64 * 4.0 / 2)) <= 32.0 + 1e-6
     True
+
+    Docs: docs/systems/world.wind.md
     """
 
     def __init__(
@@ -112,6 +118,8 @@ class WindRegion:
         This is the ``u_wind_origin`` value later work packages bind to the GPU
         (texel-(0,0)-corner convention).  Raises ``ValueError`` if
         :meth:`maybe_recenter` has never been called.
+
+        Docs: docs/systems/world.wind.md
         """
         if self.origin_cell is None:
             raise ValueError("WindRegion.maybe_recenter() never called")
@@ -119,10 +127,14 @@ class WindRegion:
 
     @property
     def size_m(self) -> float:
-        """World edge length of the tile in meters (``cells * cell_m``)."""
+        """
+        World edge length of the tile in meters (``cells * cell_m``).
+
+        Docs: docs/systems/world.wind.md
+        """
         return self.cells * self.cell_m
 
-    def _desired_origin(self, player_xy) -> tuple[int, int]:
+    def _desired_origin(self, player_xy: Sequence[float]) -> tuple[int, int]:
         """Snapped origin (in cells) that centres the tile on ``player_xy``."""
         out = []
         for c in (player_xy[0], player_xy[1]):
@@ -140,10 +152,12 @@ class WindRegion:
         ys = (self._ramp + (oy + 0.5)) * self.cell_m
         self.X, self.Y = np.meshgrid(xs, ys, indexing="ij")
 
-    def needs_recenter(self, player_xy) -> bool:
+    def needs_recenter(self, player_xy: Sequence[float]) -> bool:
         """
         True when the player has drifted past the hysteresis margin (or the
         tile was never placed).  Non-mutating — does not move the origin.
+
+        Docs: docs/systems/world.wind.md
         """
         if self.origin_cell is None:
             return True
@@ -154,7 +168,7 @@ class WindRegion:
                 return True
         return False
 
-    def maybe_recenter(self, player_xy) -> bool:
+    def maybe_recenter(self, player_xy: Sequence[float]) -> bool:
         """
         Follow the player; return True when the tile moved (and meshes rebuilt).
 
@@ -178,6 +192,8 @@ class WindRegion:
         True
         >>> region.maybe_recenter((1.0, 1.0))   # < 32 m margin
         False
+
+        Docs: docs/systems/world.wind.md
         """
         if self.needs_recenter(player_xy):
             self.origin_cell = self._desired_origin(player_xy)

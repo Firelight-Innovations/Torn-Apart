@@ -1,5 +1,6 @@
 """
-fire_engine.simulation.player — Player API: thin human-control layer (same interface as an NPC agent).
+fire_engine.simulation.player — Player API: thin human-control layer
+(same interface as an NPC agent).
 
 Session 1 exports only the free-fly camera controller.  Future sessions will
 add the embodied player agent (walking, collision, inventory) using the same

@@ -62,55 +62,55 @@ class TestClassifyGenusGoldenMapping:
         # Very low coverage/density, no precip → near-clear fair-weather sky.
         # High band is wispy CIRRUS; mid is thin ALTOCUMULUS; low is degenerate STRATUS.
         # (cov=0.05 is below both 0.18 CUMULUS and 0.55 STRATO thresholds)
-        h, m, l = classify_genus(0.05, 0.10, 0.0, Regime.HIGH_PRESSURE)
+        h, m, lo = classify_genus(0.05, 0.10, 0.0, Regime.HIGH_PRESSURE)
         assert h is CloudGenus.CIRRUS  # cov <= 0.55 → cirrus
         assert m is CloudGenus.ALTOCUMULUS  # always altocumulus at low cov
-        assert l is CloudGenus.STRATUS  # cov=0.05 ≤ 0.18 → degenerate stratus
+        assert lo is CloudGenus.STRATUS  # cov=0.05 ≤ 0.18 → degenerate stratus
 
     def test_hp_residual_cirrus(self):
         # Classic mares' tails: cov=0.08, den=0.30 → all three bands.
-        h, m, l = classify_genus(0.08, 0.30, 0.0, Regime.HIGH_PRESSURE)
+        h, m, lo = classify_genus(0.08, 0.30, 0.0, Regime.HIGH_PRESSURE)
         assert h is CloudGenus.CIRRUS
         assert m is CloudGenus.ALTOCUMULUS
         # cov=0.08 ≤ 0.18 → STRATUS (degenerate thin); CUMULUS threshold not reached
-        assert l is CloudGenus.STRATUS
+        assert lo is CloudGenus.STRATUS
 
     def test_hp_moderate_coverage(self):
         # Moderate cover on a high-pressure day: fair-weather cumulus.
-        h, m, l = classify_genus(0.35, 0.40, 0.0, Regime.HIGH_PRESSURE)
+        h, m, lo = classify_genus(0.35, 0.40, 0.0, Regime.HIGH_PRESSURE)
         assert h is CloudGenus.CIRRUS  # cov=0.35 ≤ 0.55 → CIRRUS (not CIRROSTRATUS)
         assert m is CloudGenus.ALTOCUMULUS  # cov=0.35 > 0.30 but still ALTOCUMULUS
-        assert l is CloudGenus.CUMULUS  # 0.18 < cov=0.35 < 0.55 → CUMULUS
+        assert lo is CloudGenus.CUMULUS  # 0.18 < cov=0.35 < 0.55 → CUMULUS
 
     # --- MIXED ---
 
     def test_mixed_scattered_cumulus(self):
         # Light cover, no rain → fair-weather CUMULUS low.
-        h, m, l = classify_genus(0.30, 0.40, 0.0, Regime.MIXED)
+        h, m, lo = classify_genus(0.30, 0.40, 0.0, Regime.MIXED)
         assert h is CloudGenus.CIRRUS
         assert m is CloudGenus.ALTOCUMULUS
-        assert l is CloudGenus.CUMULUS  # 0.18 < cov=0.30 < 0.55
+        assert lo is CloudGenus.CUMULUS  # 0.18 < cov=0.30 < 0.55
 
     def test_mixed_overcast_no_rain(self):
         # High cover, no precip → STRATOCUMULUS low (lumpy overcast).
         # SUSPICION: the code uses `(cov > 0.55) | (frontal & (cov > 0.45))` for
         # STRATOCUMULUS. In MIXED regime, frontal=False, so only `cov > 0.55` fires.
-        h, m, l = classify_genus(0.80, 0.65, 0.0, Regime.MIXED)
+        h, m, lo = classify_genus(0.80, 0.65, 0.0, Regime.MIXED)
         assert h is CloudGenus.CIRROSTRATUS  # cov=0.80 > 0.55
         assert m is CloudGenus.ALTOSTRATUS  # cov > 0.55 AND den > 0.55
-        assert l is CloudGenus.STRATOCUMULUS  # cov=0.80 > 0.55, no precip
+        assert lo is CloudGenus.STRATOCUMULUS  # cov=0.80 > 0.55, no precip
 
     def test_mixed_light_rain(self):
         # pre=0.10 is just above the 0.05 rain-layer threshold → STRATUS (rain deck).
-        h, m, l = classify_genus(0.60, 0.65, 0.10, Regime.MIXED)
-        assert l is CloudGenus.STRATUS  # rain layer threshold (pre > 0.05)
+        h, m, lo = classify_genus(0.60, 0.65, 0.10, Regime.MIXED)
+        assert lo is CloudGenus.STRATUS  # rain layer threshold (pre > 0.05)
         assert h is CloudGenus.CIRROSTRATUS  # cov=0.60 > 0.55
         assert m is CloudGenus.ALTOSTRATUS  # cov > 0.55 AND den > 0.55
 
     def test_mixed_heavy_rain_cumulonimbus(self):
         # pre=0.50 is just above 0.45 → CUMULONIMBUS tower.
-        h, m, l = classify_genus(0.90, 0.90, 0.50, Regime.MIXED)
-        assert l is CloudGenus.CUMULONIMBUS
+        _, _, lo = classify_genus(0.90, 0.90, 0.50, Regime.MIXED)
+        assert lo is CloudGenus.CUMULONIMBUS
 
     # --- FRONTAL ---
 
@@ -119,8 +119,8 @@ class TestClassifyGenusGoldenMapping:
         # `frontal & (cov > 0.45)` which is True → STRATOCUMULUS (not CUMULUS).
         # NOTE: this differs from MIXED at the same cov=0.50 (which yields CUMULUS).
         # Pin current behaviour.
-        h, m, l = classify_genus(0.50, 0.55, 0.0, Regime.FRONTAL)
-        assert l is CloudGenus.STRATOCUMULUS  # frontal branch fires at cov > 0.45
+        h, m, lo = classify_genus(0.50, 0.55, 0.0, Regime.FRONTAL)
+        assert lo is CloudGenus.STRATOCUMULUS  # frontal branch fires at cov > 0.45
         assert h is CloudGenus.CIRRUS  # cov=0.50 ≤ 0.55 → not cirrostratus
         # cov=0.50 > 0.30 so altocumulus is still altocumulus (cov+den threshold not met)
         # cov=0.50 NOT > 0.55 so altostratus branch doesn't fire
@@ -128,22 +128,22 @@ class TestClassifyGenusGoldenMapping:
 
     def test_frontal_full_overcast_stack(self):
         # Classic frontal overcast: cirrostratus / altostratus / stratocumulus.
-        h, m, l = classify_genus(0.85, 0.80, 0.0, Regime.FRONTAL)
+        h, m, lo = classify_genus(0.85, 0.80, 0.0, Regime.FRONTAL)
         assert h is CloudGenus.CIRROSTRATUS  # cov > 0.55
         assert m is CloudGenus.ALTOSTRATUS  # cov > 0.55 AND den > 0.55
-        assert l is CloudGenus.STRATOCUMULUS  # cov > 0.55, no precip
+        assert lo is CloudGenus.STRATOCUMULUS  # cov > 0.55, no precip
 
     def test_frontal_moderate_precip_stratus(self):
         # FRONTAL with moderate precip (rain layer, not yet CUMULONIMBUS).
-        h, m, l = classify_genus(0.80, 0.75, 0.30, Regime.FRONTAL)
-        assert l is CloudGenus.STRATUS  # pre=0.30 > 0.05 → rain layer
+        h, m, lo = classify_genus(0.80, 0.75, 0.30, Regime.FRONTAL)
+        assert lo is CloudGenus.STRATUS  # pre=0.30 > 0.05 → rain layer
         assert h is CloudGenus.CIRROSTRATUS
         assert m is CloudGenus.ALTOSTRATUS
 
     def test_frontal_storm_cumulonimbus(self):
         # FRONTAL THUNDERSTORM: high precip → CUMULONIMBUS tower.
-        h, m, l = classify_genus(0.98, 0.95, 0.95, Regime.FRONTAL)
-        assert l is CloudGenus.CUMULONIMBUS
+        h, m, lo = classify_genus(0.98, 0.95, 0.95, Regime.FRONTAL)
+        assert lo is CloudGenus.CUMULONIMBUS
         assert h is CloudGenus.CIRROSTRATUS
         assert m is CloudGenus.ALTOSTRATUS
 
@@ -158,48 +158,48 @@ class TestClassifyGenusBoundaries:
 
     def test_all_zeros(self):
         # coverage=0, density=0, precip=0 → all thresholds below minimum.
-        h, m, l = classify_genus(0.0, 0.0, 0.0, Regime.HIGH_PRESSURE)
+        h, m, lo = classify_genus(0.0, 0.0, 0.0, Regime.HIGH_PRESSURE)
         assert h is CloudGenus.CIRRUS  # cov=0 ≤ 0.55
         assert m is CloudGenus.ALTOCUMULUS  # default for mid
-        assert l is CloudGenus.STRATUS  # cov=0 ≤ 0.18 → degenerate stratus
+        assert lo is CloudGenus.STRATUS  # cov=0 ≤ 0.18 → degenerate stratus
 
     def test_all_ones(self):
         # coverage=1, density=1, precip=1 → top of every scale.
-        h, m, l = classify_genus(1.0, 1.0, 1.0, Regime.FRONTAL)
-        assert l is CloudGenus.CUMULONIMBUS  # pre=1.0 > 0.45 → storm tower
+        h, m, lo = classify_genus(1.0, 1.0, 1.0, Regime.FRONTAL)
+        assert lo is CloudGenus.CUMULONIMBUS  # pre=1.0 > 0.45 → storm tower
         assert h is CloudGenus.CIRROSTRATUS  # cov=1.0 > 0.55
         assert m is CloudGenus.ALTOSTRATUS  # cov AND den > 0.55
 
     def test_precip_exactly_at_cumulonimbus_threshold(self):
         # pre=0.45 is NOT > 0.45 (strict), so → STRATUS not CUMULONIMBUS.
-        _, _, l = classify_genus(0.9, 0.9, 0.45, Regime.FRONTAL)
-        assert l is CloudGenus.STRATUS  # strict threshold: 0.45 is NOT > 0.45
+        _, _, lo = classify_genus(0.9, 0.9, 0.45, Regime.FRONTAL)
+        assert lo is CloudGenus.STRATUS  # strict threshold: 0.45 is NOT > 0.45
 
     def test_precip_just_above_cumulonimbus_threshold(self):
         # pre just above 0.45 tips into CUMULONIMBUS.
-        _, _, l = classify_genus(0.9, 0.9, 0.451, Regime.FRONTAL)
-        assert l is CloudGenus.CUMULONIMBUS
+        _, _, lo = classify_genus(0.9, 0.9, 0.451, Regime.FRONTAL)
+        assert lo is CloudGenus.CUMULONIMBUS
 
     def test_precip_exactly_at_rain_layer_threshold(self):
         # pre=0.05 is NOT > 0.05 (strict) → doesn't trigger rain layer.
         # With cov=0.7 (> 0.55), STRATOCUMULUS fires before we reach pre check.
-        _, _, l = classify_genus(0.7, 0.7, 0.05, Regime.MIXED)
-        assert l is CloudGenus.STRATOCUMULUS  # pre=0.05 NOT > 0.05 → no rain layer
+        _, _, lo = classify_genus(0.7, 0.7, 0.05, Regime.MIXED)
+        assert lo is CloudGenus.STRATOCUMULUS  # pre=0.05 NOT > 0.05 → no rain layer
 
     def test_precip_just_above_rain_layer_threshold(self):
         # pre=0.06 > 0.05 → STRATUS rain layer (overwrites STRATOCUMULUS).
-        _, _, l = classify_genus(0.7, 0.7, 0.06, Regime.MIXED)
-        assert l is CloudGenus.STRATUS  # rain layer wins over stratocumulus
+        _, _, lo = classify_genus(0.7, 0.7, 0.06, Regime.MIXED)
+        assert lo is CloudGenus.STRATUS  # rain layer wins over stratocumulus
 
     def test_cov_at_cumulus_threshold(self):
         # cov=0.18 is NOT > 0.18 (strict) → stays STRATUS not CUMULUS.
-        _, _, l = classify_genus(0.18, 0.3, 0.0, Regime.MIXED)
-        assert l is CloudGenus.STRATUS  # strict: 0.18 is NOT > 0.18
+        _, _, lo = classify_genus(0.18, 0.3, 0.0, Regime.MIXED)
+        assert lo is CloudGenus.STRATUS  # strict: 0.18 is NOT > 0.18
 
     def test_cov_just_above_cumulus_threshold(self):
         # cov=0.19 > 0.18 → CUMULUS.
-        _, _, l = classify_genus(0.19, 0.3, 0.0, Regime.MIXED)
-        assert l is CloudGenus.CUMULUS
+        _, _, lo = classify_genus(0.19, 0.3, 0.0, Regime.MIXED)
+        assert lo is CloudGenus.CUMULUS
 
     def test_frontal_strato_at_lower_cov_than_mixed(self):
         # In FRONTAL regime, STRATOCUMULUS fires at cov > 0.45 (not 0.55).
@@ -225,12 +225,12 @@ class TestClassifyGenusVectorization:
         cov = np.array([0.05, 0.30, 0.60, 0.90, 0.98])
         den = np.array([0.20, 0.40, 0.65, 0.70, 0.95])
         pre = np.array([0.00, 0.00, 0.00, 0.30, 0.90])
-        h, m, l = classify_genus(cov, den, pre, Regime.FRONTAL)
+        h, m, lo = classify_genus(cov, den, pre, Regime.FRONTAL)
         assert h.shape == (5,)
         assert m.shape == (5,)
-        assert l.shape == (5,)
+        assert lo.shape == (5,)
         assert h.dtype == object
-        assert l.dtype == object
+        assert lo.dtype == object
 
     def test_array_scalar_parity_all_regimes(self):
         # For all three regimes, array call matches per-element scalar call.
@@ -256,7 +256,7 @@ class TestClassifyGenusVectorization:
     def test_single_element_array_returns_ndarrays(self):
         # A length-1 array → ndarrays even though logically scalar.
         cov = np.array([0.5])
-        h, m, l = classify_genus(cov, cov, np.array([0.0]), Regime.MIXED)
+        h, _, _ = classify_genus(cov, cov, np.array([0.0]), Regime.MIXED)
         assert isinstance(h, np.ndarray)
         assert h.shape == (1,)
 

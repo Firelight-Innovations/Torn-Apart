@@ -1,11 +1,14 @@
 """
-sky/sky_state.py — SkyState snapshot dataclass and the SkySystem composer.
+sky/sky_state.py — SkySystem composer (headless sky/weather core).
 
 ``SkySystem`` is the headless half of the sky/weather feature: once per frame
 it reads the game clock, asks :class:`WeatherSystem` for blended weather
 parameters, evaluates the celestial geometry and color ramps, and emits one
 frozen :class:`SkyState` snapshot.  The render half (``world/``) consumes the
 snapshot — this module never touches panda3d.
+
+:class:`SkyState` is defined in :mod:`fire_engine.world.sky.types` and
+re-exported here for backward compatibility.
 
 Art direction (Minecraft × Morrowind)
 -------------------------------------
@@ -33,19 +36,19 @@ Example
     sky = SkySystem(cfg, clock, bus)
     state = sky.update()                  # call once per frame
     print(state.sun_dir, state.daylight, state.rain_intensity)
+
+Docs: docs/systems/world.sky.md
 """
 
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
 
 import numpy as np
 
 from fire_engine.core.clock import Clock
 from fire_engine.core.config import Config
 from fire_engine.core.event_bus import EventBus
-from fire_engine.core.math3d import Vec3
 from fire_engine.core.profiler import get_profiler as _profiler
 from fire_engine.world.sky.celestial import (
     DAYLIGHT_Z_HI,
@@ -56,6 +59,7 @@ from fire_engine.world.sky.celestial import (
     smoothstep,
     sun_direction,
 )
+from fire_engine.world.sky.types import SkyState  # re-export; definition lives in types.py
 from fire_engine.world.weather import LocalWeather, WeatherSystem
 
 __all__ = ["MOON_CYCLE_DAYS", "SkyState", "SkySystem"]
@@ -231,99 +235,6 @@ def _weathered(c: tuple[float, float, float], w: float) -> tuple[float, float, f
 
 
 # ---------------------------------------------------------------------------
-# SkyState
-# ---------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class SkyState:
-    """
-    Immutable per-frame sky/weather snapshot consumed by the render layer.
-
-    All directions are unit ``Vec3`` (Z-up, forward = +Y), pointing FROM the
-    scene TOWARD the body.  All colors are linear RGB tuples with components
-    in 0–1.  Distances meters, time seconds, angles radians.
-
-    Attributes
-    ----------
-    sun_dir : Vec3 — toward the sun; ``z > 0`` = above the horizon.
-    moon_dir : Vec3 — toward the moon (roughly opposite the sun).
-    sun_color : tuple — sun light color (warm amber at horizon → near-white).
-    sun_intensity : float — 0–1; exactly 0 when the sun is below the horizon,
-        dimmed by cloud cover.
-    moon_phase : float — 0–1 lunar phase from ``game_day``
-        (0 = new, 0.5 = full, cycle = ``MOON_CYCLE_DAYS`` days).
-    daylight : float — smooth 0–1 day factor (0 night, 1 midday; 0.5 at
-        sunrise/sunset, saturating ~1 game hour past the horizon).
-    star_visibility : float — 0–1; 1 = clear night.  Clouds hide stars:
-        ``(1 − daylight) · (1 − 0.85 · cloud_coverage)``.
-    zenith_color : tuple — sky gradient top color (weather-graded).
-    horizon_color : tuple — sky gradient horizon color (weather-graded).
-    cloud_coverage : float — 0–1 fraction of cloud cells filled (blended).
-    cloud_density : float — 0–1 cloud opacity/darkness (blended).
-    fog_density : float — exponential fog coefficient, 1/m (0 = none;
-        typical FOG weather ≈ 0.025 → ~120 m visibility).
-    fog_color : tuple — horizon color blended toward weather gray.
-    rain_intensity : float — 0–1.
-    wind_dir : tuple[float, float] — unit XY direction wind blows toward.
-    wind_speed : float — m/s.
-    terrain_light_scale : tuple — RGB multiplier the renderer applies to
-        terrain vertex light: clear day ≈ (1, 1, 1); night floor
-        ≈ (0.16, 0.19, 0.30); warm-tinted at dawn/dusk; dimmed further by
-        weather (overcast ~0.75×, storm ~0.55×).  Smooth everywhere.
-        Used by the CPU lighting backend only; the GPU volumetric pipeline
-        reads the three HDR radiance fields below instead.
-    sun_radiance : tuple — **linear HDR RGB** direct-sun light reaching the
-        ground (atmosphere-transmitted): clear noon ≈ (3.2, 3.0, 2.6);
-        strongly orange and dimmer near sunset (the R/B ratio rises as the
-        sun drops); smooth twilight tail to exactly 0 at −4° elevation;
-        sharply attenuated by cloud cover.  Consumed by the GPU lighting
-        pipeline as the sun injection color (`lighting/gpu.py`).
-    moon_radiance : tuple — linear HDR RGB moonlight: pale blue-white, full
-        moon high in a clear sky ≈ (0.06, 0.07, 0.10), scaled by the phase's
-        illuminated fraction and elevation; 0 below the horizon.
-    sky_ambient : tuple — linear HDR RGB hemispheric skylight irradiance
-        (the GI skylight injection): clear noon ≈ (0.21, 0.40, 0.71);
-        warm-gray at sunset; overcast = desaturated at similar luminance;
-        clear moonless night ≈ (0.010, 0.012, 0.022) plus a small moonlight
-        bump when the moon is up.
-
-    Example
-    -------
-    >>> state = sky_system.update()
-    >>> if state.sun_dir.z > 0.0:
-    ...     render_sun(state.sun_dir, state.sun_color, state.sun_intensity)
-    """
-
-    # celestial
-    sun_dir: Vec3
-    moon_dir: Vec3
-    sun_color: tuple[float, float, float]
-    sun_intensity: float
-    moon_phase: float
-    daylight: float
-    star_visibility: float
-    # sky gradient
-    zenith_color: tuple[float, float, float]
-    horizon_color: tuple[float, float, float]
-    # weather (already blended/smoothed)
-    cloud_coverage: float
-    cloud_density: float
-    fog_density: float
-    fog_color: tuple[float, float, float]
-    rain_intensity: float
-    wind_dir: tuple[float, float]
-    wind_speed: float
-    # lighting integration
-    terrain_light_scale: tuple[float, float, float]
-    # HDR radiance contract for the GPU volumetric lighting pipeline
-    # (linear RGB; see the attribute docs above for calibrated ranges).
-    sun_radiance: tuple[float, float, float] = (0.0, 0.0, 0.0)
-    moon_radiance: tuple[float, float, float] = (0.0, 0.0, 0.0)
-    sky_ambient: tuple[float, float, float] = (0.0, 0.0, 0.0)
-
-
-# ---------------------------------------------------------------------------
 # SkySystem
 # ---------------------------------------------------------------------------
 
@@ -354,6 +265,8 @@ class SkySystem:
     >>> state = sky.update()        # once per frame
     >>> sky.state is state          # cached last snapshot
     True
+
+    Docs: docs/systems/world.sky.md
     """
 
     def __init__(self, config: Config, clock: Clock, bus: EventBus) -> None:
@@ -386,6 +299,8 @@ class SkySystem:
         -------
         SkyState — the freshly computed snapshot (also available via
         :attr:`state` until the next update).
+
+        Docs: docs/systems/world.sky.md
         """
         day = int(self._clock.game_day)
         tod = float(self._clock.game_time_of_day)
@@ -422,30 +337,50 @@ class SkySystem:
         atmo_zen = self._lut.sample(self._lut.zenith, z)
         atmo_hor = self._lut.sample(self._lut.horizon, z)
         zenith = _weathered(
-            tuple(min(1.0, atmo_zen[i] + _NIGHT_ZENITH[i] * night) for i in range(3)), w
+            (
+                min(1.0, atmo_zen[0] + _NIGHT_ZENITH[0] * night),
+                min(1.0, atmo_zen[1] + _NIGHT_ZENITH[1] * night),
+                min(1.0, atmo_zen[2] + _NIGHT_ZENITH[2] * night),
+            ),
+            w,
         )
         horizon = _weathered(
-            tuple(min(1.0, atmo_hor[i] + _NIGHT_HORIZON[i] * night) for i in range(3)), w
+            (
+                min(1.0, atmo_hor[0] + _NIGHT_HORIZON[0] * night),
+                min(1.0, atmo_hor[1] + _NIGHT_HORIZON[1] * night),
+                min(1.0, atmo_hor[2] + _NIGHT_HORIZON[2] * night),
+            ),
+            w,
         )
 
         # --- HDR radiance contract for the GPU lighting pipeline ---------
         cloud_block = wp.cloud_coverage * wp.cloud_density
         sun_clear = self._lut.sample(self._lut.sun, z)
         sun_atten = 1.0 - 0.92 * cloud_block  # overcast ⇒ diffuse, no disc
-        sun_radiance = tuple(c * sun_atten for c in sun_clear)
+        sun_radiance: tuple[float, float, float] = (
+            sun_clear[0] * sun_atten,
+            sun_clear[1] * sun_atten,
+            sun_clear[2] * sun_atten,
+        )
 
         moon_z = float(moon.z)
         illum = 0.5 * (1.0 - math.cos(2.0 * math.pi * moon_phase))
         moon_up = smoothstep(moon_z, 0.0, 0.25)
         moon_atten = 1.0 - 0.90 * cloud_block
-        moon_radiance = tuple(b * illum * moon_up * moon_atten for b in _MOON_BASE_RADIANCE)
+        moon_radiance: tuple[float, float, float] = (
+            _MOON_BASE_RADIANCE[0] * illum * moon_up * moon_atten,
+            _MOON_BASE_RADIANCE[1] * illum * moon_up * moon_atten,
+            _MOON_BASE_RADIANCE[2] * illum * moon_up * moon_atten,
+        )
 
         # Skylight: physical ambient, desaturated (not darkened) by overcast,
         # plus the night floor and a small moonlit-sky bump.
         amb = self._lut.sample(self._lut.ambient, z)
         amb = lerp_color(amb, _luminance_gray(amb), 0.8 * w)
-        sky_ambient = tuple(
-            amb[i] + _NIGHT_AMBIENT[i] * night + moon_radiance[i] * 0.18 for i in range(3)
+        sky_ambient: tuple[float, float, float] = (
+            amb[0] + _NIGHT_AMBIENT[0] * night + moon_radiance[0] * 0.18,
+            amb[1] + _NIGHT_AMBIENT[1] * night + moon_radiance[1] * 0.18,
+            amb[2] + _NIGHT_AMBIENT[2] * night + moon_radiance[2] * 0.18,
         )
 
         # Fog color: horizon hue pulled toward a neutral gray that itself
@@ -499,6 +434,8 @@ class SkySystem:
 
         If :meth:`update` has never been called, it is invoked lazily once
         so the renderer can always read a valid snapshot at boot.
+
+        Docs: docs/systems/world.sky.md
         """
         if self._state is None:
             return self.update()

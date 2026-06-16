@@ -35,6 +35,8 @@ Example
     # Drive fixed_update components
     for _ in clock.fixed_steps():
         physics_tick()           # called 0 or 1 times per frame at 50 Hz
+
+Docs: docs/systems/core.md
 """
 
 from __future__ import annotations
@@ -75,6 +77,8 @@ class Clock:
     game_day        : int   — current in-game day number (starts at 0).
     game_time_of_day: float — elapsed seconds within the current in-game day.
     total_real_time : float — total real seconds elapsed since boot / load.
+
+    Docs: docs/systems/core.md
     """
 
     def __init__(
@@ -101,7 +105,10 @@ class Clock:
 
     @property
     def fixed_dt(self) -> float:
-        """Fixed timestep in seconds (50 Hz = 0.02 s by default)."""
+        """Fixed timestep in seconds (50 Hz = 0.02 s by default).
+
+        Docs: docs/systems/core.md
+        """
         return self._fixed_dt
 
     @property
@@ -120,11 +127,17 @@ class Clock:
         >>> clock.game_time_scale          # 60.0 — normal speed
         >>> clock.game_time_scale = 3600.0 # 1 real second = 1 game hour (dev)
         >>> clock.update(1.0)              # advances the day by one game hour
+
+        Docs: docs/systems/core.md
         """
         return self._game_time_scale
 
     @game_time_scale.setter
     def game_time_scale(self, value: float) -> None:
+        """Set the real→game time multiplier.  Takes effect from the next update() call.
+
+        Docs: docs/systems/core.md
+        """
         self._game_time_scale = float(value)
 
     def update(self, real_dt: float) -> None:
@@ -144,6 +157,8 @@ class Clock:
         - Updates ``dt``, ``total_real_time``, and the fixed-step accumulator.
         - Advances the in-game calendar; publishes ``GameDayTickEvent`` via the
           EventBus (if configured) whenever a new in-game day begins.
+
+        Docs: docs/systems/core.md
         """
         self.dt = float(real_dt)
         self.total_real_time += self.dt
@@ -183,6 +198,8 @@ class Clock:
         -------
         >>> clock.update(0.05)          # 50 ms frame, fixed_dt = 0.02
         >>> list(clock.fixed_steps())   # → [0.02, 0.02]  (2 ticks, 0.01 s residual)
+
+        Docs: docs/systems/core.md
         """
         steps = 0
         while self._accumulator >= self._fixed_dt and steps < MAX_FIXED_STEPS:
@@ -198,7 +215,7 @@ class Clock:
     # Saveable protocol support
     # ------------------------------------------------------------------
 
-    def get_state(self) -> dict:
+    def get_state(self) -> dict[str, float | int]:
         """
         Return the clock state as a plain dict of primitives for serialisation.
 
@@ -211,6 +228,8 @@ class Clock:
             game_time_of_day: float  (seconds within current day)
             total_real_time : float  (seconds)
             accumulator     : float  (fixed-step residual, seconds)
+
+        Docs: docs/systems/core.md
         """
         return {
             "game_day": self.game_day,
@@ -219,7 +238,7 @@ class Clock:
             "accumulator": self._accumulator,
         }
 
-    def set_state(self, state: dict) -> None:
+    def set_state(self, state: dict[str, float | int]) -> None:
         """
         Restore clock state from a plain dict (inverse of ``get_state``).
 
@@ -228,6 +247,8 @@ class Clock:
         Parameters
         ----------
         state : dict — as produced by ``get_state()``.
+
+        Docs: docs/systems/core.md
         """
         self.game_day = int(state["game_day"])
         self.game_time_of_day = float(state["game_time_of_day"])

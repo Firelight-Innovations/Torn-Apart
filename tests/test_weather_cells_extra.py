@@ -22,6 +22,7 @@ Headless only.  No panda3d imports.  Fixed seed throughout.
 from __future__ import annotations
 
 import math
+from typing import ClassVar
 
 import numpy as np
 import pytest
@@ -72,7 +73,7 @@ class TestRegimeAmbient:
 
     # Golden values read from _REGIME_AMBIENT in cells.py — pinning current
     # behaviour so any silent edit trips the test.
-    GOLDEN = {
+    GOLDEN: ClassVar[dict] = {
         Regime.HIGH_PRESSURE: (0.08, 0.30),
         Regime.MIXED: (0.40, 0.52),
         Regime.FRONTAL: (0.75, 0.72),
@@ -322,9 +323,9 @@ class TestContributionVectorised:
         pts = np.array(
             [
                 center,
-                center + [r, 0.0],
-                center + [0.0, r],
-                center + [10 * r, 0.0],
+                center + [r, 0.0],  # noqa: RUF005 — numpy element-wise add, not list concat
+                center + [0.0, r],  # noqa: RUF005 — numpy element-wise add, not list concat
+                center + [10 * r, 0.0],  # noqa: RUF005 — numpy element-wise add, not list concat
             ]
         )
         out = self.c.contribution(pts, self.t, self.syn)

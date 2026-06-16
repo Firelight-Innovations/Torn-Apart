@@ -41,6 +41,7 @@ Then an agent reads ``profiling/report.json`` (stable, versioned schema — see
 from __future__ import annotations
 
 import argparse
+import contextlib
 import dataclasses
 import json
 import math
@@ -124,7 +125,7 @@ def run_windowed(seed: int, frames: int, warmup: int, pstats: bool) -> dict:
 
     prof = _enable_profiler(app._config, frames)
     if pstats:
-        from fire_engine.render.profiler_bridge import PStatsBridge
+        from fire_engine.render.bridges.profiler_bridge import PStatsBridge
 
         PStatsBridge(prof, connect=True)
 
@@ -167,10 +168,8 @@ def run_windowed(seed: int, frames: int, warmup: int, pstats: bool) -> dict:
     # Clean shutdown (don't enter the blocking loop).
     pipeline = getattr(app, "lighting_pipeline", None)
     if pipeline is not None:
-        try:
+        with contextlib.suppress(Exception):
             pipeline.shutdown()
-        except Exception:
-            pass
     return snap
 
 

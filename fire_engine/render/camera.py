@@ -26,14 +26,16 @@ Example
     cam = camera_go.add_component(CameraComponent)
     # Each frame, App syncs:
     #   cam.sync_to_panda()
+
+Docs: docs/systems/render.md
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 # Panda3D imports are allowed in world/ per ARCHITECTURE §3
-from panda3d.core import LPoint3f, LQuaternionf  # type: ignore[import]
+from panda3d.core import LPoint3f, LQuaternionf
 
 from fire_engine.render.component import Component
 
@@ -61,16 +63,21 @@ class CameraComponent(Component):
         # In App.setup():
         self.camera_go = instantiate(name="MainCamera")
         self.camera_go.add_component(CameraComponent, base=self)
+
+    Docs: docs/systems/render.md
     """
 
     __slots__ = ("base",)
 
-    def __init__(self, base=None) -> None:
+    def __init__(self, base: Any = None) -> None:
         super().__init__()
         self.base = base  # Panda3D ShowBase instance
 
     def awake(self) -> None:
-        """Disable Panda3D's default camera node so we drive it manually."""
+        """Disable Panda3D's default camera node so we drive it manually.
+
+        Docs: docs/systems/render.md
+        """
         if self.base is not None:
             # Detach camera from default camera group to prevent conflicts
             pass  # Panda3D camera is already directly accessible via base.camera
@@ -87,6 +94,8 @@ class CameraComponent(Component):
         ----
         This is the ONLY place math3d types are converted to Panda3D types in
         the camera pipeline.
+
+        Docs: docs/systems/render.md
         """
         if self.base is None or self.transform is None:
             return

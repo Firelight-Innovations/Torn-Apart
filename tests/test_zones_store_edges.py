@@ -125,7 +125,7 @@ class TestApplyDeltaVersionHandling:
     def test_apply_delta_empty_dict_is_noop(self):
         # Empty delta {} → early return, store unchanged.
         store = ZoneStore()
-        v = store.add("grass", (0.0, 0.0, 0.0), (5.0, 5.0, 2.0))
+        store.add("grass", (0.0, 0.0, 0.0), (5.0, 5.0, 2.0))
         store.mark_baseline()
         pre_vol = store.volumes()
         store.apply_delta({})
@@ -221,7 +221,7 @@ class TestVolumesFilteringAndOrdering:
 class TestApplyDeltaEmpty:
     def test_empty_delta_leaves_volumes_unchanged(self):
         store = ZoneStore()
-        v = store.add("grass", (0.0, 0.0, 0.0), (6.0, 6.0, 2.0))
+        store.add("grass", (0.0, 0.0, 0.0), (6.0, 6.0, 2.0))
         store.mark_baseline()
         pre = store.volumes()
         pre_ver = store.version
@@ -315,20 +315,20 @@ class TestContainsXY:
     def test_min_corner_is_inclusive(self):
         # Exactly at min — should be inside (>=).
         result = self.vol.contains_xy(np.array([2.0]), np.array([1.0]))
-        assert result[0] == True
+        assert result[0]
 
     def test_max_corner_is_exclusive(self):
         # Exactly at max — should be outside (< max).
         result = self.vol.contains_xy(np.array([6.0]), np.array([5.0]))
-        assert result[0] == False
+        assert not result[0]
 
     def test_just_inside_max(self):
         result = self.vol.contains_xy(np.array([6.0 - 1e-9]), np.array([5.0 - 1e-9]))
-        assert result[0] == True
+        assert result[0]
 
     def test_just_outside_min(self):
         result = self.vol.contains_xy(np.array([2.0 - 1e-9]), np.array([1.0]))
-        assert result[0] == False
+        assert not result[0]
 
     # --- scalar-like inputs ---
 

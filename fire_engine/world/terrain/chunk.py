@@ -26,6 +26,8 @@ The world-space centre of voxel ``(x, y, z)`` is::
 
 A value of ``0`` is **air**; any value ``>= 1`` is a **solid material id**
 (1 = default ground in Session 1).  Stored as ``uint8`` (256 material ids max).
+
+Docs: docs/systems/world.terrain.md
 """
 
 from __future__ import annotations
@@ -65,6 +67,8 @@ class Chunk:
     >>> c.materials[0, 0, 0] = 1          # make one voxel solid
     >>> c.is_solid_mask()[0, 0, 0]
     np.True_
+
+    Docs: docs/systems/world.terrain.md
     """
 
     __slots__ = ("_chunk_size", "_voxel_size", "coord", "dirty", "edited", "materials")
@@ -112,13 +116,18 @@ class Chunk:
 
         ``world_origin = coord * chunk_meters`` where
         ``chunk_meters = chunk_size * voxel_size`` (16.0 m with the defaults).
+
+        Docs: docs/systems/world.terrain.md
         """
         m = self._chunk_size * self._voxel_size
         return Vec3(self.coord[0] * m, self.coord[1] * m, self.coord[2] * m)
 
     @property
     def chunk_meters(self) -> float:
-        """World-space side length of the chunk in meters (16.0 m default)."""
+        """World-space side length of the chunk in meters (16.0 m default).
+
+        Docs: docs/systems/world.terrain.md
+        """
         return self._chunk_size * self._voxel_size
 
     def is_solid_mask(self) -> np.ndarray:
@@ -132,6 +141,8 @@ class Chunk:
         -------
         numpy.ndarray
             ``bool`` array, ``materials > 0``.
+
+        Docs: docs/systems/world.terrain.md
         """
         return self.materials > 0
 

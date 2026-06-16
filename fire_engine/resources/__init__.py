@@ -18,7 +18,7 @@ Quick start
 -----------
     # Boot (world/app.py):
     from fire_engine.resources import default_manager
-    from fire_engine.render.resource_adapter import register_panda_loaders
+    from fire_engine.render.bridges.resource_adapter import register_panda_loaders
     register_panda_loaders(default_manager)
 
     # Usage anywhere in the engine:
@@ -47,21 +47,16 @@ from fire_engine.resources.manager import (
 )
 
 __all__ = [
-    # Error
-    "UnknownResourceFormatError",
-    # Loader registry
-    "LoaderCallable",
-    "register_loader",
-    "dispatch",
-    "registered_suffixes",
-    # Handle + manager class
     "Handle",
+    "LoaderCallable",
     "ResourceManager",
-    # Module-level default instance
-    "default_manager",
-    # Convenience functions (operate on default_manager)
-    "load",
+    "UnknownResourceFormatError",
     "acquire",
+    "default_manager",
+    "dispatch",
+    "load",
+    "register_loader",
+    "registered_suffixes",
     "release",
     "unload_unreferenced",
 ]

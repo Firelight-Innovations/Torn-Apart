@@ -48,6 +48,8 @@ Example
     syn = Synoptic(load_config())
     (dx, dy), speed = syn.wind(t_abs=3 * 86400.0 + 8.5 * 3600.0)
     track_shift = syn.displacement(7200.0) - syn.displacement(3600.0)  # (2,)
+
+Docs: docs/systems/world.weather.md
 """
 
 from __future__ import annotations
@@ -88,6 +90,8 @@ class Synoptic:
     >>> (ux, uy), v = syn.wind(86400.0)     # noon-ish day 1
     >>> abs(math.hypot(ux, uy) - 1.0) < 1e-9 and v > 0.0
     True
+
+    Docs: docs/systems/world.weather.md
     """
 
     def __init__(self, config: Config) -> None:
@@ -140,6 +144,8 @@ class Synoptic:
         -------
         np.ndarray — shape ``(2,)`` for scalar input, ``(M, 2)`` for an
         ``(M,)`` array.  Units m/s, world XY, direction the wind blows TOWARD.
+
+        Docs: docs/systems/world.weather.md
         """
         t = np.asarray(t_abs, dtype=np.float64)
         scalar = t.ndim == 0
@@ -147,7 +153,8 @@ class Synoptic:
         # (M, 1, n) phase argument broadcast against (2, n) coefficients.
         arg = self._omega[None, None, :] * t[:, None, None] + self._phase[None, :, :]
         w = self._c[None, :] + (self._amp[None, :, :] * np.sin(arg)).sum(axis=2)
-        return w[0] if scalar else w
+        result: np.ndarray = w[0] if scalar else w
+        return result
 
     def displacement(self, t_abs: float | np.ndarray) -> np.ndarray:
         """
@@ -159,6 +166,8 @@ class Synoptic:
 
         Parameters / Returns — same shapes and conventions as
         :meth:`wind_vec`; units meters.
+
+        Docs: docs/systems/world.weather.md
         """
         t = np.asarray(t_abs, dtype=np.float64)
         scalar = t.ndim == 0
@@ -166,7 +175,8 @@ class Synoptic:
         arg = self._omega[None, None, :] * t[:, None, None] + self._phase[None, :, :]
         ripple = -((self._amp / self._omega)[None, :, :] * np.cos(arg)).sum(axis=2)
         d = self._c[None, :] * t[:, None] + ripple + self._d0[None, :]
-        return d[0] if scalar else d
+        result: np.ndarray = d[0] if scalar else d
+        return result
 
     def wind(self, t_abs: float) -> tuple[tuple[float, float], float]:
         """
@@ -180,6 +190,8 @@ class Synoptic:
         >>> (ux, uy), v = syn.wind(12 * 3600.0)
         >>> 1.5 <= v <= 11.0       # with default config band
         True
+
+        Docs: docs/systems/world.weather.md
         """
         w = self.wind_vec(float(t_abs))
         speed = float(math.hypot(w[0], w[1]))

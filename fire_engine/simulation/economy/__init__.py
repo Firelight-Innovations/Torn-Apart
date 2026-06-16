@@ -6,6 +6,10 @@ identical pricing path. Trade routes, hired managers, arbitrage.
 Imports allowed (ARCHITECTURE.md §4a.2): procedural, core.
 """
 
+from __future__ import annotations
+
+import numpy as np
+
 __all__ = ["GoodDef"]
 
 
@@ -15,7 +19,7 @@ class GoodDef:
     Implement in a later session per ARCHITECTURE.md §5.9.
     """
 
-    def generate(self, rng, **params):
+    def generate(self, rng: np.random.Generator, **params: object) -> None:
         raise NotImplementedError(
             "GoodDef.generate is future scope — see ARCHITECTURE.md §5.9 "
             "(Economy API). Not part of Session 1."

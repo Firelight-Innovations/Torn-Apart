@@ -7,7 +7,7 @@ twin of :func:`fire_engine.world.wind.pack_wind_field`: it turns the
 :meth:`fire_engine.world.weather.WeatherMap.rasterize` produces into a **float16**
 buffer in Panda3D's 2-D RAM layout, ready for a single
 ``Texture(F_rgba16).set_ram_image`` on the render thread
-(:class:`fire_engine.render.weather_renderer.WeatherMapComponent`).
+(:class:`fire_engine.render.sky.weather_renderer.WeatherMapComponent`).
 
 Stays in ``sky/`` (headless) rather than ``world/`` per Hard Rule 1: the
 panda3d-free packer returns plain ``bytes``; only ``world/`` constructs the
@@ -51,6 +51,8 @@ Example
 >>> data = pack_weather_map(raster)
 >>> len(data) == raster.shape[0] * raster.shape[1] * 4 * 2   # fp16 RGBA
 True
+
+Docs: docs/systems/world.sky.md
 """
 
 from __future__ import annotations
@@ -105,6 +107,8 @@ def pack_weather_map(raster: np.ndarray) -> bytes:
     >>> data = pack_weather_map(r)
     >>> len(data) == 4 * 4 * 4 * 2
     True
+
+    Docs: docs/systems/world.sky.md
     """
     arr = np.asarray(raster)
     if arr.ndim != 3 or arr.shape[2] != 4 or arr.shape[0] != arr.shape[1]:

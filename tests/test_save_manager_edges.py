@@ -147,7 +147,7 @@ class TestRegisterValid:
         was called (terrain before others per ARCHITECTURE §4a.4).
         """
         save_file = tmp_path / "order.ta"
-        cfg, clock, sm = _make_world()
+        _, _, sm = _make_world()
 
         first = _FakeSaveable("alpha", {"v": 1})
         second = _FakeSaveable("beta", {"v": 2})
@@ -156,7 +156,7 @@ class TestRegisterValid:
         sm.save(save_file)
 
         # Fresh manager, same config/clock — reload
-        cfg2, clock2, sm2 = _make_world()
+        _, _, sm2 = _make_world()
         first2 = _FakeSaveable("alpha")
         second2 = _FakeSaveable("beta")
         sm2.register(first2)
@@ -183,7 +183,7 @@ class TestRegisterValid:
                 self.applied.append(d)
                 call_order.append(self.save_key)
 
-        cfg3, clock3, sm3 = _make_world()
+        _, _, sm3 = _make_world()
         oa = _OrderedFake("alpha")
         ob = _OrderedFake("beta")
         sm3.register(oa)
@@ -204,7 +204,7 @@ class TestAtomicWrite:
     def test_no_tmp_file_after_successful_save(self, tmp_path):
         """After save(), no *.tmp file remains in tmp_path."""
         save_file = tmp_path / "world.ta"
-        cfg, clock, sm = _make_world()
+        _, _, sm = _make_world()
         sm.register(_FakeSaveable("s", {"k": 1}))
         sm.save(save_file)
 
@@ -214,7 +214,7 @@ class TestAtomicWrite:
     def test_save_file_exists_and_nonempty(self, tmp_path):
         """After save(), the destination file exists and has non-zero length."""
         save_file = tmp_path / "world.ta"
-        cfg, clock, sm = _make_world()
+        _, _, sm = _make_world()
         sm.register(_FakeSaveable("s", {"k": 1}))
         sm.save(save_file)
 
@@ -237,12 +237,12 @@ class TestAbsentSaveKey:
         save_file = tmp_path / "old.ta"
 
         # Save with only system "alpha"
-        cfg, clock, sm = _make_world()
+        _, _, sm = _make_world()
         sm.register(_FakeSaveable("alpha", {"v": 1}))
         sm.save(save_file)
 
         # Load with "alpha" + newly-added "gamma" (absent in save)
-        cfg2, clock2, sm2 = _make_world()
+        _, _, sm2 = _make_world()
         alpha2 = _FakeSaveable("alpha")
         gamma = _FakeSaveable("gamma")
         sm2.register(alpha2)
@@ -258,11 +258,11 @@ class TestAbsentSaveKey:
     def test_absent_key_system_gets_empty_applied_list(self, tmp_path):
         """Complement: the absent system's applied list is truly empty (not {})."""
         save_file = tmp_path / "only_alpha.ta"
-        cfg, clock, sm = _make_world()
+        _, _, sm = _make_world()
         sm.register(_FakeSaveable("alpha", {"x": 99}))
         sm.save(save_file)
 
-        cfg2, clock2, sm2 = _make_world()
+        _, _, sm2 = _make_world()
         new_sys = _FakeSaveable("newbie")
         sm2.register(_FakeSaveable("alpha"))
         sm2.register(new_sys)
@@ -288,12 +288,12 @@ class TestApplyDeltaError:
         save_file = tmp_path / "boom.ta"
 
         # Save with the exploding system
-        cfg, clock, sm = _make_world()
+        _, _, sm = _make_world()
         sm.register(_ExplodingApply())
         sm.save(save_file)
 
         # Load — expect apply_delta's RuntimeError to propagate
-        cfg2, clock2, sm2 = _make_world()
+        _, _, sm2 = _make_world()
         sm2.register(_ExplodingApply())
         with pytest.raises(RuntimeError, match="intentional apply_delta failure"):
             sm2.load(save_file)
@@ -309,19 +309,19 @@ class TestApplyDeltaError:
         """
         save_file = tmp_path / "boom_clock.ta"
 
-        cfg, clock, sm = _make_world()
+        _, clock, sm = _make_world()
         clock.update(99.0)  # advance clock
         sm.register(_ExplodingApply())
         sm.save(save_file)
 
-        cfg2, clock2, sm2 = _make_world()
+        _, clock2, sm2 = _make_world()
         original_state = clock2.get_state()
         sm2.register(_ExplodingApply())
 
-        try:
+        import contextlib
+
+        with contextlib.suppress(RuntimeError):
             sm2.load(save_file)
-        except RuntimeError:
-            pass
 
         # Pin: clock state WAS changed even though apply_delta raised
         # (i.e. load() is NOT atomic for apply_delta errors)
@@ -342,7 +342,7 @@ class TestConfigDigestMismatch:
         """Changing chunk_size (affects digest) → SaveIncompatibleError on load."""
         save_file = tmp_path / "digest.ta"
 
-        cfg, clock, sm = _make_world(seed=42)
+        cfg, _, sm = _make_world(seed=42)
         sm.register(_FakeSaveable("s", {}))
         sm.save(save_file)
 
@@ -361,7 +361,7 @@ class TestConfigDigestMismatch:
         """Changing voxel_size (affects digest) → SaveIncompatibleError on load."""
         save_file = tmp_path / "vox.ta"
 
-        cfg, clock, sm = _make_world(seed=77)
+        cfg, _, sm = _make_world(seed=77)
         sm.register(_FakeSaveable("s", {}))
         sm.save(save_file)
 
@@ -379,7 +379,7 @@ class TestConfigDigestMismatch:
         """Changing light_grid_scale (affects digest) → SaveIncompatibleError on load."""
         save_file = tmp_path / "lgs.ta"
 
-        cfg, clock, sm = _make_world(seed=55)
+        cfg, _, sm = _make_world(seed=55)
         sm.register(_FakeSaveable("s", {}))
         sm.save(save_file)
 
@@ -397,11 +397,11 @@ class TestConfigDigestMismatch:
         """world_seed mismatch → SaveIncompatibleError mentioning 'world_seed'."""
         save_file = tmp_path / "seed.ta"
 
-        cfg, clock, sm = _make_world(seed=111)
+        _, _, sm = _make_world(seed=111)
         sm.register(_FakeSaveable("s", {}))
         sm.save(save_file)
 
-        cfg2, clock2, sm2 = _make_world(seed=222)
+        _, _, sm2 = _make_world(seed=222)
         sm2.register(_FakeSaveable("s"))
 
         with pytest.raises(SaveIncompatibleError, match="world_seed"):
@@ -417,7 +417,7 @@ class TestConfigDigestMismatch:
 
         save_file = tmp_path / "future.ta"
 
-        cfg, clock, sm = _make_world(seed=1)
+        _, _, sm = _make_world(seed=1)
         sm.register(_FakeSaveable("s", {}))
         sm.save(save_file)
 
@@ -427,7 +427,7 @@ class TestConfigDigestMismatch:
         envelope["header"]["format_version"] = 9999
         save_file.write_bytes(msgpack.packb(envelope, use_bin_type=True))
 
-        cfg2, clock2, sm2 = _make_world(seed=1)
+        _, _, sm2 = _make_world(seed=1)
         sm2.register(_FakeSaveable("s"))
 
         with pytest.raises(SaveIncompatibleError):
@@ -568,7 +568,7 @@ class TestSaveIncompatibleError:
 
     def test_can_be_raised_and_caught(self):
         """SaveIncompatibleError can be raised and caught as Exception."""
-        with pytest.raises(Exception):
+        with pytest.raises(SaveIncompatibleError):
             raise SaveIncompatibleError("test")
 
     def test_can_be_caught_specifically(self):

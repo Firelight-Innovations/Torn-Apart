@@ -101,7 +101,6 @@ class TestSaturationHumidity:
 class TestWindGate:
     def test_monotonically_non_increasing(self, cfg):
         """Higher wind → less gate (or equal — it's flat in the plateau zones)."""
-        full = cfg.weather_fog_wind_full_ms
         none = cfg.weather_fog_wind_none_ms
         speeds = np.linspace(0.0, none + 5.0, 200)
         gate = H.wind_gate(speeds, cfg)

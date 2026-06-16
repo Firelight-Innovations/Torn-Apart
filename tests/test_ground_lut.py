@@ -13,12 +13,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from fire_engine.procedural.textures.dirt_ground import DIRT_PALETTE, DIRT_THRESHOLDS
-from fire_engine.procedural.textures.grass_ground import (
+from fire_engine.procedural.textures.ground.dirt_ground import DIRT_PALETTE, DIRT_THRESHOLDS
+from fire_engine.procedural.textures.ground.grass_ground import (
     GRASS_PALETTE,
     GRASS_THRESHOLDS,
 )
-from fire_engine.procedural.textures.grass_ground import (
+from fire_engine.procedural.textures.ground.grass_ground import (
     _posterise as _grass_posterise,
 )
 from fire_engine.procedural.textures.ground_lut import build_ground_lut

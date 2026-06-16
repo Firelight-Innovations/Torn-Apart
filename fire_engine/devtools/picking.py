@@ -14,6 +14,8 @@ AABBs are world-axis-aligned and derived from the object's world position ±
 spawned primitives; tighten later if rotated props need pixel-exact picking.
 
 No panda3d imports — headless-testable.
+
+Docs: docs/systems/devtools.md
 """
 
 from __future__ import annotations
@@ -48,6 +50,8 @@ class Selectable:
     The world AABB is recomputed on demand from the object's current transform,
     so the box follows the object as it moves (e.g. when you edit its position
     in the Inspector).
+
+    Docs: docs/systems/devtools.md
     """
 
     game_object: GameObject
@@ -61,6 +65,8 @@ class Selectable:
         -------
         (np.ndarray, np.ndarray)
             Two length-3 float64 arrays (world meters).
+
+        Docs: docs/systems/devtools.md
         """
         tf = self.game_object.transform
         center = tf.position.to_numpy().astype(np.float64)
@@ -98,6 +104,8 @@ def ray_aabb(
     -----
     Division by a zero direction component is handled via numpy's inf semantics
     (a ray parallel to a slab misses only if its origin is outside that slab).
+
+    Docs: docs/systems/devtools.md
     """
     o = origin.to_numpy().astype(np.float64)
     d = direction.to_numpy().astype(np.float64)
@@ -143,6 +151,8 @@ def pick(
         go = pick(ray_origin, ray_dir, manager.selectables)
         if go is not None:
             selection.set(go)
+
+    Docs: docs/systems/devtools.md
     """
     best_t: float | None = None
     best_go: GameObject | None = None

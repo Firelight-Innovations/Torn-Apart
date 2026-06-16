@@ -41,6 +41,8 @@ Example
     inst = tp.bake_tree_instances(vol, cfg, chunk_manager.chunks, mix,
                                   {"tree_gnarled_oak": 8}, kind="trees")
     block = tp.instances_data_block(inst, inst.species_idx == 0)
+
+Docs: docs/systems/zones.md
 """
 
 from __future__ import annotations
@@ -55,6 +57,7 @@ from fire_engine.core import Config
 from fire_engine.core.rng import for_domain
 from fire_engine.zones.grass_placement import (
     HEIGHT_SENTINEL,
+    _ChunkLike,
     bake_grass_height_field,
 )
 from fire_engine.zones.volume import ZoneVolume
@@ -115,6 +118,8 @@ class TreeInstances:
         ``int32 (N,)`` mesh-pool variant index within the species.
     species_names : tuple[str, ...]
         The species mix this bake drew from, in index order.
+
+    Docs: docs/systems/zones.md
     """
 
     x: np.ndarray
@@ -130,11 +135,14 @@ class TreeInstances:
 
     @property
     def count(self) -> int:
-        """Instance count ``N``."""
+        """Instance count ``N``.
+
+        Docs: docs/systems/zones.md
+        """
         return int(self.x.shape[0])
 
 
-def species_mix_from_params(params: Mapping, default: str) -> list[tuple[str, float]]:
+def species_mix_from_params(params: Mapping[str, object], default: str) -> list[tuple[str, float]]:
     """
     Resolve a volume's species mix from its ``params``.
 
@@ -155,6 +163,8 @@ def species_mix_from_params(params: Mapping, default: str) -> list[tuple[str, fl
     -------
     >>> species_mix_from_params({"species_mix": "a:3, b"}, "c")
     [('a', 3.0), ('b', 1.0)]
+
+    Docs: docs/systems/zones.md
     """
     if "species_mix" in params:
         mix: list[tuple[str, float]] = []
@@ -177,7 +187,7 @@ def species_mix_from_params(params: Mapping, default: str) -> list[tuple[str, fl
 def bake_tree_instances(
     volume: ZoneVolume,
     config: Config,
-    chunks: Mapping[tuple[int, int, int], object],
+    chunks: Mapping[tuple[int, int, int], _ChunkLike],
     species_weights: list[tuple[str, float]],
     variant_counts: Mapping[str, int],
     kind: str = "trees",
@@ -213,6 +223,8 @@ def bake_tree_instances(
     -------
     TreeInstances
         May be empty (no ground in the Z window, density 0, …).
+
+    Docs: docs/systems/zones.md
     """
     prefix = _KIND_PREFIX[kind]
     scale_min, scale_span = SCALE_JITTER[kind]
@@ -230,8 +242,8 @@ def bake_tree_instances(
 
     # --- jittered grid candidates ---------------------------------------
     cell = max(min_spacing, 1.0 / math.sqrt(density))
-    nx = max(1, int(math.ceil((x1 - x0) / cell)))
-    ny = max(1, int(math.ceil((y1 - y0) / cell)))
+    nx = max(1, math.ceil((x1 - x0) / cell))
+    ny = max(1, math.ceil((y1 - y0) / cell))
     gx, gy = np.meshgrid(np.arange(nx), np.arange(ny), indexing="ij")
     cx = x0 + (gx.ravel() + 0.5) * cell
     cy = y0 + (gy.ravel() + 0.5) * cell
@@ -241,7 +253,7 @@ def bake_tree_instances(
     py = (cy + jit[:, 1]).astype(np.float32)
 
     keep_p = min(density * cell * cell, 1.0)
-    keep = rng.random(n_cells) < keep_p
+    keep: np.ndarray = np.asarray(rng.random(n_cells) < keep_p)
     keep &= (px >= x0) & (px < x1) & (py >= y0) & (py < y1)
 
     # --- terrain surface Z (same bake grass stands on) -------------------
@@ -309,6 +321,8 @@ def instances_data_block(inst: TreeInstances, mask: np.ndarray | None = None) ->
     numpy.ndarray
         ``float32 (n, 2, 4)`` — row-major rows = instances, columns =
         texels.  May be ``(0, 2, 4)``.
+
+    Docs: docs/systems/zones.md
     """
     sel = slice(None) if mask is None else np.asarray(mask, dtype=bool)
     block = np.stack(

@@ -22,6 +22,8 @@ Example
     policy.band_for(50.0)   # → 1
     policy.band_for(200.0)  # → 3
     policy.band_for(999.0)  # → 4  (beyond last band → one past the last index)
+
+Docs: docs/systems/core.md
 """
 
 from __future__ import annotations
@@ -60,6 +62,8 @@ class LODPolicy:
     1
     >>> policy.band_for(600.0)
     4
+
+    Docs: docs/systems/core.md
     """
 
     bands: tuple[float, ...] = (32.0, 96.0, 192.0, 512.0)
@@ -80,6 +84,8 @@ class LODPolicy:
         -------
         >>> LODPolicy(bands=(32.0, 96.0, 192.0)).band_for(100.0)
         2
+
+        Docs: docs/systems/core.md
         """
         for i, threshold in enumerate(self.bands):
             if distance_m < threshold:

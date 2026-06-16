@@ -47,12 +47,15 @@ brush edits dirty border neighbours — see ``apply_brush``).
 Units: positions in world **meters**, Z-up, voxel = 0.5 m.  Fully vectorised
 numpy — no per-voxel/per-face Python loops (Hard Rule 4); the only loops are
 over the 12 cube edges, 26 neighbour offsets, and 6 face directions.
+
+Docs: docs/systems/world.terrain.md
 """
 
 from __future__ import annotations
 
 import itertools
 from collections.abc import Callable
+from typing import Any
 
 import numpy as np
 
@@ -70,12 +73,12 @@ __all__ = ["NEIGHBOR_OFFSETS_26", "build_mesh_faceted"]
 # chunk border straddle voxels from up to 8 chunks, so faceted meshing needs
 # the full shell, not just the 6 face neighbours the blocky mesher uses.
 NEIGHBOR_OFFSETS_26: tuple[tuple[int, int, int], ...] = tuple(
-    o for o in itertools.product((-1, 0, 1), repeat=3) if o != (0, 0, 0)
+    (o[0], o[1], o[2]) for o in itertools.product((-1, 0, 1), repeat=3) if o != (0, 0, 0)
 )
 
 # The 12 edges of a 2x2x2 cell, as pairs of corner offsets in {0,1}^3.
 _CUBE_EDGES: tuple[tuple[tuple[int, int, int], tuple[int, int, int]], ...] = tuple(
-    (a, b)
+    ((a[0], a[1], a[2]), (b[0], b[1], b[2]))
     for a in itertools.product((0, 1), repeat=3)
     for b in itertools.product((0, 1), repeat=3)
     if sum(abs(a[i] - b[i]) for i in range(3)) == 1 and a < b
@@ -114,7 +117,7 @@ def _pad_slices(offset: int, n: int) -> tuple[slice, slice]:
 
 def _build_padded_materials(
     materials: np.ndarray,
-    neighbor_materials: dict | None,
+    neighbor_materials: dict[tuple[int, int, int], np.ndarray | str] | None,
     n: int,
 ) -> np.ndarray:
     """
@@ -181,8 +184,8 @@ def _cell_vertices(solid_pad: np.ndarray, n: int) -> np.ndarray:
 
 
 def build_mesh_faceted(
-    chunk,
-    neighbor_materials: dict | None = None,
+    chunk: Any,
+    neighbor_materials: dict[tuple[int, int, int], np.ndarray | str] | None = None,
     light_sampler: Callable[[np.ndarray], np.ndarray] | None = None,
     *,
     shade_strength: float = 0.25,
@@ -238,6 +241,8 @@ def build_mesh_faceted(
     >>> mesh = build_mesh_faceted(c)
     >>> mesh.face_count, mesh.tri_count, mesh.vertex_count
     (6, 12, 36)
+
+    Docs: docs/systems/world.terrain.md
     """
     n = chunk.materials.shape[0]
     vs = float(chunk._voxel_size)

@@ -64,36 +64,36 @@ from fire_engine.devtools.tools import (
 )
 
 __all__ = [
+    "ActionsTool",
+    "Button",
+    "CallbackTool",
+    "ClockTool",
+    # tools
+    "DevTool",
+    # hub
+    "DevToolsManager",
+    "DragState",
     # model
     "Field",
     "FieldKind",
-    "Section",
-    "Button",
-    "Panel",
-    # state
-    "Selection",
-    # picking
-    "Selectable",
-    "ray_aabb",
-    "pick",
-    # introspection
-    "describe_object",
-    "describe_chunk",
-    "is_chunk",
-    # tools
-    "DevTool",
-    "PerformanceTool",
-    "InspectorTool",
-    "ActionsTool",
-    "ClockTool",
-    "CallbackTool",
-    # hub
-    "DevToolsManager",
+    "Gizmo",
     # transform gizmo (headless math)
     "GizmoMode",
-    "HandleType",
     "Handle",
-    "DragState",
-    "Gizmo",
+    "HandleType",
+    "InspectorTool",
+    "Panel",
+    "PerformanceTool",
+    "Section",
+    # picking
+    "Selectable",
+    # state
+    "Selection",
+    "describe_chunk",
+    # introspection
+    "describe_object",
+    "is_chunk",
+    "pick",
+    "ray_aabb",
     "update_drag",
 ]

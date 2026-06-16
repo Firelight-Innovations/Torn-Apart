@@ -32,17 +32,15 @@ Threading contract
 Determinism: a job's result depends only on its snapshot, origin, and palette,
 so worker output is byte-identical to a synchronous ``assemble_geometry`` +
 ``pack_volume`` for the same inputs (asserted in ``tests/``).
+
+Docs: docs/systems/lighting.md
 """
 
 from __future__ import annotations
 
-import queue
-import threading
-from dataclasses import dataclass
-
 from fire_engine.core import get_logger
-from fire_engine.lighting.occluders import TreeOccluderSet
-from fire_engine.lighting.palette import MaterialPalette
+from fire_engine.core._impl.worker import QueueWorker
+from fire_engine.lighting._impl.types import AssemblyJob, AssemblyResult
 from fire_engine.lighting.volume import (
     ChunkBlockCache,
     VolumeWindow,
@@ -58,77 +56,6 @@ __all__ = [
     "CascadeAssemblyWorker",
     "assemble_packed",
 ]
-
-
-@dataclass(frozen=True)
-class AssemblyJob:
-    """
-    One cascade-volume reassembly request.
-
-    Attributes
-    ----------
-    cascade_index : int
-        Which cascade (0 or 1) this volume is for.
-    origin_cell : tuple[int, int, int]
-        Window origin (in cells) the volume is assembled for — committed to the
-        cascade window only when the result is uploaded.
-    cells, cell_m : int, float
-        Window dimensions (texels per axis, meters per cell).
-    chunk_size, voxel_size : int, float
-        Terrain constants for the slice/downsample math.
-    materials : dict[tuple[int, int, int], numpy.ndarray]
-        Snapshot of ``uint8 (S, S, S)`` material arrays for the chunks the
-        gather will read (coord → array).  Built on the main thread.
-    palette : MaterialPalette
-        Immutable material → albedo/emission lookup (safe to share read-only).
-    seq : int
-        Monotonic id; lets the consumer drop a superseded result.
-    occluders : TreeOccluderSet | None
-        Static tree/bush occluder snapshot splatted into the volume (see
-        ``lighting/occluders.py``).  Immutable struct-of-arrays — safe to
-        share read-only across the thread boundary.  ``None`` → chunks only.
-    trunk_occ : float
-        Trunk splat opacity (``config.light_tree_trunk_occ``).
-    canopy_gain : float
-        Multiplier on the per-instance leaf-derived canopy extinction
-        (``config.light_tree_canopy_extinction_gain``).
-    """
-
-    cascade_index: int
-    origin_cell: tuple[int, int, int]
-    cells: int
-    cell_m: float
-    chunk_size: int
-    voxel_size: float
-    materials: dict
-    palette: MaterialPalette
-    seq: int
-    occluders: TreeOccluderSet | None = None
-    trunk_occ: float = 0.0
-    canopy_gain: float = 0.0
-
-
-@dataclass(frozen=True)
-class AssemblyResult:
-    """
-    A finished cascade volume, packed and ready for ``Texture.set_ram_image``.
-
-    Attributes
-    ----------
-    cascade_index : int
-    origin_cell : tuple[int, int, int]
-        The origin the volume was assembled for (commit this to the window).
-    albedo_bytes, emis_bytes : bytes
-        Page-major BGRA 3-D-texture RAM images (see ``volume.pack_volume``).
-    seq : int
-        Echoes the job's ``seq``.
-    """
-
-    cascade_index: int
-    origin_cell: tuple[int, int, int]
-    albedo_bytes: bytes
-    emis_bytes: bytes
-    seq: int
 
 
 def assemble_packed(
@@ -147,6 +74,8 @@ def assemble_packed(
     cache : ChunkBlockCache, optional
         Per-chunk downsampled-block cache passed through to
         :func:`assemble_geometry`.  Output is byte-identical with or without it.
+
+    Docs: docs/systems/lighting.md
     """
     window = VolumeWindow(cells=job.cells, cell_m=job.cell_m)
     window.origin_cell = job.origin_cell  # placed directly; no recenter needed
@@ -170,7 +99,7 @@ def assemble_packed(
     )
 
 
-class CascadeAssemblyWorker:
+class CascadeAssemblyWorker(QueueWorker[AssemblyJob, AssemblyResult]):
     """
     Single background thread that assembles + packs cascade volumes.
 
@@ -195,87 +124,44 @@ class CascadeAssemblyWorker:
     block_cache : ChunkBlockCache
         Per-chunk coarse-block cache reused across reassemblies (see
         :class:`fire_engine.lighting.volume.ChunkBlockCache`).
+
+    Docs: docs/systems/lighting.md
     """
 
     def __init__(self, *, cache_max_entries: int = 4096) -> None:
-        self._in: queue.Queue[AssemblyJob | None] = queue.Queue()
-        self._out: queue.Queue[AssemblyResult] = queue.Queue()
-        self._thread: threading.Thread | None = None
-        self._pending = 0
+        super().__init__("CascadeAssemblyWorker")
         self.block_cache = ChunkBlockCache(max_entries=cache_max_entries)
 
-    # ------------------------------------------------------------------
+    def _process(self, job: AssemblyJob) -> AssemblyResult:
+        return assemble_packed(job, cache=self.block_cache)
 
-    def start(self) -> None:
-        """Spawn the worker thread (idempotent)."""
-        if self._thread is not None:
-            return
-        self._thread = threading.Thread(target=self._run, name="CascadeAssemblyWorker", daemon=True)
-        self._thread.start()
-
-    def submit(self, job: AssemblyJob) -> None:
-        """Enqueue a reassembly job (main thread)."""
-        self._pending += 1
-        self._in.put(job)
-
-    def drain_results(self) -> list[AssemblyResult]:
-        """Pop and return all finished results (main thread, non-blocking)."""
-        out: list[AssemblyResult] = []
-        while True:
-            try:
-                res = self._out.get_nowait()
-            except queue.Empty:
-                break
-            self._pending -= 1
-            out.append(res)
-        return out
-
-    def pending(self) -> int:
-        """Jobs submitted but not yet drained."""
-        return self._pending
+    def _on_error(self, job: AssemblyJob) -> None:
+        _log.exception("Cascade assembly failed (cascade %d, seq %d)", job.cascade_index, job.seq)
+        # Post a failure sentinel (empty bytes) so the consumer can
+        # clear its in-flight flag and retry — a raised job must not
+        # leave the cascade stuck forever.
+        self._out.put(
+            AssemblyResult(
+                cascade_index=job.cascade_index,
+                origin_cell=job.origin_cell,
+                albedo_bytes=b"",
+                emis_bytes=b"",
+                seq=job.seq,
+            )
+        )
 
     def invalidate_chunk(self, coord: tuple[int, int, int]) -> None:
         """
         Drop the block cache's mini-blocks for ``coord`` (main thread, on a
         terrain edit) so the next reassembly recomputes them.  Thread-safe.
+
+        Docs: docs/systems/lighting.md
         """
         self.block_cache.invalidate(coord)
 
     def clear_cache(self) -> None:
-        """Drop the entire block cache (e.g. world reload).  Thread-safe."""
+        """Drop the entire block cache (e.g. world reload).  Thread-safe.
+
+        Docs: docs/systems/lighting.md
+        """
         self.block_cache.clear()
-
-    def stop(self, *, join: bool = True, timeout: float = 2.0) -> None:
-        """Signal the worker to exit and (optionally) join it."""
-        if self._thread is None:
-            return
-        self._in.put(None)  # sentinel
-        if join:
-            self._thread.join(timeout=timeout)
-        self._thread = None
-
-    # ------------------------------------------------------------------
-
-    def _run(self) -> None:
-        while True:
-            job = self._in.get()
-            if job is None:  # sentinel → shutdown
-                break
-            try:
-                self._out.put(assemble_packed(job, cache=self.block_cache))
-            except Exception:
-                _log.exception(
-                    "Cascade assembly failed (cascade %d, seq %d)", job.cascade_index, job.seq
-                )
-                # Post a failure sentinel (empty bytes) so the consumer can
-                # clear its in-flight flag and retry — a raised job must not
-                # leave the cascade stuck forever.
-                self._out.put(
-                    AssemblyResult(
-                        cascade_index=job.cascade_index,
-                        origin_cell=job.origin_cell,
-                        albedo_bytes=b"",
-                        emis_bytes=b"",
-                        seq=job.seq,
-                    )
-                )

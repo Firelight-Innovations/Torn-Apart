@@ -40,6 +40,8 @@ Example
                          config=load_config())
     bolt.a.shape        # (N, 3) segment start points
     bolt.is_main.any()  # True — at least one channel reached the ground
+
+Docs: docs/systems/world.weather.md
 """
 
 from __future__ import annotations
@@ -82,6 +84,8 @@ class BoltGeometry:
     * All five arrays share the same length ``N`` (``len(bolt)``).
     * The main channel's last segment endpoint ``b`` is at (or within a step of)
       ``ground_z``; branch endpoints stay above ground.
+
+    Docs: docs/systems/world.weather.md
     """
 
     a: np.ndarray
@@ -116,7 +120,8 @@ def _lattice_hash_vec(ix: np.ndarray, iy: np.ndarray, iz: np.ndarray, salt: int)
     h ^= h >> np.uint64(27)
     h *= np.uint64(0x94D049BB133111EB)
     h ^= h >> np.uint64(31)
-    return h.astype(np.float64) / float(1 << 64)
+    result: np.ndarray = h.astype(np.float64) / float(1 << 64)
+    return result
 
 
 def _value_noise_3d_vec(pts: np.ndarray, salt: int) -> np.ndarray:
@@ -152,7 +157,8 @@ def _value_noise_3d_vec(pts: np.ndarray, salt: int) -> np.ndarray:
     x11 = c011 + (c111 - c011) * wx
     y0 = x00 + (x10 - x00) * wy
     y1 = x01 + (x11 - x01) * wy
-    return y0 + (y1 - y0) * wz
+    result: np.ndarray = y0 + (y1 - y0) * wz
+    return result
 
 
 def _fan_directions(
@@ -372,6 +378,8 @@ def generate_bolt(
     >>> b = generate_bolt(7, (0.0, 0.0, 200.0), 8.0, load_config())
     >>> len(b) > 0 and b.is_main.any()
     True
+
+    Docs: docs/systems/world.weather.md
     """
     start_arr = np.asarray(start, dtype=np.float64)
     gz = float(ground_z)

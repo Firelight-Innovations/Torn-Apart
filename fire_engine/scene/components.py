@@ -29,13 +29,29 @@ Example::
     default_components_for_kind("light")        # -> [{"type": "Light", ...}]
     c = make_component("Mesh")                   # -> a Mesh with default params
     c["params"]["primitive"] = "sphere"
+
+Docs: docs/systems/scene.md
 """
 
 from __future__ import annotations
 
 import copy
-from dataclasses import dataclass, field
 from typing import Any
+
+from fire_engine.scene.types import ComponentSpec, FieldSpec
+
+# Re-export so every existing import path keeps working.
+__all__ = [
+    "COMPONENT_CATALOG",
+    "ComponentSpec",
+    "FieldSpec",
+    "catalog_payload",
+    "coerce_params",
+    "default_components_for_kind",
+    "default_params",
+    "is_known",
+    "make_component",
+]
 
 # Warm torch defaults for a Light component — the single source the game's
 # scene_visuals.SceneVisualFactory reads (it imports default_params("Light")),
@@ -43,49 +59,6 @@ from typing import Any
 _LIGHT_COLOR: tuple[float, float, float] = (1.0, 0.62, 0.28)
 _LIGHT_INTENSITY: float = 8.0
 _LIGHT_RADIUS_M: float = 16.0
-
-
-@dataclass(frozen=True)
-class FieldSpec:
-    """One editable parameter of a component.
-
-    Attributes:
-        name: Param key inside the component's ``params`` dict.
-        ui_type: How the inspector renders/edits it — one of
-            ``"float"``, ``"color"`` (rgb 0..1), ``"vec3"``, ``"enum"``, ``"bool"``.
-        default: Default value (floats for float, ``[r, g, b]`` for color/vec3,
-            a choice string for enum, a bool for bool).
-        min, max: Optional inclusive clamp for ``float`` fields.
-        choices: Allowed values for an ``enum`` field.
-        label: Human label for the inspector (defaults to ``name``).
-    """
-
-    name: str
-    ui_type: str
-    default: Any
-    min: float | None = None
-    max: float | None = None
-    choices: tuple[str, ...] = ()
-    label: str | None = None
-
-
-@dataclass(frozen=True)
-class ComponentSpec:
-    """A built-in component type.
-
-    Attributes:
-        type: Stable type id stored in each component dict's ``"type"``.
-        label: Inspector section title.
-        multiple: Whether an object may carry more than one of this type
-            (all current built-ins are singletons).
-        fields: Editable parameters, in display order.
-    """
-
-    type: str
-    label: str
-    multiple: bool
-    fields: tuple[FieldSpec, ...] = field(default_factory=tuple)
-
 
 COMPONENT_CATALOG: dict[str, ComponentSpec] = {
     "Mesh": ComponentSpec(
@@ -111,34 +84,43 @@ COMPONENT_CATALOG: dict[str, ComponentSpec] = {
 
 
 def is_known(type_name: str) -> bool:
-    """True if ``type_name`` is a registered component type."""
+    """True if ``type_name`` is a registered component type.
+
+    Docs: docs/systems/scene.md
+    """
     return type_name in COMPONENT_CATALOG
 
 
-def default_params(type_name: str) -> dict:
+def default_params(type_name: str) -> dict[str, Any]:
     """Fresh default ``params`` dict for ``type_name`` (deep-copied defaults).
 
     Raises:
         KeyError: if ``type_name`` is not a registered component type.
+
+    Docs: docs/systems/scene.md
     """
     spec = COMPONENT_CATALOG[type_name]
     return {f.name: copy.deepcopy(f.default) for f in spec.fields}
 
 
-def make_component(type_name: str, *, enabled: bool = True) -> dict:
+def make_component(type_name: str, *, enabled: bool = True) -> dict[str, Any]:
     """Build a component dict of ``type_name`` with its default params.
 
     Raises:
         KeyError: if ``type_name`` is not a registered component type.
+
+    Docs: docs/systems/scene.md
     """
     return {"type": type_name, "enabled": bool(enabled), "params": default_params(type_name)}
 
 
-def default_components_for_kind(kind: str) -> list[dict]:
+def default_components_for_kind(kind: str) -> list[dict[str, Any]]:
     """The components a freshly created (or migrated) object of ``kind`` carries.
 
     ``kind`` is only the creation archetype; the returned list becomes editable
     and the source of truth thereafter.
+
+    Docs: docs/systems/scene.md
     """
     k = str(kind).lower()
     if k == "cube":
@@ -152,18 +134,20 @@ def default_components_for_kind(kind: str) -> list[dict]:
     return []  # "empty" (and any unknown kind): a bare transform
 
 
-def coerce_params(type_name: str, params: dict) -> dict:
+def coerce_params(type_name: str, params: dict[str, Any]) -> dict[str, Any]:
     """Validate+coerce a partial ``params`` dict against the catalog.
 
     Returns only recognised keys, each coerced to its field's type (floats
     clamped to min/max, enums snapped to a valid choice, colors/vec3 to a
     3-list of floats). Unknown keys are dropped. Unknown ``type_name`` -> ``{}``.
+
+    Docs: docs/systems/scene.md
     """
     spec = COMPONENT_CATALOG.get(type_name)
     if spec is None:
         return {}
     by_name = {f.name: f for f in spec.fields}
-    out: dict = {}
+    out: dict[str, Any] = {}
     for key, value in params.items():
         fspec = by_name.get(key)
         if fspec is None:
@@ -172,8 +156,11 @@ def coerce_params(type_name: str, params: dict) -> dict:
     return out
 
 
-def catalog_payload() -> dict:
-    """JSON-friendly catalog for the ``scene.catalog`` RPC / the inspector."""
+def catalog_payload() -> dict[str, Any]:
+    """JSON-friendly catalog for the ``scene.catalog`` RPC / the inspector.
+
+    Docs: docs/systems/scene.md
+    """
     return {
         "types": [
             {
@@ -190,7 +177,7 @@ def catalog_payload() -> dict:
 # ---------------------------------------------------------------------------- #
 # Internals
 # ---------------------------------------------------------------------------- #
-def _mesh(primitive: str) -> dict:
+def _mesh(primitive: str) -> dict[str, Any]:
     c = make_component("Mesh")
     c["params"]["primitive"] = primitive
     return c
@@ -217,8 +204,8 @@ def _coerce_value(fspec: FieldSpec, value: Any) -> Any:
     return value
 
 
-def _field_payload(f: FieldSpec) -> dict:
-    out: dict = {
+def _field_payload(f: FieldSpec) -> dict[str, Any]:
+    out: dict[str, Any] = {
         "name": f.name,
         "ui_type": f.ui_type,
         "default": copy.deepcopy(f.default),

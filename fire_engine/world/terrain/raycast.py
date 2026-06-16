@@ -8,12 +8,16 @@ turn a mouse click (camera ray) into a brush centre — e.g. left-click → fire
 This is the ONE place a short Python loop is allowed (CLAUDE.md Hard Rule 4):
 the DDA steps voxel-by-voxel, bounded to ≤200 steps, and runs once per click —
 not per voxel of the world.
+
+Docs: docs/systems/world.terrain.md
 """
 
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 
@@ -42,6 +46,8 @@ class Hit:
         place an ADD brush against the surface, or to nudge a REMOVE brush.
     distance : float
         Distance from the ray origin to ``point`` in meters.
+
+    Docs: docs/systems/world.terrain.md
     """
 
     point: Vec3
@@ -59,7 +65,7 @@ def _voxel_to_chunk(vx: int, vy: int, vz: int, n: int) -> tuple[int, int, int]:
 def raycast_voxel(
     origin: Vec3,
     direction: Vec3,
-    chunk_provider,
+    chunk_provider: Callable[[tuple[int, int, int]], Any],
     max_distance_m: float = 100.0,
     *,
     chunk_size: int = 32,
@@ -96,6 +102,8 @@ def raycast_voxel(
     >>> hit = raycast_voxel(Vec3(8, -4, 10), Vec3(0, 0, -1), provider)
     >>> if hit:
     ...     print(hit.chunk_coord, hit.point)
+
+    Docs: docs/systems/world.terrain.md
     """
     o = origin.to_numpy().astype(np.float64)
     d = direction.to_numpy().astype(np.float64)
@@ -123,10 +131,7 @@ def raycast_voxel(
             t_delta[i] = math.inf
         else:
             # world coordinate of the next boundary in the step direction
-            if step[i] > 0:
-                next_boundary = (voxel[i] + 1) * vs
-            else:
-                next_boundary = voxel[i] * vs
+            next_boundary = (voxel[i] + 1) * vs if step[i] > 0 else voxel[i] * vs
             t_max[i] = (next_boundary - o[i]) / d[i]
             t_delta[i] = vs / abs(d[i])
 

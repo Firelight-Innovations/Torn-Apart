@@ -28,6 +28,7 @@ imported by the engine; lives in tools/.
 
 from __future__ import annotations
 
+import contextlib
 import sys
 import time
 from pathlib import Path
@@ -56,7 +57,7 @@ class _Stat:
         if not self.samples:
             return 0.0
         s = sorted(self.samples)
-        i = min(len(s) - 1, int(round(p / 100.0 * (len(s) - 1))))
+        i = min(len(s) - 1, round(p / 100.0 * (len(s) - 1)))
         return s[i]
 
     def mean(self) -> float:
@@ -211,10 +212,8 @@ def main() -> None:
     )
 
     # Clean exit without entering the blocking main loop.
-    try:
+    with contextlib.suppress(Exception):
         app.userExit()
-    except Exception:
-        pass
 
 
 if __name__ == "__main__":

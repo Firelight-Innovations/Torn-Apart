@@ -17,6 +17,8 @@ These two constants are the *only* light levels in Phase-4 v0 (sunlight only).
 Later phases will introduce point-light flood fill producing intermediate values.
 
 No panda3d imports.  This file is fully headless-testable.
+
+Docs: docs/systems/lighting.md
 """
 
 from __future__ import annotations
@@ -66,12 +68,15 @@ def occupancy_from_materials(materials: np.ndarray) -> np.ndarray:
     True
     >>> occ[1, 0, 0]       # neighbouring cell is empty
     False
+
+    Docs: docs/systems/lighting.md
     """
     n = materials.shape[0]
     s = n // 2  # light grid edge = 16 when n = 32
     # Reshape to (s, 2, s, 2, s, 2): axes = (cx, dx, cy, dy, cz, dz)
     # max over the three sub-axes (1, 3, 5) collapses each 2×2×2 block.
-    return materials.reshape(s, 2, s, 2, s, 2).max(axis=(1, 3, 5)) > 0
+    result: np.ndarray = materials.reshape(s, 2, s, 2, s, 2).max(axis=(1, 3, 5)) > 0
+    return result
 
 
 class LightGrid:
@@ -103,6 +108,8 @@ class LightGrid:
     (16, 16, 16)
     >>> lg.has_valid((0, 0, 0))
     True
+
+    Docs: docs/systems/lighting.md
     """
 
     def __init__(self) -> None:
@@ -130,6 +137,8 @@ class LightGrid:
             ``uint8 (16, 16, 16)`` light values in ``[0, 255]``, or ``None``
             when this chunk has no computed light (caller should default to
             full bright).
+
+        Docs: docs/systems/lighting.md
         """
         return self._arrays.get(coord)
 
@@ -140,6 +149,8 @@ class LightGrid:
         Parameters
         ----------
         coord : tuple[int, int, int]
+
+        Docs: docs/systems/lighting.md
         """
         return coord in self._valid
 
@@ -159,6 +170,8 @@ class LightGrid:
             ``uint8 (16, 16, 16)`` light values, freshly computed by the
             sunlight pass.  Stored by reference (the array should not be
             mutated by the caller after this call).
+
+        Docs: docs/systems/lighting.md
         """
         self._arrays[coord] = arr
         self._valid.add(coord)
@@ -173,6 +186,8 @@ class LightGrid:
         Parameters
         ----------
         coord : tuple[int, int, int]
+
+        Docs: docs/systems/lighting.md
         """
         self._valid.discard(coord)
 
@@ -183,6 +198,8 @@ class LightGrid:
         Parameters
         ----------
         coord : tuple[int, int, int]
+
+        Docs: docs/systems/lighting.md
         """
         self._arrays.pop(coord, None)
         self._valid.discard(coord)
@@ -194,5 +211,7 @@ class LightGrid:
         Returns
         -------
         list[tuple[int, int, int]]
+
+        Docs: docs/systems/lighting.md
         """
         return list(self._arrays.keys())

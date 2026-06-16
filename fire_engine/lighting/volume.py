@@ -37,17 +37,21 @@ True
 ...                         chunk_size=32, voxel_size=0.5)
 >>> vol.albedo_occ.shape
 (32, 32, 32, 4)
+
+Docs: docs/systems/lighting.md
 """
 
 from __future__ import annotations
 
-import threading
-from collections import OrderedDict
-from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import Any
 
 import numpy as np
 
+from fire_engine.lighting._impl.cache import ChunkBlockCache
+from fire_engine.lighting._impl.protocols import (
+    GeometryOccupancyProvider,
+)
+from fire_engine.lighting._impl.types import GeometryVolume
 from fire_engine.lighting.occluders import TreeOccluderSet, splat_tree_occluders
 from fire_engine.lighting.palette import MaterialPalette
 
@@ -61,61 +65,6 @@ __all__ = [
     "pack_volume",
     "window_chunk_span",
 ]
-
-
-@runtime_checkable
-class GeometryOccupancyProvider(Protocol):
-    """
-    Structural hook letting a NON-terrain geometry system (buildings, future
-    props) splat its solids into the lighting cascades so the GPU marches see
-    and shadow them — without lighting importing that system or vice versa
-    (the Protocol is structural; nothing imports across the boundary).
-
-    A provider rasterizes into the already-assembled volume arrays in place,
-    **max-combining** occupancy the same way :func:`splat_tree_occluders` does:
-    write a cell's occupancy alpha (and bounce albedo) only where it would
-    *raise* the existing value, so terrain solids always win over a building
-    cell that happens to overlap a hill.
-
-    Implementations must be deterministic and must touch only cells inside the
-    window (``origin_cell`` … ``origin_cell + cells`` per axis); cells outside
-    their own geometry are left untouched (so ``providers=()`` — and providers
-    whose geometry misses the window — leave the output byte-identical).
-
-    Thread-safety: a provider may be called from the async cascade-assembly
-    worker, so it must read an immutable snapshot of its geometry, never live
-    mutable state.  (v1's building provider is a documented no-op; live
-    snapshot wiring is future scope — see ``buildings/occlusion.py``.)
-    """
-
-    def rasterize_occupancy(
-        self,
-        origin_cell: tuple[int, int, int],
-        cells: int,
-        cell_m: float,
-        albedo_occ: np.ndarray,
-        emission: np.ndarray,
-    ) -> None:
-        """
-        Splat this provider's geometry into ``albedo_occ`` / ``emission``.
-
-        Parameters
-        ----------
-        origin_cell : tuple[int, int, int]
-            Window origin in light cells (integer cell coords).
-        cells : int
-            Window edge length in cells (arrays are ``(cells,)*3 (+,4)``).
-        cell_m : float
-            Cell edge in meters (cascade resolution).
-        albedo_occ : np.ndarray
-            ``uint8 (cells, cells, cells, 4)`` — RGB bounce albedo + A
-            occupancy; mutate in place, max-combining occupancy.
-        emission : np.ndarray
-            ``uint8 (cells, cells, cells, 4)`` — emissive RGB (÷EMISSION_SCALE)
-            for self-lit surfaces (e.g. future glowing windows); usually
-            untouched.
-        """
-        ...  # pragma: no cover
 
 
 # Emission is HDR (a torch glow is ~2.0) but stored in uint8 textures; values
@@ -155,6 +104,8 @@ class VolumeWindow:
     False
     >>> win.world_origin_m  # doctest: +ELLIPSIS
     (-24.0, -24.0, -24.0)
+
+    Docs: docs/systems/lighting.md
     """
 
     def __init__(
@@ -180,6 +131,8 @@ class VolumeWindow:
         """World position (meters) of the window's min corner.
 
         Raises ``ValueError`` if ``recenter`` has never been called.
+
+        Docs: docs/systems/lighting.md
         """
         if self.origin_cell is None:
             raise ValueError("VolumeWindow.recenter() never called")
@@ -191,10 +144,13 @@ class VolumeWindow:
 
     @property
     def size_m(self) -> float:
-        """World edge length of the window box in meters."""
+        """World edge length of the window box in meters.
+
+        Docs: docs/systems/lighting.md
+        """
         return self.cells * self.cell_m
 
-    def _desired_origin(self, camera_pos) -> tuple[int, int, int]:
+    def _desired_origin(self, camera_pos: Any) -> tuple[int, int, int]:
         """Snapped origin that centres the window on ``camera_pos``."""
         out = []
         for c in (camera_pos[0], camera_pos[1], camera_pos[2]):
@@ -203,7 +159,7 @@ class VolumeWindow:
             out.append(snapped)
         return (out[0], out[1], out[2])
 
-    def needs_recenter(self, camera_pos) -> bool:
+    def needs_recenter(self, camera_pos: Any) -> bool:
         """
         True when the camera has drifted past the hysteresis margin (or the
         window was never placed) — i.e. a reassembly *should* be scheduled.
@@ -213,6 +169,8 @@ class VolumeWindow:
         submit a job while leaving the *committed* origin (what the GPU volume
         and shader uniforms currently use) untouched until the new volume is
         actually uploaded.  See ``lighting/gpu.py``.
+
+        Docs: docs/systems/lighting.md
         """
         if self.origin_cell is None:
             return True
@@ -223,7 +181,7 @@ class VolumeWindow:
                 return True
         return False
 
-    def recenter(self, camera_pos) -> bool:
+    def recenter(self, camera_pos: Any) -> bool:
         """
         Follow the camera; return True when the window moved.
 
@@ -238,6 +196,8 @@ class VolumeWindow:
             True when ``origin_cell`` changed (caller must reassemble and
             re-upload the volume), False when the camera is still within the
             hysteresis margin.
+
+        Docs: docs/systems/lighting.md
         """
         if self.origin_cell is None:
             self.origin_cell = self._desired_origin(camera_pos)
@@ -249,37 +209,6 @@ class VolumeWindow:
                 self.origin_cell = self._desired_origin(camera_pos)
                 return True
         return False
-
-
-@dataclass
-class GeometryVolume:
-    """
-    Packed world-geometry block for one cascade, ready for GPU upload.
-
-    Attributes
-    ----------
-    albedo_occ : numpy.ndarray
-        ``uint8 (N, N, N, 4)`` indexed ``[x, y, z]``: RGB = surface albedo
-        (linear, 0–255), A = **solid sub-voxel fraction ×255**: the fraction
-        of the cell's ``k³`` terrain voxels that are solid, rounded to a byte.
-        At cascade 0 (``cell_m == voxel_size``, ``k == 1``) this is exactly
-        255 (solid) or 0 (air), identical to a binary occupancy flag.  At the
-        coarse cascades it is a partial value, so a hollow room reads air
-        (A == 0) in its interior and only its 1-voxel walls read partly-solid
-        — the GPU probes no longer treat a hollow box as a solid block.
-    emission : numpy.ndarray
-        ``uint8 (N, N, N, 4)``: RGB = emitted radiance / ``EMISSION_SCALE``
-        (clipped to 255), A unused (255).
-    origin_cell : tuple[int, int, int]
-        World cell index of texel (0,0,0) at assembly time.
-    cell_m : float
-        Cell edge in meters.
-    """
-
-    albedo_occ: np.ndarray
-    emission: np.ndarray
-    origin_cell: tuple[int, int, int]
-    cell_m: float
 
 
 def _downsample_chunk_block(mats: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
@@ -309,9 +238,30 @@ def _downsample_chunk_block(mats: np.ndarray, k: int) -> tuple[np.ndarray, np.nd
     return material_id, solid_count
 
 
+def _get_chunk_block(
+    coord: tuple[int, int, int],
+    chunk: Any,
+    k: int,
+    cell_m: float,
+    cache: ChunkBlockCache | None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return the ``(material_id, solid_count)`` mini-block for one chunk.
+
+    Checks the cache first; falls back to computing and storing in cache.
+    """
+    use_cache = cache is not None and k > 1
+    blk = cache.get(coord, cell_m) if use_cache else None  # type: ignore[union-attr]  # guarded by use_cache
+    if blk is None:
+        mats = getattr(chunk, "materials", chunk)
+        blk = _downsample_chunk_block(mats, k)
+        if use_cache:
+            cache.put(coord, cell_m, blk)  # type: ignore[union-attr]  # guarded by use_cache
+    return blk
+
+
 def assemble_geometry(
     window: VolumeWindow,
-    chunks: dict,
+    chunks: dict[Any, Any],
     palette: MaterialPalette,
     chunk_size: int,
     voxel_size: float,
@@ -389,6 +339,8 @@ def assemble_geometry(
     Deterministic: pure function of the chunk materials, window placement and
     palette.  Python iterates **chunks** only (≤ a few hundred); all per-cell
     work is numpy slicing (Hard Rule 4).
+
+    Docs: docs/systems/lighting.md
     """
     if window.origin_cell is None:
         raise ValueError("VolumeWindow.recenter() never called")
@@ -397,7 +349,7 @@ def assemble_geometry(
         raise ValueError(
             f"cell_m ({window.cell_m}) must be an integer multiple of voxel_size ({voxel_size})"
         )
-    k = int(round(k))
+    k = round(k)
     n = window.cells
     cells_per_chunk = chunk_size // k  # window cells per chunk edge
     if cells_per_chunk * k != chunk_size:
@@ -419,20 +371,7 @@ def assemble_geometry(
                 chunk = chunks.get(coord)
                 if chunk is None:
                     continue
-                # Per-chunk mini-blocks downsampled to this cell size.  A cache
-                # hit reuses them; a miss computes + stores them.  Only caches
-                # the coarse cascades (k > 1): at k == 1 the "block" aliases the
-                # live chunk array, and there's no downsample cost to amortise.
-                use_cache = cache is not None and k > 1
-                blk = cache.get(coord, window.cell_m) if use_cache else None
-                if blk is None:
-                    # Accept either a chunk object (.materials) or a bare
-                    # ndarray snapshot (async assembly worker passes the latter).
-                    mats = getattr(chunk, "materials", chunk)
-                    blk = _downsample_chunk_block(mats, k)
-                    if use_cache:
-                        cache.put(coord, window.cell_m, blk)
-                chunk_mat, chunk_cnt = blk
+                chunk_mat, chunk_cnt = _get_chunk_block(coord, chunk, k, window.cell_m, cache)
                 # Chunk extent in window-cell coordinates.
                 c0 = (ccx * cells_per_chunk, ccy * cells_per_chunk, ccz * cells_per_chunk)
                 # Overlap range in absolute cell coords.
@@ -497,16 +436,17 @@ def window_chunk_span(
     list[tuple[int, int, int]]
         All ``(cx, cy, cz)`` chunk coords overlapping the window box.  Pure /
         deterministic; no chunk lookups (caller filters against loaded chunks).
+
+    Docs: docs/systems/lighting.md
     """
-    k = int(round(cell_m / voxel_size))
+    k = round(cell_m / voxel_size)
     cells_per_chunk = chunk_size // k
     lo = [int(np.floor(o / cells_per_chunk)) for o in origin_cell]
     hi = [int(np.floor((o + cells - 1) / cells_per_chunk)) for o in origin_cell]
     out: list[tuple[int, int, int]] = []
     for ccx in range(lo[0], hi[0] + 1):
         for ccy in range(lo[1], hi[1] + 1):
-            for ccz in range(lo[2], hi[2] + 1):
-                out.append((ccx, ccy, ccz))
+            out.extend((ccx, ccy, ccz) for ccz in range(lo[2], hi[2] + 1))
     return out
 
 
@@ -519,128 +459,8 @@ def pack_volume(arr: np.ndarray) -> bytes:
     contiguous copy).  Factored out of ``lighting/gpu._upload_volume`` so the
     async assembly worker can run it off the main thread, leaving only the
     cheap ``Texture.set_ram_image(bytes)`` memcpy on the render thread.
+
+    Docs: docs/systems/lighting.md
     """
     data = np.ascontiguousarray(np.transpose(arr, (2, 1, 0, 3))[..., [2, 1, 0, 3]])
     return data.tobytes()
-
-
-class ChunkBlockCache:
-    """
-    Thread-safe LRU cache of per-chunk downsampled geometry mini-blocks.
-
-    Reassembling a coarse cascade re-downsamples every intersecting chunk's
-    material array from scratch — at ``light_c2_cell_m`` = 8 m cells the far
-    cascade's 512 m window touches tens of thousands of chunk coords, and a
-    full recenter re-folds all their ``uint8 (32,32,32)`` arrays each time,
-    which on the assembly worker outruns the recenter interval.  This cache
-    stores, per ``(chunk coord, cell_m)``, the chunk's
-    ``(material_id, solid_count)`` mini-block (the output of
-    ``_downsample_chunk_block``) so a recenter that re-reads the same chunk
-    copies the block instead of recomputing it.  A 16 m chunk yields a
-    ``2×2×2`` block at 8 m cells (``8×8×8`` at 2 m cells), so the entries are
-    tiny.
-
-    Thread-safety
-    -------------
-    The assembly worker thread reads + populates the cache (via
-    :func:`assemble_geometry`) while the main thread invalidates edited chunks.
-    All access is guarded by a single :class:`threading.Lock`; the blocks are
-    small so a coarse lock is fine.  Stored blocks are immutable
-    (``WRITEABLE`` cleared); :func:`assemble_geometry` slices but never mutates
-    them, so a hit can safely hand out a reference without copying.
-
-    Palette dependency
-    ------------------
-    The cached mini-blocks are material ids + solid counts — **palette-
-    independent** — so a palette change does NOT invalidate them (the palette
-    is applied after the cache, on the assembled material array).  The cache
-    *is* keyed only by chunk coord + cell size and assumes one terrain
-    voxel→chunk geometry per run; terrain edits invalidate per-chunk via
-    :meth:`invalidate`.
-
-    Eviction
-    --------
-    Bounded LRU: at most ``max_entries`` ``(coord, cell_m)`` entries
-    (default 4096).  Each entry is a few hundred bytes to a few KB, so the cap
-    bounds the cache to single-digit MB.  The least-recently-used entry is
-    evicted on overflow.
-
-    Parameters
-    ----------
-    max_entries : int, default 4096
-        Hard cap on stored ``(coord, cell_m)`` mini-blocks.
-
-    Example
-    -------
-    >>> cache = ChunkBlockCache(max_entries=8192)
-    >>> vol = assemble_geometry(win, chunks, palette, 32, 0.5, cache=cache)
-    >>> cache.invalidate((cx, cy, cz))   # after a terrain edit in that chunk
-    """
-
-    def __init__(self, max_entries: int = 4096) -> None:
-        self.max_entries = int(max_entries)
-        # key: (coord, cell_m) -> (material_id, solid_count) read-only arrays.
-        self._store: OrderedDict[tuple, tuple[np.ndarray, np.ndarray]] = OrderedDict()
-        self._lock = threading.Lock()
-
-    def get(
-        self,
-        coord: tuple[int, int, int],
-        cell_m: float,
-    ) -> tuple[np.ndarray, np.ndarray] | None:
-        """
-        Return the cached ``(material_id, solid_count)`` mini-block for
-        ``(coord, cell_m)``, or ``None`` on a miss.  Marks the entry MRU.
-
-        The returned arrays are read-only views into the cache — callers must
-        not mutate them (``assemble_geometry`` only slices/copies out of them).
-        """
-        key = (coord, float(cell_m))
-        with self._lock:
-            blk = self._store.get(key)
-            if blk is not None:
-                self._store.move_to_end(key)
-            return blk
-
-    def put(
-        self,
-        coord: tuple[int, int, int],
-        cell_m: float,
-        block: tuple[np.ndarray, np.ndarray],
-    ) -> None:
-        """
-        Store a chunk's mini-block, evicting the LRU entry past the cap.
-
-        The arrays are frozen read-only (their ``WRITEABLE`` flag is cleared)
-        so a later :meth:`get` can hand out references without copying.
-        """
-        mat, cnt = block
-        mat.setflags(write=False)
-        cnt.setflags(write=False)
-        key = (coord, float(cell_m))
-        with self._lock:
-            self._store[key] = (mat, cnt)
-            self._store.move_to_end(key)
-            while len(self._store) > self.max_entries:
-                self._store.popitem(last=False)  # evict LRU
-
-    def invalidate(self, coord: tuple[int, int, int]) -> None:
-        """
-        Drop every cached mini-block for ``coord`` (all cell sizes).
-
-        Call when a terrain edit changes that chunk's material array so the
-        next reassembly recomputes the affected blocks.
-        """
-        with self._lock:
-            for key in [k for k in self._store if k[0] == coord]:
-                del self._store[key]
-
-    def clear(self) -> None:
-        """Drop all cached blocks (e.g. on world reload)."""
-        with self._lock:
-            self._store.clear()
-
-    def __len__(self) -> int:
-        """Number of cached ``(coord, cell_m)`` entries."""
-        with self._lock:
-            return len(self._store)

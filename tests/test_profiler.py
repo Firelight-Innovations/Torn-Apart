@@ -46,7 +46,7 @@ class FakeClock:
         return self.t
 
     def advance_ms(self, ms: float) -> None:
-        self.t += int(round(ms * 1e6))
+        self.t += round(ms * 1e6)
 
 
 def _run_frame(
@@ -70,7 +70,7 @@ def _run_frame(
         for name, val in counters.items():
             prof.set_counter(name, val)
     prof.end_frame()
-    clk.t = begin_t + int(round(total_ms * 1e6))
+    clk.t = begin_t + round(total_ms * 1e6)
 
 
 # ---------------------------------------------------------------------------

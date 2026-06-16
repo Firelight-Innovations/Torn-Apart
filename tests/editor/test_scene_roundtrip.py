@@ -89,7 +89,7 @@ def _game_load(cfg, save_path, factory=None) -> SceneRuntime:
 class TestSceneRoundTrip:
     def test_objects_round_trip_with_exact_transforms(self, tmp_path):
         daemon, cfg = _daemon_with_world()
-        cube, child, light, spawn, rot = _author_scene(daemon)
+        cube, child, _light, _spawn, rot = _author_scene(daemon)
         save_path = tmp_path / "scene.ta"
         daemon.session.save(str(save_path))
 

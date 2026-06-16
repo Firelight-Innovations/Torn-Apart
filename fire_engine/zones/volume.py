@@ -23,6 +23,8 @@ Example
     )
     vol.area_xy_m2          # 720.0
     vol.to_dict()           # plain primitives — save-safe
+
+Docs: docs/systems/zones.md
 """
 
 from __future__ import annotations
@@ -61,6 +63,8 @@ class ZoneVolume:
     >>> v = ZoneVolume(1, "grass", (0.0, 0.0, 0.0), (10.0, 20.0, 4.0))
     >>> v.area_xy_m2
     200.0
+
+    Docs: docs/systems/zones.md
     """
 
     id: int
@@ -77,7 +81,7 @@ class ZoneVolume:
         hi = tuple(float(v) for v in self.max_corner)
         if len(lo) != 3 or len(hi) != 3:
             raise ValueError("ZoneVolume corners must be 3-tuples (x, y, z)")
-        if not all(a < b for a, b in zip(lo, hi)):
+        if not all(a < b for a, b in zip(lo, hi, strict=True)):
             raise ValueError(f"ZoneVolume min_corner {lo} must be < max_corner {hi} on every axis")
         # Normalise to float tuples (frozen dataclass → object.__setattr__).
         object.__setattr__(self, "min_corner", lo)
@@ -89,7 +93,10 @@ class ZoneVolume:
 
     @property
     def size_m(self) -> tuple[float, float, float]:
-        """Edge lengths (x, y, z) in meters."""
+        """Edge lengths (x, y, z) in meters.
+
+        Docs: docs/systems/zones.md
+        """
         return (
             self.max_corner[0] - self.min_corner[0],
             self.max_corner[1] - self.min_corner[1],
@@ -98,7 +105,10 @@ class ZoneVolume:
 
     @property
     def area_xy_m2(self) -> float:
-        """Footprint area in square meters (XY plane)."""
+        """Footprint area in square meters (XY plane).
+
+        Docs: docs/systems/zones.md
+        """
         sx, sy, _ = self.size_m
         return sx * sy
 
@@ -115,6 +125,8 @@ class ZoneVolume:
         -------
         numpy.ndarray
             Boolean array, True where ``min <= coord < max`` on both axes.
+
+        Docs: docs/systems/zones.md
         """
         wx = np.asarray(world_x)
         wy = np.asarray(world_y)
@@ -135,6 +147,8 @@ class ZoneVolume:
             Integer chunk coordinate ``(cx, cy, cz)``.
         chunk_meters : float
             World-space chunk edge length (``config.chunk_meters``, 16.0 m).
+
+        Docs: docs/systems/zones.md
         """
         return all(
             coord[i] * chunk_meters < self.max_corner[i]
@@ -147,7 +161,10 @@ class ZoneVolume:
     # ------------------------------------------------------------------
 
     def to_dict(self) -> dict[str, Any]:
-        """Reduce to a plain dict of primitives (msgpack/save-safe)."""
+        """Reduce to a plain dict of primitives (msgpack/save-safe).
+
+        Docs: docs/systems/zones.md
+        """
         return {
             "id": int(self.id),
             "tag": str(self.tag),
@@ -159,12 +176,17 @@ class ZoneVolume:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ZoneVolume:
-        """Inverse of :meth:`to_dict`."""
+        """Inverse of :meth:`to_dict`.
+
+        Docs: docs/systems/zones.md
+        """
+        lo = [float(v) for v in data["min_corner"]]
+        hi = [float(v) for v in data["max_corner"]]
         return cls(
             id=int(data["id"]),
             tag=str(data["tag"]),
-            min_corner=tuple(float(v) for v in data["min_corner"]),
-            max_corner=tuple(float(v) for v in data["max_corner"]),
+            min_corner=(lo[0], lo[1], lo[2]),
+            max_corner=(hi[0], hi[1], hi[2]),
             biome=data.get("biome"),
             params=dict(data.get("params") or {}),
         )

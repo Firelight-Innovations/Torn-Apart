@@ -43,57 +43,21 @@ Path Normalisation
 All paths are normalised via ``os.path.normcase(os.path.normpath(path))``
 before cache lookup, so ``assets\\models\\foo.egg`` and
 ``assets/models/foo.egg`` hit the same cache entry.
+
+Docs: docs/systems/resources.md
 """
 
 from __future__ import annotations
 
+import contextlib
 import os
 from typing import Any, Protocol, runtime_checkable
 
 import fire_engine.resources.loaders as _default_loaders_module
 
-# ---------------------------------------------------------------------------
-# Handle
-# ---------------------------------------------------------------------------
-
-
-class Handle:
-    """
-    A reference-counted wrapper around a loaded resource.
-
-    Attributes
-    ----------
-    resource : object
-        The raw loaded object (e.g. a Panda3D ``NodePath``, ``AudioSound``,
-        Pillow ``Image``, or whatever the registered loader returned).
-    path : str
-        Normalised path string used as the cache key.
-    refcount : int
-        Current reference count.  Starts at 0 on construction.  Call
-        ``ResourceManager.acquire(handle)`` to increment,
-        ``ResourceManager.release(handle)`` to decrement.
-
-    Example
-    -------
-        handle = manager.load("assets/models/player_hands.egg")
-        manager.acquire(handle)
-        obj = handle.resource   # live resource
-        manager.release(handle)
-    """
-
-    __slots__ = ("path", "refcount", "resource")
-
-    def __init__(self, resource: Any, path: str) -> None:
-        self.resource: Any = resource
-        self.path: str = path
-        self.refcount: int = 0
-
-    def __repr__(self) -> str:
-        return (
-            f"Handle(path={self.path!r}, refcount={self.refcount}, "
-            f"resource={type(self.resource).__name__})"
-        )
-
+# Handle (the reference-counted resource wrapper) lives in resources/types.py;
+# re-exported here so `from fire_engine.resources.manager import Handle` resolves.
+from fire_engine.resources.types import Handle as Handle
 
 # ---------------------------------------------------------------------------
 # LoadersModule protocol — for type-safe injection in tests
@@ -140,7 +104,7 @@ class ResourceManager:
     -------
         # Boot sequence (world/app.py):
         from fire_engine.resources import manager as resource_manager_module
-        from fire_engine.render.resource_adapter import register_panda_loaders
+        from fire_engine.render.bridges.resource_adapter import register_panda_loaders
 
         # 1. Register real panda3d loaders into the default loaders module
         register_panda_loaders(resource_manager_module.default_manager)
@@ -150,6 +114,8 @@ class ResourceManager:
         handle = load("assets/models/landmark_church.egg")
         acquire(handle)
         nodepath = handle.resource
+
+    Docs: docs/systems/resources.md
     """
 
     def __init__(
@@ -195,6 +161,8 @@ class ResourceManager:
             handle = manager.load("assets/models/church.egg")
             manager.acquire(handle)
             nodepath = handle.resource
+
+        Docs: docs/systems/resources.md
         """
         key = self._normalise(path)
         if key in self._cache:
@@ -236,6 +204,8 @@ class ResourceManager:
         -------
             handle = manager.load("assets/audio/ambient.ogg")
             manager.acquire(handle)   # refcount → 1
+
+        Docs: docs/systems/resources.md
         """
         handle.refcount += 1
         return handle
@@ -257,6 +227,8 @@ class ResourceManager:
         -------
             manager.release(handle)   # refcount → 0
             manager.unload_unreferenced()  # handle evicted from cache
+
+        Docs: docs/systems/resources.md
         """
         if handle.refcount > 0:
             handle.refcount -= 1
@@ -283,6 +255,8 @@ class ResourceManager:
             manager.release(handle_a)
             n = manager.unload_unreferenced()
             # handle_a is gone; any handle with refcount > 0 remains.
+
+        Docs: docs/systems/resources.md
         """
         to_remove = [key for key, h in self._cache.items() if h.refcount == 0]
         for key in to_remove:
@@ -290,17 +264,15 @@ class ResourceManager:
             # Best-effort cleanup hook (e.g. NodePath.remove_node)
             cleanup = getattr(handle.resource, "cleanup", None)
             if callable(cleanup):
-                try:
+                with contextlib.suppress(Exception):
                     cleanup()
-                except Exception:
-                    pass
         return len(to_remove)
 
     # ------------------------------------------------------------------
     # Diagnostics
     # ------------------------------------------------------------------
 
-    def stats(self) -> dict:
+    def stats(self) -> dict[str, int]:
         """
         Return a summary of the current cache state.
 
@@ -319,6 +291,8 @@ class ResourceManager:
             s = manager.stats()
             print(s["cache_size"])   # e.g. 4
             print(s["zero_ref"])     # e.g. 1  (ready to evict)
+
+        Docs: docs/systems/resources.md
         """
         handles = list(self._cache.values())
         refcounts = [h.refcount for h in handles]
@@ -381,6 +355,8 @@ def load(path: str) -> Handle:
         from fire_engine.resources import load, acquire
         handle = acquire(load("assets/models/church.egg"))
         nodepath = handle.resource
+
+    Docs: docs/systems/resources.md
     """
     return default_manager.load(path)
 
@@ -394,6 +370,8 @@ def acquire(handle: Handle) -> Handle:
     Example
     -------
         handle = acquire(load("assets/audio/wind.ogg"))
+
+    Docs: docs/systems/resources.md
     """
     return default_manager.acquire(handle)
 
@@ -403,6 +381,8 @@ def release(handle: Handle) -> None:
     Decrement the refcount of *handle* via the default manager.
 
     Convenience wrapper for ``default_manager.release(handle)``.
+
+    Docs: docs/systems/resources.md
     """
     default_manager.release(handle)
 
@@ -412,5 +392,7 @@ def unload_unreferenced() -> int:
     Evict all zero-refcount handles from the default manager.
 
     Returns the number of evicted handles.
+
+    Docs: docs/systems/resources.md
     """
     return default_manager.unload_unreferenced()

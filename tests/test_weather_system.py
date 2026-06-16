@@ -18,6 +18,8 @@ Coverage
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import numpy as np
 import pytest
 
@@ -108,7 +110,7 @@ class TestSpatial:
 
 class TestContinuity:
     STEP = 2.0
-    BOUNDS = {
+    BOUNDS: ClassVar[dict] = {
         "cloud_coverage": 0.05,
         "cloud_density": 0.05,
         "rain_intensity": 0.06,

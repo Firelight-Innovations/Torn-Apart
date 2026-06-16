@@ -59,7 +59,7 @@ class TestSphereCount:
 class TestRoundTrip:
     def test_add_then_remove_round_trips(self, cfg):
         set_world_seed(1)
-        provider, store = make_provider(cfg)
+        provider, _store = make_provider(cfg)
         center = Vec3(8.0, 8.0, 8.0)
         # baseline copy
         ch = provider((0, 0, 0))
@@ -73,7 +73,7 @@ class TestRoundTrip:
 class TestMultiChunk:
     def test_brush_touches_correct_chunk_set(self, cfg):
         set_world_seed(1)
-        provider, store = make_provider(cfg)
+        provider, _store = make_provider(cfg)
         # Center on the boundary between chunks along X at world x=16 (border of
         # chunk 0 and 1), radius spanning into both. chunk_meters = 16.
         center = Vec3(16.0, 8.0, 8.0)
@@ -87,7 +87,7 @@ class TestMultiChunk:
 
     def test_corner_brush_eight_chunks(self, cfg):
         set_world_seed(1)
-        provider, store = make_provider(cfg)
+        provider, _store = make_provider(cfg)
         # Centre exactly on the 8-chunk corner at (16,16,16).
         center = Vec3(16.0, 16.0, 16.0)
         touched = apply_brush(SphereBrush(2.0), center, BrushMode.ADD, chunk_provider=provider)
@@ -98,7 +98,7 @@ class TestMultiChunk:
 class TestEvents:
     def test_remove_sets_flags_and_publishes(self, cfg):
         set_world_seed(1)
-        provider, store = make_provider(cfg)
+        provider, _store = make_provider(cfg)
         # Pre-fill chunk so REMOVE actually changes voxels.
         ch = provider((0, 0, 0))
         ch.materials[:] = 1
@@ -126,7 +126,7 @@ class TestEvents:
     def test_no_event_when_no_change(self, cfg):
         """REMOVE on an empty chunk changes nothing → no flags, no event."""
         set_world_seed(1)
-        provider, store = make_provider(cfg)
+        provider, _store = make_provider(cfg)
         ch = provider((0, 0, 0))  # empty
         bus = EventBus()
         events = []
@@ -146,7 +146,7 @@ class TestEvents:
 class TestOtherShapes:
     def test_box_brush_extent(self, cfg):
         set_world_seed(1)
-        provider, store = make_provider(cfg)
+        provider, _store = make_provider(cfg)
         apply_brush(
             BoxBrush(Vec3(2.0, 2.0, 2.0)),
             Vec3(8, 8, 8),
@@ -162,7 +162,7 @@ class TestOtherShapes:
 
     def test_cylinder_brush(self, cfg):
         set_world_seed(1)
-        provider, store = make_provider(cfg)
+        provider, _store = make_provider(cfg)
         touched = apply_brush(
             CylinderBrush(radius_m=2.0, height_m=4.0),
             Vec3(8, 8, 8),

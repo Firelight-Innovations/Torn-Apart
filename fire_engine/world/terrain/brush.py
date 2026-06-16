@@ -13,134 +13,110 @@ published per touched chunk.
 
 Determinism: brushes contain no randomness; the mask is a pure function of the
 shape and centre.  No per-voxel Python loops (Hard Rule 4).
+
+Docs: docs/systems/world.terrain.md
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import Enum
+from collections.abc import Callable
+from typing import Any
 
 import numpy as np
 
 from fire_engine.core import TerrainEditedEvent
 from fire_engine.core.math3d import Vec3
 
-
-class BrushMode(Enum):
-    """Whether a brush adds solid material or removes it."""
-
-    ADD = "add"
-    REMOVE = "remove"
-
-
-# ---------------------------------------------------------------------------
-# Brush shapes.  Each implements ``mask(X, Y, Z, center)`` returning a boolean
-# array (same shape as the broadcast of X,Y,Z) of voxel CENTRES inside the
-# shape, and ``aabb(center)`` returning (min_corner, max_corner) world meters.
-# ---------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class SphereBrush:
-    """
-    Solid sphere brush.
-
-    Parameters
-    ----------
-    radius_m : float
-        Sphere radius in meters.
-
-    Example
-    -------
-    >>> SphereBrush(radius_m=2.5)        # a 2.5 m explosion radius
-    SphereBrush(radius_m=2.5)
-    """
-
-    radius_m: float
-
-    def aabb(self, center: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """World-space axis-aligned bounds (min, max) in meters."""
-        r = np.array([self.radius_m] * 3, dtype=np.float64)
-        return center - r, center + r
-
-    def mask(self, X: np.ndarray, Y: np.ndarray, Z: np.ndarray, center: np.ndarray) -> np.ndarray:
-        """Boolean mask: voxel centres within ``radius_m`` of ``center``."""
-        cx, cy, cz = center
-        return (X - cx) ** 2 + (Y - cy) ** 2 + (Z - cz) ** 2 <= self.radius_m**2
-
-
-@dataclass(frozen=True)
-class BoxBrush:
-    """
-    Axis-aligned box brush.
-
-    Parameters
-    ----------
-    half_extents_m : Vec3
-        Half-size of the box along each world axis in meters.
-
-    Example
-    -------
-    >>> from fire_engine.core.math3d import Vec3
-    >>> BoxBrush(half_extents_m=Vec3(1.0, 1.0, 2.0))   # 2×2×4 m block
-    BoxBrush(half_extents_m=Vec3(1.0, 1.0, 2.0))
-    """
-
-    half_extents_m: Vec3
-
-    def aabb(self, center: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """World-space axis-aligned bounds (min, max) in meters."""
-        he = self.half_extents_m.to_numpy().astype(np.float64)
-        return center - he, center + he
-
-    def mask(self, X: np.ndarray, Y: np.ndarray, Z: np.ndarray, center: np.ndarray) -> np.ndarray:
-        """Boolean mask: voxel centres inside the axis-aligned box."""
-        cx, cy, cz = center
-        hx, hy, hz = self.half_extents_m.to_numpy()
-        return (np.abs(X - cx) <= hx) & (np.abs(Y - cy) <= hy) & (np.abs(Z - cz) <= hz)
-
-
-@dataclass(frozen=True)
-class CylinderBrush:
-    """
-    Vertical cylinder brush (axis along world +Z).
-
-    Parameters
-    ----------
-    radius_m : float
-        Cylinder radius in meters (in the XY plane).
-    height_m : float
-        Full cylinder height in meters (centred on ``center`` along Z).
-
-    Example
-    -------
-    >>> CylinderBrush(radius_m=1.5, height_m=4.0)
-    CylinderBrush(radius_m=1.5, height_m=4.0)
-    """
-
-    radius_m: float
-    height_m: float
-
-    def aabb(self, center: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """World-space axis-aligned bounds (min, max) in meters."""
-        half = np.array([self.radius_m, self.radius_m, self.height_m / 2.0], dtype=np.float64)
-        return center - half, center + half
-
-    def mask(self, X: np.ndarray, Y: np.ndarray, Z: np.ndarray, center: np.ndarray) -> np.ndarray:
-        """Boolean mask: voxel centres inside the vertical cylinder."""
-        cx, cy, cz = center
-        half_h = self.height_m / 2.0
-        radial = (X - cx) ** 2 + (Y - cy) ** 2 <= self.radius_m**2
-        vertical = np.abs(Z - cz) <= half_h
-        return radial & vertical
-
-
-Brush = SphereBrush | BoxBrush | CylinderBrush
-
+# Re-exports — brush shape types and mode live in grouping modules; these
+# aliases preserve every historical import path without any importer churn.
+from fire_engine.world.terrain.enums import BrushMode as BrushMode
+from fire_engine.world.terrain.types import BoxBrush as BoxBrush
+from fire_engine.world.terrain.types import Brush as Brush
+from fire_engine.world.terrain.types import CylinderBrush as CylinderBrush
+from fire_engine.world.terrain.types import SphereBrush as SphereBrush
 
 # ---------------------------------------------------------------------------
 # apply_brush — the mutation entry point.
 # ---------------------------------------------------------------------------
+
+
+def _apply_brush_to_chunk(
+    brush: Brush,
+    center_np: np.ndarray,
+    mode: BrushMode,
+    material: int,
+    coord: tuple[int, int, int],
+    chunk_provider: Callable[[tuple[int, int, int]], Any],
+) -> np.ndarray | None:
+    """
+    Apply the brush to a single chunk and return the changed-voxel mask.
+
+    Returns the boolean changed array if any voxel changed, or ``None`` if the
+    chunk was not modified.  Side-effect: writes to ``chunk.materials`` when a
+    change occurs.
+    """
+    chunk = chunk_provider(coord)
+    n = chunk.materials.shape[0]
+    vs = float(chunk._voxel_size)
+    origin = chunk.world_origin.to_numpy().astype(np.float64)
+    lin = (np.arange(n, dtype=np.float64) + 0.5) * vs
+    X = (origin[0] + lin)[:, None, None]
+    Y = (origin[1] + lin)[None, :, None]
+    Z = (origin[2] + lin)[None, None, :]
+    mask = brush.mask(X, Y, Z, center_np)
+    if not mask.any():
+        return None
+    if mode is BrushMode.ADD:
+        changed: np.ndarray = mask & (chunk.materials != material)
+        if not changed.any():
+            return None
+        chunk.materials[mask] = np.uint8(material)
+    else:  # REMOVE
+        changed = mask & (chunk.materials != 0)
+        if not changed.any():
+            return None
+        chunk.materials[mask] = 0
+    return changed
+
+
+def _collect_neighbor_dirty(
+    changed: np.ndarray,
+    coord: tuple[int, int, int],
+    neighbor_dirty: set[tuple[int, int, int]],
+) -> None:
+    """
+    Record neighbour chunks that need a remesh due to boundary voxel changes.
+
+    Changed voxels on a boundary slab affect the neighbour chunk's mesh
+    (cross-chunk face culling + faceted border vertices) → queue those
+    neighbours for a remesh.  Per-axis side flags; diagonal offsets are
+    included when both/all of their axis sides were touched (slightly
+    over-marks corner cases — a harmless extra remesh, never a miss).
+    """
+    last = changed.shape[0] - 1
+    side: dict[int, tuple[bool, bool, bool]] = {
+        -1: (
+            bool(changed[0, :, :].any()),
+            bool(changed[:, 0, :].any()),
+            bool(changed[:, :, 0].any()),
+        ),
+        1: (
+            bool(changed[last, :, :].any()),
+            bool(changed[:, last, :].any()),
+            bool(changed[:, :, last].any()),
+        ),
+    }
+    for ox in (-1, 0, 1):
+        for oy in (-1, 0, 1):
+            for oz in (-1, 0, 1):
+                if (ox, oy, oz) == (0, 0, 0):
+                    continue
+                if (
+                    (ox == 0 or side[ox][0])
+                    and (oy == 0 or side[oy][1])
+                    and (oz == 0 or side[oz][2])
+                ):
+                    neighbor_dirty.add((coord[0] + ox, coord[1] + oy, coord[2] + oz))
 
 
 def _chunks_in_aabb(mn: np.ndarray, mx: np.ndarray, chunk_m: float) -> list[tuple[int, int, int]]:
@@ -152,11 +128,10 @@ def _chunks_in_aabb(mn: np.ndarray, mx: np.ndarray, chunk_m: float) -> list[tupl
     """
     c_min = np.floor(mn / chunk_m).astype(np.int64)
     c_max = np.floor(mx / chunk_m).astype(np.int64)
-    coords = []
-    for cx in range(c_min[0], c_max[0] + 1):
-        for cy in range(c_min[1], c_max[1] + 1):
-            for cz in range(c_min[2], c_max[2] + 1):
-                coords.append((cx, cy, cz))
+    coords: list[tuple[int, int, int]] = []
+    for cx in range(int(c_min[0]), int(c_max[0]) + 1):
+        for cy in range(int(c_min[1]), int(c_max[1]) + 1):
+            coords.extend((cx, cy, cz) for cz in range(int(c_min[2]), int(c_max[2]) + 1))
     return coords
 
 
@@ -166,8 +141,8 @@ def apply_brush(
     mode: BrushMode,
     material: int = 1,
     *,
-    chunk_provider,
-    bus=None,
+    chunk_provider: Callable[[tuple[int, int, int]], Any],
+    bus: Any = None,
 ) -> set[tuple[int, int, int]]:
     """
     Apply a brush edit to terrain — the single terrain mutation path.
@@ -226,69 +201,25 @@ def apply_brush(
     ...                       BrushMode.ADD, chunk_provider=provider)
     >>> (0, 0, 0) in touched
     True
+
+    Docs: docs/systems/world.terrain.md
     """
     center_np = center.to_numpy().astype(np.float64)
     mn, mx = brush.aabb(center_np)
     touched: set[tuple[int, int, int]] = set()
     neighbor_dirty: set[tuple[int, int, int]] = set()
 
-    # We need chunk geometry; read it from the first chunk we fetch.
-    coords = None
     for coord in _chunks_in_aabb_lazy(mn, mx, chunk_provider):
-        chunk = chunk_provider(coord)
-        n = chunk.materials.shape[0]
-        vs = float(chunk._voxel_size)
-        origin = chunk.world_origin.to_numpy().astype(np.float64)
-
-        # World-centre coordinate of each voxel along each local axis.
-        lin = (np.arange(n, dtype=np.float64) + 0.5) * vs
-        X = (origin[0] + lin)[:, None, None]
-        Y = (origin[1] + lin)[None, :, None]
-        Z = (origin[2] + lin)[None, None, :]
-
-        mask = brush.mask(X, Y, Z, center_np)  # (n,n,n) bool
-        if not mask.any():
+        changed = _apply_brush_to_chunk(brush, center_np, mode, material, coord, chunk_provider)
+        if changed is None:
             continue
-
-        if mode is BrushMode.ADD:
-            # Only count as modified where it actually changes a voxel.
-            changed = mask & (chunk.materials != material)
-            if not changed.any():
-                continue
-            chunk.materials[mask] = np.uint8(material)
-        else:  # REMOVE
-            changed = mask & (chunk.materials != 0)
-            if not changed.any():
-                continue
-            chunk.materials[mask] = 0
-
+        chunk = chunk_provider(coord)
         chunk.dirty = True
         chunk.edited = True
         touched.add(coord)
         if bus is not None:
             bus.publish(TerrainEditedEvent(chunk_coords=coord, brush=brush))
-
-        # Changed voxels on a boundary slab affect the neighbour chunk's mesh
-        # (cross-chunk face culling + faceted border vertices) → queue those
-        # neighbours for a remesh.  Per-axis side flags; diagonal offsets are
-        # included when both/all of their axis sides were touched (slightly
-        # over-marks corner cases — a harmless extra remesh, never a miss).
-        last = n - 1
-        side = {
-            -1: (changed[0, :, :].any(), changed[:, 0, :].any(), changed[:, :, 0].any()),
-            1: (changed[last, :, :].any(), changed[:, last, :].any(), changed[:, :, last].any()),
-        }
-        for ox in (-1, 0, 1):
-            for oy in (-1, 0, 1):
-                for oz in (-1, 0, 1):
-                    if (ox, oy, oz) == (0, 0, 0):
-                        continue
-                    if (
-                        (ox == 0 or side[ox][0])
-                        and (oy == 0 or side[oy][1])
-                        and (oz == 0 or side[oz][2])
-                    ):
-                        neighbor_dirty.add((coord[0] + ox, coord[1] + oy, coord[2] + oz))
+        _collect_neighbor_dirty(changed, coord, neighbor_dirty)
 
     # Flag border neighbours for remesh (dirty only — not edited, no event).
     for coord in neighbor_dirty - touched:
@@ -297,7 +228,11 @@ def apply_brush(
     return touched
 
 
-def _chunks_in_aabb_lazy(mn, mx, chunk_provider):
+def _chunks_in_aabb_lazy(
+    mn: np.ndarray,
+    mx: np.ndarray,
+    chunk_provider: Callable[[tuple[int, int, int]], Any],
+) -> list[tuple[int, int, int]]:
     """
     Yield chunk coords intersecting AABB [mn, mx].
 
@@ -313,5 +248,4 @@ def _chunks_in_aabb_lazy(mn, mx, chunk_provider):
     )
     probe = chunk_provider(probe_coord)
     chunk_m = probe.chunk_meters
-    for coord in _chunks_in_aabb(np.asarray(mn), np.asarray(mx), chunk_m):
-        yield coord
+    return _chunks_in_aabb(np.asarray(mn), np.asarray(mx), chunk_m)

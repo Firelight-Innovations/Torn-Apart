@@ -29,12 +29,13 @@ Example::
     store.set_transform(cube["id"], position=(4.0, 0.0, 2.0))
     store.reparent(child["id"], parent=None)   # promote to a root
     tree = store.tree()                          # flat, DFS-ordered list of dicts
+
+Docs: docs/systems/scene.md
 """
 
 from __future__ import annotations
 
-import copy
-from dataclasses import dataclass, field
+from typing import Any
 
 from fire_engine.scene.components import (
     COMPONENT_CATALOG,
@@ -43,81 +44,27 @@ from fire_engine.scene.components import (
     is_known,
     make_component,
 )
+from fire_engine.scene.types import (
+    _ZERO,
+    QuatT,
+    SceneError,
+    SceneObject,
+    Vec3T,
+)
+
+# Re-export support types so every existing import path keeps working.
+__all__ = [
+    "KINDS",
+    "QuatT",
+    "SceneError",
+    "SceneObject",
+    "SceneObjectStore",
+    "Vec3T",
+]
 
 # Object kinds the editor can place. "empty" is a bare transform (a grouping
 # node, like an empty Unity GameObject); the rest carry a default visual gizmo.
 KINDS: frozenset[str] = frozenset({"empty", "cube", "sphere", "light", "spawn"})
-
-Vec3T = tuple[float, float, float]
-QuatT = tuple[float, float, float, float]  # (w, x, y, z)
-
-_IDENTITY_QUAT: QuatT = (1.0, 0.0, 0.0, 0.0)
-_ONE: Vec3T = (1.0, 1.0, 1.0)
-_ZERO: Vec3T = (0.0, 0.0, 0.0)
-
-
-class SceneError(ValueError):
-    """Invalid scene operation (unknown id/kind, or a reparent that would cycle)."""
-
-
-@dataclass
-class SceneObject:
-    """One node in the authoring hierarchy.
-
-    Attributes:
-        id: Stable integer id, unique within a session (monotonic counter).
-        name: Display name (not required unique).
-        kind: One of :data:`KINDS`.
-        parent: Parent object id, or ``None`` for a root.
-        position: Local translation in meters ``(x, y, z)``, Z-up.
-        rotation: Local rotation quaternion ``(w, x, y, z)``.
-        scale: Local scale factors ``(x, y, z)``.
-        components: Built-in components beyond the Transform — each a dict
-            ``{"type", "enabled", "params"}`` (see
-            :mod:`fire_engine.scene.components`). ``kind`` seeds these on
-            creation; thereafter the list is the source of truth for visuals.
-            The Transform is intrinsic (the TRS fields) and is NOT in this list.
-    """
-
-    id: int
-    name: str
-    kind: str
-    parent: int | None = None
-    position: Vec3T = _ZERO
-    rotation: QuatT = _IDENTITY_QUAT
-    scale: Vec3T = _ONE
-    components: list[dict] = field(default_factory=list)
-
-    def to_dict(self) -> dict:
-        """Wire/serialisation form: plain JSON-friendly primitives."""
-        return {
-            "id": self.id,
-            "name": self.name,
-            "kind": self.kind,
-            "parent": self.parent,
-            "position": list(self.position),
-            "rotation": list(self.rotation),
-            "scale": list(self.scale),
-            "components": copy.deepcopy(self.components),
-        }
-
-    @staticmethod
-    def from_dict(d: dict) -> SceneObject:
-        kind = str(d["kind"])
-        # Migration seam (the ONLY one): pre-component saves lack "components",
-        # so synthesise the kind's defaults. New saves carry them verbatim.
-        raw = d.get("components")
-        components = default_components_for_kind(kind) if raw is None else copy.deepcopy(list(raw))
-        return SceneObject(
-            id=int(d["id"]),
-            name=str(d["name"]),
-            kind=kind,
-            parent=None if d.get("parent") is None else int(d["parent"]),
-            position=tuple(float(v) for v in d.get("position", _ZERO)),  # type: ignore[arg-type]
-            rotation=tuple(float(v) for v in d.get("rotation", _IDENTITY_QUAT)),  # type: ignore[arg-type]
-            scale=tuple(float(v) for v in d.get("scale", _ONE)),  # type: ignore[arg-type]
-            components=components,
-        )
 
 
 class SceneObjectStore:
@@ -129,6 +76,8 @@ class SceneObjectStore:
 
     Implements the ``Saveable`` protocol (``save_key`` + ``get_delta`` /
     ``apply_delta``) so the scene persists inside the world's ``.ta`` save.
+
+    Docs: docs/systems/scene.md
     """
 
     save_key: str = "editor_scene"
@@ -144,6 +93,10 @@ class SceneObjectStore:
         return len(self._objects)
 
     def get(self, obj_id: int) -> SceneObject:
+        """Return the :class:`SceneObject` for ``obj_id``; raises :class:`SceneError` if missing.
+
+        Docs: docs/systems/scene.md
+        """
         obj = self._objects.get(int(obj_id))
         if obj is None:
             raise SceneError(f"no scene object with id {obj_id}")
@@ -164,9 +117,12 @@ class SceneObjectStore:
                     frontier.append(child.id)
         return out
 
-    def tree(self) -> list[dict]:
-        """Flat, depth-first list of object dicts (roots first, siblings ordered)."""
-        out: list[dict] = []
+    def tree(self) -> list[dict[str, Any]]:
+        """Flat, depth-first list of object dicts (roots first, siblings ordered).
+
+        Docs: docs/systems/scene.md
+        """
+        out: list[dict[str, Any]] = []
 
         def walk(parent: int | None) -> None:
             for child in self._children(parent):
@@ -186,8 +142,11 @@ class SceneObjectStore:
         parent: int | None = None,
         name: str | None = None,
         position: Vec3T = _ZERO,
-    ) -> dict:
-        """Create a new object; returns its dict form. Raises on bad kind/parent."""
+    ) -> dict[str, Any]:
+        """Create a new object; returns its dict form. Raises on bad kind/parent.
+
+        Docs: docs/systems/scene.md
+        """
         k = str(kind).lower()
         if k not in KINDS:
             raise SceneError(f"unknown kind {kind!r}; expected one of {sorted(KINDS)}")
@@ -205,13 +164,20 @@ class SceneObjectStore:
         self._next_id += 1
         return obj.to_dict()
 
-    def rename(self, obj_id: int, name: str) -> dict:
+    def rename(self, obj_id: int, name: str) -> dict[str, Any]:
+        """Rename the object at ``obj_id``; returns its updated dict form.
+
+        Docs: docs/systems/scene.md
+        """
         obj = self.get(obj_id)
         obj.name = str(name)
         return obj.to_dict()
 
-    def reparent(self, obj_id: int, parent: int | None) -> dict:
-        """Move ``obj_id`` under ``parent`` (``None`` = root). Rejects cycles."""
+    def reparent(self, obj_id: int, parent: int | None) -> dict[str, Any]:
+        """Move ``obj_id`` under ``parent`` (``None`` = root). Rejects cycles.
+
+        Docs: docs/systems/scene.md
+        """
         obj = self.get(obj_id)
         if parent is not None:
             pid = int(parent)
@@ -233,7 +199,15 @@ class SceneObjectStore:
         position: Vec3T | None = None,
         rotation: QuatT | None = None,
         scale: Vec3T | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
+        """Set the local TRS of ``obj_id``; returns the updated dict form.
+
+        All keyword arguments are optional — omit to keep the current value.
+        Positions are in meters (local to parent); rotation is a quaternion
+        ``(w, x, y, z)``; scale is a unitless multiplier ``(x, y, z)``.
+
+        Docs: docs/systems/scene.md
+        """
         obj = self.get(obj_id)
         if position is not None:
             obj.position = tuple(float(v) for v in position)  # type: ignore[assignment]
@@ -246,12 +220,14 @@ class SceneObjectStore:
     # ------------------------------------------------------------------ #
     # Components
     # ------------------------------------------------------------------ #
-    def add_component(self, obj_id: int, type_name: str) -> dict:
+    def add_component(self, obj_id: int, type_name: str) -> dict[str, Any]:
         """Attach a built-in component of ``type_name`` to ``obj_id``.
 
         Components are independent of ``kind`` (Unity-style) — an ``empty`` can
         be given a Light. Singletons (every built-in) reject a second instance.
         Raises :class:`SceneError` on unknown type or singleton violation.
+
+        Docs: docs/systems/scene.md
         """
         obj = self.get(obj_id)
         t = str(type_name)
@@ -264,8 +240,11 @@ class SceneObjectStore:
         obj.components.append(make_component(t))
         return obj.to_dict()
 
-    def remove_component(self, obj_id: int, index: int) -> dict:
-        """Remove the component at ``index`` (0-based). Raises on a bad index."""
+    def remove_component(self, obj_id: int, index: int) -> dict[str, Any]:
+        """Remove the component at ``index`` (0-based). Raises on a bad index.
+
+        Docs: docs/systems/scene.md
+        """
         obj = self.get(obj_id)
         i = int(index)
         if i < 0 or i >= len(obj.components):
@@ -278,12 +257,15 @@ class SceneObjectStore:
         obj_id: int,
         index: int,
         *,
-        params: dict | None = None,
+        params: dict[str, Any] | None = None,
         enabled: bool | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Edit the component at ``index``: merge validated ``params`` and/or
         toggle ``enabled``. Unknown/extraneous param keys are dropped and values
-        are coerced to the catalog field types. Raises on a bad index."""
+        are coerced to the catalog field types. Raises on a bad index.
+
+        Docs: docs/systems/scene.md
+        """
         obj = self.get(obj_id)
         i = int(index)
         if i < 0 or i >= len(obj.components):
@@ -297,7 +279,10 @@ class SceneObjectStore:
         return obj.to_dict()
 
     def delete(self, obj_id: int) -> list[int]:
-        """Delete ``obj_id`` and all its descendants; returns removed ids."""
+        """Delete ``obj_id`` and all its descendants; returns removed ids.
+
+        Docs: docs/systems/scene.md
+        """
         obj = self.get(obj_id)
         removed = self._descendants(obj.id) | {obj.id}
         for rid in removed:
@@ -305,15 +290,21 @@ class SceneObjectStore:
         return sorted(removed)
 
     def clear(self) -> None:
-        """Drop all objects (e.g. on ``world.open``); resets the id counter."""
+        """Drop all objects (e.g. on ``world.open``); resets the id counter.
+
+        Docs: docs/systems/scene.md
+        """
         self._objects.clear()
         self._next_id = 1
 
     # ------------------------------------------------------------------ #
     # Saveable protocol
     # ------------------------------------------------------------------ #
-    def get_delta(self) -> dict:
-        """Deviation from the empty baseline: the full object list (or ``{}``)."""
+    def get_delta(self) -> dict[str, Any]:
+        """Deviation from the empty baseline: the full object list (or ``{}``).
+
+        Docs: docs/systems/scene.md
+        """
         if not self._objects:
             return {}
         return {
@@ -321,8 +312,11 @@ class SceneObjectStore:
             "next_id": self._next_id,
         }
 
-    def apply_delta(self, delta: dict) -> None:
-        """Restore objects saved by :meth:`get_delta` onto the empty baseline."""
+    def apply_delta(self, delta: dict[str, Any]) -> None:
+        """Restore objects saved by :meth:`get_delta` onto the empty baseline.
+
+        Docs: docs/systems/scene.md
+        """
         self.clear()
         objs = delta.get("objects", [])
         for d in objs:

@@ -186,10 +186,10 @@ class _FakeWindField:
         self.modifiers.append(m)
 
     def remove_modifier(self, m) -> None:
-        try:
+        import contextlib
+
+        with contextlib.suppress(ValueError):
             self.modifiers.remove(m)
-        except ValueError:
-            pass
 
 
 def test_gustfront_registers_when_cell_near_and_no_leak():

@@ -5,13 +5,16 @@ tool covers. Every limit comes from ``[tool.firelight]`` via
 :mod:`tools.standards_config` — this script holds zero magic numbers.
 
 Standards enforced (see docs/systems/standards.md):
-  * 6  — max sub-folders per folder.
+  * 6  — max sub-folders per folder (the source root itself is exempt — it is the
+         engine subsystem index, not a leaf package; matches check_docs.py).
   * 7  — max Python modules per folder (excluding ``__init__.py``).
   * 10 — one public top-level class per module (with §C exemptions).
   * 11 — one cohesive responsibility per module (module docstring required;
          grouping modules ``events.py`` / ``types.py`` … are exempt from 10).
   * 17 — every public source module has a matching test module (mirrored path,
-         legacy flat ``tests/test_<stem>.py`` also accepted).
+         legacy flat ``tests/test_<stem>.py`` also accepted). Modules that import
+         panda3d are exempt — Hard Rule 1 bars them from the headless suite, so a
+         headless mirror is impossible; they are integration-verified at app launch.
 
 Run standalone (exit 1 on any violation):
     python tools/check_repo_structure.py
@@ -52,11 +55,20 @@ def _iter_dirs(root: Path, cfg: StandardsConfig) -> list[Path]:
 
 
 def _subdirs(directory: Path, cfg: StandardsConfig) -> list[Path]:
-    """Immediate non-excluded child directories of ``directory``."""
+    """Immediate non-excluded child *sub-packages* of ``directory``.
+
+    The deep-&-narrow rule governs nesting of Python PACKAGES, so only child
+    directories that are packages (contain ``__init__.py``) count toward the
+    sub-folder cap. Sibling *data* directories — e.g. a ``shaders/`` folder of
+    ``.vert``/``.frag``/``.glsl`` files, or ``__pycache__`` — are not
+    sub-packages and are not counted (they hold no importable modules).
+    """
     return [
         child
         for child in directory.iterdir()
-        if child.is_dir() and not cfg.is_excluded(child.relative_to(REPO_ROOT))
+        if child.is_dir()
+        and (child / "__init__.py").exists()
+        and not cfg.is_excluded(child.relative_to(REPO_ROOT))
     ]
 
 
@@ -76,6 +88,27 @@ def _public_top_level_classes(tree: ast.Module) -> list[str]:
         for node in tree.body
         if isinstance(node, ast.ClassDef) and not node.name.startswith("_")
     ]
+
+
+def _imports_panda3d(tree: ast.Module) -> bool:
+    """True if the module imports ``panda3d`` or ``direct`` (the Panda3D SDK).
+
+    Such a module is, by Hard Rule 1, a ``render/``/``lighting/`` bridge that the
+    headless test suite *excludes by construction* (importing panda3d at collection
+    would need a GPU/window). It therefore cannot have a headless test mirror and is
+    exempt from standard 17 — it is integration-verified by launching the app, not
+    unit-mirrored. A pure module under ``render/`` that does NOT import panda3d (e.g.
+    a GLSL-string builder) is still headless-testable and still requires its mirror.
+    """
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            if any(a.name.split(".")[0] in ("panda3d", "direct") for a in node.names):
+                return True
+        elif isinstance(node, ast.ImportFrom):
+            root = (node.module or "").split(".")[0]
+            if root in ("panda3d", "direct"):
+                return True
+    return False
 
 
 def _test_paths_for(module: Path, cfg: StandardsConfig) -> list[Path]:
@@ -106,8 +139,12 @@ def collect_violations(cfg: StandardsConfig) -> list[str]:
         for directory in _iter_dirs(root, cfg):
             rel_dir = directory.relative_to(REPO_ROOT).as_posix()
 
+            # The source root itself (e.g. ``fire_engine/``) is the engine's
+            # subsystem index, governed by ARCHITECTURE.md — not a leaf package the
+            # narrowness cap is meant for. check_docs.py already exempts it (``if
+            # pkg == root: continue``); mirror that here so the two checkers agree.
             n_subdirs = len(_subdirs(directory, cfg))
-            if n_subdirs > cfg.max_subdirs:
+            if directory != root and n_subdirs > cfg.max_subdirs:
                 violations.append(
                     f"[6] {rel_dir}/ has {n_subdirs} sub-folders (max {cfg.max_subdirs}) "
                     f"- introduce a new sub-package instead of widening."
@@ -147,7 +184,10 @@ def _check_module(module: Path, cfg: StandardsConfig) -> list[str]:
                 f"trivial support types - into a dedicated {cfg.grouping_modules}."
             )
 
-    if not any(p.exists() for p in _test_paths_for(module, cfg)):
+    # Standard 17 is a *headless*-test-mirror rule. A module that imports panda3d
+    # is excluded from the headless suite by Hard Rule 1, so it cannot have one —
+    # exempt it (it is integration-verified via the app launch instead).
+    if not _imports_panda3d(tree) and not any(p.exists() for p in _test_paths_for(module, cfg)):
         canonical = _test_paths_for(module, cfg)[0].relative_to(REPO_ROOT).as_posix()
         out.append(f"[17] {rel}: no test module (expected {canonical}).")
 

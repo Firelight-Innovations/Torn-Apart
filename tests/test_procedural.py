@@ -34,16 +34,16 @@ def _fresh_registry():
     # The cleanest way without module-reload tricks is to call reset_registry
     # and then re-register the built-in defs directly.
     from fire_engine.procedural.registry import register, reset_registry
-    from fire_engine.procedural.textures.dirt_ground import DirtGroundDef
-    from fire_engine.procedural.textures.grass_ground import GrassGroundDef
-    from fire_engine.procedural.textures.grass_tuft import GrassTuftDef
-    from fire_engine.procedural.textures.moon_surface import MoonSurfaceDef
-    from fire_engine.procedural.textures.night_sky import (
+    from fire_engine.procedural.textures.ground.dirt_ground import DirtGroundDef
+    from fire_engine.procedural.textures.ground.grass_ground import GrassGroundDef
+    from fire_engine.procedural.textures.ground.wasteland_ground import WastelandGroundDef
+    from fire_engine.procedural.textures.sky.moon_surface import MoonSurfaceDef
+    from fire_engine.procedural.textures.sky.night_sky import (
         NightSkyCubeDef,
         NightSkyDef,
     )
-    from fire_engine.procedural.textures.rain_streak import RainStreakDef
-    from fire_engine.procedural.textures.wasteland_ground import WastelandGroundDef
+    from fire_engine.procedural.textures.sky.rain_streak import RainStreakDef
+    from fire_engine.procedural.textures.sprites.grass_tuft import GrassTuftDef
 
     reset_registry()
     register(WastelandGroundDef())

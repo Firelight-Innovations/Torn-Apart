@@ -28,6 +28,8 @@ Example
 >>> T = np.array([5.0, 19.0])                 # cool pre-dawn / warm afternoon
 >>> np.round(saturation_humidity(T, cfg), 3)  # warmer air saturates higher
 array([0.63 , 0.784])
+
+Docs: docs/systems/world.weather.md
 """
 
 from __future__ import annotations
@@ -78,6 +80,8 @@ def humidity_base(day: int, config: Config) -> float:
     Returns
     -------
     float — baseline relative humidity in [base_min, base_max].
+
+    Docs: docs/systems/world.weather.md
     """
     lo = float(config.weather_humidity_base_min)
     hi = float(config.weather_humidity_base_max)
@@ -113,6 +117,8 @@ def relative_humidity(
     Returns
     -------
     np.ndarray — shape ``(N,)`` relative humidity clamped to [0, 1].
+
+    Docs: docs/systems/world.weather.md
     """
     rain_gain = float(config.weather_humidity_rain_gain)
     wet_gain = float(config.weather_humidity_wetness_gain)
@@ -148,6 +154,8 @@ def saturation_humidity(temperature_c: np.ndarray, config: Config) -> np.ndarray
     Returns
     -------
     np.ndarray — shape ``(N,)`` saturation humidity clamped to [0.5, 1.0].
+
+    Docs: docs/systems/world.weather.md
     """
     base = float(config.weather_fog_sat_base)
     ref = float(config.weather_fog_sat_ref_c)
@@ -173,6 +181,8 @@ def condense_fraction(humidity: np.ndarray, h_sat: np.ndarray, config: Config) -
     Returns
     -------
     np.ndarray — shape ``(N,)`` condensation fraction in [0, 1].
+
+    Docs: docs/systems/world.weather.md
     """
     band = float(config.weather_fog_condense_band)
     over = np.asarray(humidity, dtype=np.float64) - np.asarray(h_sat, dtype=np.float64)
@@ -195,6 +205,8 @@ def wind_gate(wind_speed: np.ndarray, config: Config) -> np.ndarray:
     Returns
     -------
     np.ndarray — shape ``(N,)`` gate in [0, 1].
+
+    Docs: docs/systems/world.weather.md
     """
     full = float(config.weather_fog_wind_full_ms)
     none = float(config.weather_fog_wind_none_ms)
@@ -238,9 +250,12 @@ def emergent_fog(
     >>> f = emergent_fog(h, T, w, cfg)
     >>> bool(f[0] > 0.0) and bool(f[1] == 0.0)
     True
+
+    Docs: docs/systems/world.weather.md
     """
     f_max = float(config.weather_fog_emergent_max)
     h_sat = saturation_humidity(temperature_c, config)
     condense = condense_fraction(humidity, h_sat, config)
     gate = wind_gate(wind_speed, config)
-    return f_max * condense * gate
+    result: np.ndarray = f_max * condense * gate
+    return result

@@ -16,6 +16,12 @@ through the engine's public setters (``set`` is ``None`` ⇒ read-only).
 Nothing here imports panda3d (CLAUDE.md hard rule 1) — the whole model is
 plain Python and fully headless-testable.
 
+Class definitions live in :mod:`fire_engine.devtools.types` (Field, Section,
+Button, Panel) and :mod:`fire_engine.devtools.enums` (FieldKind); this module
+re-exports them to preserve every historical import path.
+
+Docs: docs/systems/devtools.md
+
 Example
 -------
     from fire_engine.devtools.fields import Field, FieldKind, Section, Panel
@@ -36,147 +42,7 @@ Example
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass, field
-from enum import Enum, auto
-from typing import Any
+from fire_engine.devtools.enums import FieldKind
+from fire_engine.devtools.types import Button, Field, Panel, Section
 
-
-class FieldKind(Enum):
-    """
-    The widget family a :class:`Field` maps to.
-
-    The renderer chooses a concrete control per kind:
-
-    LABEL   — read-only text (a formatted string from ``get``).
-    FLOAT   — single numeric entry; ``get``→float, ``set``(float).
-    INT     — single integer entry; ``get``→int, ``set``(int).
-    BOOL    — toggle; ``get``→bool, ``set``(bool).
-    STRING  — text entry; ``get``→str, ``set``(str).
-    VEC3    — three numeric entries; ``get``→(x, y, z) tuple of float,
-              ``set``((x, y, z)).  Used for positions, scales, and
-              euler-angle views of rotations.
-    ENUM    — choice from ``choices``; ``get``→str, ``set``(str).
-    """
-
-    LABEL = auto()
-    FLOAT = auto()
-    INT = auto()
-    BOOL = auto()
-    STRING = auto()
-    VEC3 = auto()
-    ENUM = auto()
-
-
-@dataclass
-class Field:
-    """
-    One inspectable / editable property in a panel.
-
-    Parameters
-    ----------
-    label : str
-        Human-readable name shown next to the control.
-    kind : FieldKind
-        Which widget family to render (see :class:`FieldKind`).
-    get : Callable[[], Any]
-        Returns the current value, in the units implied by ``kind``.  Called
-        every frame for live read-only rows and to refresh unfocused editors.
-    set : Callable[[Any], None] | None
-        Applies a new value through the engine's public setter.  ``None`` marks
-        the field read-only (the renderer shows it but offers no editor).
-    choices : tuple[str, ...] | None
-        Allowed values for ``FieldKind.ENUM``; ignored otherwise.
-    step : float
-        Suggested increment for numeric drag/step controls (renderer hint).
-    units : str
-        Optional unit suffix for display (e.g. ``"m"``, ``"deg"``).
-
-    Notes
-    -----
-    ``get``/``set`` are intentionally closures, not a cached value: the panel
-    a tool returns each frame stays in sync with live engine state without the
-    tool having to diff anything.
-    """
-
-    label: str
-    kind: FieldKind
-    get: Callable[[], Any]
-    set: Callable[[Any], None] | None = None
-    choices: tuple[str, ...] | None = None
-    step: float = 0.1
-    units: str = ""
-
-    @property
-    def read_only(self) -> bool:
-        """True when this field has no setter (display only)."""
-        return self.set is None
-
-
-@dataclass
-class Section:
-    """
-    A titled group of related fields (renders as a labelled sub-block).
-
-    Parameters
-    ----------
-    title : str
-        Section heading (e.g. ``"Transform"``, ``"FlyController"``).
-    fields : list[Field]
-        The rows in this section, top-to-bottom.
-    """
-
-    title: str
-    fields: list[Field]
-
-
-@dataclass
-class Button:
-    """
-    A one-shot action button (spawn something, fire an event, reset state...).
-
-    Parameters
-    ----------
-    label : str
-        Button caption.
-    on_click : Callable[[], None]
-        Invoked when the user presses the button.  Should be cheap / fire-and-
-        forget; long work belongs off the UI path.
-    """
-
-    label: str
-    on_click: Callable[[], None]
-
-
-@dataclass
-class Panel:
-    """
-    The complete on-screen description of one dev tool for the current frame.
-
-    A tool rebuilds this each frame via :meth:`DevTool.build`.  Construction is
-    cheap (dataclasses + closures), so there is no diffing on the tool side.
-
-    Parameters
-    ----------
-    tool_id : str
-        Stable identifier (used by the renderer to keep widget state across
-        frames — same ``tool_id`` ⇒ same on-screen panel).
-    title : str
-        Panel caption shown in its title bar.
-    sections : list[Section]
-        Field groups, top-to-bottom.
-    buttons : list[Button]
-        Action buttons shown at the foot of the panel.
-    revision : int
-        Bumps whenever the panel's *structure* (which sections/fields/buttons
-        exist) changes — e.g. when the inspector's selection changes.  The
-        renderer rebuilds its widgets only when ``revision`` changes; between
-        bumps it just polls ``Field.get`` to refresh values.  Editing a value
-        does **not** bump the revision.
-    """
-
-    tool_id: str
-    title: str
-    sections: list[Section]
-    buttons: list[Button] = field(default_factory=list)
-    revision: int = 0
+__all__ = ["Button", "Field", "FieldKind", "Panel", "Section"]

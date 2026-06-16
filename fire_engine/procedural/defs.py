@@ -33,12 +33,14 @@ Quick example — define and register a custom texture:
     # Now accessible anywhere via:
     #   from fire_engine.procedural import get
     #   arr = get("my_texture")          # returns (256, 256, 4) uint8 ndarray
+
+Docs: docs/systems/procedural.md
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -76,6 +78,8 @@ class ProceduralDef(ABC):
     Example
     -------
     See module docstring for a minimal working example.
+
+    Docs: docs/systems/procedural.md
     """
 
     #: Unique string key for this definition.  Set as a class attribute in each
@@ -83,7 +87,7 @@ class ProceduralDef(ABC):
     name: str
 
     @abstractmethod
-    def generate(self, rng: np.random.Generator, **params):
+    def generate(self, rng: np.random.Generator, **params: Any) -> Any:
         """
         Generate content from *rng* and optional keyword *params*.
 
@@ -109,6 +113,8 @@ class ProceduralDef(ABC):
         NotImplementedError
             Always from the abstract base — override this method.
             See ARCHITECTURE.md §5.2 for the ProceduralDef contract.
+
+        Docs: docs/systems/procedural.md
         """
         raise NotImplementedError(
             f"{type(self).__name__}.generate() not implemented. "
@@ -138,6 +144,8 @@ def register_def(cls: type[ProceduralDef]) -> type[ProceduralDef]:
     type[ProceduralDef]
         The original class, unchanged (so the class can still be subclassed
         or instantiated directly in tests).
+
+    Docs: docs/systems/procedural.md
     """
     # Defer the import to avoid a circular import at module load time
     # (registry imports defs; defs should not import registry at the top level).

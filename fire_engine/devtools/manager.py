@@ -13,6 +13,8 @@ turns mouse events into rays.  Swapping the renderer (e.g. to Dear ImGui later)
 touches nothing in this package.
 
 No panda3d imports — headless-testable.
+
+Docs: docs/systems/devtools.md
 """
 
 from __future__ import annotations
@@ -51,6 +53,8 @@ class DevToolsManager:
         mgr.register_tool(PerformanceTool({...}))
         mgr.register_tool(InspectorTool(mgr.selection))
         mgr.add_selectable(cube_go, Vec3(0.5, 0.5, 0.5))
+
+    Docs: docs/systems/devtools.md
     """
 
     __slots__ = ("enabled", "selectables", "selection", "tools")
@@ -72,12 +76,18 @@ class DevToolsManager:
         Parameters
         ----------
         tool : DevTool
+
+        Docs: docs/systems/devtools.md
         """
         self.tools.append(tool)
         return tool
 
     def panels(self) -> list[Panel]:
-        """Build the current-frame :class:`Panel` for every registered tool."""
+        """
+        Build the current-frame :class:`Panel` for every registered tool.
+
+        Docs: docs/systems/devtools.md
+        """
         return [t.build() for t in self.tools]
 
     # ------------------------------------------------------------------
@@ -96,6 +106,8 @@ class DevToolsManager:
         Returns
         -------
         Selectable — the created entry (also appended to ``selectables``).
+
+        Docs: docs/systems/devtools.md
         """
         sel = Selectable(go, half_extents)
         self.selectables.append(sel)
@@ -109,13 +121,19 @@ class DevToolsManager:
         Parameters
         ----------
         go : GameObject
+
+        Docs: docs/systems/devtools.md
         """
         self.selectables = [s for s in self.selectables if s.game_object is not go]
         if self.selection.current is go:
             self.selection.clear()
 
     def find_selectable(self, go: GameObject) -> Selectable | None:
-        """Return the :class:`Selectable` for ``go``, or ``None``."""
+        """
+        Return the :class:`Selectable` for ``go``, or ``None``.
+
+        Docs: docs/systems/devtools.md
+        """
         for s in self.selectables:
             if s.game_object is go:
                 return s
@@ -133,6 +151,8 @@ class DevToolsManager:
         Returns
         -------
         GameObject | None
+
+        Docs: docs/systems/devtools.md
         """
         return pick(origin, direction, self.selectables)
 
@@ -147,6 +167,8 @@ class DevToolsManager:
         ----------
         origin : Vec3
         direction : Vec3
+
+        Docs: docs/systems/devtools.md
         """
         hit = self.pick(origin, direction)
         self.selection.set(hit)

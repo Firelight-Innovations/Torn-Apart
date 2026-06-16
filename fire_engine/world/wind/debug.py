@@ -23,6 +23,8 @@ once at :class:`WindField` construction); this integrator adds none.
 
 No panda3d.  No per-element Python loops.
 
+Docs: docs/systems/world.wind.md
+
 Example
 -------
 >>> import numpy as np
@@ -77,6 +79,8 @@ class BallParams:
     max_speed : float
         Horizontal speed clamp (m/s); keeps a storm from launching the ball off
         the visible plane.
+
+    Docs: docs/systems/world.wind.md
     """
 
     ground_z: float = 8.0
@@ -135,6 +139,8 @@ def debug_ball_step(
     >>> p2, v2 = debug_ball_step(p, v, wind, 0.02, BallParams())
     >>> bool(v2[0] > 0.0)                              # accelerated downwind
     True
+
+    Docs: docs/systems/world.wind.md
     """
     p = np.asarray(pos, dtype=np.float64).copy()
     v = np.asarray(vel, dtype=np.float64).copy()

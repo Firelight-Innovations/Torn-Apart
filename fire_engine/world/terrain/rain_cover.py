@@ -48,6 +48,8 @@ Example
     field.rebuild_all(cm.chunks)             # fold every loaded chunk's top-solid
     h = field.height                          # (cells, cells) float32 world Z (m)
     ox, oy = field.origin_m                   # min-corner world XY of texel (0,0)
+
+Docs: docs/systems/world.terrain.md
 """
 
 from __future__ import annotations
@@ -93,6 +95,8 @@ class RainCoverField:
         refreshed only by :meth:`recenter`.
 
     Units: meters, voxels (0.5 m), world Z-up.
+
+    Docs: docs/systems/world.terrain.md
     """
 
     def __init__(self, config: Config) -> None:
@@ -118,7 +122,10 @@ class RainCoverField:
 
     @property
     def origin_m(self) -> tuple[float, float]:
-        """Min-corner world XY (meters) of texel ``(0, 0)`` — the committed origin."""
+        """Min-corner world XY (meters) of texel ``(0, 0)`` — the committed origin.
+
+        Docs: docs/systems/world.terrain.md
+        """
         return (self._origin_x, self._origin_y)
 
     def recenter(self, center_xy: tuple[float, float]) -> tuple[float, float]:
@@ -139,6 +146,8 @@ class RainCoverField:
         -------
         tuple[float, float]
             The new committed ``origin_m`` (min-corner world XY, meters).
+
+        Docs: docs/systems/world.terrain.md
         """
         cx, cy = float(center_xy[0]), float(center_xy[1])
         half = 0.5 * self.span_m
@@ -236,6 +245,8 @@ class RainCoverField:
         ----------
         chunks : Mapping[coord, Chunk]
             Loaded chunks (e.g. ``ChunkManager.chunks``).
+
+        Docs: docs/systems/world.terrain.md
         """
         self.height.fill(OPEN_SKY_Z)
         for coord in self._chunks_in_window(chunks):
@@ -261,6 +272,8 @@ class RainCoverField:
             Loaded chunks.
         chunk_columns : Iterable[tuple[int, int]]
             ``(cx, cy)`` chunk-column coords to refresh.
+
+        Docs: docs/systems/world.terrain.md
         """
         for cx, cy in chunk_columns:
             self._clear_chunk_column(cx, cy)
@@ -304,5 +317,8 @@ class RainCoverField:
 
     @staticmethod
     def chunk_column_of(coord: tuple[int, int, int]) -> tuple[int, int]:
-        """The (cx, cy) chunk column a chunk coord belongs to (drops cz)."""
+        """The (cx, cy) chunk column a chunk coord belongs to (drops cz).
+
+        Docs: docs/systems/world.terrain.md
+        """
         return (int(coord[0]), int(coord[1]))

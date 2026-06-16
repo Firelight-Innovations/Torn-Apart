@@ -40,6 +40,8 @@ Example
 1
 >>> arr.shape
 (64, 12)
+
+Docs: docs/systems/lighting.md
 """
 
 from __future__ import annotations
@@ -48,6 +50,16 @@ import math
 from dataclasses import dataclass
 
 import numpy as np
+
+from fire_engine.lighting._impl.occluder_set import (
+    MAX_OCCLUDERS,
+    OccluderSet,
+)
+from fire_engine.lighting._impl.types import (
+    AreaLight,
+    PointLight,
+    SpotLight,
+)
 
 __all__ = [
     "LIGHT_TYPE_AREA",
@@ -64,113 +76,6 @@ __all__ = [
 LIGHT_TYPE_POINT: float = 0.0
 LIGHT_TYPE_AREA: float = 1.0
 LIGHT_TYPE_SPOT: float = 2.0
-
-#: Maximum dynamic occluder boxes uploaded to the GPU (mirrors the fixed
-#: uniform array length in ``lighting/glsl.py``).
-MAX_OCCLUDERS: int = 16
-
-
-@dataclass
-class PointLight:
-    """
-    Omnidirectional punctual light.
-
-    Attributes
-    ----------
-    position : tuple[float, float, float]
-        World position in meters.
-    color : tuple[float, float, float]
-        Linear RGB in [0, 1] (hue only; brightness lives in ``intensity``).
-    intensity : float
-        HDR radiant intensity (a cosy torch ≈ 2–4, an explosion flash ≈ 30).
-    radius : float
-        Falloff window in meters — zero contribution beyond this.
-    ttl_s : float | None
-        Lifetime in seconds; ``None`` = permanent.  Transient lights fade
-        linearly over their lifetime and are removed at expiry.
-    """
-
-    position: tuple[float, float, float]
-    color: tuple[float, float, float]
-    intensity: float
-    radius: float
-    ttl_s: float | None = None
-
-
-@dataclass
-class AreaLight:
-    """
-    Axis-aligned emissive box light (windows, lava pools, shafts).
-
-    Attributes
-    ----------
-    center : tuple[float, float, float]
-        Box centre, world meters.
-    half_extents : tuple[float, float, float]
-        Box half sizes per axis, meters.
-    color : tuple[float, float, float]
-        Linear RGB in [0, 1].
-    intensity : float
-        HDR radiant intensity at the box surface.
-    radius : float
-        Falloff window in meters measured from the box *surface*.
-    ttl_s : float | None
-        Lifetime in seconds; ``None`` = permanent.
-    """
-
-    center: tuple[float, float, float]
-    half_extents: tuple[float, float, float]
-    color: tuple[float, float, float]
-    intensity: float
-    radius: float
-    ttl_s: float | None = None
-
-
-@dataclass
-class SpotLight:
-    """
-    Cone-restricted punctual light (flashlight, lighthouse, vehicle beam).
-
-    Same windowed inverse-square falloff and occupancy-march shadowing as
-    :class:`PointLight`, multiplied by a smooth cone window: full strength
-    inside the cone core, fading to zero at the cone edge.
-
-    Attributes
-    ----------
-    position : tuple[float, float, float]
-        World position in meters (e.g. the camera position).
-    direction : tuple[float, float, float]
-        Unit beam direction, world space (e.g. camera forward).  Normalised
-        defensively at pack time.
-    color : tuple[float, float, float]
-        Linear RGB in [0, 1].
-    intensity : float
-        HDR radiant intensity (a hand flashlight ≈ 10–18).
-    radius : float
-        Falloff window in meters — zero contribution beyond this.
-    cone_deg : float
-        FULL cone angle in degrees (a typical flashlight ≈ 35–50).
-    ttl_s : float | None
-        Lifetime in seconds; ``None`` = permanent.
-
-    Example
-    -------
-    >>> ls = LightSet()
-    >>> torch = SpotLight(position=(0, 0, 10), direction=(0, 1, 0),
-    ...                   color=(1.0, 0.95, 0.8), intensity=14.0,
-    ...                   radius=30.0, cone_deg=42.0)
-    >>> lid = ls.add(torch)
-    >>> torch.position = (0, 2, 10)   # follow the camera...
-    >>> ls.notify_changed()           # ...then mark the packed data stale
-    """
-
-    position: tuple[float, float, float]
-    direction: tuple[float, float, float]
-    color: tuple[float, float, float]
-    intensity: float
-    radius: float
-    cone_deg: float = 42.0
-    ttl_s: float | None = None
 
 
 @dataclass
@@ -194,6 +99,8 @@ class LightSet:
     >>> ls.update(0.6)            # transient expired
     >>> ls.count
     0
+
+    Docs: docs/systems/lighting.md
     """
 
     def __init__(self) -> None:
@@ -205,11 +112,17 @@ class LightSet:
 
     @property
     def count(self) -> int:
-        """Number of active lights."""
+        """Number of active lights.
+
+        Docs: docs/systems/lighting.md
+        """
         return len(self._entries)
 
     def add(self, light: PointLight | AreaLight) -> int:
-        """Register a light; returns its id (use with ``remove``)."""
+        """Register a light; returns its id (use with ``remove``).
+
+        Docs: docs/systems/lighting.md
+        """
         lid = self._next_id
         self._next_id += 1
         self._entries[lid] = _Entry(light)
@@ -217,12 +130,18 @@ class LightSet:
         return lid
 
     def remove(self, light_id: int) -> None:
-        """Remove a light by id (no-op when absent)."""
+        """Remove a light by id (no-op when absent).
+
+        Docs: docs/systems/lighting.md
+        """
         if self._entries.pop(light_id, None) is not None:
             self.version += 1
 
     def clear(self) -> None:
-        """Remove all lights."""
+        """Remove all lights.
+
+        Docs: docs/systems/lighting.md
+        """
         if self._entries:
             self._entries.clear()
             self.version += 1
@@ -235,11 +154,16 @@ class LightSet:
         mutate the light's ``position``/``direction`` fields directly, then
         call this so the GPU pipeline re-injects.  Cheap — call only when the
         light actually moved (re-injection is the expensive part).
+
+        Docs: docs/systems/lighting.md
         """
         self.version += 1
 
     def get(self, light_id: int) -> PointLight | AreaLight | SpotLight | None:
-        """Return the registered light object for ``light_id`` (or None)."""
+        """Return the registered light object for ``light_id`` (or None).
+
+        Docs: docs/systems/lighting.md
+        """
         e = self._entries.get(light_id)
         return e.light if e is not None else None
 
@@ -251,6 +175,8 @@ class LightSet:
         by remaining lifetime) and are removed once expired.  Permanent
         lights are untouched.  Bumps ``version`` whenever any transient
         light exists (its fade changes the packed data every frame).
+
+        Docs: docs/systems/lighting.md
         """
         if not self._entries:
             return
@@ -291,6 +217,8 @@ class LightSet:
         -------
         tuple[numpy.ndarray, int]
             ``(array, active_count)``.
+
+        Docs: docs/systems/lighting.md
         """
         out = np.zeros((max_lights, 12), dtype=np.float32)
         n = 0
@@ -310,7 +238,7 @@ class LightSet:
                 out[n, 7] = LIGHT_TYPE_SPOT
                 d = np.asarray(li.direction, np.float32)
                 norm = float(np.linalg.norm(d))
-                out[n, 8:11] = d / norm if norm > 1e-6 else np.float32((0.0, 0.0, -1.0))
+                out[n, 8:11] = d / norm if norm > 1e-6 else np.asarray((0.0, 0.0, -1.0), np.float32)
                 out[n, 11] = math.cos(math.radians(li.cone_deg) * 0.5)
             else:
                 out[n, 0:3] = li.position
@@ -319,89 +247,3 @@ class LightSet:
             out[n, 4:7] = np.asarray(li.color, np.float32) * (li.intensity * fade)
             n += 1
         return out, n
-
-
-class OccluderSet:
-    """
-    Registry of dynamic shadow-caster AABBs for the GPU lighting pipeline.
-
-    Anything that should cast voxel-style shadows but is NOT part of the
-    terrain voxel field (dev cubes, props, NPCs) sets its world bounding box
-    here once per frame.  ``set_boxes`` only bumps ``version`` when the
-    packed data actually changed (beyond ~1 cm), so static objects cost
-    nothing and the pipeline re-injects only when something moved.
-
-    Limits: the GPU uniform arrays hold :data:`MAX_OCCLUDERS` (16) boxes;
-    extra boxes are dropped (warn-once) — dev tooling scale, not gameplay.
-
-    Example
-    -------
-    >>> occ = OccluderSet()
-    >>> occ.set_boxes([((0.0, 0.0, 8.0), (1.0, 1.0, 9.0))])
-    True
-    >>> mins, maxs, count = occ.pack()
-    >>> count
-    1
-    """
-
-    def __init__(self) -> None:
-        self.version: int = 0
-        self._mins = np.zeros((MAX_OCCLUDERS, 3), dtype=np.float32)
-        self._maxs = np.zeros((MAX_OCCLUDERS, 3), dtype=np.float32)
-        self._count: int = 0
-        self._warned: bool = False
-
-    @property
-    def count(self) -> int:
-        """Number of active occluder boxes."""
-        return self._count
-
-    def set_boxes(
-        self,
-        boxes: list[tuple[tuple[float, float, float], tuple[float, float, float]]],
-    ) -> bool:
-        """
-        Replace the full occluder list with ``boxes`` (world-space AABBs).
-
-        Parameters
-        ----------
-        boxes : list of ((min_x, min_y, min_z), (max_x, max_y, max_z))
-            World meters.  Call every frame with the current boxes; change
-            detection is internal.
-
-        Returns
-        -------
-        bool — True when the set changed (``version`` was bumped).
-        """
-        if len(boxes) > MAX_OCCLUDERS and not self._warned:
-            self._warned = True
-            import logging
-
-            logging.getLogger("fire_engine.lighting.lights").warning(
-                "OccluderSet: %d boxes > max %d — extras dropped", len(boxes), MAX_OCCLUDERS
-            )
-        boxes = boxes[:MAX_OCCLUDERS]
-        n = len(boxes)
-        mins = np.zeros((MAX_OCCLUDERS, 3), dtype=np.float32)
-        maxs = np.zeros((MAX_OCCLUDERS, 3), dtype=np.float32)
-        if n:
-            mins[:n] = np.asarray([b[0] for b in boxes], dtype=np.float32)
-            maxs[:n] = np.asarray([b[1] for b in boxes], dtype=np.float32)
-        if (
-            n == self._count
-            and np.allclose(mins, self._mins, atol=0.01)
-            and np.allclose(maxs, self._maxs, atol=0.01)
-        ):
-            return False
-        self._mins, self._maxs, self._count = mins, maxs, n
-        self.version += 1
-        return True
-
-    def pack(self) -> tuple[np.ndarray, np.ndarray, int]:
-        """
-        Packed GPU arrays: ``(mins (16, 3) float32, maxs (16, 3), count)``.
-
-        Rows past ``count`` are zero.  Layout mirrors ``u_box_min`` /
-        ``u_box_max`` / ``u_num_boxes`` in ``lighting/glsl.py``.
-        """
-        return self._mins, self._maxs, self._count

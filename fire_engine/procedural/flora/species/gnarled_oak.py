@@ -19,6 +19,8 @@ Usage
     set_world_seed(1337)
     oaks = get("tree_gnarled_oak")        # TreeVariantSet, 8 unique meshes
     # Preview: python tools/preview_tree.py tree_gnarled_oak --obj --png
+
+Docs: docs/systems/procedural.flora.species.md
 """
 
 from __future__ import annotations
@@ -43,6 +45,8 @@ class GnarledOakDef(TreeSpeciesDef):
     Gnarled wasteland oak — 5–7 m, crooked trunk, blocky tiered limbs.
 
     Registered name: ``"tree_gnarled_oak"``.  8 variants per world.
+
+    Docs: docs/systems/procedural.flora.species.md
     """
 
     name = "tree_gnarled_oak"
@@ -57,7 +61,10 @@ class GnarledOakDef(TreeSpeciesDef):
     LEAF_HOLE_THRESH = 0.16
 
     def grow(self, rng: np.random.Generator, variant: int) -> tuple[TreeSkeleton, Leaves]:
-        """Crooked trunk → near-90° limbs (shorter near the crown) → twigs."""
+        """Crooked trunk → near-90° limbs (shorter near the crown) → twigs.
+
+        Docs: docs/systems/procedural.flora.species.md
+        """
         sb = SkeletonBuilder(rng)
         trunk = sb.trunk(
             height_m=5.5 + float(rng.uniform(-1.0, 1.5)),

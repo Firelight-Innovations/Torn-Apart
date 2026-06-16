@@ -17,6 +17,8 @@ Usage
     set_world_seed(1337)
     snags = get("tree_dead")              # TreeVariantSet, 6 unique meshes
     # Preview: python tools/preview_tree.py tree_dead --obj --png
+
+Docs: docs/systems/procedural.flora.species.md
 """
 
 from __future__ import annotations
@@ -41,6 +43,8 @@ class DeadTreeDef(TreeSpeciesDef):
     Dead snag — 6–9 m bare twisted tree, at most two dry leaf tufts.
 
     Registered name: ``"tree_dead"``.  6 variants per world.
+
+    Docs: docs/systems/procedural.flora.species.md
     """
 
     name = "tree_dead"
@@ -55,7 +59,10 @@ class DeadTreeDef(TreeSpeciesDef):
     LEAF_HOLE_THRESH = 0.30  # scraggly, mostly gaps
 
     def grow(self, rng: np.random.Generator, variant: int) -> tuple[TreeSkeleton, Leaves]:
-        """Tall lean trunk → sparse drooping limbs → crooked twig ends."""
+        """Tall lean trunk → sparse drooping limbs → crooked twig ends.
+
+        Docs: docs/systems/procedural.flora.species.md
+        """
         sb = SkeletonBuilder(rng)
         trunk = sb.trunk(
             height_m=6.5 + float(rng.uniform(-0.5, 2.5)),

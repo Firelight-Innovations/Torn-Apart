@@ -30,6 +30,8 @@ Usage
     # At runtime, ResourceManager uses dispatch:
     from fire_engine.resources.loaders import dispatch
     resource_obj = dispatch("assets/models/landmark.egg")
+
+Docs: docs/systems/resources.md
 """
 
 from __future__ import annotations
@@ -74,6 +76,8 @@ class UnknownResourceFormatError(Exception):
             obj = dispatch("models/npc.xyz")
         except UnknownResourceFormatError as e:
             print(e.suffix)   # ".xyz"
+
+    Docs: docs/systems/resources.md
     """
 
     def __init__(self, path: str, suffix: str) -> None:
@@ -139,6 +143,8 @@ def register_loader(suffix: str, loader: LoaderCallable) -> None:
                 return json.load(f)
 
         register_loader(".json", my_loader)
+
+    Docs: docs/systems/resources.md
     """
     _LOADERS[suffix.lower()] = loader
 
@@ -172,12 +178,11 @@ def dispatch(path: str) -> Any:
         register_loader(".fake", lambda p: {"loaded": p})
         obj = dispatch("assets/test.fake")
         # obj == {"loaded": "assets/test.fake"}
+
+    Docs: docs/systems/resources.md
     """
     dot_idx = path.rfind(".")
-    if dot_idx == -1:
-        suffix = ""
-    else:
-        suffix = path[dot_idx:].lower()
+    suffix = "" if dot_idx == -1 else path[dot_idx:].lower()
 
     if suffix not in _LOADERS or _LOADERS[suffix] is None:
         raise UnknownResourceFormatError(path, suffix)
@@ -197,5 +202,7 @@ def registered_suffixes() -> list[str]:
     -------
     list[str]
         Sorted list of lowercase suffix strings (e.g. ``['.egg', '.png']``).
+
+    Docs: docs/systems/resources.md
     """
     return sorted(s for s, fn in _LOADERS.items() if fn is not None)

@@ -31,6 +31,8 @@ Usage
 
     rng2 = for_domain("terrain", (4, 5, 0))       # same keys → same stream
     assert rng2.integers(0, 1000) == rng.integers(0, 1000)   # ← always true
+
+Docs: docs/systems/core.md
 """
 
 from __future__ import annotations
@@ -61,12 +63,14 @@ def set_world_seed(seed: int) -> None:
     -------
     >>> set_world_seed(1337)
     >>> rng = for_domain("terrain", (0, 0, 0))
+
+    Docs: docs/systems/core.md
     """
     global _world_seed
     _world_seed = int(seed)
 
 
-def _keys_digest(keys: tuple) -> int:
+def _keys_digest(keys: tuple[object, ...]) -> int:
     """
     Compute a stable cross-process int digest for a tuple of domain keys.
 
@@ -90,7 +94,7 @@ def _keys_digest(keys: tuple) -> int:
     return int.from_bytes(digest, byteorder="big", signed=False)
 
 
-def for_domain(*keys) -> np.random.Generator:
+def for_domain(*keys: str | int | tuple[object, ...]) -> np.random.Generator:
     """
     Return a deterministic ``numpy.random.Generator`` for the given domain keys.
 
@@ -130,6 +134,8 @@ def for_domain(*keys) -> np.random.Generator:
     Cross-process determinism (subprocess test in tests/test_rng.py confirms):
     >>> # In process 1:  for_domain("terrain",(1,2,3)).integers(0,10**6,5)
     >>> # In process 2:  same call with same seed → identical array
+
+    Docs: docs/systems/core.md
     """
     key_int = _keys_digest(keys)
     # Combine world_seed and key_int as independent entropy sources.

@@ -1,5 +1,5 @@
 """
-save/saveable.py — Saveable protocol and SaveIncompatibleError.
+save/saveable.py — Saveable protocol.
 
 Defines the ``Saveable`` structural interface that any system must implement
 to participate in delta saves.  The protocol is **exactly** as specified in
@@ -15,6 +15,9 @@ That means saves store only *deviations from the procedurally determined
 baseline*, so an untouched world costs ~0 bytes.  Hard Rule 3: no pickle
 anywhere — deltas are plain dicts of primitives / numpy arrays only, no live
 object references.
+
+Exception types (``SaveIncompatibleError``) live in ``save.types`` and are
+re-exported here for backward-compat import paths.
 
 Example
 -------
@@ -33,11 +36,17 @@ Example
 
     # Runtime check:
     assert isinstance(MySystem(), Saveable)   # True at runtime
+
+Docs: docs/systems/save.md
 """
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
+
+from fire_engine.save.types import SaveIncompatibleError  # re-export
+
+__all__ = ["SaveIncompatibleError", "Saveable"]
 
 
 @runtime_checkable
@@ -69,11 +78,13 @@ class Saveable(Protocol):
       is the registration order (``SaveManager.register`` call order).  Per
       ARCHITECTURE.md §4a.4 sequence diagram, terrain is applied before AI,
       which is applied before economy/politics.
+
+    Docs: docs/systems/save.md
     """
 
     save_key: str
 
-    def get_delta(self) -> dict:
+    def get_delta(self) -> dict[str, Any]:
         """
         Return this system's deviations from its procedural baseline.
 
@@ -87,10 +98,12 @@ class Saveable(Protocol):
             Plain dict of primitives / numpy arrays.  Keys must be serialisable
             to msgpack (strings, ints, floats, or tuples of those — tuple keys
             are encoded specially by SaveManager).
+
+        Docs: docs/systems/save.md
         """
         ...  # pragma: no cover
 
-    def apply_delta(self, delta: dict) -> None:
+    def apply_delta(self, delta: dict[str, Any]) -> None:
         """
         Overlay saved delta onto the already-regenerated procedural baseline.
 
@@ -103,36 +116,7 @@ class Saveable(Protocol):
             As produced by :meth:`get_delta` (decoded from the save file).
             If the system's save_key was absent from the save file, this method
             is not called at all — the system retains its fresh-generated state.
+
+        Docs: docs/systems/save.md
         """
         ...  # pragma: no cover
-
-
-class SaveIncompatibleError(Exception):
-    """
-    Raised by ``SaveManager.load`` when a save file cannot be loaded safely.
-
-    Triggers:
-    - ``format_version`` in the file is newer than the engine supports.
-    - ``world_seed`` in the save header does not match the current
-      ``Config.world_seed``.
-    - ``config_digest`` in the save header does not match the digest of the
-      current ``Config``.
-
-    When this exception is raised, **no partial load has occurred**: the
-    engine state is unchanged (the save file was validated before any
-    ``apply_delta`` calls).
-
-    Attributes
-    ----------
-    message : str
-        Human-readable explanation of the incompatibility.
-
-    Example
-    -------
-        from fire_engine.save import SaveIncompatibleError
-
-        try:
-            save_manager.load("saves/quick.ta")
-        except SaveIncompatibleError as exc:
-            print(f"Cannot load save: {exc}")
-    """

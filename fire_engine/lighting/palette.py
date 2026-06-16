@@ -25,6 +25,8 @@ Example
 ((256, 3), (256, 3))
 >>> bool((pal.albedo[0] == 0).all())   # air bounces nothing
 True
+
+Docs: docs/systems/lighting.md
 """
 
 from __future__ import annotations
@@ -66,6 +68,8 @@ class MaterialPalette:
 
     Both arrays are safe to fancy-index with whole ``uint8`` material arrays:
     ``palette.albedo[materials]`` → ``float32 (..., 3)``.
+
+    Docs: docs/systems/lighting.md
     """
 
     albedo: np.ndarray = field(default_factory=lambda: np.zeros((256, 3), dtype=np.float32))
@@ -85,6 +89,8 @@ class MaterialPalette:
         rgb : tuple[float, float, float]
             Linear RGB emitted radiance (HDR — values above 1 are normal for
             bright sources; a torch-like glow is ~(2.0, 1.2, 0.4)).
+
+        Docs: docs/systems/lighting.md
         """
         emission = self.emission.copy()
         emission[material] = np.asarray(rgb, dtype=np.float32)
@@ -133,6 +139,8 @@ def build_default_palette() -> MaterialPalette:
     same seed always produces byte-identical palettes.  Call after
     ``import fire_engine.procedural`` (registration side-effect) and
     ``set_world_seed``.
+
+    Docs: docs/systems/lighting.md
     """
     albedo = np.empty((256, 3), dtype=np.float32)
     albedo[:] = np.asarray(_FALLBACK_ALBEDO, dtype=np.float32)

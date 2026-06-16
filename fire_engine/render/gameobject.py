@@ -24,6 +24,8 @@ Example
     go = GameObject(name="Player", tag="player")
     go.add_component(Logger)
     # ComponentRegistry.run_frame() will call awake → start → update
+
+Docs: docs/systems/render.md
 """
 
 from __future__ import annotations
@@ -65,6 +67,8 @@ class GameObject:
     Lifecycle methods (on components) are dispatched by ComponentRegistry,
     not by GameObject itself.  GameObject calls the registry's scheduling
     methods so that awake/start are queued, not called immediately.
+
+    Docs: docs/systems/render.md
     """
 
     __slots__ = (
@@ -90,7 +94,7 @@ class GameObject:
         self.active_self: bool = True
 
         self.transform: Transform = Transform()
-        self.transform.game_object = self
+        self.transform.game_object = self  # type: ignore[assignment]  # Transform.game_object slot starts as None; type widened by GameObject
 
         self._components: list[Component] = []
 
@@ -104,6 +108,8 @@ class GameObject:
         True when this object and all of its ancestors are active.
 
         Traverses the transform parent chain; O(depth) but depth is small.
+
+        Docs: docs/systems/render.md
         """
         if not self.active_self:
             return False
@@ -119,7 +125,7 @@ class GameObject:
     # Component management
     # ------------------------------------------------------------------
 
-    def add_component(self, t: type[T], **kwargs) -> T:
+    def add_component(self, t: type[T], **kwargs: object) -> T:
         """
         Construct a component of type *t*, attach it, and schedule awake/start.
 
@@ -144,6 +150,8 @@ class GameObject:
             from fire_engine.render.gameobject import GameObject
             go = GameObject(name="Player")
             ctrl = go.add_component(FlyController, speed=10.0)
+
+        Docs: docs/systems/render.md
         """
         component = t(**kwargs)
         component.game_object = self
@@ -179,14 +187,16 @@ class GameObject:
             ctrl = go.get_component(FlyController)
             if ctrl:
                 ctrl.speed = 20.0
+
+        Docs: docs/systems/render.md
         """
         for c in self._components:
             if type(c) is t:
-                return c  # type: ignore[return-value]
+                return c
         # fallback: check subclasses too (isinstance)
         for c in self._components:
             if isinstance(c, t):
-                return c  # type: ignore[return-value]
+                return c
         return None
 
     def get_components(self, t: type[T]) -> list[T]:
@@ -200,8 +210,10 @@ class GameObject:
         Returns
         -------
         list[T] — may be empty.
+
+        Docs: docs/systems/render.md
         """
-        return [c for c in self._components if isinstance(c, t)]  # type: ignore[misc]
+        return [c for c in self._components if isinstance(c, t)]
 
     def get_component_in_children(self, t: type[T]) -> T | None:
         """
@@ -219,6 +231,8 @@ class GameObject:
         Example
         -------
             renderer = root.get_component_in_children(MeshRenderer)
+
+        Docs: docs/systems/render.md
         """
         # BFS over transform children
         queue: list[GameObject] = [self]
@@ -247,6 +261,8 @@ class GameObject:
         Raises
         ------
         ValueError if the component is not attached to this object.
+
+        Docs: docs/systems/render.md
         """
         if c not in self._components:
             raise ValueError(f"Component {c!r} is not attached to GameObject '{self.name}'.")
@@ -280,6 +296,8 @@ class GameObject:
         -------
             go.set_active(False)   # disable this and all children
             go.set_active(True)    # re-enable
+
+        Docs: docs/systems/render.md
         """
         if self.active_self == value:
             return
@@ -323,6 +341,8 @@ class GameObject:
         -------
             if go.compare_tag("player"):
                 take_damage()
+
+        Docs: docs/systems/render.md
         """
         return self.tag == tag
 

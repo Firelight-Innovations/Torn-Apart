@@ -22,9 +22,13 @@ Example
     zones.mark_baseline()              # boot defaults = baseline, delta == {}
     zones.volumes("grass")             # (vol,)
     save_manager.register(zones)       # participates in F5/F9 delta saves
+
+Docs: docs/systems/zones.md
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 from fire_engine.core import get_logger
 from fire_engine.zones.volume import ZoneVolume
@@ -55,6 +59,8 @@ class ZoneStore:
     >>> v = store.add("grass", (0.0, 0.0, 0.0), (8.0, 8.0, 4.0))
     >>> store.volumes() == (v,)
     True
+
+    Docs: docs/systems/zones.md
     """
 
     save_key: str = "zones"
@@ -63,7 +69,7 @@ class ZoneStore:
         self._volumes: dict[int, ZoneVolume] = {}
         self._next_id: int = 1
         self.version: int = 0
-        self._baseline: list[dict] | None = None
+        self._baseline: list[dict[str, Any]] | None = None
 
     # ------------------------------------------------------------------
     # Mutation
@@ -91,6 +97,8 @@ class ZoneStore:
             Biome name for ``tag="biome"`` volumes.
         params : dict[str, float] | None
             Per-volume tuning (e.g. grass ``"density"`` blades/m²).
+
+        Docs: docs/systems/zones.md
         """
         vol = ZoneVolume(
             id=self._next_id,
@@ -106,7 +114,10 @@ class ZoneStore:
         return vol
 
     def remove(self, volume_id: int) -> bool:
-        """Remove a volume by id; returns True when it existed."""
+        """Remove a volume by id; returns True when it existed.
+
+        Docs: docs/systems/zones.md
+        """
         if self._volumes.pop(volume_id, None) is None:
             return False
         self.version += 1
@@ -124,6 +135,8 @@ class ZoneStore:
         ----------
         tag : str | None
             When given, only volumes whose ``tag`` matches are returned.
+
+        Docs: docs/systems/zones.md
         """
         vols = sorted(self._volumes.values(), key=lambda v: v.id)
         if tag is not None:
@@ -131,7 +144,10 @@ class ZoneStore:
         return tuple(vols)
 
     def get(self, volume_id: int) -> ZoneVolume | None:
-        """The volume with this id, or None."""
+        """The volume with this id, or None.
+
+        Docs: docs/systems/zones.md
+        """
         return self._volumes.get(volume_id)
 
     # ------------------------------------------------------------------
@@ -145,10 +161,12 @@ class ZoneStore:
         Call once at boot after registering the world's default volumes —
         :meth:`get_delta` then returns ``{}`` until something actually
         changes, keeping untouched worlds at ~0 save bytes.
+
+        Docs: docs/systems/zones.md
         """
         self._baseline = self._snapshot()
 
-    def get_delta(self) -> dict:
+    def get_delta(self) -> dict[str, Any]:
         """
         Full volume list when it deviates from the baseline, else ``{}``.
 
@@ -157,18 +175,22 @@ class ZoneStore:
         dict
             ``{}`` when unchanged; otherwise ``{"version": 1,
             "volumes": [vol.to_dict(), ...], "next_id": int}``.
+
+        Docs: docs/systems/zones.md
         """
         snap = self._snapshot()
         if self._baseline is not None and snap == self._baseline:
             return {}
         return {"version": _DELTA_VERSION, "volumes": snap, "next_id": int(self._next_id)}
 
-    def apply_delta(self, delta: dict) -> None:
+    def apply_delta(self, delta: dict[str, Any]) -> None:
         """
         Replace the volume set with the saved one (post-baseline overlay).
 
         An empty delta means "baseline was saved unchanged" — the freshly
         registered boot defaults already ARE the baseline, so nothing happens.
+
+        Docs: docs/systems/zones.md
         """
         if not delta:
             return
@@ -184,6 +206,6 @@ class ZoneStore:
 
     # ------------------------------------------------------------------
 
-    def _snapshot(self) -> list[dict]:
+    def _snapshot(self) -> list[dict[str, Any]]:
         """Serialised, id-ordered volume list (comparison + delta payload)."""
         return [v.to_dict() for v in self.volumes()]

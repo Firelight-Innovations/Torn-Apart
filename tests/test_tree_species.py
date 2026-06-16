@@ -73,7 +73,7 @@ class TestDeterminism:
         set_world_seed(1337)
         clear_cache()
         vs2 = get("tree_gnarled_oak")
-        for m1, m2 in zip(vs1.meshes, vs2.meshes):
+        for m1, m2 in zip(vs1.meshes, vs2.meshes, strict=True):
             assert np.array_equal(m1.positions, m2.positions)
             assert np.array_equal(m1.colors, m2.colors)
             assert np.array_equal(m1.indices, m2.indices)

@@ -37,94 +37,27 @@ Example
 
     # look_at — forward points toward origin
     child.look_at(Vec3.ZERO)
+Docs: docs/systems/render.md
 """
 
 from __future__ import annotations
 
-from enum import Enum, auto
 from typing import TYPE_CHECKING
 
 import numpy as np
 
 from fire_engine.core.math3d import Quat, Vec3
+from fire_engine.render._impl.transform_math import mat3_to_quat, trs_matrix
+from fire_engine.render.enums import Space  # re-export for backward compatibility
 
 if TYPE_CHECKING:
     pass  # no circular imports needed currently
 
-
-# ---------------------------------------------------------------------------
-# Space enum
-# ---------------------------------------------------------------------------
+# Re-export Space so existing ``from fire_engine.render.transform import Space`` still works.
+__all__ = ["Space", "Transform"]
 
 
-class Space(Enum):
-    """
-    Reference-frame selector used by Transform.translate and Transform.rotate.
-
-    SELF  — operations are expressed in the transform's own local frame.
-    WORLD — operations are expressed in world space.
-
-    Example
-    -------
-        t.translate(Vec3(0, 1, 0), relative_to=Space.SELF)   # move 1 m forward
-        t.translate(Vec3(0, 1, 0), relative_to=Space.WORLD)  # move 1 m along world +Y
-    """
-
-    SELF = auto()
-    WORLD = auto()
-
-
-# ---------------------------------------------------------------------------
-# 4×4 matrix helpers (pure numpy, float64 internally for precision)
-# ---------------------------------------------------------------------------
-
-
-def _trs_matrix(pos: Vec3, rot: Quat, scale: Vec3) -> np.ndarray:
-    """
-    Build a 4×4 TRS (translation × rotation × scale) matrix.
-
-    Uses float64 internally; callers may cast if needed.
-
-    Parameters
-    ----------
-    pos   : Vec3 — translation in meters
-    rot   : Quat — rotation quaternion (unit)
-    scale : Vec3 — scale per axis
-
-    Returns
-    -------
-    np.ndarray shape (4, 4) float64
-    """
-    w, x, y, z = (float(c) for c in rot._data)
-    sx, sy, sz = float(scale.x), float(scale.y), float(scale.z)
-
-    # Rotation matrix from quaternion
-    m = np.array(
-        [
-            [1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y), 0.0],
-            [2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x), 0.0],
-            [2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y), 0.0],
-            [0.0, 0.0, 0.0, 1.0],
-        ],
-        dtype=np.float64,
-    )
-
-    # Apply scale to rotation columns
-    m[0, :3] *= sx
-    m[1, :3] *= sy
-    m[2, :3] *= sz
-
-    # Translation
-    m[0, 3] = float(pos.x)
-    m[1, 3] = float(pos.y)
-    m[2, 3] = float(pos.z)
-
-    return m
-
-
-# ---------------------------------------------------------------------------
 # Transform
-# ---------------------------------------------------------------------------
 
 
 class Transform:
@@ -159,6 +92,7 @@ class Transform:
     forward : Vec3   — +Y axis in world space (facing direction)
     right   : Vec3   — +X axis in world space
     up      : Vec3   — +Z axis in world space
+    Docs: docs/systems/render.md
     """
 
     __slots__ = (
@@ -185,18 +119,20 @@ class Transform:
 
         self.game_object = None  # filled in by GameObject.__init__
 
-    # ------------------------------------------------------------------
     # Hierarchy
-    # ------------------------------------------------------------------
 
     @property
     def parent(self) -> Transform | None:
-        """Parent transform, or None if this is a root transform."""
+        """Parent transform, or None if this is a root transform.
+        Docs: docs/systems/render.md
+        """
         return self._parent
 
     @property
     def children(self) -> tuple[Transform, ...]:
-        """Read-only tuple of immediate child transforms."""
+        """Read-only tuple of immediate child transforms.
+        Docs: docs/systems/render.md
+        """
         return tuple(self._children)
 
     def set_parent(
@@ -219,6 +155,7 @@ class Transform:
             child.set_parent(parent)          # child keeps world position
             child.set_parent(None)            # detach from parent
             child.set_parent(other, False)    # keep local coords, world jumps
+        Docs: docs/systems/render.md
         """
         if p is self:
             raise ValueError("A Transform cannot be its own parent.")
@@ -248,48 +185,59 @@ class Transform:
 
         self._mark_dirty()
 
-    # ------------------------------------------------------------------
     # Local TRS accessors
-    # ------------------------------------------------------------------
 
     @property
     def local_position(self) -> Vec3:
-        """Position relative to the parent frame (meters)."""
+        """Position relative to the parent frame (meters).
+        Docs: docs/systems/render.md
+        """
         return self._local_position
 
     @local_position.setter
     def local_position(self, value: Vec3) -> None:
+        """Set position relative to the parent frame (meters).
+        Docs: docs/systems/render.md
+        """
         self._local_position = value
         self._mark_dirty()
 
     @property
     def local_rotation(self) -> Quat:
-        """Rotation relative to the parent frame (unit quaternion)."""
+        """Rotation relative to the parent frame (unit quaternion).
+        Docs: docs/systems/render.md
+        """
         return self._local_rotation
 
     @local_rotation.setter
     def local_rotation(self, value: Quat) -> None:
+        """Set rotation relative to the parent frame (unit quaternion).
+        Docs: docs/systems/render.md
+        """
         self._local_rotation = value.normalized()
         self._mark_dirty()
 
     @property
     def local_scale(self) -> Vec3:
-        """Scale relative to the parent frame."""
+        """Scale relative to the parent frame.
+        Docs: docs/systems/render.md
+        """
         return self._local_scale
 
     @local_scale.setter
     def local_scale(self, value: Vec3) -> None:
+        """Set scale relative to the parent frame.
+        Docs: docs/systems/render.md
+        """
         self._local_scale = value
         self._mark_dirty()
 
-    # ------------------------------------------------------------------
     # World-space position/rotation (derived through parent chain)
-    # ------------------------------------------------------------------
 
     def _world_mat(self) -> np.ndarray:
         """Return the cached (or freshly computed) world matrix."""
         if self._dirty or self._world_matrix is None:
-            local = _trs_matrix(
+            local = trs_matrix(
                 self._local_position,
                 self._local_rotation,
                 self._local_scale,
@@ -307,12 +255,16 @@ class Transform:
         World-space position in meters.
 
         Setting this recomputes local_position relative to the current parent.
+        Docs: docs/systems/render.md
         """
         m = self._world_mat()
         return Vec3(float(m[0, 3]), float(m[1, 3]), float(m[2, 3]))
 
     @position.setter
     def position(self, world_pos: Vec3) -> None:
+        """Set world-space position in meters; recomputes local_position.
+        Docs: docs/systems/render.md
+        """
         if self._parent is None:
             self._local_position = world_pos
         else:
@@ -325,6 +277,7 @@ class Transform:
         World-space rotation (unit quaternion).
 
         Setting this recomputes local_rotation relative to the current parent.
+        Docs: docs/systems/render.md
         """
         if self._parent is None:
             return self._local_rotation
@@ -332,6 +285,9 @@ class Transform:
 
     @rotation.setter
     def rotation(self, world_rot: Quat) -> None:
+        """Set world-space rotation; recomputes local_rotation relative to current parent.
+        Docs: docs/systems/render.md
+        """
         if self._parent is None:
             self._local_rotation = world_rot.normalized()
         else:
@@ -339,28 +295,30 @@ class Transform:
             self._local_rotation = (parent_inv * world_rot).normalized()
         self._mark_dirty()
 
-    # ------------------------------------------------------------------
     # Direction vectors (world-space)
-    # ------------------------------------------------------------------
 
     @property
     def forward(self) -> Vec3:
-        """World-space forward direction (+Y in local space, Z-up convention)."""
+        """World-space forward direction (+Y in local space, Z-up convention).
+        Docs: docs/systems/render.md
+        """
         return self.rotation.rotate(Vec3.FORWARD)
 
     @property
     def right(self) -> Vec3:
-        """World-space right direction (+X in local space)."""
+        """World-space right direction (+X in local space).
+        Docs: docs/systems/render.md
+        """
         return self.rotation.rotate(Vec3.RIGHT)
 
     @property
     def up(self) -> Vec3:
-        """World-space up direction (+Z in local space)."""
+        """World-space up direction (+Z in local space).
+        Docs: docs/systems/render.md
+        """
         return self.rotation.rotate(Vec3.UP)
 
-    # ------------------------------------------------------------------
     # Operations
-    # ------------------------------------------------------------------
 
     def translate(self, v: Vec3, relative_to: Space = Space.SELF) -> None:
         """
@@ -376,6 +334,7 @@ class Transform:
         -------
             t.translate(Vec3(0, 1, 0))               # 1 m forward (local)
             t.translate(Vec3(0, 0, 1), Space.WORLD)  # 1 m up (world)
+        Docs: docs/systems/render.md
         """
         if relative_to is Space.SELF:
             self._local_position = self._local_position + self.rotation.rotate(v)
@@ -399,6 +358,7 @@ class Transform:
         -------
             t.rotate(Quat.from_axis_angle(Vec3.UP, pi/4))          # yaw 45° local
             t.rotate(Quat.from_axis_angle(Vec3.UP, pi/4), Space.WORLD)  # yaw 45° world
+        Docs: docs/systems/render.md
         """
         if relative_to is Space.SELF:
             self._local_rotation = (self._local_rotation * q).normalized()
@@ -426,6 +386,7 @@ class Transform:
         -------
             camera_transform.look_at(Vec3(10, 20, 0))
             # camera.forward ≈ direction toward (10,20,0)
+        Docs: docs/systems/render.md
         """
         world_pos = self.position
         fwd = target - world_pos
@@ -437,10 +398,7 @@ class Transform:
         up_ref = up
         if abs(fwd.dot(up_ref)) > 0.999:
             # Use an alternate up reference
-            if abs(fwd.dot(Vec3.FORWARD)) < 0.999:
-                up_ref = Vec3.FORWARD
-            else:
-                up_ref = Vec3.RIGHT
+            up_ref = Vec3.FORWARD if abs(fwd.dot(Vec3.FORWARD)) < 0.999 else Vec3.RIGHT
 
         # Build orthonormal basis: in Z-up space forward=+Y, right=+X, up=+Z
         # right = fwd × up_ref  (cross: (Y)×(Z) = +X in right-hand system)
@@ -470,7 +428,7 @@ class Transform:
 
         # Convert rotation matrix to quaternion
         # Using Shepperd's method
-        world_rot = _mat3_to_quat(m3)
+        world_rot = mat3_to_quat(m3)
         self.rotation = world_rot
 
     def transform_point(self, p: Vec3) -> Vec3:
@@ -490,6 +448,7 @@ class Transform:
             # An object at (10,0,0) world, rotated 90° yaw:
             # its local +Y forward maps to world −X
             world_pt = t.transform_point(Vec3(0, 1, 0))
+        Docs: docs/systems/render.md
         """
         m = self._world_mat()
         hp = np.array([p.x, p.y, p.z, 1.0], dtype=np.float64)
@@ -512,6 +471,7 @@ class Transform:
         -------
             local_pt = t.inverse_transform_point(world_pt)
             # round-trip: t.transform_point(local_pt) ≈ world_pt
+        Docs: docs/systems/render.md
         """
         m = self._world_mat()
         inv = np.linalg.inv(m)
@@ -519,9 +479,7 @@ class Transform:
         lp = inv @ hp
         return Vec3(float(lp[0]), float(lp[1]), float(lp[2]))
 
-    # ------------------------------------------------------------------
     # Dirty-flag propagation
-    # ------------------------------------------------------------------
 
     def _mark_dirty(self) -> None:
         """Mark this transform and all descendants dirty (world matrix stale)."""
@@ -530,9 +488,7 @@ class Transform:
             for child in self._children:
                 child._mark_dirty()
 
-    # ------------------------------------------------------------------
     # Debug
-    # ------------------------------------------------------------------
 
     def __repr__(self) -> str:
         pos = self._local_position
@@ -541,61 +497,3 @@ class Transform:
             f"children={len(self._children)}, "
             f"parent={'yes' if self._parent else 'no'})"
         )
-
-
-# ---------------------------------------------------------------------------
-# Helper: 3×3 rotation matrix → Quat  (Shepperd's method)
-# ---------------------------------------------------------------------------
-
-
-def _mat3_to_quat(m: np.ndarray) -> Quat:
-    """
-    Convert a 3×3 rotation matrix to a unit quaternion (Shepperd's method).
-
-    Parameters
-    ----------
-    m : np.ndarray shape (3, 3) — orthonormal rotation matrix.
-        Rows = output axes in the *input* frame:
-            m[0] = new X-axis (right)
-            m[1] = new Y-axis (forward)
-            m[2] = new Z-axis (up)
-
-    Returns
-    -------
-    Quat — unit quaternion
-
-    Note
-    ----
-    The matrix is stored with rows as the destination axes for each local
-    basis vector (i.e. the *transpose* of a column-basis matrix).
-    """
-    trace = m[0, 0] + m[1, 1] + m[2, 2]
-
-    if trace > 0.0:
-        s = 0.5 / np.sqrt(trace + 1.0)
-        w = 0.25 / s
-        x = (m[2, 1] - m[1, 2]) * s
-        y = (m[0, 2] - m[2, 0]) * s
-        z = (m[1, 0] - m[0, 1]) * s
-    elif m[0, 0] > m[1, 1] and m[0, 0] > m[2, 2]:
-        s = 2.0 * np.sqrt(1.0 + m[0, 0] - m[1, 1] - m[2, 2])
-        w = (m[2, 1] - m[1, 2]) / s
-        x = 0.25 * s
-        y = (m[0, 1] + m[1, 0]) / s
-        z = (m[0, 2] + m[2, 0]) / s
-    elif m[1, 1] > m[2, 2]:
-        s = 2.0 * np.sqrt(1.0 + m[1, 1] - m[0, 0] - m[2, 2])
-        w = (m[0, 2] - m[2, 0]) / s
-        x = (m[0, 1] + m[1, 0]) / s
-        y = 0.25 * s
-        z = (m[1, 2] + m[2, 1]) / s
-    else:
-        s = 2.0 * np.sqrt(1.0 + m[2, 2] - m[0, 0] - m[1, 1])
-        w = (m[1, 0] - m[0, 1]) / s
-        x = (m[0, 2] + m[2, 0]) / s
-        y = (m[1, 2] + m[2, 1]) / s
-        z = 0.25 * s
-
-    q = Quat.__new__(Quat)
-    q._data = np.array([w, x, y, z], dtype=np.float32)
-    return q.normalized()

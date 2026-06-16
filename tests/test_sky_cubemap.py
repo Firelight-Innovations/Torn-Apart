@@ -17,7 +17,7 @@ from fire_engine.core.rng import set_world_seed
 def _fresh_registry():
     """Reset + re-register the night-sky defs only (fast, isolated)."""
     from fire_engine.procedural.registry import register, reset_registry
-    from fire_engine.procedural.textures.night_sky import (
+    from fire_engine.procedural.textures.sky.night_sky import (
         NightSkyCubeDef,
         NightSkyDef,
     )
@@ -31,7 +31,7 @@ class TestCubeFaceMath:
     """cube_face_directions ↔ _dirs_to_face_pixels must be exact inverses."""
 
     def test_roundtrip_every_texel(self):
-        from fire_engine.procedural.textures.night_sky import (
+        from fire_engine.procedural.textures.sky.night_sky import (
             _dirs_to_face_pixels,
             cube_face_directions,
         )
@@ -44,7 +44,7 @@ class TestCubeFaceMath:
         assert (col == np.tile(np.arange(size), 6 * size)).all()
 
     def test_directions_are_unit(self):
-        from fire_engine.procedural.textures.night_sky import (
+        from fire_engine.procedural.textures.sky.night_sky import (
             cube_face_directions,
         )
 
@@ -54,7 +54,7 @@ class TestCubeFaceMath:
 
     def test_axis_directions_hit_face_centres(self):
         """±X/±Y/±Z unit vectors land on the centre texel of faces 0..5."""
-        from fire_engine.procedural.textures.night_sky import (
+        from fire_engine.procedural.textures.sky.night_sky import (
             _dirs_to_face_pixels,
         )
 
@@ -124,7 +124,7 @@ class TestNightSkyCube:
         draws precede the star draws, making the field byte-identical and
         the star delta exact.
         """
-        from fire_engine.procedural.textures.night_sky import NightSkyCubeDef
+        from fire_engine.procedural.textures.sky.night_sky import NightSkyCubeDef
 
         d = NightSkyCubeDef()
 

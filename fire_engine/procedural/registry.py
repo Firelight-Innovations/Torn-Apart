@@ -41,6 +41,8 @@ Usage
     clear_cache()
     arr3 = get("wasteland_ground")
     assert arr3 is not arr                  # regenerated after cache clear
+
+Docs: docs/systems/procedural.md
 """
 
 from __future__ import annotations
@@ -68,7 +70,7 @@ _cache: dict[tuple[str, int, str], Any] = {}
 # ---------------------------------------------------------------------------
 
 
-def _params_digest(params: dict) -> str:
+def _params_digest(params: dict[str, object]) -> str:
     """
     Return a stable, canonical string digest of *params*.
 
@@ -141,6 +143,8 @@ def register(def_instance: ProceduralDef) -> None:
                 return {"value": rng.integers(0, 100)}
 
         register(MyDef())
+
+    Docs: docs/systems/procedural.md
     """
     if not isinstance(def_instance, ProceduralDef):
         raise TypeError(f"register() expects a ProceduralDef instance, got {type(def_instance)}")
@@ -152,7 +156,7 @@ def register(def_instance: ProceduralDef) -> None:
     _registry[name] = def_instance
 
 
-def get(name: str, **params) -> Any:
+def get(name: str, **params: Any) -> Any:
     """
     Generate (or return cached) content for the named definition.
 
@@ -193,6 +197,8 @@ def get(name: str, **params) -> Any:
         arr = get("wasteland_ground")          # 256×256 RGBA uint8
         arr2 = get("wasteland_ground")
         assert arr2 is arr                      # cached — same object
+
+    Docs: docs/systems/procedural.md
     """
     if name not in _registry:
         raise KeyError(
@@ -239,6 +245,8 @@ def clear_cache() -> None:
         clear_cache()
         arr2 = get("wasteland_ground")
         assert arr2 is not arr1   # freshly generated
+
+    Docs: docs/systems/procedural.md
     """
     _cache.clear()
 
@@ -259,6 +267,8 @@ def reset_registry() -> None:
         from fire_engine.procedural.registry import reset_registry, register, get
         reset_registry()
         # Now register only the def you want to test…
+
+    Docs: docs/systems/procedural.md
     """
     _registry.clear()
     _cache.clear()

@@ -19,12 +19,14 @@ Reflection is intentionally duck-typed: this module reads ``.transform``,
 so it (and its tests) stay clear of panda3d.
 
 No panda3d imports — headless-testable.
+
+Docs: docs/systems/devtools.md
 """
 
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeGuard
 
 import numpy as np
 
@@ -69,10 +71,11 @@ def describe_object(go: GameObject) -> list[Section]:
     -------
         sections = describe_object(selected)
         # sections[1].title == "Transform"
+
+    Docs: docs/systems/devtools.md
     """
     sections: list[Section] = [_identity_section(go), _transform_section(go)]
-    for comp in list(go._components):
-        sections.append(_component_section(comp))
+    sections.extend(_component_section(comp) for comp in go._components)
     return sections
 
 
@@ -81,7 +84,7 @@ def describe_object(go: GameObject) -> list[Section]:
 # ---------------------------------------------------------------------------
 
 
-def is_chunk(obj: Any) -> bool:
+def is_chunk(obj: Any) -> TypeGuard[Chunk]:
     """
     True when ``obj`` is a terrain :class:`~fire_engine.world.terrain.chunk.Chunk`.
 
@@ -89,6 +92,8 @@ def is_chunk(obj: Any) -> bool:
     *and* terrain-free): a chunk is anything carrying the voxel-array trio
     ``materials`` / ``coord`` / ``chunk_meters``.  Used by the Inspector to route
     a picked chunk to :func:`describe_chunk` instead of :func:`describe_object`.
+
+    Docs: docs/systems/devtools.md
     """
     return hasattr(obj, "materials") and hasattr(obj, "coord") and hasattr(obj, "chunk_meters")
 
@@ -118,6 +123,8 @@ def describe_chunk(chunk: Chunk) -> list[Section]:
     -------
         sections = describe_chunk(chunk)
         # sections[0].title == "Chunk"
+
+    Docs: docs/systems/devtools.md
     """
 
     def origin_str() -> str:
@@ -253,8 +260,8 @@ def _component_section(comp: Component) -> Section:
         Field(
             "enabled",
             FieldKind.BOOL,
-            lambda c=comp: c.enabled,
-            lambda v, c=comp: setattr(c, "enabled", bool(v)),
+            lambda: comp.enabled,
+            lambda v: setattr(comp, "enabled", bool(v)),
         )
     ]
     for name in _public_slots(comp):
@@ -299,37 +306,37 @@ def _field_for_attr(obj: Any, name: str) -> Field | None:
         return Field(
             name,
             FieldKind.BOOL,
-            lambda o=obj, n=name: getattr(o, n),
-            lambda v, o=obj, n=name: setattr(o, n, bool(v)),
+            lambda: getattr(obj, name),
+            lambda v: setattr(obj, name, bool(v)),
         )
     if isinstance(value, int):
         return Field(
             name,
             FieldKind.INT,
-            lambda o=obj, n=name: getattr(o, n),
-            lambda v, o=obj, n=name: setattr(o, n, int(v)),
+            lambda: getattr(obj, name),
+            lambda v: setattr(obj, name, int(v)),
         )
     if isinstance(value, float):
         return Field(
             name,
             FieldKind.FLOAT,
-            lambda o=obj, n=name: getattr(o, n),
-            lambda v, o=obj, n=name: setattr(o, n, float(v)),
+            lambda: getattr(obj, name),
+            lambda v: setattr(obj, name, float(v)),
         )
     if isinstance(value, str):
         return Field(
             name,
             FieldKind.STRING,
-            lambda o=obj, n=name: getattr(o, n),
-            lambda v, o=obj, n=name: setattr(o, n, str(v)),
+            lambda: getattr(obj, name),
+            lambda v: setattr(obj, name, str(v)),
         )
     if isinstance(value, Vec3):
         return Field(
             name,
             FieldKind.VEC3,
-            lambda o=obj, n=name: tuple(getattr(o, n)),
-            lambda v, o=obj, n=name: setattr(o, n, Vec3(float(v[0]), float(v[1]), float(v[2]))),
+            lambda: tuple(getattr(obj, name)),
+            lambda v: setattr(obj, name, Vec3(float(v[0]), float(v[1]), float(v[2]))),
         )
 
     # Unknown type: show it, don't hide it (read-only repr).
-    return Field(name, FieldKind.LABEL, lambda o=obj, n=name: repr(getattr(o, n)))
+    return Field(name, FieldKind.LABEL, lambda: repr(getattr(obj, name)))

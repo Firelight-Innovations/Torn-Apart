@@ -86,8 +86,14 @@ class EditorSession:
         numpy — never import ``world.terrain_shader`` here (it pulls panda3d).
         """
         if self._ground_lut is None:
-            from fire_engine.procedural.textures.dirt_ground import DIRT_PALETTE, DIRT_THRESHOLDS
-            from fire_engine.procedural.textures.grass_ground import GRASS_PALETTE, GRASS_THRESHOLDS
+            from fire_engine.procedural.textures.ground.dirt_ground import (
+                DIRT_PALETTE,
+                DIRT_THRESHOLDS,
+            )
+            from fire_engine.procedural.textures.ground.grass_ground import (
+                GRASS_PALETTE,
+                GRASS_THRESHOLDS,
+            )
             from fire_engine.procedural.textures.ground_lut import build_ground_lut
             from fire_engine.world.terrain import MATERIAL_DIRT, MATERIAL_GRASS
 
@@ -133,11 +139,12 @@ class EditorSession:
         the viewport fills in from the camera outward.
         """
         ccx, ccy, ccz = self.cm.camera_chunk(center)
-        coords: list[tuple[int, int, int]] = []
-        for dx in range(-radius, radius + 1):
-            for dy in range(-radius, radius + 1):
-                for dz in range(_Z_MIN, _Z_MAX + 1):
-                    coords.append((ccx + dx, ccy + dy, ccz + dz))
+        coords: list[tuple[int, int, int]] = [
+            (ccx + dx, ccy + dy, ccz + dz)
+            for dx in range(-radius, radius + 1)
+            for dy in range(-radius, radius + 1)
+            for dz in range(_Z_MIN, _Z_MAX + 1)
+        ]
         coords.sort(key=lambda c: (c[0] - ccx) ** 2 + (c[1] - ccy) ** 2 + (c[2] - ccz) ** 2)
         return coords
 

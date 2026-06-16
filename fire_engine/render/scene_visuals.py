@@ -35,14 +35,16 @@ Example (wired by main.py)::
     runtime = SceneRuntime(visual_factory=factory)
     factory.runtime = runtime          # enables store write-back
     save_manager.register(runtime)
+
+Docs: docs/systems/render.md
 """
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from panda3d.core import GeomNode, LQuaternionf, NodePath  # type: ignore[import]
+from panda3d.core import GeomNode, LQuaternionf, NodePath
 
 from fire_engine.core.math3d import Vec3
 from fire_engine.render.primitives import (
@@ -73,9 +75,11 @@ class SceneVisualFactory:
             authored lights are skipped with one log line).
         dev_overlay: ``DevOverlay`` or ``None``; when present, authored objects
             register as click-pickable in the F1 overlay.
+
+    Docs: docs/systems/render.md
     """
 
-    def __init__(self, app, lighting_pipeline=None, dev_overlay=None) -> None:
+    def __init__(self, app: Any, lighting_pipeline: Any = None, dev_overlay: Any = None) -> None:
         self._app = app
         self._pipeline = lighting_pipeline
         self._overlay = dev_overlay
@@ -84,18 +88,20 @@ class SceneVisualFactory:
         self._node_scale: dict[GameObject, float] = {}  # model-unit fixup
         self._light_ids: dict[GameObject, int] = {}
         self._ids: dict[GameObject, int] = {}  # go -> scene object id
-        self._last_synced: dict[GameObject, tuple] = {}
+        self._last_synced: dict[GameObject, tuple[float, ...]] = {}
         self._warned_no_pipeline = False
         app.taskMgr.add(self._sync_task, "scene-visuals-sync")
 
     # ------------------------------------------------------------------ #
     # Runtime contract
     # ------------------------------------------------------------------ #
-    def attach(self, go: GameObject, kind: str, obj: dict) -> None:
+    def attach(self, go: GameObject, kind: str, obj: dict[str, Any]) -> None:
         """Give ``go`` its in-game visuals by walking its component list.
 
         ``kind`` is only a fallback for pre-component data; the components list
         (Mesh, Light, ...) drives what is built. Disabled components are skipped.
+
+        Docs: docs/systems/render.md
         """
         self._ids[go] = int(obj["id"])
         components = obj.get("components")
@@ -119,7 +125,7 @@ class SceneVisualFactory:
             half = 0.5 if has_mesh else 0.25
             self._overlay.manager.add_selectable(go, Vec3(half, half, half))
 
-    def _attach_mesh(self, go: GameObject, obj: dict, primitive: str) -> None:
+    def _attach_mesh(self, go: GameObject, obj: dict[str, Any], primitive: str) -> None:
         if primitive == "sphere":
             node = GeomNode(f"scene_sphere_{obj['id']}")
             node.add_geom(build_sphere_geom(0.5))
@@ -135,7 +141,7 @@ class SceneVisualFactory:
                 self._nodes[go] = model
                 self._node_scale[go] = CUBE_MODEL_SCALE
 
-    def _attach_light(self, go: GameObject, params: dict) -> None:
+    def _attach_light(self, go: GameObject, params: dict[str, Any]) -> None:
         if self._pipeline is None:
             if not self._warned_no_pipeline:
                 log.info("authored lights skipped: no GPU lighting pipeline")
@@ -144,7 +150,8 @@ class SceneVisualFactory:
         from fire_engine.lighting.lights import PointLight
 
         defaults = default_params("Light")
-        color = tuple(float(c) for c in params.get("color", defaults["color"]))
+        raw_color = [float(c) for c in params.get("color", defaults["color"])]
+        color: tuple[float, float, float] = (raw_color[0], raw_color[1], raw_color[2])
         intensity = float(params.get("intensity", defaults["intensity"]))
         radius = float(params.get("radius", defaults["radius"]))
         p = go.transform.position
@@ -164,6 +171,8 @@ class SceneVisualFactory:
         Called by the runtime before a rebuild (and safe to call repeatedly);
         must not wait on the engine's deferred GameObject destroy, or a double
         load within one frame would leak NodePaths/lights.
+
+        Docs: docs/systems/render.md
         """
         for np_ in self._nodes.values():
             np_.remove_node()
@@ -182,7 +191,7 @@ class SceneVisualFactory:
     # ------------------------------------------------------------------ #
     # Per-frame sync
     # ------------------------------------------------------------------ #
-    def _sync_task(self, task):
+    def _sync_task(self, task: Any) -> Any:
         """Mirror GameObject transforms onto visuals; write edits to the store.
 
         The F1 overlay's gizmo moves the GameObject's Transform directly; this
@@ -197,7 +206,9 @@ class SceneVisualFactory:
             p, q, s = t.position, t.rotation, t.local_scale
             key = (p.x, p.y, p.z, q.w, q.x, q.y, q.z, s.x, s.y, s.z)
             last = self._last_synced.get(go)
-            if last is not None and all(abs(a - b) <= _MOVE_EPS for a, b in zip(key, last)):
+            if last is not None and all(
+                abs(a - b) <= _MOVE_EPS for a, b in zip(key, last, strict=True)
+            ):
                 continue
             self._last_synced[go] = key
 

@@ -43,6 +43,8 @@ Example
             self.transform.rotate(
                 Quat.from_axis_angle(Vec3.UP, self.speed * dt)
             )
+
+Docs: docs/systems/render.md
 """
 
 from __future__ import annotations
@@ -83,6 +85,8 @@ class Component:
     6. fixed_update (fixed-dt, 0–5× per real frame)
     7. on_disable  (enabled → False, or object deactivated)
     8. on_destroy  (deferred to end of the frame that called destroy())
+
+    Docs: docs/systems/render.md
     """
 
     __slots__ = ("_started", "enabled", "game_object", "transform")
@@ -107,6 +111,8 @@ class Component:
 
         Note: do NOT call base class awake() — the default body is a no-op
         and components are not guaranteed to have a super() chain.
+
+        Docs: docs/systems/render.md
         """
 
     def on_enable(self) -> None:
@@ -116,6 +122,8 @@ class Component:
         Also called on the first enable (after awake) when the component is
         created in an enabled state.  May be called multiple times during
         the lifetime of the component.
+
+        Docs: docs/systems/render.md
         """
 
     def start(self) -> None:
@@ -124,6 +132,8 @@ class Component:
         the frame have completed.
 
         Use for initialisation that depends on other components being awake.
+
+        Docs: docs/systems/render.md
         """
 
     def update(self, dt: float) -> None:
@@ -134,6 +144,8 @@ class Component:
         Parameters
         ----------
         dt : float — real frame delta in **seconds** (e.g. 0.016 at 60 fps).
+
+        Docs: docs/systems/render.md
         """
 
     def late_update(self, dt: float) -> None:
@@ -146,6 +158,8 @@ class Component:
         Parameters
         ----------
         dt : float — real frame delta in **seconds**.
+
+        Docs: docs/systems/render.md
         """
 
     def fixed_update(self, dt: float) -> None:
@@ -159,6 +173,8 @@ class Component:
         Parameters
         ----------
         dt : float — fixed timestep in **seconds** (always clock.fixed_dt).
+
+        Docs: docs/systems/render.md
         """
 
     def on_disable(self) -> None:
@@ -167,6 +183,8 @@ class Component:
         GameObject's active_in_hierarchy becomes False.
 
         May be called multiple times (paired with on_enable).
+
+        Docs: docs/systems/render.md
         """
 
     def on_destroy(self) -> None:
@@ -176,4 +194,6 @@ class Component:
 
         Perform cleanup: unsubscribe events, release resources, etc.
         Called after on_disable() for enabled components.
+
+        Docs: docs/systems/render.md
         """

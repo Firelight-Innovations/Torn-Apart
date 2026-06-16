@@ -22,82 +22,36 @@ Conventions
 - Rotations compose in world space: ``new = axis_delta * start`` (premultiply),
   matching :class:`~fire_engine.core.math3d.Quat` semantics.
 
+Enum and support-type definitions live in :mod:`fire_engine.devtools.enums`
+(GizmoMode, HandleType) and :mod:`fire_engine.devtools.types` (Handle,
+DragState); they are re-exported here to preserve every historical import path.
+
 No panda3d imports — headless-testable.
+
+Docs: docs/systems/devtools.md
 """
 
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
-from enum import Enum
 
 import numpy as np
 
 from fire_engine.core.math3d import Quat, Vec3
+from fire_engine.devtools.enums import GizmoMode, HandleType
+from fire_engine.devtools.types import DragState, Handle
 
-
-class GizmoMode(Enum):
-    """Which manipulator is active (mirrors Unity's W/E/R tools)."""
-
-    TRANSLATE = "translate"
-    ROTATE = "rotate"
-    SCALE = "scale"
-
-
-class HandleType(Enum):
-    """
-    The kind of handle a ray can grab.
-
-    AXIS    — a single-axis arrow (translate) or stalk (scale).
-    PLANE   — a two-axis square (translate on the plane whose *normal* is ``axis``).
-    RING    — a rotation ring in the plane whose *normal* is ``axis``.
-    UNIFORM — the centre cube (uniform scale on all axes; ``axis`` ignored).
-    """
-
-    AXIS = "axis"
-    PLANE = "plane"
-    RING = "ring"
-    UNIFORM = "uniform"
-
-
-@dataclass(frozen=True)
-class Handle:
-    """
-    One grabbable part of the gizmo.
-
-    Parameters
-    ----------
-    type : HandleType
-    axis : int
-        ``0=X / 1=Y / 2=Z``.  For PLANE/RING it is the plane's *normal* axis;
-        for UNIFORM it is unused (always 0).
-    """
-
-    type: HandleType
-    axis: int
-
-
-@dataclass
-class DragState:
-    """
-    Captured reference pose for an in-progress drag (returned by :meth:`Gizmo.begin`).
-
-    Holds the object's pose at grab time plus the one reference quantity the
-    handle needs (axis parameter, plane point, ring angle, or radial distance),
-    so :func:`update_drag` can compute an absolute new pose each frame.
-    """
-
-    mode: GizmoMode
-    handle: Handle
-    pivot: Vec3
-    size: float
-    start_position: Vec3
-    start_rotation: Quat
-    start_scale: Vec3
-    ref_scalar: float = 0.0
-    ref_point: np.ndarray | None = None
-    ref_angle: float = 0.0
-    ref_dist: float = 0.0
+# Re-export so `from fire_engine.devtools.gizmo import GizmoMode` etc. keep working.
+__all__ = [
+    "DragState",
+    "Gizmo",
+    "GizmoMode",
+    "Handle",
+    "HandleType",
+    "closest_on_axis",
+    "ray_plane_intersect",
+    "update_drag",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -135,6 +89,8 @@ def ray_plane_intersect(
 
     Returns the hit point (length-3 array) or ``None`` if the ray is parallel to
     the plane or only hits it behind the origin.
+
+    Docs: docs/systems/devtools.md
     """
     denom = float(n.dot(d))
     if abs(denom) < 1e-9:
@@ -153,6 +109,8 @@ def closest_on_axis(
 
     Returns ``(axis_t, ray_s, dist)``: the parameter along the axis (meters), the
     parameter along the ray, and the distance between the two closest points.
+
+    Docs: docs/systems/devtools.md
     """
     w0 = o - p
     A = float(d.dot(d))
@@ -199,6 +157,8 @@ class Gizmo:
         handle = giz.pick(ray_o, ray_d)
         if handle is not None:
             drag = giz.begin(handle, ray_o, ray_d, pos, rot, scale)
+
+    Docs: docs/systems/devtools.md
     """
 
     def __init__(self, pivot: Vec3, size: float, mode: GizmoMode) -> None:
@@ -216,54 +176,93 @@ class Gizmo:
         ----------
         ray_o, ray_d : Vec3
             World-space ray origin and direction (need not be normalised).
+
+        Docs: docs/systems/devtools.md
         """
         o, d, p = _np(ray_o), _np(ray_d), _np(self.pivot)
         R = self.size
-        axis_r = R * 0.18
-        best: tuple[float, Handle] | None = None
-
-        def consider(depth: float, handle: Handle) -> None:
-            nonlocal best
-            if depth <= 0.0:
-                return
-            if best is None or depth < best[0]:
-                best = (depth, handle)
+        candidates: list[tuple[float, Handle]] = []
 
         if self.mode in (GizmoMode.TRANSLATE, GizmoMode.SCALE):
-            for i in range(3):
-                a = _AXIS_NP[i]
-                axis_t, ray_s, dist = closest_on_axis(o, d, p, a)
-                if 0.0 <= axis_t <= R and dist <= axis_r:
-                    consider(ray_s, Handle(HandleType.AXIS, i))
-
+            candidates.extend(self._pick_axes(o, d, p, R))
         if self.mode == GizmoMode.TRANSLATE:
-            lo, hi = R * 0.15, R * 0.55
-            for i in range(3):
-                hit = ray_plane_intersect(o, d, p, _AXIS_NP[i])
-                if hit is None:
-                    continue
-                j, k = _OTHER[i]
-                cj = float((hit - p).dot(_AXIS_NP[j]))
-                ck = float((hit - p).dot(_AXIS_NP[k]))
-                if lo <= cj <= hi and lo <= ck <= hi:
-                    consider(_ray_s_of(o, d, hit), Handle(HandleType.PLANE, i))
-
+            candidates.extend(self._pick_planes(o, d, p, R))
         if self.mode == GizmoMode.SCALE:
-            cp_s = _ray_s_of(o, d, p)
-            cp = o + cp_s * d
-            if cp_s > 0.0 and float(np.linalg.norm(cp - p)) <= R * 0.2:
-                consider(cp_s, Handle(HandleType.UNIFORM, 0))
-
+            candidates.extend(self._pick_uniform(o, d, p, R))
         if self.mode == GizmoMode.ROTATE:
-            for i in range(3):
-                hit = ray_plane_intersect(o, d, p, _AXIS_NP[i])
-                if hit is None:
-                    continue
-                r = float(np.linalg.norm(hit - p))
-                if abs(r - R) <= R * 0.12:
-                    consider(_ray_s_of(o, d, hit), Handle(HandleType.RING, i))
+            candidates.extend(self._pick_rings(o, d, p, R))
 
-        return None if best is None else best[1]
+        valid = [(depth, h) for depth, h in candidates if depth > 0.0]
+        return min(valid, key=lambda x: x[0])[1] if valid else None
+
+    def _pick_axes(
+        self,
+        o: np.ndarray,
+        d: np.ndarray,
+        p: np.ndarray,
+        R: float,
+    ) -> list[tuple[float, Handle]]:
+        """Axis-arrow / axis-stalk candidates for translate and scale modes."""
+        axis_r = R * 0.18
+        hits: list[tuple[float, Handle]] = []
+        for i in range(3):
+            axis_t, ray_s, dist = closest_on_axis(o, d, p, _AXIS_NP[i])
+            if 0.0 <= axis_t <= R and dist <= axis_r:
+                hits.append((ray_s, Handle(HandleType.AXIS, i)))
+        return hits
+
+    def _pick_planes(
+        self,
+        o: np.ndarray,
+        d: np.ndarray,
+        p: np.ndarray,
+        R: float,
+    ) -> list[tuple[float, Handle]]:
+        """Two-axis plane-square candidates for translate mode."""
+        lo, hi = R * 0.15, R * 0.55
+        hits: list[tuple[float, Handle]] = []
+        for i in range(3):
+            hit = ray_plane_intersect(o, d, p, _AXIS_NP[i])
+            if hit is None:
+                continue
+            j, k = _OTHER[i]
+            cj = float((hit - p).dot(_AXIS_NP[j]))
+            ck = float((hit - p).dot(_AXIS_NP[k]))
+            if lo <= cj <= hi and lo <= ck <= hi:
+                hits.append((_ray_s_of(o, d, hit), Handle(HandleType.PLANE, i)))
+        return hits
+
+    def _pick_uniform(
+        self,
+        o: np.ndarray,
+        d: np.ndarray,
+        p: np.ndarray,
+        R: float,
+    ) -> list[tuple[float, Handle]]:
+        """Centre-cube candidate for uniform-scale mode."""
+        cp_s = _ray_s_of(o, d, p)
+        cp = o + cp_s * d
+        if cp_s > 0.0 and float(np.linalg.norm(cp - p)) <= R * 0.2:
+            return [(cp_s, Handle(HandleType.UNIFORM, 0))]
+        return []
+
+    def _pick_rings(
+        self,
+        o: np.ndarray,
+        d: np.ndarray,
+        p: np.ndarray,
+        R: float,
+    ) -> list[tuple[float, Handle]]:
+        """Rotation-ring candidates for rotate mode."""
+        hits: list[tuple[float, Handle]] = []
+        for i in range(3):
+            hit = ray_plane_intersect(o, d, p, _AXIS_NP[i])
+            if hit is None:
+                continue
+            r = float(np.linalg.norm(hit - p))
+            if abs(r - R) <= R * 0.12:
+                hits.append((_ray_s_of(o, d, hit), Handle(HandleType.RING, i)))
+        return hits
 
     # -- drag begin -----------------------------------------------------
 
@@ -288,6 +287,8 @@ class Gizmo:
         Returns
         -------
         DragState — feed to :func:`update_drag` each frame until release.
+
+        Docs: docs/systems/devtools.md
         """
         o, d, p = _np(ray_o), _np(ray_d), _np(self.pivot)
         st = DragState(
@@ -340,6 +341,8 @@ def update_drag(state: DragState, ray_o: Vec3, ray_d: Vec3) -> tuple[Vec3, Quat,
     Returns
     -------
     (Vec3, Quat, Vec3) — new local position, rotation, scale to assign.
+
+    Docs: docs/systems/devtools.md
     """
     o, d, p = _np(ray_o), _np(ray_d), _np(state.pivot)
     pos, rot, scl = state.start_position, state.start_rotation, state.start_scale

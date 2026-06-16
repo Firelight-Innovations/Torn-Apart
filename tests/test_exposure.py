@@ -62,7 +62,7 @@ NO_LIGHTS = (np.zeros((4, 12), dtype=np.float32), 0)
 def step(meter: ExposureMeter, cam, sky, chunks, lights, seconds: float, dt: float = 0.1) -> float:
     """Run update() repeatedly for `seconds` of simulated time."""
     val = meter.exposure
-    n = int(round(seconds / dt))
+    n = round(seconds / dt)
     for _ in range(n):
         val = meter.update(cam, sky, chunks, lights, dt)
     return val

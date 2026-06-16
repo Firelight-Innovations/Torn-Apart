@@ -80,7 +80,7 @@ class TestOccupancyFromMaterials:
         # Voxels [0,0,0] and [1,1,1] share light cell (0,0,0).
         mat[0, 0, 0] = 1
         occ = occupancy_from_materials(mat)
-        assert occ[0, 0, 0] == True
+        assert occ[0, 0, 0]
         # All other cells must be False.
         other = occ.copy()
         other[0, 0, 0] = False
@@ -91,16 +91,16 @@ class TestOccupancyFromMaterials:
         # Voxel (2, 4, 6) lives in light cell (1, 2, 3).
         mat[2, 4, 6] = 1
         occ = occupancy_from_materials(mat)
-        assert occ[1, 2, 3] == True
+        assert occ[1, 2, 3]
         # Neighboring cell should be False.
-        assert occ[0, 2, 3] == False
+        assert not occ[0, 2, 3]
 
     def test_two_voxels_in_same_cell(self):
         mat = np.zeros((32, 32, 32), dtype=np.uint8)
         mat[0, 0, 0] = 1
         mat[1, 1, 1] = 1
         occ = occupancy_from_materials(mat)
-        assert occ[0, 0, 0] == True
+        assert occ[0, 0, 0]
         other = occ.copy()
         other[0, 0, 0] = False
         assert not other.any()
@@ -109,7 +109,7 @@ class TestOccupancyFromMaterials:
         mat = np.zeros((32, 32, 32), dtype=np.uint8)
         mat[30, 30, 30] = 1  # should land in cell (15, 15, 15)
         occ = occupancy_from_materials(mat)
-        assert occ[15, 15, 15] == True
+        assert occ[15, 15, 15]
         other = occ.copy()
         other[15, 15, 15] = False
         assert not other.any()
@@ -335,7 +335,7 @@ class TestEventInvalidation:
         lg = LightGrid()
         chunk = Chunk((2, 3, 0))  # all air initially
         provider = _FakeChunkProvider({(2, 3, 0): chunk})
-        sc = SunlightComputer(cfg, provider, lg, bus)
+        SunlightComputer(cfg, provider, lg, bus)
 
         # Manually clear dirty flag to test that it gets re-set.
         chunk.dirty = False
@@ -363,7 +363,7 @@ class TestEventInvalidation:
         lg = LightGrid()
         chunk = Chunk((0, 0, 2))
         provider = _FakeChunkProvider({(0, 0, 2): chunk})
-        sc = SunlightComputer(cfg, provider, lg, bus)
+        SunlightComputer(cfg, provider, lg, bus)
 
         bus.publish(ChunkLoadedEvent(coord=(0, 0, 2)))
 
@@ -387,7 +387,7 @@ class TestEventInvalidation:
                 (1, 1, 2): chunk2,
             }
         )
-        sc = SunlightComputer(cfg, provider, lg, bus)
+        SunlightComputer(cfg, provider, lg, bus)
 
         # Clear dirty flags.
         chunk0.dirty = False
@@ -486,7 +486,7 @@ class TestMakeLightSampler:
 
     def test_fully_lit_chunk_returns_near_one(self):
         """Face centres in a fully lit (all air) chunk → light ≈ 1.0."""
-        sampler, cfg = self._fully_lit_setup()
+        sampler, _cfg = self._fully_lit_setup()
         # Face centres scattered across chunk (0,0,0): world coords [0, 16) m.
         positions = np.array(
             [
@@ -598,7 +598,7 @@ class TestMakeLightSampler:
 
     def test_output_dtype_and_range(self):
         """Output is float32 and values are in [0, 1]."""
-        sampler, cfg = self._fully_lit_setup()
+        sampler, _cfg = self._fully_lit_setup()
         positions = np.random.default_rng(0).uniform(0, 16, (100, 3)).astype(np.float32)
         result = sampler(positions)
         assert result.dtype == np.float32

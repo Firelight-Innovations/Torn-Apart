@@ -34,51 +34,19 @@ Example
 >>> front = GustFront(seed_key=("demo",), direction=(1.0, 0.0), speed=12.0,
 ...                   strength=6.0, width_m=20.0, period_m=400.0)
 >>> front.apply(X, Y, t=3.0, vx=vx, vy=vy, turb=turb)   # mutates in place
+
+Docs: docs/systems/world.wind.md
 """
 
 from __future__ import annotations
 
 import math
-from typing import Protocol, runtime_checkable
 
 import numpy as np
 
+from fire_engine.world.wind.protocols import WindModifier
+
 __all__ = ["GustFront", "WindModifier"]
-
-
-@runtime_checkable
-class WindModifier(Protocol):
-    """
-    In-place modifier of the composed wind field, applied before publish.
-
-    Implementations mutate ``vx``, ``vy`` and ``turb`` (all same-shaped
-    ``float32`` ``(cells, cells)`` arrays, indexed ``[x, y]``) in place; the
-    return value is ignored.  ``X`` / ``Y`` are the matching cell-centre world
-    coordinate meshes (meters); ``t`` is the field's evaluation time (seconds).
-
-    Keep implementations a **pure function of their own seed/config and ``t``**
-    (no accumulated state) to preserve the field's determinism and
-    zero-save-bytes guarantee.
-
-    Example
-    -------
-    >>> class Calm:                          # zero out all wind in a region
-    ...     def apply(self, X, Y, t, vx, vy, turb):
-    ...         mask = (X**2 + Y**2) < 100.0
-    ...         vx[mask] = 0.0; vy[mask] = 0.0
-    """
-
-    def apply(
-        self,
-        X: np.ndarray,
-        Y: np.ndarray,
-        t: float,
-        vx: np.ndarray,
-        vy: np.ndarray,
-        turb: np.ndarray,
-    ) -> None:
-        """Mutate ``vx`` / ``vy`` / ``turb`` in place for time ``t``."""
-        ...
 
 
 class GustFront:
@@ -121,11 +89,13 @@ class GustFront:
     >>> front = GustFront(("demo",), (1.0, 0.0), speed=12.0, strength=6.0,
     ...                   width_m=20.0)
     >>> # apply() pushes air toward +X in a moving 20 m-wide band.
+
+    Docs: docs/systems/world.wind.md
     """
 
     def __init__(
         self,
-        seed_key: tuple,
+        seed_key: tuple[object, ...],
         direction: tuple[float, float],
         speed: float,
         strength: float,
@@ -173,6 +143,8 @@ class GustFront:
             Field evaluation time (seconds).
         vx, vy, turb : numpy.ndarray
             Field arrays mutated in place (``float32 (cells, cells)``).
+
+        Docs: docs/systems/world.wind.md
         """
         dx, dy = self.dir
         # Distance of each cell along the travel direction (meters).

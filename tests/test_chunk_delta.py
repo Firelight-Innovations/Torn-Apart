@@ -51,7 +51,7 @@ def cm(cfg):
 
 
 # ---------------------------------------------------------------------------
-# is_solid_mask()
+# is_solid_mask()  # noqa: ERA001
 # ---------------------------------------------------------------------------
 
 
@@ -203,9 +203,9 @@ class TestDirtyEditedFlags:
 
     def test_get_delta_only_returns_edited_chunks(self, cm, cfg):
         """ChunkManager.get_delta() includes only chunks where edited=True."""
-        c0 = cm.get_or_create((0, 0, 0))
+        cm.get_or_create((0, 0, 0))
         c1 = cm.get_or_create((1, 0, 0))
-        # Do NOT mark c0 as edited; mark c1.
+        # Do NOT mark (0,0,0) as edited; mark c1.
         c1.edited = True
         delta = cm.get_delta()
         assert (1, 0, 0) in delta

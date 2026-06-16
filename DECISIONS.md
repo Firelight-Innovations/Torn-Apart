@@ -609,3 +609,26 @@ ARCHITECTURE.md §5.7 reserved `fire_engine/buildings/` as a "blocks + primitive
 - **Q:** The profiler was developed on a branch off the pre-reorg `world/` layout; master meanwhile landed the `world/`→`render/` reorg (+ standards-gate, editor).
 - **Choice:** Re-applied the profiler changes onto master's new layout as a single linear commit: panda3d mirrors live in `render/profiler_bridge.py` + `render/profiler_overlay.py`; loop instrumentation in `render/app.py` + `render/registry.py`; weather scope in `world/sky/sky_state.py`; core unchanged location (`core/profiler.py`). Doc kept as the flat `docs/systems/profiler.md` (the profiler spans `core/` + `render/`, not one package).
 - **Why:** Cleaner and more reviewable than a rename-conflict-laden 3-way merge; ships as a fast-forwardable commit on master.
+
+---
+
+## 2026-06-15 — Standards-gate remediation (branch `refactor/standards-remediation`)
+
+Bringing the 6 failing `tests/standards/` gates to green honestly (no shortcuts;
+CLAUDE.md Hard Rules + the 2660-logic-test tripwire outrank passing any gate).
+See `docs/sessions/standards-remediation-spec.md` and the session note.
+
+### Exclude `tools/out/` from ruff lint
+- **Q:** `ruff check .` linted `tools/out/diag/*` (ad-hoc probe/dump scripts) — ~111 of 484 hits — that were never meant as maintained source.
+- **Choice:** Add `tools/out` to `[tool.ruff] extend-exclude` (the dir is already git-tracked scratch/output; left tracked, just unlinted).
+- **Why:** Scratch diagnostic output, not source. Sanctioned by the remediation spec; does not hide any `fire_engine` problem (the limit and every engine path stay linted). Dropped ruff to 373 real hits.
+
+### Resolve `[6] fire_engine/ has 12 sub-folders (max 5)` via source-root exemption — NOT a top-level reorg
+- **Q:** The structure gate counts `fire_engine/`'s own 12 immediate sub-packages against `max_subdirs=5`. But CLAUDE.md's documented Repo Layout *prescribes* exactly those 12 top-level subsystems (core/ render/ world/ simulation/ …), and `max_subdirs` is a real limit the goal forbids loosening. The two conflict.
+- **Choice (option B, default):** Treat the **source-root package directory itself** (`fire_engine/`) as a namespace aggregator exempt from the `[6]` sub-folder count — mirroring `check_docs.py`, which *already* exempts the source root (`if pkg == root: continue`, "it only re-exports"). Every real sub-package still enforces ≤5 sub-folders and ≤10 modules; `max_subdirs` stays 5. Implemented as a one-line guard in `check_repo_structure.py`, not a `pyproject` limit change.
+- **Why:** Lowest-risk honest fix that does **not** weaken the deep-&-narrow guarantee for any actual code folder, is consistent with the docs-checker's existing root exemption, and matches CLAUDE.md's prescribed layout. The alternative (**option A**: regroup the 12 into ≤5 super-packages, e.g. `foundation/{core,save,resources}`) rewrites every import across `fire_engine/`, `tests/`, `tools/`, `editor/`, `main.py` and contradicts the documented layout — high blast-radius for an unattended run. **Flagged for owner review:** if option A is preferred, the delta is a mechanical top-level move + path rewrite.
+
+### Vec3 world-space constants typed as `ClassVar`
+- **Q:** `Vec3.ZERO/ONE/UP/FORWARD/RIGHT` are assigned after the class body (a Vec3 can't be built inside its own definition), so `mypy --strict` reported ~20 `attr-defined` errors tree-wide.
+- **Choice:** Annotation-only `ClassVar[Vec3]` declarations inside the class body; values still assigned just below it.
+- **Why:** Pure typing fix, zero runtime change (`from __future__ import annotations` makes the annotations strings); clears the errors at the source instead of per-call-site.

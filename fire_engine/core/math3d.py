@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Iterator
+from typing import ClassVar
 
 import numpy as np
 
@@ -53,6 +54,15 @@ class Vec3:
     """
 
     __slots__ = ("_data",)
+
+    # World-space constants. Declared here for type-checkers; the values are
+    # assigned just after the class body (a Vec3 can't be constructed inside
+    # its own definition). Keep the two in sync.
+    ZERO: ClassVar[Vec3]
+    ONE: ClassVar[Vec3]
+    UP: ClassVar[Vec3]
+    FORWARD: ClassVar[Vec3]
+    RIGHT: ClassVar[Vec3]
 
     # ------------------------------------------------------------------
     # Construction

@@ -73,6 +73,9 @@ line-length = 100
 extend-exclude = [
     ".venv", "saves", "assets", "scenes", "site", "build", "dist",
     "vulture_whitelist.py",
+    # Generated diagnostic scratch (probe/dump scripts written ad-hoc during
+    # debugging) — outputs, not maintained source. See DECISIONS.md 2026-06-15.
+    "tools/out",
     # Codegen artifact — owned by editor/protocol/codegen.py; its exact bytes are
     # asserted by tests/editor/test_protocol.py::test_generated_is_current, so ruff
     # must not reformat it.

@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass, field
+from typing import Any
 
 from fire_engine.scene.components import (
     COMPONENT_CATALOG,
@@ -86,9 +87,9 @@ class SceneObject:
     position: Vec3T = _ZERO
     rotation: QuatT = _IDENTITY_QUAT
     scale: Vec3T = _ONE
-    components: list[dict] = field(default_factory=list)
+    components: list[dict[str, Any]] = field(default_factory=list)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Wire/serialisation form: plain JSON-friendly primitives."""
         return {
             "id": self.id,
@@ -102,7 +103,7 @@ class SceneObject:
         }
 
     @staticmethod
-    def from_dict(d: dict) -> SceneObject:
+    def from_dict(d: dict[str, Any]) -> SceneObject:
         kind = str(d["kind"])
         # Migration seam (the ONLY one): pre-component saves lack "components",
         # so synthesise the kind's defaults. New saves carry them verbatim.
@@ -164,9 +165,9 @@ class SceneObjectStore:
                     frontier.append(child.id)
         return out
 
-    def tree(self) -> list[dict]:
+    def tree(self) -> list[dict[str, Any]]:
         """Flat, depth-first list of object dicts (roots first, siblings ordered)."""
-        out: list[dict] = []
+        out: list[dict[str, Any]] = []
 
         def walk(parent: int | None) -> None:
             for child in self._children(parent):
@@ -186,7 +187,7 @@ class SceneObjectStore:
         parent: int | None = None,
         name: str | None = None,
         position: Vec3T = _ZERO,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Create a new object; returns its dict form. Raises on bad kind/parent."""
         k = str(kind).lower()
         if k not in KINDS:
@@ -205,12 +206,12 @@ class SceneObjectStore:
         self._next_id += 1
         return obj.to_dict()
 
-    def rename(self, obj_id: int, name: str) -> dict:
+    def rename(self, obj_id: int, name: str) -> dict[str, Any]:
         obj = self.get(obj_id)
         obj.name = str(name)
         return obj.to_dict()
 
-    def reparent(self, obj_id: int, parent: int | None) -> dict:
+    def reparent(self, obj_id: int, parent: int | None) -> dict[str, Any]:
         """Move ``obj_id`` under ``parent`` (``None`` = root). Rejects cycles."""
         obj = self.get(obj_id)
         if parent is not None:
@@ -233,7 +234,7 @@ class SceneObjectStore:
         position: Vec3T | None = None,
         rotation: QuatT | None = None,
         scale: Vec3T | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         obj = self.get(obj_id)
         if position is not None:
             obj.position = tuple(float(v) for v in position)  # type: ignore[assignment]
@@ -246,7 +247,7 @@ class SceneObjectStore:
     # ------------------------------------------------------------------ #
     # Components
     # ------------------------------------------------------------------ #
-    def add_component(self, obj_id: int, type_name: str) -> dict:
+    def add_component(self, obj_id: int, type_name: str) -> dict[str, Any]:
         """Attach a built-in component of ``type_name`` to ``obj_id``.
 
         Components are independent of ``kind`` (Unity-style) — an ``empty`` can
@@ -264,7 +265,7 @@ class SceneObjectStore:
         obj.components.append(make_component(t))
         return obj.to_dict()
 
-    def remove_component(self, obj_id: int, index: int) -> dict:
+    def remove_component(self, obj_id: int, index: int) -> dict[str, Any]:
         """Remove the component at ``index`` (0-based). Raises on a bad index."""
         obj = self.get(obj_id)
         i = int(index)
@@ -278,9 +279,9 @@ class SceneObjectStore:
         obj_id: int,
         index: int,
         *,
-        params: dict | None = None,
+        params: dict[str, Any] | None = None,
         enabled: bool | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Edit the component at ``index``: merge validated ``params`` and/or
         toggle ``enabled``. Unknown/extraneous param keys are dropped and values
         are coerced to the catalog field types. Raises on a bad index."""
@@ -312,7 +313,7 @@ class SceneObjectStore:
     # ------------------------------------------------------------------ #
     # Saveable protocol
     # ------------------------------------------------------------------ #
-    def get_delta(self) -> dict:
+    def get_delta(self) -> dict[str, Any]:
         """Deviation from the empty baseline: the full object list (or ``{}``)."""
         if not self._objects:
             return {}
@@ -321,7 +322,7 @@ class SceneObjectStore:
             "next_id": self._next_id,
         }
 
-    def apply_delta(self, delta: dict) -> None:
+    def apply_delta(self, delta: dict[str, Any]) -> None:
         """Restore objects saved by :meth:`get_delta` onto the empty baseline."""
         self.clear()
         objs = delta.get("objects", [])

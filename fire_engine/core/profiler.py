@@ -61,6 +61,7 @@ Example
 
 from __future__ import annotations
 
+import contextlib
 import functools
 import json
 import os
@@ -68,10 +69,14 @@ import tempfile
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from fire_engine.core.log import get_logger
+
+if TYPE_CHECKING:
+    from fire_engine.core.config import Config
 
 __all__ = [
     "SCHEMA_VERSION",
@@ -94,7 +99,7 @@ SCHEMA_VERSION = 1
 # ---------------------------------------------------------------------------
 
 
-def frame_time_stats(frames_ms: np.ndarray, budget_ms: float) -> dict:
+def frame_time_stats(frames_ms: np.ndarray, budget_ms: float) -> dict[str, float]:
     """
     Compute frame-time summary statistics from an array of per-frame ms.
 
@@ -170,8 +175,8 @@ class NullScope:
     def __enter__(self) -> NullScope:
         return self
 
-    def __exit__(self, *exc) -> bool:
-        return False
+    def __exit__(self, *exc: object) -> None:
+        pass
 
 
 #: Module-level singleton no-op scope (never holds state).
@@ -196,10 +201,9 @@ class _ScopeCtx:
         self._prof._start_sid(self._sid)
         return self
 
-    def __exit__(self, *exc) -> bool:
+    def __exit__(self, *exc: object) -> None:
         self._prof._stop_sid(self._sid)
         self._prof._release_ctx(self)
-        return False
 
 
 # ---------------------------------------------------------------------------
@@ -359,7 +363,7 @@ class Profiler:
         self._recent_count = 0
 
         # Hitch records (most-recent-first list, capped at recent_hitches).
-        self._hitches: list[dict] = []
+        self._hitches: list[dict[str, Any]] = []
         self._hitch_count = 0
         self._last_threshold_ms = 0.0
 
@@ -370,7 +374,7 @@ class Profiler:
         self._start_wall = self._time()  # for hitches-per-second
         self._frame_cpu_ms_seen = False
 
-    def configure_from_config(self, config) -> Profiler:
+    def configure_from_config(self, config: Config) -> Profiler:
         """
         (Re)configure this profiler in place from a :class:`Config`.
 
@@ -426,7 +430,7 @@ class Profiler:
     # Scope API
     # ------------------------------------------------------------------
 
-    def scope(self, name: str):
+    def scope(self, name: str) -> NullScope | _ScopeCtx:
         """
         Return a context manager timing the named (compound) scope.
 
@@ -450,7 +454,9 @@ class Profiler:
         ctx._sid = sid
         return ctx
 
-    def profiled(self, name: str):
+    def profiled(
+        self, name: str
+    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         """
         Decorator timing a whole function/method under the named scope.
 
@@ -460,9 +466,9 @@ class Profiler:
             def update(self, dt): ...
         """
 
-        def decorator(fn):
+        def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
             @functools.wraps(fn)
-            def wrapper(*args, **kwargs):
+            def wrapper(*args: Any, **kwargs: Any) -> Any:
                 if not self.enabled:
                     return fn(*args, **kwargs)
                 with self.scope(name):
@@ -751,7 +757,7 @@ class Profiler:
     # Stats / snapshot
     # ------------------------------------------------------------------
 
-    def _valid_slice(self):
+    def _valid_slice(self) -> tuple[slice, int]:
         """Return the populated rows of the ring (order-independent)."""
         valid = min(self._frames_written, self.history_frames)
         if valid == 0:
@@ -783,7 +789,7 @@ class Profiler:
             )
         return chrono[-n:].copy()
 
-    def snapshot(self) -> dict:
+    def snapshot(self) -> dict[str, Any]:
         """
         Build a plain-dict performance summary (the AI-agent / overlay contract).
 
@@ -801,7 +807,7 @@ class Profiler:
 
         # Per-scope means/maxes over the valid slice (vectorized).
         ns = len(self._scope_names)
-        scopes: list[dict] = []
+        scopes: list[dict[str, Any]] = []
         if valid > 0 and ns > 0:
             sm = self._scope_ms[sl, :ns]
             sc = self._scope_calls[sl, :ns]
@@ -876,10 +882,8 @@ class Profiler:
                 json.dump(snap, fh, indent=2, sort_keys=True)
             os.replace(tmp, path)
         except BaseException:
-            try:
+            with contextlib.suppress(OSError):
                 os.unlink(tmp)
-            except OSError:
-                pass
             raise
 
     # ------------------------------------------------------------------
@@ -900,7 +904,7 @@ class Profiler:
         return self._hitch_count
 
     @property
-    def recent_hitch(self) -> dict | None:
+    def recent_hitch(self) -> dict[str, Any] | None:
         """The most recent hitch record (or None)."""
         return self._hitches[0] if self._hitches else None
 
@@ -923,7 +927,7 @@ def get_profiler() -> Profiler:
     return _PROFILER
 
 
-def init_profiler(config) -> Profiler:
+def init_profiler(config: Config) -> Profiler:
     """
     Configure the singleton profiler from a :class:`Config` and return it.
 

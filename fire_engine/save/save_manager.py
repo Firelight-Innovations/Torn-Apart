@@ -109,7 +109,7 @@ import zlib
 from pathlib import Path
 from typing import Any
 
-import msgpack
+import msgpack  # type: ignore[import-untyped]  # msgpack has no py.typed or stubs
 import numpy as np
 
 from fire_engine.core.clock import Clock
@@ -229,14 +229,14 @@ def _decode_value(obj: Any) -> Any:
             and isinstance(obj[0], (str, bytes))
             and (obj[0] == _NDARRAY_TAG or obj[0] == _NDARRAY_TAG.encode())
         ):
-            tag, dtype_str, shape, raw = obj
+            _tag, dtype_str, shape, raw = obj
             if isinstance(dtype_str, bytes):
                 dtype_str = dtype_str.decode()
             return np.frombuffer(raw, dtype=np.dtype(dtype_str)).reshape(shape)
         return [_decode_value(x) for x in obj]
     if isinstance(obj, dict):
         # Decode bytes keys (msgpack may return bytes for string keys)
-        decoded_dict: dict = {}
+        decoded_dict: dict[str, Any] = {}
         for k, v in obj.items():
             if isinstance(k, bytes):
                 k = k.decode()
@@ -245,7 +245,7 @@ def _decode_value(obj: Any) -> Any:
 
         delta_type = obj.get(_DELTA_KV_TAG)
         if delta_type == "kv_pairs":
-            result: dict = {}
+            result: dict[Any, Any] = {}
             for pair in obj["pairs"]:
                 key = _decode_value(pair[0])
                 val = _decode_value(pair[1])
@@ -258,7 +258,7 @@ def _decode_value(obj: Any) -> Any:
     return obj
 
 
-def _encode_delta(delta: dict) -> bytes:
+def _encode_delta(delta: dict[str, Any]) -> bytes:
     """
     Encode a system delta dict to msgpack bytes.
 
@@ -273,10 +273,10 @@ def _encode_delta(delta: dict) -> bytes:
         Raw msgpack-encoded bytes (not compressed).
     """
     encoded = _encode_value(delta)
-    return msgpack.packb(encoded, use_bin_type=True)
+    return bytes(msgpack.packb(encoded, use_bin_type=True))
 
 
-def _decode_delta(data: bytes) -> dict:
+def _decode_delta(data: bytes) -> dict[str, Any]:
     """
     Decode a system delta from raw msgpack bytes.
 
@@ -291,7 +291,8 @@ def _decode_delta(data: bytes) -> dict:
         The original delta as passed to :func:`_encode_delta`.
     """
     raw = msgpack.unpackb(data, raw=False)
-    return _decode_value(raw)
+    result: dict[str, Any] = _decode_value(raw)
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -397,7 +398,7 @@ class SaveManager:
         self._saveables.append(saveable)
         _log.debug("Registered saveable %r", saveable.save_key)
 
-    def save(self, path: str | os.PathLike) -> None:
+    def save(self, path: str | os.PathLike[str]) -> None:
         """
         Save the world to disk as a header + compressed per-system delta blobs.
 
@@ -471,7 +472,7 @@ class SaveManager:
 
         _log.info("Saved world to %s (%d bytes)", path, len(data))
 
-    def load(self, path: str | os.PathLike) -> None:
+    def load(self, path: str | os.PathLike[str]) -> None:
         """
         Load a save file, validate the header, and apply deltas.
 
@@ -512,7 +513,7 @@ class SaveManager:
 
         header_raw = envelope.get("header", {})
         if isinstance(header_raw, dict):
-            header: dict = {
+            header: dict[str, Any] = {
                 (k.decode() if isinstance(k, bytes) else k): v for k, v in header_raw.items()
             }
         else:
@@ -557,7 +558,7 @@ class SaveManager:
         # 1. Restore clock from header (authoritative per §4a.4).
         clock_state_raw = header.get("game_clock", {})
         if isinstance(clock_state_raw, dict):
-            clock_state: dict = {
+            clock_state: dict[str, Any] = {
                 (k.decode() if isinstance(k, bytes) else k): v for k, v in clock_state_raw.items()
             }
         else:

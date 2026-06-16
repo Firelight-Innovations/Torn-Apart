@@ -66,7 +66,7 @@ def set_world_seed(seed: int) -> None:
     _world_seed = int(seed)
 
 
-def _keys_digest(keys: tuple) -> int:
+def _keys_digest(keys: tuple[object, ...]) -> int:
     """
     Compute a stable cross-process int digest for a tuple of domain keys.
 
@@ -90,7 +90,7 @@ def _keys_digest(keys: tuple) -> int:
     return int.from_bytes(digest, byteorder="big", signed=False)
 
 
-def for_domain(*keys) -> np.random.Generator:
+def for_domain(*keys: str | int | tuple[object, ...]) -> np.random.Generator:
     """
     Return a deterministic ``numpy.random.Generator`` for the given domain keys.
 

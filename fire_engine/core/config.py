@@ -50,6 +50,7 @@ from __future__ import annotations
 import tomllib
 import warnings
 from dataclasses import dataclass
+from typing import Any
 
 # ----------------------------------------------------------------------------
 # Graphics-quality presets.  Each maps the heavy/quality-dependent ``gfx_*``
@@ -58,7 +59,7 @@ from dataclasses import dataclass
 # default and stay consistent across presets.  ``"high"`` mirrors the Config
 # dataclass defaults exactly.  Tune for the target machine via config.toml.
 # ----------------------------------------------------------------------------
-GRAPHICS_PRESETS: dict[str, dict] = {
+GRAPHICS_PRESETS: dict[str, dict[str, Any]] = {
     "off": {
         "gfx_post_process": False,
         "gfx_hdr_format": "rgba8",
@@ -149,7 +150,7 @@ GRAPHICS_PRESETS: dict[str, dict] = {
 }
 
 
-def resolve_graphics_preset(graphics_table: dict | None = None) -> dict:
+def resolve_graphics_preset(graphics_table: dict[str, Any] | None = None) -> dict[str, Any]:
     """
     Expand a ``[graphics]`` TOML table into flat ``gfx_*`` ``Config`` kwargs.
 
@@ -187,11 +188,10 @@ def resolve_graphics_preset(graphics_table: dict | None = None) -> dict:
             stacklevel=2,
         )
         requested = "high"
-    resolved: dict = dict(GRAPHICS_PRESETS[requested])
+    resolved: dict[str, Any] = dict(GRAPHICS_PRESETS[requested])
     resolved["gfx_preset"] = requested
     # Explicit per-field overrides win over the preset.
-    for key, value in table.items():
-        resolved[key] = value
+    resolved.update(table)
     return resolved
 
 
@@ -770,16 +770,16 @@ class Config:
     weather_wetness_tau_s: float = 3600.0  # wetness decay time constant (game s)
     weather_wetness_step_s: float = 600.0  # quadrature step into the past (game s)
     weather_wetness_samples: int = 12  # number of past rain samples (window = step·samples)
-    # Emergent humidity + fog (M5): fog condenses from conditions, not a state.
-    # humidity = base(day) + rain_gain·rain_recent + wetness_gain·wetness; it
-    # condenses to fog where it exceeds the temperature-dependent saturation
-    # humidity in calm air. All closed-form pure fn of (seed, t, pos). See
-    # weather/humidity.py. Units: relative humidity 0–1, °C, m/s, fog 1/m.
+    # Emergent humidity + fog (M5): fog condenses from conditions, not a state;
+    # all closed-form pure fn of (seed, t, pos). See weather/humidity.py.
+    # Units: relative humidity 0–1, °C, m/s, fog 1/m.
     weather_humidity_base_min: float = 0.35  # seeded per-day calm-air humidity baseline band
     weather_humidity_base_max: float = 0.65
     weather_humidity_rain_gain: float = 1.00  # humidity added per unit recent rain (0–1)
     weather_humidity_wetness_gain: float = 0.30  # humidity added per unit ground wetness (0–1)
-    weather_humidity_recent_tau_s: float = 18000.0  # recent-rain decay time constant (game s; 5 h — air holds moisture for hours so evening rain feeds pre-dawn fog)
+    # recent-rain decay time constant (game s; 5 h — air holds moisture for hours
+    # so evening rain feeds pre-dawn fog)
+    weather_humidity_recent_tau_s: float = 18000.0
     weather_humidity_recent_step_s: float = 1800.0  # recent-rain quadrature step into past (game s)
     weather_humidity_recent_samples: int = 12  # recent-rain samples (window = step·samples = 6 h)
     weather_fog_emergent_max: float = (
@@ -834,7 +834,9 @@ class Config:
     weather_summon_fog_radius_m: float = 600.0  # summoned fog-bank footprint radius (m)
     weather_summon_fog_duration_s: float = 7200.0  # summoned fog-bank lifetime (game s; 2 h)
     weather_summon_fog_intensity: float = 0.9  # summoned fog-bank peak intensity (0–1)
-    weather_gustfront_range_m: float = 600.0  # register a gust-front modifier when a cell's leading edge is within this range of the player (m)
+    # register a gust-front modifier when a cell's leading edge is within this
+    # range of the player (m)
+    weather_gustfront_range_m: float = 600.0
     weather_gustfront_strength_ms: float = (
         7.0  # peak added wind speed along the summoned gust front (m/s)
     )
@@ -882,7 +884,9 @@ class Config:
     gfx_cloud_max_dist_m: float = 6000.0
     gfx_weather_map: bool = True
     gfx_cloud_virga: bool = True
-    gfx_cloud_genera: bool = True  # M9: layered WMO genera bands (high cirrus / mid alto / low cumulus+cb). Off ⇒ single-slab clouds (pre-M9 look). Requires gfx_weather_map.
+    # M9: layered WMO genera bands (high cirrus / mid alto / low cumulus+cb).
+    # Off => single-slab clouds (pre-M9 look). Requires gfx_weather_map.
+    gfx_cloud_genera: bool = True
     gfx_god_rays: bool = True
     gfx_god_ray_samples: int = 32
     gfx_foliage_shadow_refine: bool = True
@@ -1016,7 +1020,7 @@ def load_config(path: str = "config.toml") -> Config:
         "graphics",
         "profiler",
     )
-    flat: dict = {k: v for k, v in raw.items() if k not in _TABLES}
+    flat: dict[str, Any] = {k: v for k, v in raw.items() if k not in _TABLES}
     for table in _TABLES:
         if table == "graphics":
             continue
@@ -1024,7 +1028,7 @@ def load_config(path: str = "config.toml") -> Config:
     flat.update(resolve_graphics_preset(raw.get("graphics", {})))
 
     # Build Config by extracting only known fields (ignore unknown keys)
-    known_fields = {f.name for f in Config.__dataclass_fields__.values()}  # type: ignore[attr-defined]
+    known_fields = {f.name for f in Config.__dataclass_fields__.values()}
     kwargs = {k: flat[k] for k in flat if k in known_fields}
 
     return Config(**kwargs)

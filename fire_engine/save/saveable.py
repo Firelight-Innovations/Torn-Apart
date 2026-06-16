@@ -37,7 +37,7 @@ Example
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 
 @runtime_checkable
@@ -73,7 +73,7 @@ class Saveable(Protocol):
 
     save_key: str
 
-    def get_delta(self) -> dict:
+    def get_delta(self) -> dict[str, Any]:
         """
         Return this system's deviations from its procedural baseline.
 
@@ -90,7 +90,7 @@ class Saveable(Protocol):
         """
         ...  # pragma: no cover
 
-    def apply_delta(self, delta: dict) -> None:
+    def apply_delta(self, delta: dict[str, Any]) -> None:
         """
         Overlay saved delta onto the already-regenerated procedural baseline.
 

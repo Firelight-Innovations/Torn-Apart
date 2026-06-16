@@ -115,7 +115,7 @@ def is_known(type_name: str) -> bool:
     return type_name in COMPONENT_CATALOG
 
 
-def default_params(type_name: str) -> dict:
+def default_params(type_name: str) -> dict[str, Any]:
     """Fresh default ``params`` dict for ``type_name`` (deep-copied defaults).
 
     Raises:
@@ -125,7 +125,7 @@ def default_params(type_name: str) -> dict:
     return {f.name: copy.deepcopy(f.default) for f in spec.fields}
 
 
-def make_component(type_name: str, *, enabled: bool = True) -> dict:
+def make_component(type_name: str, *, enabled: bool = True) -> dict[str, Any]:
     """Build a component dict of ``type_name`` with its default params.
 
     Raises:
@@ -134,7 +134,7 @@ def make_component(type_name: str, *, enabled: bool = True) -> dict:
     return {"type": type_name, "enabled": bool(enabled), "params": default_params(type_name)}
 
 
-def default_components_for_kind(kind: str) -> list[dict]:
+def default_components_for_kind(kind: str) -> list[dict[str, Any]]:
     """The components a freshly created (or migrated) object of ``kind`` carries.
 
     ``kind`` is only the creation archetype; the returned list becomes editable
@@ -152,7 +152,7 @@ def default_components_for_kind(kind: str) -> list[dict]:
     return []  # "empty" (and any unknown kind): a bare transform
 
 
-def coerce_params(type_name: str, params: dict) -> dict:
+def coerce_params(type_name: str, params: dict[str, Any]) -> dict[str, Any]:
     """Validate+coerce a partial ``params`` dict against the catalog.
 
     Returns only recognised keys, each coerced to its field's type (floats
@@ -163,7 +163,7 @@ def coerce_params(type_name: str, params: dict) -> dict:
     if spec is None:
         return {}
     by_name = {f.name: f for f in spec.fields}
-    out: dict = {}
+    out: dict[str, Any] = {}
     for key, value in params.items():
         fspec = by_name.get(key)
         if fspec is None:
@@ -172,7 +172,7 @@ def coerce_params(type_name: str, params: dict) -> dict:
     return out
 
 
-def catalog_payload() -> dict:
+def catalog_payload() -> dict[str, Any]:
     """JSON-friendly catalog for the ``scene.catalog`` RPC / the inspector."""
     return {
         "types": [
@@ -190,7 +190,7 @@ def catalog_payload() -> dict:
 # ---------------------------------------------------------------------------- #
 # Internals
 # ---------------------------------------------------------------------------- #
-def _mesh(primitive: str) -> dict:
+def _mesh(primitive: str) -> dict[str, Any]:
     c = make_component("Mesh")
     c["params"]["primitive"] = primitive
     return c
@@ -217,8 +217,8 @@ def _coerce_value(fspec: FieldSpec, value: Any) -> Any:
     return value
 
 
-def _field_payload(f: FieldSpec) -> dict:
-    out: dict = {
+def _field_payload(f: FieldSpec) -> dict[str, Any]:
+    out: dict[str, Any] = {
         "name": f.name,
         "ui_type": f.ui_type,
         "default": copy.deepcopy(f.default),

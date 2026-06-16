@@ -198,7 +198,7 @@ class Clock:
     # Saveable protocol support
     # ------------------------------------------------------------------
 
-    def get_state(self) -> dict:
+    def get_state(self) -> dict[str, float | int]:
         """
         Return the clock state as a plain dict of primitives for serialisation.
 
@@ -219,7 +219,7 @@ class Clock:
             "accumulator": self._accumulator,
         }
 
-    def set_state(self, state: dict) -> None:
+    def set_state(self, state: dict[str, float | int]) -> None:
         """
         Restore clock state from a plain dict (inverse of ``get_state``).
 

@@ -46,6 +46,7 @@ Example
 from __future__ import annotations
 
 import collections
+import contextlib
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -98,7 +99,7 @@ class TerrainEditedEvent:
         Typed loosely as ``object`` to avoid an import cycle with terrain/.
     """
 
-    chunk_coords: tuple
+    chunk_coords: tuple[int, ...]
     brush: object
 
 
@@ -318,10 +319,8 @@ class EventBus:
         """
         handlers = self._handlers.get(event_type)
         if handlers is not None:
-            try:
+            with contextlib.suppress(ValueError):
                 handlers.remove(handler)
-            except ValueError:
-                pass
 
     # ------------------------------------------------------------------
     # Publishing

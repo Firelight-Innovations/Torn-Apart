@@ -83,11 +83,11 @@ class SceneRuntime:
     # ------------------------------------------------------------------ #
     # Saveable protocol
     # ------------------------------------------------------------------ #
-    def get_delta(self) -> dict:
+    def get_delta(self) -> dict[str, Any]:
         """The authored scene as saved by the editor (empty dict when empty)."""
         return self.store.get_delta()
 
-    def apply_delta(self, delta: dict) -> None:
+    def apply_delta(self, delta: dict[str, Any]) -> None:
         """Restore the authored scene and (re)build its GameObjects."""
         self.store.apply_delta(delta)
         self.rebuild()

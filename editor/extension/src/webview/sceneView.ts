@@ -24,6 +24,18 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setClearColor(0x101418, 1);
 document.body.appendChild(renderer.domElement);
 
+// VS Code webviews only deliver keyboard events to the iframe once its document
+// holds focus, and a bare <canvas> isn't focusable — so without this the WASD
+// fly keys and the W/E/R/F/G/B/Esc hotkeys (all `window` keydown handlers below)
+// silently never fire. Make the canvas focusable and claim focus on load and on
+// every pointer interaction so keystrokes reach the viewport.
+renderer.domElement.tabIndex = 0;
+renderer.domElement.style.outline = "none";
+const grabViewportFocus = (): void => renderer.domElement.focus({ preventScroll: true });
+renderer.domElement.addEventListener("pointerdown", grabViewportFocus);
+window.addEventListener("focus", grabViewportFocus);
+grabViewportFocus();
+
 const scene = new THREE.Scene();
 scene.add(new THREE.AmbientLight(0xffffff, 1.0)); // baked lighting is in vertex colors
 

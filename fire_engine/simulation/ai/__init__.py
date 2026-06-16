@@ -7,6 +7,10 @@ be a single array-based numpy pass over all agents, never 10k Python objects.
 Imports allowed (ARCHITECTURE.md §4a.2): world, procedural, core.
 """
 
+from __future__ import annotations
+
+import numpy as np
+
 __all__ = ["NPCArchetype"]
 
 
@@ -16,7 +20,7 @@ class NPCArchetype:
     Implement in a later session per ARCHITECTURE.md §5.8.
     """
 
-    def generate(self, rng, **params):
+    def generate(self, rng: np.random.Generator, **params: object) -> None:
         raise NotImplementedError(
             "NPCArchetype.generate is future scope — see ARCHITECTURE.md §5.8 "
             "(AI API). Not part of Session 1."

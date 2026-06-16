@@ -21,6 +21,7 @@ Imports allowed: procedural, core (Hard Rule 1 — no panda3d).
 from __future__ import annotations
 
 import math
+from typing import Any
 
 import numpy as np
 
@@ -60,7 +61,7 @@ class BuildingDef(ProceduralDef):
         house = get("building_demo_house", ground_z=8.0)   # a Building
     """
 
-    def generate(self, rng: np.random.Generator, **params) -> Building:
+    def generate(self, rng: np.random.Generator, **params: Any) -> Building:
         raise NotImplementedError(
             "BuildingDef subclasses must implement generate() -> Building. "
             "See ARCHITECTURE.md §5.7 and docs/systems/buildings.md."
@@ -127,7 +128,7 @@ class DemoHouseDef(BuildingDef):
     _EXT_T = 0.4  # exterior wall thickness
     _INT_T = 0.15  # interior partition thickness
 
-    def generate(self, rng: np.random.Generator, **params) -> Building:
+    def generate(self, rng: np.random.Generator, **params: Any) -> Building:
         ground_z = float(params.get("ground_z", 8.0))
         pos = params.get("position", (-26.0, 6.0, ground_z))
         yaw = math.radians(float(params.get("yaw_deg", 18.0)))
@@ -160,7 +161,7 @@ class DemoHouseDef(BuildingDef):
             bulge=-0.4,  # E bay (curved)
             thickness_m=ext,
         )
-        eup = s0.add_wall((W, ys), (W, D), thickness_m=ext)  # E upper (window)
+        s0.add_wall((W, ys), (W, D), thickness_m=ext)  # E upper (window)
         s0.add_wall((W, D), (xs, D), thickness_m=ext)  # N-E
         nw = s0.add_wall((xs, D), (0, D), thickness_m=ext)  # N-W (window)
         west = s0.add_wall((0, D), (0, ch), thickness_m=ext)  # W (window)

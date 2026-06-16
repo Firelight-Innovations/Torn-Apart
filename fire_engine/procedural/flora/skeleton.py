@@ -228,7 +228,16 @@ class SkeletonBuilder:
     def _all(self, parts: list[np.ndarray]) -> np.ndarray:
         return np.concatenate(parts, axis=0) if parts else np.empty((0,))
 
-    def _append(self, parent, start, end, r0, r1, depth, chain_len) -> np.ndarray:
+    def _append(
+        self,
+        parent: np.ndarray,
+        start: np.ndarray,
+        end: np.ndarray,
+        r0: np.ndarray,
+        r1: np.ndarray,
+        depth: np.ndarray,
+        chain_len: np.ndarray,
+    ) -> np.ndarray:
         n = int(start.shape[0])
         ids = np.arange(self._count, self._count + n, dtype=np.int32)
         self._parent.append(np.asarray(parent, dtype=np.int32))

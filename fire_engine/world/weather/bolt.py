@@ -116,7 +116,8 @@ def _lattice_hash_vec(ix: np.ndarray, iy: np.ndarray, iz: np.ndarray, salt: int)
     h ^= h >> np.uint64(27)
     h *= np.uint64(0x94D049BB133111EB)
     h ^= h >> np.uint64(31)
-    return h.astype(np.float64) / float(1 << 64)
+    result: np.ndarray = h.astype(np.float64) / float(1 << 64)
+    return result
 
 
 def _value_noise_3d_vec(pts: np.ndarray, salt: int) -> np.ndarray:
@@ -152,7 +153,8 @@ def _value_noise_3d_vec(pts: np.ndarray, salt: int) -> np.ndarray:
     x11 = c011 + (c111 - c011) * wx
     y0 = x00 + (x10 - x00) * wy
     y1 = x01 + (x11 - x01) * wy
-    return y0 + (y1 - y0) * wz
+    result: np.ndarray = y0 + (y1 - y0) * wz
+    return result
 
 
 def _fan_directions(

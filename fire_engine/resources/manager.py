@@ -47,6 +47,7 @@ before cache lookup, so ``assets\\models\\foo.egg`` and
 
 from __future__ import annotations
 
+import contextlib
 import os
 from typing import Any, Protocol, runtime_checkable
 
@@ -290,17 +291,15 @@ class ResourceManager:
             # Best-effort cleanup hook (e.g. NodePath.remove_node)
             cleanup = getattr(handle.resource, "cleanup", None)
             if callable(cleanup):
-                try:
+                with contextlib.suppress(Exception):
                     cleanup()
-                except Exception:
-                    pass
         return len(to_remove)
 
     # ------------------------------------------------------------------
     # Diagnostics
     # ------------------------------------------------------------------
 
-    def stats(self) -> dict:
+    def stats(self) -> dict[str, int]:
         """
         Return a summary of the current cache state.
 

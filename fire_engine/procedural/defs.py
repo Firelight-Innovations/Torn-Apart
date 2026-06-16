@@ -38,7 +38,7 @@ Quick example — define and register a custom texture:
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -83,7 +83,7 @@ class ProceduralDef(ABC):
     name: str
 
     @abstractmethod
-    def generate(self, rng: np.random.Generator, **params):
+    def generate(self, rng: np.random.Generator, **params: Any) -> Any:
         """
         Generate content from *rng* and optional keyword *params*.
 

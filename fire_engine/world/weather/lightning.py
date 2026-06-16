@@ -47,6 +47,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+import numpy as np
+
 from fire_engine.core.config import Config
 from fire_engine.core.rng import for_domain
 from fire_engine.world.weather.cells import StormCell
@@ -201,7 +203,7 @@ def scheduled_strikes(
     return out
 
 
-def _strike_offset(cell: StormCell, t: float, rng) -> tuple[float, float]:
+def _strike_offset(cell: StormCell, t: float, rng: np.random.Generator) -> tuple[float, float]:
     """
     Strike XY offset within the cell footprint (gaussian, clamped to radius).
 

@@ -41,8 +41,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from fire_engine.buildings.model import Building, Wall, _convex_hull
+from fire_engine.buildings.model import Building, Storey, Wall, _convex_hull
 from fire_engine.buildings.triangulate import triangulate_polygon
+from fire_engine.core.config import Config
 from fire_engine.world.terrain.meshing import MeshArrays
 
 __all__ = ["mesh_building", "mesh_slab", "mesh_wall"]
@@ -126,7 +127,8 @@ class _Soup:
 def _normalize(v: np.ndarray) -> np.ndarray:
     ln = np.linalg.norm(v, axis=-1, keepdims=True)
     ln[ln < _EPS] = 1.0
-    return v / ln
+    result: np.ndarray = v / ln
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -304,13 +306,11 @@ def _panel_grid(
     outward: bool,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Build the solid panel quads of one wall face (front or back)."""
-    m = face.shape[0]
-    nz = zlev.shape[0]
     keep = ~hole  # (m-1, nz-1)
     ki, ji = np.nonzero(keep)
     q = ki.shape[0]
     corners = np.empty((q, 4, 3), dtype=np.float64)
-    # corner (k,j),(k+1,j),(k+1,j+1),(k,j+1)
+    # Corners in order: bottom-left, bottom-right, top-right, top-left.
     corners[:, 0, :2] = face[ki]
     corners[:, 0, 2] = zlev[ji]
     corners[:, 1, :2] = face[ki + 1]
@@ -376,7 +376,7 @@ def _cap_strip(
 # ---------------------------------------------------------------------------
 
 
-def _storey_footprint(building: Building, storey) -> np.ndarray:
+def _storey_footprint(building: Building, storey: Storey) -> np.ndarray:
     """Convex-hull footprint of a storey's walls for its floor slab."""
     if storey.walls:
         xy = np.concatenate([w.tessellate(8) for w in storey.walls], axis=0)
@@ -386,7 +386,7 @@ def _storey_footprint(building: Building, storey) -> np.ndarray:
     return np.empty((0, 2), dtype=np.float64)
 
 
-def mesh_building(building: Building, cfg) -> MeshArrays:
+def mesh_building(building: Building, cfg: Config) -> MeshArrays:
     """
     Mesh an entire building into one building-local triangle soup.
 

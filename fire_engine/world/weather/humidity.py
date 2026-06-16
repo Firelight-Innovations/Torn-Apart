@@ -243,4 +243,5 @@ def emergent_fog(
     h_sat = saturation_humidity(temperature_c, config)
     condense = condense_fraction(humidity, h_sat, config)
     gate = wind_gate(wind_speed, config)
-    return f_max * condense * gate
+    result: np.ndarray = f_max * condense * gate
+    return result

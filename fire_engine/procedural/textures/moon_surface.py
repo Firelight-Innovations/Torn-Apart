@@ -43,6 +43,8 @@ Usage
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 
 from fire_engine.procedural.defs import register_def
@@ -75,7 +77,7 @@ class MoonSurfaceDef(ProceduralTextureDef):
 
     name = "moon_surface"
 
-    def generate(self, rng: np.random.Generator, **params) -> np.ndarray:
+    def generate(self, rng: np.random.Generator, **params: Any) -> np.ndarray:
         """
         Generate the lunar disc texture.
 

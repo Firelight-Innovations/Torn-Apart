@@ -125,7 +125,7 @@ class GustFront:
 
     def __init__(
         self,
-        seed_key: tuple,
+        seed_key: tuple[object, ...],
         direction: tuple[float, float],
         speed: float,
         strength: float,

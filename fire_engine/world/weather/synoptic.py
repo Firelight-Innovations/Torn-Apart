@@ -147,7 +147,8 @@ class Synoptic:
         # (M, 1, n) phase argument broadcast against (2, n) coefficients.
         arg = self._omega[None, None, :] * t[:, None, None] + self._phase[None, :, :]
         w = self._c[None, :] + (self._amp[None, :, :] * np.sin(arg)).sum(axis=2)
-        return w[0] if scalar else w
+        result: np.ndarray = w[0] if scalar else w
+        return result
 
     def displacement(self, t_abs: float | np.ndarray) -> np.ndarray:
         """
@@ -166,7 +167,8 @@ class Synoptic:
         arg = self._omega[None, None, :] * t[:, None, None] + self._phase[None, :, :]
         ripple = -((self._amp / self._omega)[None, :, :] * np.cos(arg)).sum(axis=2)
         d = self._c[None, :] * t[:, None] + ripple + self._d0[None, :]
-        return d[0] if scalar else d
+        result: np.ndarray = d[0] if scalar else d
+        return result
 
     def wind(self, t_abs: float) -> tuple[tuple[float, float], float]:
         """

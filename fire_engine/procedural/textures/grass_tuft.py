@@ -39,6 +39,8 @@ Usage
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 
 from fire_engine.procedural.defs import register_def
@@ -95,7 +97,7 @@ class GrassTuftDef(ProceduralTextureDef):
     DEFAULT_WIDTH = 32
     DEFAULT_HEIGHT = 32
 
-    def generate(self, rng: np.random.Generator, **params) -> np.ndarray:
+    def generate(self, rng: np.random.Generator, **params: Any) -> np.ndarray:
         """
         Generate the tuft silhouette.
 

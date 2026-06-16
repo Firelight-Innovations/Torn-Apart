@@ -77,7 +77,7 @@ class ZoneVolume:
         hi = tuple(float(v) for v in self.max_corner)
         if len(lo) != 3 or len(hi) != 3:
             raise ValueError("ZoneVolume corners must be 3-tuples (x, y, z)")
-        if not all(a < b for a, b in zip(lo, hi)):
+        if not all(a < b for a, b in zip(lo, hi, strict=True)):
             raise ValueError(f"ZoneVolume min_corner {lo} must be < max_corner {hi} on every axis")
         # Normalise to float tuples (frozen dataclass → object.__setattr__).
         object.__setattr__(self, "min_corner", lo)
@@ -160,11 +160,13 @@ class ZoneVolume:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ZoneVolume:
         """Inverse of :meth:`to_dict`."""
+        lo = [float(v) for v in data["min_corner"]]
+        hi = [float(v) for v in data["max_corner"]]
         return cls(
             id=int(data["id"]),
             tag=str(data["tag"]),
-            min_corner=tuple(float(v) for v in data["min_corner"]),
-            max_corner=tuple(float(v) for v in data["max_corner"]),
+            min_corner=(lo[0], lo[1], lo[2]),
+            max_corner=(hi[0], hi[1], hi[2]),
             biome=data.get("biome"),
             params=dict(data.get("params") or {}),
         )

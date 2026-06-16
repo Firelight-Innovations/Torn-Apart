@@ -39,6 +39,8 @@ where ``wx, wy`` are sub-cell fractional offsets computed via ``np.meshgrid``.
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 
 from fire_engine.procedural.defs import ProceduralDef
@@ -132,8 +134,8 @@ def value_noise(
     freq = float(base_freq)
 
     for _ in range(octaves):
-        freq_h = max(1, int(round(freq)))
-        freq_w = max(1, int(round(freq)))
+        freq_h = max(1, round(freq))
+        freq_w = max(1, round(freq))
 
         # Draw random values at coarse-grid corners.
         # Shape: (freq_h + 1, freq_w + 1) — +1 so every cell has all 4 corners.
@@ -154,7 +156,6 @@ def value_noise(
         wx = (c_f - c0).astype(np.float64)  # horizontal fraction (W,)
 
         # Bilinear interpolation via broadcasting — shape (H, W)
-        # TL = grid[r0, c0], TR = grid[r0, c1], BL = grid[r1, c0], BR = grid[r1, c1]
         # Each corner array is (H, W) via index broadcasting.
         TL = grid[r0[:, None], c0[None, :]]  # (H, W)
         TR = grid[r0[:, None], c1[None, :]]  # (H, W)
@@ -263,8 +264,8 @@ def pixel_noise(
     freq = float(base_freq)
 
     for _ in range(octaves):
-        freq_h = max(1, int(round(freq)))
-        freq_w = max(1, int(round(freq)))
+        freq_h = max(1, round(freq))
+        freq_w = max(1, round(freq))
 
         # Draw random values at coarse-grid cells — shape (freq_h, freq_w).
         grid = rng.random((freq_h, freq_w))  # float64 in [0, 1)
@@ -359,7 +360,7 @@ class ProceduralTextureDef(ProceduralDef):
         assert (arr[..., 3] == 255).all()   # fully opaque
     """
 
-    def generate(self, rng: np.random.Generator, **params) -> np.ndarray:
+    def generate(self, rng: np.random.Generator, **params: Any) -> np.ndarray:
         """
         Generate and return an RGBA texture array.
 

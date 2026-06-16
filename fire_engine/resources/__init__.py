@@ -47,21 +47,16 @@ from fire_engine.resources.manager import (
 )
 
 __all__ = [
-    # Error
-    "UnknownResourceFormatError",
-    # Loader registry
-    "LoaderCallable",
-    "register_loader",
-    "dispatch",
-    "registered_suffixes",
-    # Handle + manager class
     "Handle",
+    "LoaderCallable",
     "ResourceManager",
-    # Module-level default instance
-    "default_manager",
-    # Convenience functions (operate on default_manager)
-    "load",
+    "UnknownResourceFormatError",
     "acquire",
+    "default_manager",
+    "dispatch",
+    "load",
+    "register_loader",
+    "registered_suffixes",
     "release",
     "unload_unreferenced",
 ]

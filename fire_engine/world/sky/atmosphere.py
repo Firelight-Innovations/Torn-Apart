@@ -150,7 +150,7 @@ def _unit_rows(dirs: np.ndarray) -> np.ndarray:
     """Coerce *dirs* to a float64 ``(N, 3)`` array of unit row vectors."""
     d = np.atleast_2d(np.asarray(dirs, dtype=np.float64))
     norm = np.linalg.norm(d, axis=1, keepdims=True)
-    return d / np.maximum(norm, 1e-12)
+    return np.asarray(d / np.maximum(norm, 1e-12))
 
 
 def _exit_distance(radius: np.ndarray, cos_b: np.ndarray) -> np.ndarray:
@@ -167,7 +167,7 @@ def _exit_distance(radius: np.ndarray, cos_b: np.ndarray) -> np.ndarray:
     (N,) float — the positive root of the ray/sphere quadratic.
     """
     disc = cos_b * cos_b - (radius * radius - _R_TOP * _R_TOP)
-    return -cos_b + np.sqrt(np.maximum(disc, 0.0))
+    return np.asarray(-cos_b + np.sqrt(np.maximum(disc, 0.0)))
 
 
 # ---------------------------------------------------------------------------
@@ -226,7 +226,7 @@ def transmittance(view_dirs: np.ndarray, samples: int = 64) -> np.ndarray:
     tau = (
         BETA_RAYLEIGH[None, :] * od_r[:, None] + (BETA_MIE * _MIE_EXTINCTION_FACTOR) * od_m[:, None]
     )
-    out = np.exp(-tau)
+    out: np.ndarray = np.exp(-tau)
     out[hit] = 0.0
     return out
 
@@ -271,8 +271,8 @@ def sun_radiance(sun_z: float | np.ndarray, samples: int = 64) -> np.ndarray:
     )
     t = transmittance(dirs, samples=samples)  # (N, 3)
     fade = _smoothstep(z1, SUN_FADE_LO_Z, 0.0)  # (N,)
-    out = SUN_GROUND_SCALE * t * fade[:, None]
-    return out[0] if scalar else out
+    out: np.ndarray = np.asarray(SUN_GROUND_SCALE * t * fade[:, None])
+    return np.asarray(out[0]) if scalar else out
 
 
 def sky_radiance(
@@ -441,5 +441,7 @@ def sky_ambient(
     dirs = _hemisphere_dirs(samples)
     L = sky_radiance(dirs, sun, steps=steps, light_steps=light_steps)  # (N,3)
     # Uniform-in-cos hemisphere sampling: E ≈ (2π / N) Σ L_i cosθ_i.
-    irradiance = (2.0 * math.pi / samples) * np.sum(L * dirs[:, 2:3], axis=0)
-    return AMBIENT_SCALE * irradiance
+    irradiance: np.ndarray = np.asarray(
+        (2.0 * math.pi / samples) * np.sum(L * dirs[:, 2:3], axis=0)
+    )
+    return np.asarray(AMBIENT_SCALE * irradiance)

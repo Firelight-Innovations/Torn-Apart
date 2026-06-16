@@ -33,8 +33,10 @@ Example
 
 from __future__ import annotations
 
+import contextlib
 import math
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 
@@ -206,7 +208,7 @@ def _lerp_local(a: LocalWeather, b: LocalWeather, t: float) -> LocalWeather:
     )
 
 
-def _local_to_dict(lw: LocalWeather) -> dict:
+def _local_to_dict(lw: LocalWeather) -> dict[str, Any]:
     """Serialise a LocalWeather to plain primitives (Saveable)."""
     return {
         "cloud_coverage": float(lw.cloud_coverage),
@@ -221,7 +223,7 @@ def _local_to_dict(lw: LocalWeather) -> dict:
     }
 
 
-def _local_from_dict(d: dict) -> LocalWeather:
+def _local_from_dict(d: dict[str, Any]) -> LocalWeather:
     """Inverse of :func:`_local_to_dict`."""
     return LocalWeather(
         cloud_coverage=float(d["cloud_coverage"]),
@@ -244,7 +246,7 @@ def _local_from_dict(d: dict) -> LocalWeather:
 # *and* the would-be strike schedule M7 derives from them).
 
 
-def _cell_to_dict(c: StormCell) -> dict:
+def _cell_to_dict(c: StormCell) -> dict[str, Any]:
     """Serialise a summoned :class:`StormCell` to plain primitives (Saveable)."""
     return {
         "id": str(c.id),
@@ -258,7 +260,7 @@ def _cell_to_dict(c: StormCell) -> dict:
     }
 
 
-def _cell_from_dict(d: dict) -> StormCell:
+def _cell_from_dict(d: dict[str, Any]) -> StormCell:
     """Inverse of :func:`_cell_to_dict` (raises ``KeyError``/``ValueError`` on a
     malformed dict — the caller guards the whole delta)."""
     return StormCell(
@@ -560,17 +562,23 @@ class WeatherSystem:
         )
         return cell_id
 
-    def summon_rainstorm(self, *, time_abs: float, player_pos: tuple[float, float], **kw) -> str:
+    def summon_rainstorm(
+        self, *, time_abs: float, player_pos: tuple[float, float], **kw: Any
+    ) -> str:
         """Convenience: summon a SHOWER (rainstorm) drifting toward the player."""
         return self.summon_cell(CellKind.SHOWER, time_abs=time_abs, player_pos=player_pos, **kw)
 
-    def summon_thunderstorm(self, *, time_abs: float, player_pos: tuple[float, float], **kw) -> str:
+    def summon_thunderstorm(
+        self, *, time_abs: float, player_pos: tuple[float, float], **kw: Any
+    ) -> str:
         """Convenience: summon a THUNDERSTORM (rain + lightning + gust)."""
         return self.summon_cell(
             CellKind.THUNDERSTORM, time_abs=time_abs, player_pos=player_pos, **kw
         )
 
-    def summon_fog_bank(self, *, time_abs: float, player_pos: tuple[float, float], **kw) -> str:
+    def summon_fog_bank(
+        self, *, time_abs: float, player_pos: tuple[float, float], **kw: Any
+    ) -> str:
         """Convenience: summon a FOG_BANK drifting toward the player."""
         return self.summon_cell(CellKind.FOG_BANK, time_abs=time_abs, player_pos=player_pos, **kw)
 
@@ -616,7 +624,7 @@ class WeatherSystem:
     # M8 — GustFront coupling (a storm's leading edge kicks the grass)
     # ------------------------------------------------------------------
 
-    def attach_wind_field(self, wind_field) -> None:
+    def attach_wind_field(self, wind_field: Any) -> None:
         """
         Wire the wind field so approaching storm cells register a gust front.
 
@@ -937,7 +945,7 @@ class WeatherSystem:
         )
 
     # ------------------------------------------------------------------
-    # Lightning (M7)
+    # M7 lightning emission
     # ------------------------------------------------------------------
 
     def _emit_lightning(self, abs_t: float, cells: list[StormCell]) -> None:
@@ -961,6 +969,8 @@ class WeatherSystem:
         from fire_engine.world.weather.cells import CellKind
         from fire_engine.world.weather.lightning import cell_id_int, scheduled_strikes
 
+        if self._bus is None:  # no bus: nothing to publish
+            return
         last = self._last_strike_time
         if last is None:  # first update: no back-window to emit
             return
@@ -993,7 +1003,7 @@ class WeatherSystem:
                 )
 
     # ------------------------------------------------------------------
-    # Classification (hysteresis)
+    # Hysteresis-stabilised classification
     # ------------------------------------------------------------------
 
     def _classified_state(self, lw: LocalWeather, abs_t: float) -> WeatherType:
@@ -1093,7 +1103,8 @@ class WeatherSystem:
                 self._override_from = self._last_local if self._last_local is not None else natural
             target = self._target_local(self._override, abs_t)
             bt = _smoothstep(abs_t - self._override_start_abs_t, 0.0, BLEND_SECONDS)
-            local = _lerp_local(self._override_from, target, bt)
+            override_from = self._override_from if self._override_from is not None else natural
+            local = _lerp_local(override_from, target, bt)
             new_state = self._override
         elif self._release_from is not None:
             if self._release_start_abs_t is None:
@@ -1178,7 +1189,7 @@ class WeatherSystem:
     # Saveable protocol
     # ------------------------------------------------------------------
 
-    def get_delta(self) -> dict:
+    def get_delta(self) -> dict[str, Any]:
         """
         Deviations from the procedural baseline (Saveable protocol).
 
@@ -1197,7 +1208,7 @@ class WeatherSystem:
         footprint, so a save→load mid-storm reproduces the IDENTICAL future
         (positions and the would-be M7 strike schedule).
         """
-        delta: dict = {}
+        delta: dict[str, Any] = {}
 
         # --- M8 summon/save: spatial summons + natural-cell suppressions. ---
         if self._summoned:
@@ -1224,22 +1235,8 @@ class WeatherSystem:
 
         return delta
 
-    def apply_delta(self, delta: dict) -> None:
-        """
-        Restore summons / suppressions / override from :meth:`get_delta` output.
-
-        The natural baseline needs no restoration (recomputed from the seed).
-        Summoned cells are reconstructed from their param dicts and the
-        suppression set from its id list, so the loaded system reproduces the
-        identical future.  A legacy or unknown-shaped delta is tolerated: a
-        malformed summoned-cell entry is skipped rather than crashing the load,
-        and legacy Markov deltas' ``override`` / ``release_from`` keys still map
-        straight onto the shim.
-        """
-        if not isinstance(delta, dict) or not delta:
-            return
-
-        # --- M8 summon/save: rebuild summoned cells + suppression set. ---
+    def _apply_delta_summons(self, delta: dict[str, Any]) -> None:
+        """Rebuild summoned cells + suppression set from delta (M8)."""
         summoned: list[StormCell] = []
         for d in delta.get("summoned", ()) or ():
             try:
@@ -1249,22 +1246,19 @@ class WeatherSystem:
         if summoned:
             self._summoned = summoned
         if "summon_seq" in delta:
-            try:
+            with contextlib.suppress(TypeError, ValueError):
                 self._summon_seq = int(delta["summon_seq"])
-            except (TypeError, ValueError):
-                pass
         # Never let a stale counter alias an existing summoned id.
         for c in self._summoned:
             if c.id.startswith("s:"):
-                try:
+                with contextlib.suppress(ValueError):
                     self._summon_seq = max(self._summon_seq, int(c.id[2:]) + 1)
-                except ValueError:
-                    pass
         supp = delta.get("suppressed")
         if isinstance(supp, (list, tuple)):
             self._suppressed = {str(s) for s in supp}
 
-        # Legacy dev-override shim.
+    def _apply_delta_override(self, delta: dict[str, Any]) -> None:
+        """Restore legacy dev-override shim state from delta."""
         if "override" in delta:
             self._override = WeatherType(delta["override"])
             self._override_start_abs_t = (
@@ -1281,3 +1275,20 @@ class WeatherSystem:
         if "last_state" in delta:
             self._last_state = WeatherType(delta["last_state"])
             self._committed_state = self._last_state
+
+    def apply_delta(self, delta: dict[str, Any]) -> None:
+        """
+        Restore summons / suppressions / override from :meth:`get_delta` output.
+
+        The natural baseline needs no restoration (recomputed from the seed).
+        Summoned cells are reconstructed from their param dicts and the
+        suppression set from its id list, so the loaded system reproduces the
+        identical future.  A legacy or unknown-shaped delta is tolerated: a
+        malformed summoned-cell entry is skipped rather than crashing the load,
+        and legacy Markov deltas' ``override`` / ``release_from`` keys still map
+        straight onto the shim.
+        """
+        if not isinstance(delta, dict) or not delta:
+            return
+        self._apply_delta_summons(delta)
+        self._apply_delta_override(delta)

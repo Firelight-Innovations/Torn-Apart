@@ -142,7 +142,7 @@ class BuildingDefaults:
             foundation_depth_m=cfg.building_foundation_depth_m,
         )
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Plain-primitive dict (delta-save payload)."""
         return {
             "storey_height_m": float(self.storey_height_m),
@@ -152,7 +152,7 @@ class BuildingDefaults:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> BuildingDefaults:
+    def from_dict(cls, d: dict[str, Any]) -> BuildingDefaults:
         """Inverse of :meth:`to_dict`."""
         return cls(
             storey_height_m=float(d["storey_height_m"]),
@@ -191,7 +191,7 @@ class Opening:
     sill_m: float
     head_m: float
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Plain-primitive dict (delta-save payload)."""
         return {
             "id": int(self.id),
@@ -203,7 +203,7 @@ class Opening:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> Opening:
+    def from_dict(cls, d: dict[str, Any]) -> Opening:
         """Inverse of :meth:`to_dict`."""
         return cls(
             id=int(d["id"]),
@@ -346,7 +346,7 @@ class Wall:
     # Serialisation
     # ------------------------------------------------------------------
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Plain-primitive dict (delta-save payload)."""
         return {
             "id": int(self.id),
@@ -359,7 +359,7 @@ class Wall:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> Wall:
+    def from_dict(cls, d: dict[str, Any]) -> Wall:
         """Inverse of :meth:`to_dict`."""
         h = d.get("height_m")
         return cls(
@@ -419,7 +419,7 @@ class Room:
         cy = float(np.sum((y + np.roll(y, -1)) * cross)) / (6.0 * a)
         return cx, cy
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Plain-primitive dict (delta-save payload)."""
         return {
             "id": int(self.id),
@@ -430,7 +430,7 @@ class Room:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> Room:
+    def from_dict(cls, d: dict[str, Any]) -> Room:
         """Inverse of :meth:`to_dict`."""
         return cls(
             id=int(d["id"]),
@@ -467,7 +467,7 @@ class StairsStub:
     direction_rad: float
     width_m: float
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Plain-primitive dict (delta-save payload)."""
         return {
             "id": int(self.id),
@@ -479,7 +479,7 @@ class StairsStub:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> StairsStub:
+    def from_dict(cls, d: dict[str, Any]) -> StairsStub:
         """Inverse of :meth:`to_dict`."""
         return cls(
             id=int(d["id"]),
@@ -503,7 +503,7 @@ class Foundation:
     polygon: np.ndarray
     depth_m: float
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Plain-primitive dict (delta-save payload)."""
         return {
             "polygon": [[float(p[0]), float(p[1])] for p in self.polygon],
@@ -511,7 +511,7 @@ class Foundation:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> Foundation:
+    def from_dict(cls, d: dict[str, Any]) -> Foundation:
         """Inverse of :meth:`to_dict`."""
         return cls(polygon=np.array(d["polygon"], dtype=np.float64), depth_m=float(d["depth_m"]))
 
@@ -528,7 +528,7 @@ class RoofSlab:
     polygon: np.ndarray
     thickness_m: float
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Plain-primitive dict (delta-save payload)."""
         return {
             "polygon": [[float(p[0]), float(p[1])] for p in self.polygon],
@@ -536,7 +536,7 @@ class RoofSlab:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> RoofSlab:
+    def from_dict(cls, d: dict[str, Any]) -> RoofSlab:
         """Inverse of :meth:`to_dict`."""
         return cls(
             polygon=np.array(d["polygon"], dtype=np.float64), thickness_m=float(d["thickness_m"])
@@ -776,7 +776,7 @@ class Storey:
     # Serialisation
     # ------------------------------------------------------------------
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Plain-primitive dict (delta-save payload)."""
         return {
             "id": int(self.id),
@@ -789,7 +789,7 @@ class Storey:
         }
 
     @classmethod
-    def from_dict(cls, building: Building, d: dict) -> Storey:
+    def from_dict(cls, building: Building, d: dict[str, Any]) -> Storey:
         """Inverse of :meth:`to_dict` (re-wires the building back-ref)."""
         storey = cls(
             building,
@@ -1010,7 +1010,7 @@ class Building:
     # Serialisation
     # ------------------------------------------------------------------
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """
         Full building spec as a dict of primitives (delta-save payload).
 
@@ -1031,7 +1031,7 @@ class Building:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> Building:
+    def from_dict(cls, d: dict[str, Any]) -> Building:
         """Inverse of :meth:`to_dict`."""
         pos = d["position"]
         rot = d["rotation"]
@@ -1086,7 +1086,8 @@ class Building:
         bis /= norm
         # Scale so the *edge* offset is pad (1/cos(half-angle) factor).
         cos_half = np.clip(np.sum(bis * n_out, axis=1, keepdims=True), 0.2, 1.0)
-        return hull + bis * (pad / cos_half)
+        result: np.ndarray = hull + bis * (pad / cos_half)
+        return result
 
 
 def _convex_hull(points: np.ndarray) -> np.ndarray:

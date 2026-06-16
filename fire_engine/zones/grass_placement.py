@@ -37,12 +37,20 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
+from typing import Protocol
 
 import numpy as np
 
 from fire_engine.core import Config
 from fire_engine.core.rng import for_domain
 from fire_engine.zones.volume import ZoneVolume
+
+
+class _ChunkLike(Protocol):
+    """Structural contract for chunk objects: exposes a voxel materials array."""
+
+    materials: np.ndarray
+
 
 __all__ = [
     "HEIGHT_SENTINEL",
@@ -221,7 +229,7 @@ def leaf_instance_count(volume: ZoneVolume, config: Config) -> int:
 
 def bake_grass_height_field(
     volume: ZoneVolume,
-    chunks: Mapping[tuple[int, int, int], object],
+    chunks: Mapping[tuple[int, int, int], _ChunkLike],
     config: Config,
 ) -> np.ndarray:
     """
@@ -261,8 +269,8 @@ def bake_grass_height_field(
     x0, y0, z0 = volume.min_corner
     x1, y1, z1 = volume.max_corner
 
-    W = max(1, int(math.ceil((x1 - x0) / vs)))
-    H = max(1, int(math.ceil((y1 - y0) / vs)))
+    W = max(1, math.ceil((x1 - x0) / vs))
+    H = max(1, math.ceil((y1 - y0) / vs))
 
     # Global voxel index of each texel column (sampled at texel centres).
     vox_x = np.floor((x0 + (np.arange(W) + 0.5) * vs) / vs).astype(np.int64)
@@ -273,8 +281,8 @@ def bake_grass_height_field(
     # spans [z0/vs − 1, z1/vs − 1].
     cxs = np.unique(vox_x // n)
     cys = np.unique(vox_y // n)
-    kz_lo = int(math.floor(z0 / vs)) - 1
-    kz_hi = int(math.ceil(z1 / vs))
+    kz_lo = math.floor(z0 / vs) - 1
+    kz_hi = math.ceil(z1 / vs)
     czs = range(kz_lo // n, kz_hi // n + 1)
 
     best_z = np.full((H, W), -np.inf, dtype=np.float64)

@@ -58,7 +58,8 @@ or 1/m as noted.  Z-up.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import Enum, StrEnum
+from typing import cast
 
 import numpy as np
 
@@ -77,7 +78,7 @@ __all__ = [
 ]
 
 
-class CloudGenus(str, Enum):
+class CloudGenus(StrEnum):
     """
     The WMO cloud genera this model expresses.  ``str`` mixin so ``.value``
     round-trips through events/UI as a plain string (mirrors the
@@ -189,7 +190,7 @@ class CloudLayers:
         return (self.genus_high, self.genus_mid, self.genus_low)[int(band)]
 
 
-def _smoothstep(x: np.ndarray, lo: float, hi: float) -> np.ndarray:
+def _smoothstep(x: float | np.ndarray, lo: float, hi: float) -> np.ndarray:
     """Vectorised Hermite smoothstep clamped to [0, 1]."""
     if hi <= lo:
         return np.where(np.asarray(x) < lo, 0.0, 1.0)
@@ -198,11 +199,11 @@ def _smoothstep(x: np.ndarray, lo: float, hi: float) -> np.ndarray:
 
 
 def classify_genus(
-    coverage,
-    density,
-    precip,
+    coverage: float | np.ndarray,
+    density: float | np.ndarray,
+    precip: float | np.ndarray,
     regime: Regime,
-):
+) -> tuple[CloudGenus, CloudGenus, CloudGenus] | tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Discrete dominant genus per band from a continuous weather sample.
 
@@ -354,7 +355,8 @@ def cloud_layers(
     den = float(np.clip(density, 0.0, 1.0))
     pre = float(np.clip(precip, 0.0, 1.0))
 
-    g_high, g_mid, g_low = classify_genus(cov, den, pre, regime)
+    _genus = cast(tuple[CloudGenus, CloudGenus, CloudGenus], classify_genus(cov, den, pre, regime))
+    g_high, g_mid, g_low = _genus
     base_alt, thick = _band_altitudes(config)
 
     w_high = float(config.cloud_genera_high_cov_weight)

@@ -174,10 +174,7 @@ def dispatch(path: str) -> Any:
         # obj == {"loaded": "assets/test.fake"}
     """
     dot_idx = path.rfind(".")
-    if dot_idx == -1:
-        suffix = ""
-    else:
-        suffix = path[dot_idx:].lower()
+    suffix = "" if dot_idx == -1 else path[dot_idx:].lower()
 
     if suffix not in _LOADERS or _LOADERS[suffix] is None:
         raise UnknownResourceFormatError(path, suffix)

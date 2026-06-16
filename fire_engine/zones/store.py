@@ -26,6 +26,8 @@ Example
 
 from __future__ import annotations
 
+from typing import Any
+
 from fire_engine.core import get_logger
 from fire_engine.zones.volume import ZoneVolume
 
@@ -63,7 +65,7 @@ class ZoneStore:
         self._volumes: dict[int, ZoneVolume] = {}
         self._next_id: int = 1
         self.version: int = 0
-        self._baseline: list[dict] | None = None
+        self._baseline: list[dict[str, Any]] | None = None
 
     # ------------------------------------------------------------------
     # Mutation
@@ -148,7 +150,7 @@ class ZoneStore:
         """
         self._baseline = self._snapshot()
 
-    def get_delta(self) -> dict:
+    def get_delta(self) -> dict[str, Any]:
         """
         Full volume list when it deviates from the baseline, else ``{}``.
 
@@ -163,7 +165,7 @@ class ZoneStore:
             return {}
         return {"version": _DELTA_VERSION, "volumes": snap, "next_id": int(self._next_id)}
 
-    def apply_delta(self, delta: dict) -> None:
+    def apply_delta(self, delta: dict[str, Any]) -> None:
         """
         Replace the volume set with the saved one (post-baseline overlay).
 
@@ -184,6 +186,6 @@ class ZoneStore:
 
     # ------------------------------------------------------------------
 
-    def _snapshot(self) -> list[dict]:
+    def _snapshot(self) -> list[dict[str, Any]]:
         """Serialised, id-ordered volume list (comparison + delta payload)."""
         return [v.to_dict() for v in self.volumes()]

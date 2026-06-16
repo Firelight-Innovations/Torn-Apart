@@ -33,6 +33,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 
@@ -109,22 +110,22 @@ class MeshArrays:
     @property
     def face_count(self) -> int:
         """Number of exposed faces emitted."""
-        return self.positions.shape[0] // self.verts_per_face
+        return int(self.positions.shape[0]) // self.verts_per_face
 
     @property
     def vertex_count(self) -> int:
         """Number of vertices (``verts_per_face`` per face)."""
-        return self.positions.shape[0]
+        return int(self.positions.shape[0])
 
     @property
     def tri_count(self) -> int:
         """Number of triangles (2 per face)."""
-        return self.indices.shape[0] // 3
+        return int(self.indices.shape[0]) // 3
 
     @property
     def is_empty(self) -> bool:
         """True when no faces were emitted (fully buried or empty chunk)."""
-        return self.positions.shape[0] == 0
+        return bool(self.positions.shape[0] == 0)
 
 
 # ---------------------------------------------------------------------------
@@ -135,7 +136,7 @@ class MeshArrays:
 # ---------------------------------------------------------------------------
 
 
-def _build_face_templates() -> dict[tuple[int, int, int], dict]:
+def _build_face_templates() -> dict[tuple[int, int, int], dict[str, np.ndarray]]:
     """
     Build the static per-direction quad corner offsets and normals.
 
@@ -144,7 +145,7 @@ def _build_face_templates() -> dict[tuple[int, int, int], dict]:
     """
     # Voxel occupies the unit cube [0,1]^3 in voxel units (later scaled by voxel_size).
     # Each face's 4 corners ordered CCW when viewed from outside (normal toward viewer).
-    templates: dict[tuple[int, int, int], dict] = {}
+    templates: dict[tuple[int, int, int], dict[str, np.ndarray]] = {}
     # +X face (x=1 plane), normal +X. CCW from +X looking toward -X.
     templates[(1, 0, 0)] = dict(
         corners=np.array([[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0, 1]], np.float32),
@@ -181,9 +182,23 @@ def _build_face_templates() -> dict[tuple[int, int, int], dict]:
 _FACE_TEMPLATES = _build_face_templates()
 
 
+def _fill_pad_slab(
+    pad: np.ndarray,
+    nb: np.ndarray | str | None,
+    dst: tuple[Any, ...],
+    src: tuple[Any, ...],
+) -> None:
+    """Fill one slab of *pad* from a neighbour entry (or sentinel / absent)."""
+    if nb is WORLD_FLOOR_SOLID:
+        pad[dst] = True
+    elif nb is not None:
+        assert isinstance(nb, np.ndarray)
+        pad[dst] = nb[src]
+
+
 def _build_padded_solid(
     solid: np.ndarray,
-    neighbor_solids: dict | None,
+    neighbor_solids: dict[tuple[int, int, int], np.ndarray | str] | None,
     n: int,
 ) -> np.ndarray:
     """
@@ -213,54 +228,28 @@ def _build_padded_solid(
     pad = np.zeros((n + 2, n + 2, n + 2), dtype=bool)
     pad[1 : n + 1, 1 : n + 1, 1 : n + 1] = solid
 
-    ns = neighbor_solids or {}
-
-    def neighbour(dir_: tuple[int, int, int]):
-        return ns.get(dir_, None)
+    ns: dict[tuple[int, int, int], np.ndarray | str] = neighbor_solids or {}
+    s = slice(1, n + 1)
 
     # +X neighbour fills the x = n+1 slab using its x=0 slab.
-    nb = neighbour((1, 0, 0))
-    if nb is WORLD_FLOOR_SOLID:
-        pad[n + 1, 1 : n + 1, 1 : n + 1] = True
-    elif nb is not None:
-        pad[n + 1, 1 : n + 1, 1 : n + 1] = nb[0, :, :]
+    _fill_pad_slab(pad, ns.get((1, 0, 0)), (n + 1, s, s), (0, slice(None), slice(None)))
     # -X neighbour fills x = 0 slab using its x=n-1 slab.
-    nb = neighbour((-1, 0, 0))
-    if nb is WORLD_FLOOR_SOLID:
-        pad[0, 1 : n + 1, 1 : n + 1] = True
-    elif nb is not None:
-        pad[0, 1 : n + 1, 1 : n + 1] = nb[n - 1, :, :]
+    _fill_pad_slab(pad, ns.get((-1, 0, 0)), (0, s, s), (n - 1, slice(None), slice(None)))
     # +Y
-    nb = neighbour((0, 1, 0))
-    if nb is WORLD_FLOOR_SOLID:
-        pad[1 : n + 1, n + 1, 1 : n + 1] = True
-    elif nb is not None:
-        pad[1 : n + 1, n + 1, 1 : n + 1] = nb[:, 0, :]
+    _fill_pad_slab(pad, ns.get((0, 1, 0)), (s, n + 1, s), (slice(None), 0, slice(None)))
     # -Y
-    nb = neighbour((0, -1, 0))
-    if nb is WORLD_FLOOR_SOLID:
-        pad[1 : n + 1, 0, 1 : n + 1] = True
-    elif nb is not None:
-        pad[1 : n + 1, 0, 1 : n + 1] = nb[:, n - 1, :]
+    _fill_pad_slab(pad, ns.get((0, -1, 0)), (s, 0, s), (slice(None), n - 1, slice(None)))
     # +Z
-    nb = neighbour((0, 0, 1))
-    if nb is WORLD_FLOOR_SOLID:
-        pad[1 : n + 1, 1 : n + 1, n + 1] = True
-    elif nb is not None:
-        pad[1 : n + 1, 1 : n + 1, n + 1] = nb[:, :, 0]
+    _fill_pad_slab(pad, ns.get((0, 0, 1)), (s, s, n + 1), (slice(None), slice(None), 0))
     # -Z (the bottom-of-world case): sentinel → SOLID pad.
-    nb = neighbour((0, 0, -1))
-    if nb is WORLD_FLOOR_SOLID:
-        pad[1 : n + 1, 1 : n + 1, 0] = True
-    elif nb is not None:
-        pad[1 : n + 1, 1 : n + 1, 0] = nb[:, :, n - 1]
+    _fill_pad_slab(pad, ns.get((0, 0, -1)), (s, s, 0), (slice(None), slice(None), n - 1))
 
     return pad
 
 
 def build_mesh(
-    chunk,
-    neighbor_solids: dict | None = None,
+    chunk: Any,
+    neighbor_solids: dict[tuple[int, int, int], np.ndarray | str] | None = None,
     light_sampler: Callable[[np.ndarray], np.ndarray] | None = None,
 ) -> MeshArrays:
     """

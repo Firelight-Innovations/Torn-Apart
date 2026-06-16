@@ -219,51 +219,88 @@ class Gizmo:
         """
         o, d, p = _np(ray_o), _np(ray_d), _np(self.pivot)
         R = self.size
-        axis_r = R * 0.18
-        best: tuple[float, Handle] | None = None
-
-        def consider(depth: float, handle: Handle) -> None:
-            nonlocal best
-            if depth <= 0.0:
-                return
-            if best is None or depth < best[0]:
-                best = (depth, handle)
+        candidates: list[tuple[float, Handle]] = []
 
         if self.mode in (GizmoMode.TRANSLATE, GizmoMode.SCALE):
-            for i in range(3):
-                a = _AXIS_NP[i]
-                axis_t, ray_s, dist = closest_on_axis(o, d, p, a)
-                if 0.0 <= axis_t <= R and dist <= axis_r:
-                    consider(ray_s, Handle(HandleType.AXIS, i))
-
+            candidates.extend(self._pick_axes(o, d, p, R))
         if self.mode == GizmoMode.TRANSLATE:
-            lo, hi = R * 0.15, R * 0.55
-            for i in range(3):
-                hit = ray_plane_intersect(o, d, p, _AXIS_NP[i])
-                if hit is None:
-                    continue
-                j, k = _OTHER[i]
-                cj = float((hit - p).dot(_AXIS_NP[j]))
-                ck = float((hit - p).dot(_AXIS_NP[k]))
-                if lo <= cj <= hi and lo <= ck <= hi:
-                    consider(_ray_s_of(o, d, hit), Handle(HandleType.PLANE, i))
-
+            candidates.extend(self._pick_planes(o, d, p, R))
         if self.mode == GizmoMode.SCALE:
-            cp_s = _ray_s_of(o, d, p)
-            cp = o + cp_s * d
-            if cp_s > 0.0 and float(np.linalg.norm(cp - p)) <= R * 0.2:
-                consider(cp_s, Handle(HandleType.UNIFORM, 0))
-
+            candidates.extend(self._pick_uniform(o, d, p, R))
         if self.mode == GizmoMode.ROTATE:
-            for i in range(3):
-                hit = ray_plane_intersect(o, d, p, _AXIS_NP[i])
-                if hit is None:
-                    continue
-                r = float(np.linalg.norm(hit - p))
-                if abs(r - R) <= R * 0.12:
-                    consider(_ray_s_of(o, d, hit), Handle(HandleType.RING, i))
+            candidates.extend(self._pick_rings(o, d, p, R))
 
-        return None if best is None else best[1]
+        valid = [(depth, h) for depth, h in candidates if depth > 0.0]
+        return min(valid, key=lambda x: x[0])[1] if valid else None
+
+    def _pick_axes(
+        self,
+        o: np.ndarray,
+        d: np.ndarray,
+        p: np.ndarray,
+        R: float,
+    ) -> list[tuple[float, Handle]]:
+        """Axis-arrow / axis-stalk candidates for translate and scale modes."""
+        axis_r = R * 0.18
+        hits: list[tuple[float, Handle]] = []
+        for i in range(3):
+            axis_t, ray_s, dist = closest_on_axis(o, d, p, _AXIS_NP[i])
+            if 0.0 <= axis_t <= R and dist <= axis_r:
+                hits.append((ray_s, Handle(HandleType.AXIS, i)))
+        return hits
+
+    def _pick_planes(
+        self,
+        o: np.ndarray,
+        d: np.ndarray,
+        p: np.ndarray,
+        R: float,
+    ) -> list[tuple[float, Handle]]:
+        """Two-axis plane-square candidates for translate mode."""
+        lo, hi = R * 0.15, R * 0.55
+        hits: list[tuple[float, Handle]] = []
+        for i in range(3):
+            hit = ray_plane_intersect(o, d, p, _AXIS_NP[i])
+            if hit is None:
+                continue
+            j, k = _OTHER[i]
+            cj = float((hit - p).dot(_AXIS_NP[j]))
+            ck = float((hit - p).dot(_AXIS_NP[k]))
+            if lo <= cj <= hi and lo <= ck <= hi:
+                hits.append((_ray_s_of(o, d, hit), Handle(HandleType.PLANE, i)))
+        return hits
+
+    def _pick_uniform(
+        self,
+        o: np.ndarray,
+        d: np.ndarray,
+        p: np.ndarray,
+        R: float,
+    ) -> list[tuple[float, Handle]]:
+        """Centre-cube candidate for uniform-scale mode."""
+        cp_s = _ray_s_of(o, d, p)
+        cp = o + cp_s * d
+        if cp_s > 0.0 and float(np.linalg.norm(cp - p)) <= R * 0.2:
+            return [(cp_s, Handle(HandleType.UNIFORM, 0))]
+        return []
+
+    def _pick_rings(
+        self,
+        o: np.ndarray,
+        d: np.ndarray,
+        p: np.ndarray,
+        R: float,
+    ) -> list[tuple[float, Handle]]:
+        """Rotation-ring candidates for rotate mode."""
+        hits: list[tuple[float, Handle]] = []
+        for i in range(3):
+            hit = ray_plane_intersect(o, d, p, _AXIS_NP[i])
+            if hit is None:
+                continue
+            r = float(np.linalg.norm(hit - p))
+            if abs(r - R) <= R * 0.12:
+                hits.append((_ray_s_of(o, d, hit), Handle(HandleType.RING, i)))
+        return hits
 
     # -- drag begin -----------------------------------------------------
 

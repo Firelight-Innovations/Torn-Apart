@@ -13,7 +13,9 @@ not per voxel of the world.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 
@@ -59,7 +61,7 @@ def _voxel_to_chunk(vx: int, vy: int, vz: int, n: int) -> tuple[int, int, int]:
 def raycast_voxel(
     origin: Vec3,
     direction: Vec3,
-    chunk_provider,
+    chunk_provider: Callable[[tuple[int, int, int]], Any],
     max_distance_m: float = 100.0,
     *,
     chunk_size: int = 32,
@@ -123,10 +125,7 @@ def raycast_voxel(
             t_delta[i] = math.inf
         else:
             # world coordinate of the next boundary in the step direction
-            if step[i] > 0:
-                next_boundary = (voxel[i] + 1) * vs
-            else:
-                next_boundary = voxel[i] * vs
+            next_boundary = (voxel[i] + 1) * vs if step[i] > 0 else voxel[i] * vs
             t_max[i] = (next_boundary - o[i]) / d[i]
             t_delta[i] = vs / abs(d[i])
 

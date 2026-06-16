@@ -71,7 +71,7 @@ class BuildingManager:
         self._buildings: dict[int, Building] = {}
         self._next_id: int = 1
         self.version: int = 0
-        self._baseline: list[dict] | None = None
+        self._baseline: list[dict[str, Any]] | None = None
 
     # ------------------------------------------------------------------
     # Mutation
@@ -143,7 +143,7 @@ class BuildingManager:
         """
         self._baseline = self._snapshot()
 
-    def get_delta(self) -> dict:
+    def get_delta(self) -> dict[str, Any]:
         """
         Full building list when it deviates from the baseline, else ``{}``.
 
@@ -158,7 +158,7 @@ class BuildingManager:
             return {}
         return {"version": _DELTA_VERSION, "next_id": int(self._next_id), "buildings": snap}
 
-    def apply_delta(self, delta: dict) -> None:
+    def apply_delta(self, delta: dict[str, Any]) -> None:
         """
         Replace the building set with the saved one and republish ``"added"``
         for each so the renderer rebuilds.  An empty delta means "baseline
@@ -185,7 +185,7 @@ class BuildingManager:
 
     # ------------------------------------------------------------------
 
-    def _snapshot(self) -> list[dict]:
+    def _snapshot(self) -> list[dict[str, Any]]:
         """Serialised, id-ordered building list (comparison + delta payload)."""
         return [b.to_dict() for b in self.buildings()]
 

@@ -25,9 +25,14 @@ Units: meters, game seconds.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from fire_engine.core.config import Config
+
+if TYPE_CHECKING:
+    from fire_engine.world.weather.system import WeatherSystem
 
 __all__ = ["MAP_CHANNELS", "WeatherMap"]
 
@@ -88,7 +93,7 @@ class WeatherMap:
 
     def rasterize(
         self,
-        system,
+        system: WeatherSystem,
         center_xy: tuple[float, float],
         t_abs: float,
     ) -> np.ndarray:

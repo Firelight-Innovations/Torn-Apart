@@ -235,7 +235,7 @@ def mesh_branches(
 
     sway0 = sk.sway_start()
     sway_vert = np.stack([sway0, sway0, sk.sway, sk.sway], axis=1)  # (S, 4)
-    colors = np.empty((S, sides, 4, 4), dtype=np.float32)
+    colors: np.ndarray = np.empty((S, sides, 4, 4), dtype=np.float32)
     colors[..., 0:3] = np.asarray(tint, dtype=np.float32)
     colors[..., 3] = sway_vert[:, None, :]
 
@@ -385,7 +385,7 @@ def merge_parts(*parts: TreeMesh) -> TreeMesh:
     offsets = np.cumsum([0] + [p.n_vertices for p in live[:-1]])
     positions = np.concatenate([p.positions for p in live])
     indices = np.concatenate(
-        [p.indices.astype(np.uint64) + off for p, off in zip(live, offsets)]
+        [p.indices.astype(np.uint64) + off for p, off in zip(live, offsets, strict=True)]
     ).astype(np.uint32)
     height, radius = _metadata(positions)
     return TreeMesh(

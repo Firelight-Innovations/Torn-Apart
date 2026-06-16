@@ -30,12 +30,16 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from fire_engine.core.config import Config
 from fire_engine.core.rng import for_domain
+
+if TYPE_CHECKING:
+    from fire_engine.world.weather.synoptic import Synoptic
 
 __all__ = [
     "CellKind",
@@ -66,7 +70,7 @@ def _smoothstep(x: float, lo: float, hi: float) -> float:
     return t * t * (3.0 - 2.0 * t)
 
 
-class CellKind(str, Enum):
+class CellKind(StrEnum):
     """
     The four kinds of storm cell.  ``str`` mixin so ``.value`` round-trips
     through saves and event payloads as a plain string.
@@ -87,7 +91,7 @@ class CellKind(str, Enum):
     FOG_BANK = "fog_bank"
 
 
-class Regime(str, Enum):
+class Regime(StrEnum):
     """Per-day synoptic regime — sets ambient sky and the cell spawn mix."""
 
     HIGH_PRESSURE = "high_pressure"
@@ -212,7 +216,7 @@ class StormCell:
         """True while the cell is alive (``spawn_time < t < end``)."""
         return 0.0 < (t - self.spawn_time) < self.duration_s
 
-    def center(self, t: float, synoptic) -> np.ndarray:
+    def center(self, t: float, synoptic: Synoptic) -> np.ndarray:
         """
         World-XY center at absolute time *t* (meters), shape ``(2,)``.
 
@@ -230,7 +234,7 @@ class StormCell:
             dtype=np.float64,
         )
 
-    def contribution(self, points_xy: np.ndarray, t: float, synoptic) -> np.ndarray:
+    def contribution(self, points_xy: np.ndarray, t: float, synoptic: Synoptic) -> np.ndarray:
         """
         Influence 0–``peak_intensity`` of this cell at each query point.
 
@@ -252,7 +256,8 @@ class StormCell:
         c = self.center(t, synoptic)
         d2 = ((pts - c[None, :]) ** 2).sum(axis=1)
         r = self.radius(t)
-        return amp * np.exp(-(d2 / (r * r)) * _FOOTPRINT_K)
+        result: np.ndarray = amp * np.exp(-(d2 / (r * r)) * _FOOTPRINT_K)
+        return result
 
 
 # ---------------------------------------------------------------------------

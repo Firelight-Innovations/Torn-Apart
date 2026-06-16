@@ -53,6 +53,7 @@ Usage
 from __future__ import annotations
 
 import math
+from typing import Any
 
 import numpy as np
 
@@ -120,12 +121,13 @@ def _seamless_u(field: np.ndarray) -> np.ndarray:
     -------
     np.ndarray — (H, W) float32, same value range, U-seamless.
     """
-    H, W = field.shape
+    _H, W = field.shape
     rolled = np.roll(field, W // 2, axis=1)
     x = np.arange(W, dtype=np.float32)
     s = np.abs(x - W / 2.0) / (W / 2.0)  # 1 at edges, 0 at centre
     s = s[None, :]
-    return (field * (1.0 - s) + rolled * s).astype(np.float32)
+    result: np.ndarray = (field * (1.0 - s) + rolled * s).astype(np.float32)
+    return result
 
 
 def _ramp_rgb(t: np.ndarray, keys: np.ndarray, rgb: np.ndarray) -> np.ndarray:
@@ -183,7 +185,7 @@ class NightSkyDef(ProceduralTextureDef):
     DEFAULT_HEIGHT = 512
     DEFAULT_STAR_COUNT = 2500  # mirrors Config.sky_star_count default
 
-    def generate(self, rng: np.random.Generator, **params) -> np.ndarray:
+    def generate(self, rng: np.random.Generator, **params: Any) -> np.ndarray:
         """
         Generate the night-sky texture.
 
@@ -438,7 +440,8 @@ def cube_face_directions(size: int) -> np.ndarray:
         ],
         axis=0,
     )
-    return (faces / np.linalg.norm(faces, axis=-1, keepdims=True)).astype(np.float32)
+    normed: np.ndarray = (faces / np.linalg.norm(faces, axis=-1, keepdims=True)).astype(np.float32)
+    return normed
 
 
 def _dirs_to_face_pixels(dirs: np.ndarray, size: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -462,7 +465,6 @@ def _dirs_to_face_pixels(dirs: np.ndarray, size: int) -> tuple[np.ndarray, np.nd
     # Major axis selection (GL): x beats y beats z on ties.
     fx = (ax >= ay) & (ax >= az)
     fy = ~fx & (ay >= az)
-    fz = ~fx & ~fy
     face = np.where(
         fx, np.where(x >= 0, 0, 1), np.where(fy, np.where(y >= 0, 2, 3), np.where(z >= 0, 4, 5))
     )
@@ -600,7 +602,7 @@ class NightSkyCubeDef(ProceduralTextureDef):
     DEFAULT_FACE_SIZE = 512
     DEFAULT_STAR_COUNT = 9000
 
-    def generate(self, rng: np.random.Generator, **params) -> np.ndarray:
+    def generate(self, rng: np.random.Generator, **params: Any) -> np.ndarray:
         """
         Generate the six cube-map faces.
 

@@ -45,6 +45,8 @@ Usage
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 
 from fire_engine.procedural.defs import register_def
@@ -113,7 +115,7 @@ class FlowerSpriteDef(ProceduralTextureDef):
     DEFAULT_WIDTH = _CELL * _VARIANTS  # 128
     DEFAULT_HEIGHT = _CELL  # 32
 
-    def generate(self, rng: np.random.Generator, **params) -> np.ndarray:
+    def generate(self, rng: np.random.Generator, **params: Any) -> np.ndarray:
         """
         Generate the 4-variant wildflower atlas.
 

@@ -104,7 +104,7 @@ class VenturiJob:
     chunk_size: int
     voxel_size: float
     ground_band: tuple[float, float]
-    materials: dict
+    materials: dict[tuple[int, int, int], np.ndarray]
     venturi_iters: int
     venturi_max: float
     deflect_gain: float

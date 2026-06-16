@@ -38,6 +38,7 @@ This module imports only numpy + the model layer — no panda3d, no RNG.
 
 from __future__ import annotations
 
+import itertools
 import math
 
 import numpy as np
@@ -57,6 +58,107 @@ def _signed_area(poly: np.ndarray) -> float:
     x = poly[:, 0]
     y = poly[:, 1]
     return 0.5 * float(np.sum(x * np.roll(y, -1) - np.roll(x, -1) * y))
+
+
+def _build_snap_graph(
+    walls: list[Wall],
+    inv_eps: float,
+    arc_segments_per_quarter: int,
+) -> tuple[list[tuple[float, float]], set[tuple[int, int]]]:
+    """
+    Tessellate walls, snap vertices to grid, and build an undirected edge set.
+
+    Returns ``(node_xy, edge_set)`` where ``node_xy[i]`` is the float position
+    of snap-node ``i`` and ``edge_set`` holds canonical ``(u, v)`` pairs with
+    ``u < v``.
+    """
+    node_xy: list[tuple[float, float]] = []
+    node_of_key: dict[tuple[int, int], int] = {}
+
+    def _snap_node(px: float, py: float) -> int:
+        key = (round(px * inv_eps), round(py * inv_eps))
+        idx = node_of_key.get(key)
+        if idx is None:
+            idx = len(node_xy)
+            node_of_key[key] = idx
+            node_xy.append((px, py))
+        return idx
+
+    edge_set: set[tuple[int, int]] = set()
+    for wall in walls:
+        poly = wall.tessellate(arc_segments_per_quarter)
+        ids = [_snap_node(float(px), float(py)) for px, py in poly]
+        for u, v in itertools.pairwise(ids):
+            if u == v:
+                continue  # zero-length segment after snapping
+            edge_set.add((u, v) if u < v else (v, u))
+
+    return node_xy, edge_set
+
+
+def _build_half_edges(
+    node_xy: list[tuple[float, float]],
+    edge_set: set[tuple[int, int]],
+) -> tuple[list[tuple[int, int]], list[list[int]], dict[int, int]]:
+    """
+    Build directed half-edges (darts) from an undirected edge set.
+
+    Each undirected edge ``(u, v)`` produces dart ``2k = u→v`` and twin
+    ``2k+1 = v→u``.  Returns ``(dart, out_darts, pos_in_order)`` where
+    ``out_darts[node]`` lists the darts leaving that node sorted CCW by
+    heading, and ``pos_in_order[dart_id]`` is the dart's position in that
+    sorted list.
+    """
+    dart: list[tuple[int, int]] = []
+    out_darts: list[list[int]] = [[] for _ in range(len(node_xy))]
+    for u, v in edge_set:
+        d0 = len(dart)
+        dart.append((u, v))
+        dart.append((v, u))
+        out_darts[u].append(d0)
+        out_darts[v].append(d0 + 1)
+
+    def _heading(d: int) -> float:
+        u, v = dart[d]
+        return math.atan2(node_xy[v][1] - node_xy[u][1], node_xy[v][0] - node_xy[u][0])
+
+    pos_in_order: dict[int, int] = {}
+    for _, ds in enumerate(out_darts):
+        ds.sort(key=_heading)
+        pos_in_order.update({d: i for i, d in enumerate(ds)})
+
+    return dart, out_darts, pos_in_order
+
+
+def _trace_face(
+    start: int,
+    dart: list[tuple[int, int]],
+    out_darts: list[list[int]],
+    pos_in_order: dict[int, int],
+    visited: list[bool],
+) -> list[int]:
+    """
+    Walk one face starting at dart ``start``; mark darts visited.
+
+    Returns the ordered list of source nodes visited (the face boundary).
+    Uses the *clockwise-from-twin* rule: from dart ``d = u→v`` the next dart
+    in the face is the dart leaving ``v`` that is immediately clockwise from
+    the reverse dart ``v→u`` (twin of ``d``) around ``v``.
+    """
+    cycle: list[int] = []
+    d = start
+    for _ in range(len(dart) + 1):
+        if visited[d]:
+            break
+        visited[d] = True
+        cycle.append(dart[d][0])
+        t = d ^ 1  # twin
+        v = dart[d][1]
+        ring = out_darts[v]
+        d = ring[(pos_in_order[t] - 1) % len(ring)]
+        if d == start:
+            break
+    return cycle
 
 
 def detect_room_polygons(
@@ -91,83 +193,18 @@ def detect_room_polygons(
         raise ValueError("snap_eps_m must be positive")
     inv_eps = 1.0 / snap_eps_m
 
-    # ---- nodes: snap-quantized point -> node index -------------------------
-    node_xy: list[tuple[float, float]] = []
-    node_of_key: dict[tuple[int, int], int] = {}
-
-    def _node(px: float, py: float) -> int:
-        key = (int(round(px * inv_eps)), int(round(py * inv_eps)))
-        idx = node_of_key.get(key)
-        if idx is None:
-            idx = len(node_xy)
-            node_of_key[key] = idx
-            node_xy.append((px, py))
-        return idx
-
-    # ---- undirected edges from every tessellated wall segment --------------
-    edge_set: set[tuple[int, int]] = set()
-    for wall in walls:
-        poly = wall.tessellate(arc_segments_per_quarter)
-        ids = [_node(float(px), float(py)) for px, py in poly]
-        for u, v in zip(ids[:-1], ids[1:]):
-            if u == v:
-                continue  # zero-length segment after snapping
-            edge_set.add((u, v) if u < v else (v, u))
-
+    node_xy, edge_set = _build_snap_graph(walls, inv_eps, arc_segments_per_quarter)
     if not edge_set:
         return []
 
-    # ---- darts (directed half-edges) + per-node outgoing adjacency ---------
-    # dart id is an index into `dart`; twin(2k) == 2k+1 and vice versa.
-    dart: list[tuple[int, int]] = []
-    out_darts: list[list[int]] = [[] for _ in range(len(node_xy))]
-    for u, v in edge_set:
-        d0 = len(dart)
-        dart.append((u, v))
-        dart.append((v, u))
-        out_darts[u].append(d0)
-        out_darts[v].append(d0 + 1)
+    dart, out_darts, pos_in_order = _build_half_edges(node_xy, edge_set)
 
-    def _twin(d: int) -> int:
-        return d ^ 1
-
-    def _heading(d: int) -> float:
-        u, v = dart[d]
-        return math.atan2(node_xy[v][1] - node_xy[u][1], node_xy[v][0] - node_xy[u][0])
-
-    # Sort each node's outgoing darts CCW by heading, and remember each dart's
-    # position in its source node's order so we can step clockwise in O(1).
-    pos_in_order: dict[int, int] = {}
-    for node, ds in enumerate(out_darts):
-        ds.sort(key=_heading)
-        for i, d in enumerate(ds):
-            pos_in_order[d] = i
-
-    def _next_in_face(d: int) -> int:
-        # Arrive at v along u->v; leave along the dart immediately clockwise
-        # from the reverse dart v->u around v (keeps the face on the left).
-        t = _twin(d)
-        v = dart[d][1]
-        ring = out_darts[v]
-        return ring[(pos_in_order[t] - 1) % len(ring)]
-
-    # ---- trace every face once; keep the CCW (positive-area) bounded ones --
     visited = [False] * len(dart)
     rooms: list[np.ndarray] = []
     for start in range(len(dart)):
         if visited[start]:
             continue
-        cycle: list[int] = []
-        d = start
-        # Bounded loop: at most one pass over all darts (each visited once).
-        for _ in range(len(dart) + 1):
-            if visited[d]:
-                break
-            visited[d] = True
-            cycle.append(dart[d][0])  # source node of this dart
-            d = _next_in_face(d)
-            if d == start:
-                break
+        cycle = _trace_face(start, dart, out_darts, pos_in_order, visited)
         if len(cycle) < 3:
             continue
         poly = np.array([node_xy[n] for n in cycle], dtype=np.float64)

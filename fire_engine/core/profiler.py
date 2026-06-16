@@ -454,9 +454,7 @@ class Profiler:
         ctx._sid = sid
         return ctx
 
-    def profiled(
-        self, name: str
-    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    def profiled(self, name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         """
         Decorator timing a whole function/method under the named scope.
 

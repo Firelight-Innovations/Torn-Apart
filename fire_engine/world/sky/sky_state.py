@@ -422,30 +422,50 @@ class SkySystem:
         atmo_zen = self._lut.sample(self._lut.zenith, z)
         atmo_hor = self._lut.sample(self._lut.horizon, z)
         zenith = _weathered(
-            tuple(min(1.0, atmo_zen[i] + _NIGHT_ZENITH[i] * night) for i in range(3)), w
+            (
+                min(1.0, atmo_zen[0] + _NIGHT_ZENITH[0] * night),
+                min(1.0, atmo_zen[1] + _NIGHT_ZENITH[1] * night),
+                min(1.0, atmo_zen[2] + _NIGHT_ZENITH[2] * night),
+            ),
+            w,
         )
         horizon = _weathered(
-            tuple(min(1.0, atmo_hor[i] + _NIGHT_HORIZON[i] * night) for i in range(3)), w
+            (
+                min(1.0, atmo_hor[0] + _NIGHT_HORIZON[0] * night),
+                min(1.0, atmo_hor[1] + _NIGHT_HORIZON[1] * night),
+                min(1.0, atmo_hor[2] + _NIGHT_HORIZON[2] * night),
+            ),
+            w,
         )
 
         # --- HDR radiance contract for the GPU lighting pipeline ---------
         cloud_block = wp.cloud_coverage * wp.cloud_density
         sun_clear = self._lut.sample(self._lut.sun, z)
         sun_atten = 1.0 - 0.92 * cloud_block  # overcast ⇒ diffuse, no disc
-        sun_radiance = tuple(c * sun_atten for c in sun_clear)
+        sun_radiance: tuple[float, float, float] = (
+            sun_clear[0] * sun_atten,
+            sun_clear[1] * sun_atten,
+            sun_clear[2] * sun_atten,
+        )
 
         moon_z = float(moon.z)
         illum = 0.5 * (1.0 - math.cos(2.0 * math.pi * moon_phase))
         moon_up = smoothstep(moon_z, 0.0, 0.25)
         moon_atten = 1.0 - 0.90 * cloud_block
-        moon_radiance = tuple(b * illum * moon_up * moon_atten for b in _MOON_BASE_RADIANCE)
+        moon_radiance: tuple[float, float, float] = (
+            _MOON_BASE_RADIANCE[0] * illum * moon_up * moon_atten,
+            _MOON_BASE_RADIANCE[1] * illum * moon_up * moon_atten,
+            _MOON_BASE_RADIANCE[2] * illum * moon_up * moon_atten,
+        )
 
         # Skylight: physical ambient, desaturated (not darkened) by overcast,
         # plus the night floor and a small moonlit-sky bump.
         amb = self._lut.sample(self._lut.ambient, z)
         amb = lerp_color(amb, _luminance_gray(amb), 0.8 * w)
-        sky_ambient = tuple(
-            amb[i] + _NIGHT_AMBIENT[i] * night + moon_radiance[i] * 0.18 for i in range(3)
+        sky_ambient: tuple[float, float, float] = (
+            amb[0] + _NIGHT_AMBIENT[0] * night + moon_radiance[0] * 0.18,
+            amb[1] + _NIGHT_AMBIENT[1] * night + moon_radiance[1] * 0.18,
+            amb[2] + _NIGHT_AMBIENT[2] * night + moon_radiance[2] * 0.18,
         )
 
         # Fog color: horizon hue pulled toward a neutral gray that itself

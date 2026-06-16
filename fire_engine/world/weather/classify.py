@@ -24,7 +24,7 @@ if TYPE_CHECKING:  # avoid a runtime import cycle
 __all__ = ["WeatherType", "classify"]
 
 
-class WeatherType(str, Enum):
+class WeatherType(str, Enum):  # noqa: UP042 — test_weather_classify pins str() == "WeatherType.X" behavior
     """
     Discrete weather label.  ``str`` mixin so ``.value`` round-trips through
     saves and :class:`WeatherChangedEvent` payloads as a plain string.  Values

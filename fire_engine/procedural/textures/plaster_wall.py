@@ -40,6 +40,8 @@ Usage
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 
 from fire_engine.procedural.defs import register_def
@@ -107,7 +109,7 @@ class PlasterWallDef(ProceduralTextureDef):
     DEFAULT_WIDTH = 64
     DEFAULT_HEIGHT = 64
 
-    def generate(self, rng: np.random.Generator, **params) -> np.ndarray:
+    def generate(self, rng: np.random.Generator, **params: Any) -> np.ndarray:
         """
         Generate the plaster wall texture.
 

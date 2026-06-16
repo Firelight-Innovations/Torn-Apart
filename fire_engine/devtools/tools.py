@@ -29,6 +29,7 @@ from fire_engine.devtools.fields import Button, Field, FieldKind, Panel, Section
 from fire_engine.devtools.introspect import describe_chunk, describe_object, is_chunk
 
 if TYPE_CHECKING:
+    from fire_engine.core.clock import Clock
     from fire_engine.devtools.selection import Selection
 
 
@@ -98,10 +99,7 @@ class PerformanceTool(DevTool):
         self._providers = dict(providers)
 
     def build(self) -> Panel:
-        fields = [
-            Field(label, FieldKind.LABEL, (lambda fn=fn: fn()))
-            for label, fn in self._providers.items()
-        ]
+        fields = [Field(label, FieldKind.LABEL, fn) for label, fn in self._providers.items()]
         return Panel(self.tool_id, self.title, [Section("Stats", fields)])
 
 
@@ -282,7 +280,7 @@ class ClockTool(DevTool):
     tool_id = "clock"
     title = "Time"
 
-    def __init__(self, clock) -> None:
+    def __init__(self, clock: Clock) -> None:
         self._clock = clock
 
     @staticmethod

@@ -94,7 +94,7 @@ def _neighbor_mean4(a: np.ndarray) -> np.ndarray:
     down = p[2:, 1:-1]
     left = p[1:-1, :-2]
     right = p[1:-1, 2:]
-    return (up + down + left + right) * 0.25
+    return np.asarray((up + down + left + right) * 0.25)
 
 
 def _box_blur3(a: np.ndarray) -> np.ndarray:
@@ -140,18 +140,17 @@ def column_solid_fraction(job: VenturiJob) -> np.ndarray:
     cell_m = float(job.cell_m)
     voxel = float(job.voxel_size)
     S = int(job.chunk_size)
-    chunk_m = S * voxel
 
     vpc = cell_m / voxel  # voxels per wind-cell edge
     if abs(vpc - round(vpc)) > 1e-9 or vpc < 1:
         raise ValueError(f"cell_m ({cell_m}) must be an integer multiple of voxel_size ({voxel})")
-    vpc = int(round(vpc))  # 8 at the defaults
+    vpc = round(vpc)  # 8 at the defaults
 
     ox_cell, oy_cell = job.origin_cell  # wind cells
     # World corner of wind cell (0,0), in voxel indices on the global voxel
     # grid (voxel v spans world [v*voxel, (v+1)*voxel)).
-    vx0 = int(round(ox_cell * cell_m / voxel))
-    vy0 = int(round(oy_cell * cell_m / voxel))
+    vx0 = round(ox_cell * cell_m / voxel)
+    vy0 = round(oy_cell * cell_m / voxel)
 
     z_lo, z_hi = job.ground_band
     # Global voxel-z range covering the band (inclusive of partial top voxel).
@@ -279,7 +278,8 @@ def solve_venturi(job: VenturiJob) -> VenturiResult:
     crowd = solid.copy()
     iters = max(int(job.venturi_iters), 0)
     for _ in range(iters):
-        crowd = (1.0 - _CROWD_DIFFUSE) * crowd + _CROWD_DIFFUSE * _neighbor_mean4(crowd)
+        blended = (1.0 - _CROWD_DIFFUSE) * crowd + _CROWD_DIFFUSE * _neighbor_mean4(crowd)
+        crowd = np.asarray(blended, dtype=np.float32)
     crowd = crowd.astype(np.float32)
 
     # --- Speed-up: an OPEN cell in a crowded neighbourhood is a pinch -------

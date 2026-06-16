@@ -68,16 +68,12 @@ from fire_engine.procedural.registry import clear_cache, get, register, reset_re
 from fire_engine.procedural.textures.base import ProceduralTextureDef, value_noise
 
 __all__ = [
-    # Base classes
     "ProceduralDef",
     "ProceduralTextureDef",
-    # Registration decorator
-    "register_def",
-    # Registry API
-    "register",
-    "get",
     "clear_cache",
+    "get",
+    "register",
+    "register_def",
     "reset_registry",
-    # Noise helper (reused by terrain Phase 3)
     "value_noise",
 ]

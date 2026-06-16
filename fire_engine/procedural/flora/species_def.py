@@ -38,6 +38,7 @@ Preview with ``python tools/preview_tree.py tree_my_tree --obj --png``.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 
@@ -186,7 +187,7 @@ class TreeSpeciesDef(ProceduralDef):
     # Shared pipeline (species rarely override below here)
     # ------------------------------------------------------------------
 
-    def generate(self, rng: np.random.Generator, **params) -> TreeVariantSet:
+    def generate(self, rng: np.random.Generator, **params: Any) -> TreeVariantSet:
         """
         Build the full variant set (registry-cached; do not call directly —
         use ``procedural.get(self.name)``).
@@ -228,7 +229,7 @@ class TreeSpeciesDef(ProceduralDef):
         grow_seeds = rng.integers(0, 2**63, size=n)
         imp_seeds = rng.integers(0, 2**63, size=n)
         meshes: list[TreeMesh] = []
-        grown: list = []
+        grown: list[tuple[TreeSkeleton, Leaves]] = []
         for v in range(n):  # pool-size loop (≤ 8)
             vrng = np.random.default_rng(int(grow_seeds[v]))
             sk, leaves = self.grow(vrng, v)

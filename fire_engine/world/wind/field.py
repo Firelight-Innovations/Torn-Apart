@@ -68,8 +68,10 @@ Example
 
 from __future__ import annotations
 
+import contextlib
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -80,7 +82,7 @@ from fire_engine.world.wind.region import WindRegion
 from fire_engine.world.wind.worker import VenturiJob
 
 if TYPE_CHECKING:
-    from fire_engine.world.wind.worker import VenturiWorker
+    from fire_engine.world.wind.worker import VenturiResult, VenturiWorker
 
 __all__ = [
     "WindField",
@@ -173,7 +175,7 @@ def vertical_profile(z: np.ndarray, z_ground: float, cfg: Config) -> np.ndarray:
     cap = float(cfg.wind_profile_cap)
     above = np.maximum(np.asarray(z, dtype=np.float32) - float(z_ground), 0.0)
     prof = (above / z_ref) ** shear
-    return np.clip(prof, floor, cap).astype(np.float32)
+    return np.asarray(np.clip(prof, floor, cap), dtype=np.float32)
 
 
 class WindField:
@@ -258,10 +260,8 @@ class WindField:
         modifier and re-running :meth:`update` restores the base field exactly
         (modifiers are pure / additive).  No-op if ``m`` is not registered.
         """
-        try:
+        with contextlib.suppress(ValueError):
             self._modifiers.remove(m)
-        except ValueError:
-            pass
 
     # ------------------------------------------------------------------
     # Per-frame update
@@ -271,9 +271,9 @@ class WindField:
         self,
         dt: float,
         wind_time: float,
-        sky_state: object | None,
-        player_pos,
-        chunks: dict | None = None,
+        sky_state: Any,
+        player_pos: Sequence[float],
+        chunks: dict[tuple[int, int, int], Any] | None = None,
     ) -> None:
         """
         Recompute and atomically publish the wind field for this frame.
@@ -345,8 +345,9 @@ class WindField:
 
         # --- 1. Recenter (free: analytic field, just rebuild meshes) --------
         recentered = self._region.maybe_recenter(player_pos)
-        X = self._region.X
-        Y = self._region.Y
+        assert self._region.X is not None and self._region.Y is not None
+        X: np.ndarray = self._region.X
+        Y: np.ndarray = self._region.Y
 
         # --- 2. Weather scaling (duck-typed sky_state; None => calm) --------
         if sky_state is None:
@@ -421,7 +422,7 @@ class WindField:
     def _venturi_step(
         self,
         recentered: bool,
-        chunks: dict | None,
+        chunks: dict[tuple[int, int, int], Any] | None,
         mean: tuple[float, float],
     ) -> None:
         """
@@ -494,7 +495,9 @@ class WindField:
             self._venturi_origin = None
 
     @staticmethod
-    def _snapshot_materials(chunks: dict) -> dict:
+    def _snapshot_materials(
+        chunks: dict[tuple[int, int, int], Any],
+    ) -> dict[tuple[int, int, int], np.ndarray]:
         """
         Build the ``coord -> uint8 materials`` snapshot the worker reads.
 
@@ -502,12 +505,12 @@ class WindField:
         (mirrors ``lighting`` assembly-worker's dual acceptance).  References,
         not copies — the arrays are treated as immutable for the solve's life.
         """
-        out: dict = {}
+        out: dict[tuple[int, int, int], np.ndarray] = {}
         for coord, ch in chunks.items():
             out[coord] = getattr(ch, "materials", ch)
         return out
 
-    def _commit_venturi(self, res) -> None:
+    def _commit_venturi(self, res: VenturiResult) -> None:
         """
         Apply a drained :class:`~fire_engine.world.wind.worker.VenturiResult`.
 
@@ -617,14 +620,13 @@ class WindField:
         out[:, 1] = horiz[:, 1] * prof
 
         # Vertical updraft: wind funnelled by a windward obstacle (high venturi
-        # speed-up) rises so motes/leaves lift over it.  vz =
-        #   bilinear(updraft_gain_grid) * horizontal_speed * height_falloff,
-        # where updraft_gain_grid = wind_updraft_gain * max(speedup-1, 0) (set
-        # only for the current origin; zeros = identity / no obstacle).  Kept
-        # intentionally simple — it just needs particles to rise over a
-        # windward constriction, not be physically exact.  Gated on origin
-        # agreement so a snapshot from a just-recentered frame never reads a
-        # stale (other-origin) updraft grid.
+        # speed-up) rises so motes/leaves lift over it.  vz is the bilinear
+        # sample of updraft_gain_grid (wind_updraft_gain * max(speedup-1, 0),
+        # set only for the current origin; zeros = identity / no obstacle)
+        # multiplied by horizontal speed and divided by prof (so the rise tapers
+        # with height).  Kept intentionally simple — particles just need to
+        # rise over a constriction.  Gated on origin agreement so a snapshot
+        # from a just-recentered frame never reads a stale updraft grid.
         if self._venturi_origin is not None and self._venturi_origin == self._region.origin_cell:
             g = self._updraft_gain_grid
             u00 = g[i0c, j0c]

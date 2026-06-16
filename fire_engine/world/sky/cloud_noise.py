@@ -43,7 +43,7 @@ __all__ = ["bake_detail_noise", "bake_shape_noise"]
 
 
 def _smoothstep(f: np.ndarray) -> np.ndarray:
-    return f * f * (3.0 - 2.0 * f)
+    return np.asarray(f * f * (3.0 - 2.0 * f))
 
 
 def _value_octave(size: int, freq: int, rng: np.random.Generator) -> np.ndarray:
@@ -57,8 +57,8 @@ def _value_octave(size: int, freq: int, rng: np.random.Generator) -> np.ndarray:
     fy = f[None, :, None]
     fz = f[None, None, :]
 
-    def corner(ix, iy, iz):
-        return grid[np.ix_(ix, iy, iz)]
+    def corner(ix: np.ndarray, iy: np.ndarray, iz: np.ndarray) -> np.ndarray:
+        return np.asarray(grid[np.ix_(ix, iy, iz)])
 
     g000 = corner(i0, i0, i0)
     g100 = corner(i1, i0, i0)
@@ -74,7 +74,7 @@ def _value_octave(size: int, freq: int, rng: np.random.Generator) -> np.ndarray:
     g11 = g011 + (g111 - g011) * fx
     g0 = g00 + (g10 - g00) * fy
     g1 = g01 + (g11 - g01) * fy
-    return g0 + (g1 - g0) * fz
+    return np.asarray(g0 + (g1 - g0) * fz)
 
 
 def _worley_octave(size: int, freq: int, rng: np.random.Generator) -> np.ndarray:

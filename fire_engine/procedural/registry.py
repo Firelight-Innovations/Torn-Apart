@@ -68,7 +68,7 @@ _cache: dict[tuple[str, int, str], Any] = {}
 # ---------------------------------------------------------------------------
 
 
-def _params_digest(params: dict) -> str:
+def _params_digest(params: dict[str, object]) -> str:
     """
     Return a stable, canonical string digest of *params*.
 
@@ -152,7 +152,7 @@ def register(def_instance: ProceduralDef) -> None:
     _registry[name] = def_instance
 
 
-def get(name: str, **params) -> Any:
+def get(name: str, **params: Any) -> Any:
     """
     Generate (or return cached) content for the named definition.
 

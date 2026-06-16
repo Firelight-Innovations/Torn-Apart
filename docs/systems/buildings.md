@@ -1,5 +1,5 @@
 # buildings — System Doc
-keywords: building, buildings, floorplan, floor plan, storey, story, floor, wall, walls, curved wall, arc, bulge, segment, thickness, opening, window, door, sill, head, lintel, room, rooms, room detection, interior, foundation, slab, roof, flat roof, stairs, stair stub, BuildingDefaults, Building, Storey, Wall, Opening, Room, StairsStub, Foundation, RoofSlab, WallKind, OpeningKind, add_wall, add_opening, add_room, add_storey, add_stairs, set_foundation, set_roof, detect_rooms, storey_base_z, world_aabb, to_dict, from_dict, allocate_eid, element id, plan space, building-local, free-form, non-voxel, Sims, Paralives, BuildingDef, procedural building, house, settlement
+keywords: building, buildings, floorplan, floor plan, storey, story, floor, wall, walls, curved wall, arc, bulge, segment, thickness, opening, window, door, sill, head, lintel, room, rooms, room detection, interior, foundation, slab, roof, flat roof, stairs, stair stub, BuildingDefaults, Building, Storey, Wall, Opening, Room, StairsStub, Foundation, RoofSlab, WallKind, OpeningKind, add_wall, add_opening, add_room, add_storey, add_stairs, set_foundation, set_roof, detect_rooms, storey_base_z, world_aabb, to_dict, from_dict, allocate_eid, element id, plan space, building-local, free-form, non-voxel, Sims, Paralives, BuildingDef, procedural building, house, settlement, seam, gap, corner filler, filler post, junction, butt joint, miter, watertight, pad_hull, pitched roof, gable, hip, shed, roof kind, surface material, per-surface material
 
 ## Role
 Free-form floorplan buildings (ARCHITECTURE.md §5.7) — the data model and imperative authoring API for structures that are deliberately **not** voxel-aligned. A `Building` has one world transform (position `Vec3` + rotation `Quat`, arbitrary axis) and stacks per-storey 2-D floorplans: walls are straight segments or circular arcs (single `bulge` scalar) with real thickness and parametric window/door openings; rooms are first-class objects (explicitly authored, or auto-detected from wall topology) so future systems can procedurally furnish each room; foundations, floor/ceiling slabs and flat roofs complete the envelope; stairs exist as data stubs only (no geometry yet). This package is the base layer the future tag→building procedural generator (`BuildingDef`) will drive — every generator action is one of these API calls. It deliberately does NOT render (that is `world/building_renderer.py`), does NOT import panda3d (fully headless), and does NOT yet mesh stairs or pitched roofs.
@@ -69,7 +69,8 @@ The registered `DemoHouseDef` (`procedural.get("building_demo_house")`, in `buil
 - A positive-bulge wall on a CCW perimeter bows **into** the room (left of travel); use negative bulge for outward bay windows on CCW outlines.
 - `Building.world_aabb()` is conservative (hull + thickness padding, tessellation at 4 chords/quarter), not tight — fine for lighting invalidation, wrong tool for collision.
 - Don't construct `Storey` directly — `Building.add_storey` wires the back-reference that element-id allocation needs (`Storey.from_dict` is the only other sanctioned path).
-- Meshing joins walls **butt-to-butt** (v1): each wall is offset/mitered along its *own* centerline only — there is no cross-wall miter at shared corners, so thick walls overlap slightly at corners (invisible from outside; cross-wall miter is future polish). Per-storey floor slabs use the **convex hull** of that storey's wall centerlines, so a concave plan's floor bridges the notch (same caveat as `set_foundation`).
+- Meshing joins walls **butt-to-butt** (each wall is offset along its *own* centerline only — no cross-wall miter at shared corners; the general miter solver is Iteration 3). Iteration 2 closes the resulting corner gap with a **filler post** per shared node: `meshing._add_corner_fillers` extrudes the convex hull of the incident walls' offset corner points over the shared wall band, so corners read as solid without mitering. Lone (free) wall ends keep their butt cap.
+- Per-storey floor slabs use the **convex hull** of that storey's wall centerlines, **padded outward to the outer wall faces** (half the thickest wall, via `model._pad_hull_outward`) so the floor edge meets the wall instead of stopping `thickness/2` short (Iteration 2 floor↔wall seam fix). The hull is still convex, so a *concave* plan's floor bridges the notch (true-outline concave slabs are Iteration 3 — same caveat as `set_foundation`).
 - A wall mesh assumes its openings' `head_m` stays below the wall top — the top cap spans the full length; an opening reaching the very top would leave the cap floating. Keep `head_m < height_m`.
 - `mesh_building` emits **building-local** positions (unlike terrain chunk meshes, which are world-space at the chunk origin). The renderer MUST apply `building.position`/`rotation` as a node transform, and `building.vert` MUST compute `v_world` via `p3d_ModelMatrix` or lighting samples the wrong world cell.
 
@@ -77,7 +78,7 @@ The registered `DemoHouseDef` (`procedural.get("building_demo_house")`, in `buil
 This is the **first iteration**. The list below is the canonical handoff for the agent that takes the next pass — every item is a deliberate v1 cut, not an accidental bug. (Owner/other agents: append your own findings under "Owner-observed", below.)
 
 1. **No light occlusion — buildings don't shadow or bounce GI.** `occlusion.BuildingOccupancyRasterizer.rasterize_occupancy` is a documented no-op, so buildings are *lit* but cast no shadows and contribute no GI; interiors only darken through openings. Enabling it needs a thread-safe immutable geometry snapshot handed to the async cascade-assembly worker (the intended wall/slab voxelization is spelled out in `occlusion.py`'s docstring). **This is the single biggest visual gap.**
-2. **Butt-to-butt wall joins — no cross-wall corner miter.** Each wall is offset/mitered along *its own* centerline only; at shared corners thick walls overlap and can poke through. Looks fine from outside for thin walls; visible on thick walls and at acute corners.
+2. **Butt-to-butt wall joins — no cross-wall corner miter.** Each wall is offset along *its own* centerline only; at shared corners thick walls overlap. **Iteration 2 update:** the corner *gap* is now closed by a filler post per shared node (`_add_corner_fillers`), so corners are watertight — but this is a fill, not a true miter (faces are not trimmed/extended to meet cleanly). The general miter solver remains Iteration 3.
 3. **Convex-hull slabs & footprints.** `set_foundation`/`set_roof` (auto) and the per-storey floor slabs use the **convex hull** of the wall centerlines. Concave / L-shaped / U-shaped / courtyard plans get a slab that bridges the notch (the demo's chamfer notch is bridged this way). Workaround today: pass explicit polygons; proper fix is to triangulate the true room/footprint outlines.
 4. **Flat roofs only.** `set_roof` is a single flat slab — no pitched / gabled / hipped / shed roofs, no overhang/eave control beyond the footprint polygon, no fascia/gutter.
 5. **Stairs are data-only stubs.** `StairsStub` reserves which storeys connect and where, but meshes nothing and feeds no traversal/navmesh — there is no way to actually move between storeys.
@@ -92,15 +93,26 @@ This is the **first iteration**. The list below is the canonical handoff for the
 ### Owner-observed (fill in)
 _Reserved for the owner's and other agents' additional findings — add bullets here._
 
-## Roadmap — Iteration 2 (suggested)
-Ordered roughly by impact; the next agent should treat this as a starting backlog, not a fixed spec.
-- **Wire up light occlusion** (limitation 1): snapshot-safe geometry → cascade worker → buildings shadow + bounce GI. Highest visual payoff.
-- **True-outline (concave) slabs** (limitation 3): triangulate actual room/footprint polygons; support L-shapes, courtyards, atria.
-- **Cross-wall corner miter** (limitation 2): proper mitered joins at shared nodes.
-- **Pitched roofs** (limitation 4): gable/hip/shed roof generators over the footprint.
-- **Per-surface materials** (limitation 7): material ids per wall/room/face + roof/floor/trim textures, UV control.
+## Roadmap
+
+### Iteration 2 — IN PROGRESS (branch `feature/procedural-buildings`)
+The owner-selected scope for this pass (everything else below is deferred to Iteration 3+):
+- **Gap/seam fixing** (limitations 2 & 12, partial): close the visible gaps and overlaps where building *sections* meet — wall→wall at shared corners, wall→floor-slab, and wall-top→roof. This is the "make the existing demo house look solid" pass, not the full general miter solver (that is Iteration 3).
+- **Pitched roofs** (limitation 4): gable / hip / shed roof generators over the footprint, replacing flat-only.
+- **Per-surface materials** (limitation 7): distinct material ids per surface class (wall / floor / roof / trim / foundation) instead of the single `plaster_wall` albedo, so roofs and floors read differently from walls.
+
+### Iteration 3 — PLANNED (owner-specified 2026-06-16, record so it isn't forgotten)
+The headline theme is **authoring + generation tooling** — making buildings something both a human and a coding/AI harness can create and edit:
+- **Editor UI for buildings**: in-engine editor tooling to place, edit, and refine buildings *by hand* (walls, openings, storeys, roofs, materials) — see the editor system docs (`devtools` / editor harness) for the host.
+- **Harness editing path**: a stable, scriptable API surface so a coding harness (e.g. Claude Code) can author/edit buildings programmatically — the imperative authoring API exists today; this iteration hardens it into the canonical harness-facing contract.
+- **Procedural building generation**: tag/description → building generator (limitation 11), runnable BOTH from a coding harness AND from inside the editor UI itself (a "generate a building like X" action). This is the `BuildingDef.generate(rng, **params)` seam finally implemented beyond `DemoHouseDef`.
+
+### Iteration 3+ backlog (unscheduled, ordered roughly by impact)
+- **True-outline (concave) slabs** (limitation 3): triangulate actual room/footprint polygons; support L-shapes, courtyards, atria. (Deferred from Iteration 2 by owner.)
+- **Cross-wall corner miter** (limitation 2): the *general* mitered-join solver at shared nodes (Iteration 2 only closes the seams cosmetically; this does it properly for arbitrary plans).
+- **Wire up light occlusion** (limitation 1): snapshot-safe geometry → cascade worker → buildings shadow + bounce GI. Highest visual payoff; needs the thread-safe immutable geometry snapshot.
+- **Procedural room/furniture placer** (limitation 9): the system that consumes `Room` tags to furnish interiors — the reason rooms are first-class objects. Pairs with the Iteration 3 generator.
 - **Real stairs** (limitation 5): stair-run geometry + storey traversal.
 - **Richer openings** (limitation 8): frames, glazing, arched tops, functional doors, room-connectivity/portal graph.
 - **Collision meshes** (limitation 10): per-wall collision for the player/physics.
-- **The procedural generator** (limitation 11): tag/description→building + settlement placement — the reason the whole authoring API exists.
 - **T-junction room detection** (limitation 6): auto-split mid-span wall intersections.

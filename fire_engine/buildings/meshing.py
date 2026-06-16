@@ -43,7 +43,14 @@ from __future__ import annotations
 
 import numpy as np
 
-from fire_engine.buildings.model import Building, Storey, Wall, _convex_hull
+from fire_engine.buildings._impl.seams import corner_filler_polys
+from fire_engine.buildings.model import (
+    Building,
+    Storey,
+    Wall,
+    _convex_hull,
+    _pad_hull_outward,
+)
 from fire_engine.buildings.triangulate import triangulate_polygon
 from fire_engine.core.config import Config
 from fire_engine.world.terrain.meshing import MeshArrays
@@ -388,13 +395,35 @@ def _cap_strip(
 
 
 def _storey_footprint(building: Building, storey: Storey) -> np.ndarray:
-    """Convex-hull footprint of a storey's walls for its floor slab."""
+    """
+    Convex-hull footprint of a storey's walls for its floor slab, **padded out
+    to the outer wall faces** (half the thickest wall) so the floor edge meets
+    the wall rather than stopping ``thickness/2`` short — closes the floor↔wall
+    seam.  Concave (true-outline) floors remain Iteration 3 scope.
+    """
     if storey.walls:
         xy = np.concatenate([w.tessellate(8) for w in storey.walls], axis=0)
-        return _convex_hull(xy)
+        pad = max(w.thickness_m for w in storey.walls) / 2.0
+        return _pad_hull_outward(_convex_hull(xy), pad)
     if building.foundation is not None:
         return building.foundation.polygon
     return np.empty((0, 2), dtype=np.float64)
+
+
+def _add_corner_fillers(
+    soup: _Soup, storey: Storey, z_bottom: float, qpq: int, snap_eps: float
+) -> None:
+    """
+    Close the gap at shared wall corners with a vertical filler post per
+    junction node (Iteration-2 seam fix).
+
+    Delegates the geometry to
+    :func:`fire_engine.buildings._impl.seams.corner_filler_polys` (one filler
+    polygon + band top per junction) and extrudes each as a solid slab over the
+    shared wall band.  Free wall ends keep their existing butt cap.
+    """
+    for hull, band in corner_filler_polys(storey, qpq, snap_eps):
+        _add_slab(soup, hull, z_bottom, z_bottom + band)
 
 
 def mesh_building(building: Building, cfg: Config) -> MeshArrays:
@@ -426,6 +455,7 @@ def mesh_building(building: Building, cfg: Config) -> MeshArrays:
         for wall in storey.walls:
             band = wall.height_m if wall.height_m is not None else storey.height_m - storey.slab_m
             _add_wall(soup, wall, z_floor1, z_floor1 + band, qpq)
+        _add_corner_fillers(soup, storey, z_floor1, qpq, float(cfg.building_snap_eps_m))
     if building.foundation is not None:
         _add_slab(soup, building.foundation.polygon, -building.foundation.depth_m, 0.0)
     if building.roof is not None:

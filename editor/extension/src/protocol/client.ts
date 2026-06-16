@@ -1,8 +1,8 @@
 // WebSocket JSON-RPC client for the Fire Editor daemon (EDITOR_PRD §4).
 // Owns the single Node `ws` connection used by the extension host. The actual
 // JSON-RPC correlation / notification / binary-decode logic lives in the
-// transport-agnostic `RpcSession` (shared with the browser viewport harness);
-// this class is just the `ws` glue. No vscode import here so the extension host
+// transport-agnostic `RpcSession`; this class is just the `ws` glue. No vscode
+// import here so the extension host
 // owns UI separately and this stays portable.
 import WebSocket from "ws";
 import { DecodedFrame } from "./binary";

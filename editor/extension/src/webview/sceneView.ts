@@ -24,6 +24,18 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setClearColor(0x101418, 1);
 document.body.appendChild(renderer.domElement);
 
+// VS Code webviews only deliver keyboard events to the iframe once its document
+// holds focus, and a bare <canvas> isn't focusable — so without this the WASD
+// fly keys and the W/E/R/F/G/B/Esc hotkeys (all `window` keydown handlers below)
+// silently never fire. Make the canvas focusable and claim focus on load and on
+// every pointer interaction so keystrokes reach the viewport.
+renderer.domElement.tabIndex = 0;
+renderer.domElement.style.outline = "none";
+const grabViewportFocus = (): void => renderer.domElement.focus({ preventScroll: true });
+renderer.domElement.addEventListener("pointerdown", grabViewportFocus);
+window.addEventListener("focus", grabViewportFocus);
+grabViewportFocus();
+
 const scene = new THREE.Scene();
 scene.add(new THREE.AmbientLight(0xffffff, 1.0)); // baked lighting is in vertex colors
 
@@ -590,7 +602,7 @@ let lastTime = performance.now();
 let lastFocusSent = 0;
 let fps = 0;
 
-// Place the camera deterministically (harness screenshots). Accepts an explicit
+// Place the camera deterministically. Accepts an explicit
 // position and either yaw/pitch or a look-at target (default: origin). Forces a
 // fresh stream-center so chunks load around the new pose.
 function applyCameraPose(p: {
@@ -617,8 +629,8 @@ function applyCameraPose(p: {
   lastCenterSent = new THREE.Vector3(Infinity, Infinity, Infinity);
 }
 
-// Numeric viewport state for harness assertions / Chrome MCP readbacks. Not used
-// by VS Code; harmless there. Read it with `window.__fireSceneDebug.snapshot()`.
+// Numeric viewport state for debug readbacks (e.g. the webview devtools console).
+// Read it with `window.__fireSceneDebug.snapshot()`.
 const fireSceneDebug = {
   snapshot() {
     return {

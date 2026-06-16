@@ -2,12 +2,21 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "fire-editor: install",
+      "type": "shell",
+      "command": "npm install",
+      "options": { "cwd": "${workspaceFolder}/editor/extension" },
+      "problemMatcher": []
+    },
+    {
       "label": "fire-editor: build",
       "type": "shell",
       "command": "npm run compile",
       "options": { "cwd": "${workspaceFolder}/editor/extension" },
       "problemMatcher": [],
-      "group": { "kind": "build", "isDefault": true }
+      "group": { "kind": "build", "isDefault": true },
+      "dependsOn": ["fire-editor: install"],
+      "dependsOrder": "sequence"
     },
     {
       "label": "fire-editor: watch",

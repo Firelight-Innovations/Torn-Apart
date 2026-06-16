@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import NotRequired, TypedDict
 
-PROTOCOL_VERSION = 6
+PROTOCOL_VERSION = 7
 DAEMON_VERSION = "0.1.0"
 
 # Binary framing: [u32 magic][u32 schema_id][u32 payload_id][payload], little-endian.
@@ -28,6 +28,7 @@ class Method:
     PING = "ping"
     WORLD_OPEN = "world.open"
     WORLD_SAVE = "world.save"
+    WORLD_SCREENSHOT = "world.screenshot"
     CHUNKS_SET_CENTER = "chunks.set_center"
     WORLD_GROUND_LUT = "world.ground_lut"
     SCENE_STATS = "scene.stats"
@@ -87,6 +88,23 @@ class WorldSaveResult(TypedDict):
     ok: bool
     path: str
     edited_chunks: int
+
+class WorldScreenshotParams(TypedDict):
+    px: float
+    py: float
+    pz: float
+    yaw: NotRequired[float]
+    pitch: NotRequired[float]
+    width: NotRequired[int]
+    height: NotRequired[int]
+    frames: NotRequired[int]
+    out_path: NotRequired[str]
+
+class WorldScreenshotResult(TypedDict):
+    ok: bool
+    path: str
+    width: int
+    height: int
 
 class ChunksSetCenterParams(TypedDict):
     x: float

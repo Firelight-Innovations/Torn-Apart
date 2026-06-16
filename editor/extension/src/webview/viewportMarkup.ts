@@ -1,8 +1,6 @@
-// Shared viewport markup — the CSS + body HTML for the Scene View, used by BOTH
-// the VS Code panel (`sceneViewPanel.ts`) and the standalone browser harness
-// (`harnessBoot.ts`). Keeping it here means any new viewport UI (gizmo buttons,
-// palette fields, hints) lands in the harness automatically, so an agent's
-// screenshots always match what a human sees in VS Code.
+// Shared viewport markup — the CSS + body HTML for the Scene View, injected by
+// the VS Code panel (`sceneViewPanel.ts`). Keeping it in one module means any
+// new viewport UI (gizmo buttons, palette fields, hints) has a single home.
 //
 // IMPORTANT: every element id `sceneView.ts` dereferences must live here. The
 // `viewportMarkup.test.ts` test guards that contract.

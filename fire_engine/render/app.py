@@ -151,6 +151,7 @@ class App(ShowBase):  # type: ignore[misc]  # panda3d ShowBase has no stubs; Any
     _escape_was_down: bool
     _skip_mouse_delta: bool
     _had_focus: bool
+    _headless: bool
     chunk_manager: Any
     light_sampler: Any
     lighting_pipeline: Any
@@ -168,6 +169,7 @@ class App(ShowBase):  # type: ignore[misc]  # panda3d ShowBase has no stubs; Any
         config: Config,
         clock: Clock,
         event_bus: EventBus,
+        headless: bool = False,
     ) -> None:
         # The HDR post-processing buffers are full-window render targets.
         # Panda3D's default ``textures-power-2 down`` would round them to a
@@ -195,6 +197,11 @@ class App(ShowBase):  # type: ignore[misc]  # panda3d ShowBase has no stubs; Any
         self._config = config
         self._clock = clock
         self._event_bus = event_bus
+        # Offscreen render mode (world.screenshot / tools): no visible window, no
+        # mouse capture, no FPS meter, no focus reasserts.  The caller sets
+        # ``window-type offscreen`` + ``win-size`` via loadPrcFileData BEFORE
+        # constructing App; this flag just skips the interactive-only setup.
+        self._headless = headless
 
         # Performance profiler (core, panda3d-free) — configure the process
         # singleton from config.  No-op + zero buffers when disabled.  The
@@ -234,14 +241,17 @@ class App(ShowBase):  # type: ignore[misc]  # panda3d ShowBase has no stubs; Any
         # Per-chunk NodePath bookkeeping: coord -> NodePath under terrain_root.
         self._chunk_nodes: dict[tuple[int, int, int], NodePath] = {}
 
-        # Window setup
-        props = WindowProperties()
-        props.set_size(1280, 720)
-        props.set_title("Torn Apart")
-        props.set_fixed_size(False)
-        self.win.request_properties(props)
+        # Window setup.  Skipped when headless: the offscreen buffer's size comes
+        # from the ``win-size`` PRC the caller set before ShowBase init, and an
+        # offscreen GraphicsBuffer has no title / cursor to configure.
+        if not self._headless:
+            props = WindowProperties()
+            props.set_size(1280, 720)
+            props.set_title("Torn Apart")
+            props.set_fixed_size(False)
+            self.win.request_properties(props)
 
-        if config.show_fps:
+        if config.show_fps and not self._headless:
             self.setFrameRateMeter(True)
 
         # Vsync — Panda3D uses sync-video property
@@ -267,8 +277,10 @@ class App(ShowBase):  # type: ignore[misc]  # panda3d ShowBase has no stubs; Any
         # opens (no need to hunt for ESC first).  ESC toggles capture off again
         # to free the cursor.  The actual cursor lock is requested in
         # _set_mouse_capture; the first delta is skipped via _skip_mouse_delta.
-        self.input_state.mouse_captured = True
-        self._set_mouse_capture(True)
+        # Headless: no cursor to capture on an offscreen buffer.
+        if not self._headless:
+            self.input_state.mouse_captured = True
+            self._set_mouse_capture(True)
 
         # Camera GameObject
         self.camera_go = instantiate()

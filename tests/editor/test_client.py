@@ -1,4 +1,4 @@
-"""EditorClient + harness tests (EDITOR_PRD agent access).
+"""EditorClient tests (EDITOR_PRD agent access).
 
 Exercises the Python client against a real in-process daemon over a real
 WebSocket: handshake, world.open, chunk streaming, scene ops, the resend

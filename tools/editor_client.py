@@ -1,24 +1,27 @@
 """tools/editor_client.py — drive the Fire Editor daemon from the command line.
 
-This is the agent-facing CLI half of the editor harness (EDITOR_PRD agent
-access): every subcommand maps ~1:1 to a daemon RPC method, so an agent (or a
-human, or CI) can open a world, stream/inspect chunks, carve terrain, place and
-transform scene objects, undo/redo and save — all without the VS Code UI.
+This is the agent-facing CLI for the editor (EDITOR_PRD agent access): every
+subcommand maps ~1:1 to a daemon RPC method, so an agent (or a human, or CI) can
+open a world, stream/inspect chunks, carve terrain, place and transform scene
+objects, undo/redo, screenshot and save — all without the VS Code UI.
 
 Two ways to run it:
 
   • Persistent server (recommended for an interactive session)::
 
-        python tools/editor_client.py serve --port 8123 --http-port 8770
+        python tools/editor_client.py serve --port 8123
         # then, in another shell, talk to that same daemon:
         python tools/editor_client.py --port 8123 open --seed 1337
         python tools/editor_client.py --port 8123 brush --x 0 --y 0 --z 7.5 --mode remove
         python tools/editor_client.py --port 8123 create cube --x 2 --y 0 --z 8
 
-    ``serve`` also hosts the browser viewport harness over HTTP and prints its
-    URL; the CLI edits above render live in that page (the daemon broadcasts to
-    every connected client). Point Chrome (or the Chrome MCP tools) at the URL
-    to *see* what your CLI edits do.
+    ``serve`` runs a long-lived headless daemon (no window, no HTTP host). To
+    *see* what your CLI edits do, take a screenshot::
+
+        python tools/editor_client.py --port 8123 screenshot --px 0 --py -20 --pz 12 --out shot.png
+
+    which renders the current live-edited world offscreen on a GPU and prints the
+    PNG path.
 
   • One-shot (spawns a throwaway daemon, runs one command, exits): omit
     ``--port`` and the CLI spawns its own daemon. Handy for ``tree``/``raycast``
@@ -35,12 +38,8 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
-import functools
-import http.server
 import json
-import socketserver
 import sys
-import threading
 from pathlib import Path
 
 # Make `fire_engine` (repo root) and `fire_editor` (editor/) importable when run
@@ -54,7 +53,6 @@ for _p in (_REPO_ROOT, _EDITOR_DIR):
 from fire_editor import Daemon, EditorClient, RpcRemoteError, spawn_daemon  # noqa: E402
 
 _DEFAULT_PORT = 8123
-_DEFAULT_HTTP_PORT = 8770
 
 
 # --------------------------------------------------------------------------- #
@@ -79,6 +77,15 @@ async def _cmd_open(c: EditorClient, args) -> object:
 
 async def _cmd_save(c: EditorClient, args) -> object:
     return await c.request("world.save", {"path": args.path})
+
+
+async def _cmd_screenshot(c: EditorClient, args) -> object:
+    params: dict = {"px": args.px, "py": args.py, "pz": args.pz}
+    for k in ("yaw", "pitch", "width", "height", "frames", "out"):
+        v = getattr(args, k)
+        if v is not None:
+            params["out_path" if k == "out" else k] = v
+    return await c.request("world.screenshot", params)
 
 
 async def _cmd_ground_lut(c: EditorClient, args) -> object:
@@ -229,6 +236,7 @@ async def _cmd_watch(c: EditorClient, args) -> object:
 _HANDLERS = {
     "open": _cmd_open,
     "save": _cmd_save,
+    "screenshot": _cmd_screenshot,
     "ground-lut": _cmd_ground_lut,
     "set-center": _cmd_set_center,
     "tree": _cmd_tree,
@@ -279,38 +287,18 @@ async def _run_command(args) -> int:
 
 
 # --------------------------------------------------------------------------- #
-# `serve`: long-lived daemon + HTTP host for the browser viewport harness.
+# `serve`: long-lived headless daemon (no window, no HTTP host).
 # --------------------------------------------------------------------------- #
-def _start_http(http_port: int, host: str) -> socketserver.TCPServer:
-    """Serve editor/extension/ over HTTP (harness HTML + media bundles)."""
-    directory = str(_EDITOR_DIR / "extension")
-    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=directory)
-    httpd = socketserver.ThreadingTCPServer((host, http_port), handler)
-    httpd.daemon_threads = True
-    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-    thread.start()
-    return httpd
-
-
 async def _serve(args) -> int:
     daemon = Daemon(host=args.host)
     bound = await daemon.server.start(args.port)
-    httpd = _start_http(args.http_port, args.host)
-    url = (
-        f"http://{args.host}:{args.http_port}/harness/?port={bound}&seed={args.seed}&cam={args.cam}"
-    )
     print(f"[serve] daemon ws://{args.host}:{bound}", file=sys.stderr)
-    print(f"[serve] harness {url}", file=sys.stderr)
-    # The harness URL on stdout so callers (and Chrome MCP) can grab it.
-    _emit(
-        {"ok": True, "ws_port": bound, "http_port": args.http_port, "harness_url": url}, args.json
-    )
+    _emit({"ok": True, "ws_port": bound}, args.json)
     try:
         await daemon.server._server.wait_closed()  # type: ignore[union-attr]
     except (KeyboardInterrupt, asyncio.CancelledError):
         pass
     finally:
-        httpd.shutdown()
         await daemon.server.close()
     return 0
 
@@ -339,6 +327,17 @@ def _build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("save", help="save the open world to a path")
     s.add_argument("--path", required=True)
+
+    s = sub.add_parser("screenshot", help="render the open world offscreen to a PNG (needs a GPU)")
+    s.add_argument("--px", type=float, required=True, help="camera X (meters)")
+    s.add_argument("--py", type=float, required=True, help="camera Y (meters)")
+    s.add_argument("--pz", type=float, required=True, help="camera Z (meters)")
+    s.add_argument("--yaw", type=float, help="yaw degrees (default: look at origin)")
+    s.add_argument("--pitch", type=float, help="pitch degrees (default: look at origin)")
+    s.add_argument("--width", type=int, help="pixels (default 1280)")
+    s.add_argument("--height", type=int, help="pixels (default 720)")
+    s.add_argument("--frames", type=int, help="frames to step before capture (default 180)")
+    s.add_argument("--out", help="output PNG path (default: a temp file)")
 
     sub.add_parser("ground-lut", help="ship the procedural-ground LUT texture frame")
 
@@ -423,7 +422,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("watch", help="stream every notification + binary header to stdout")
 
-    s = sub.add_parser("serve", help="run a persistent daemon + HTTP host for the harness")
+    s = sub.add_parser("serve", help="run a persistent headless daemon")
     s.add_argument(
         "--port",
         type=int,
@@ -431,9 +430,6 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="serve_port",
         help="daemon WebSocket port (0 = OS-assigned)",
     )
-    s.add_argument("--http-port", type=int, default=_DEFAULT_HTTP_PORT)
-    s.add_argument("--seed", type=int, default=1337, help="seed baked into the harness URL")
-    s.add_argument("--cam", default="20,-20,24", help="initial camera, baked into the URL")
 
     return p
 

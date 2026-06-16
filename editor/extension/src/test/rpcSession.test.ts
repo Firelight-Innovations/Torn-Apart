@@ -1,6 +1,6 @@
-// Unit tests for the transport-agnostic JSON-RPC core shared by the extension
-// host client and the browser viewport harness. A fake transport captures
-// outbound text; we feed inbound frames via handleText/handleBinary.
+// Unit tests for the transport-agnostic JSON-RPC core used by the extension
+// host client. A fake transport captures outbound text; we feed inbound frames
+// via handleText/handleBinary.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 

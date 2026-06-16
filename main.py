@@ -746,6 +746,20 @@ def build_demo(
     ground_tex = None if use_gpu_lighting else _to_ground_texture()
     app.setup_terrain_rendering(ground_tex, _to_material_textures(triples=use_gpu_lighting))
 
+    # 9a. Threaded terrain LOD (Hard Rule 12): move chunk meshing off the main
+    #     thread onto a worker pool.  Enabled only when no per-face light is
+    #     baked into the mesh (light_sampler is None — the GPU lighting backend);
+    #     the baked-light/CPU path stays on the synchronous stream_frame for now
+    #     (the worker bakes no light).  app_terrain drives app.lod_streamer when
+    #     present; the pool is stopped on exit (mirrors the wind worker).
+    if cfg.lod_streaming_enabled and light_sampler is None:
+        from fire_engine.world.terrain.lod import LodStreamer, TerrainLodPool
+
+        lod_pool = TerrainLodPool(cfg.lod_worker_threads)
+        lod_pool.start()
+        app.lod_pool = lod_pool
+        app.lod_streamer = LodStreamer(chunk_manager, lod_pool, cfg)
+
     # 9b. GPU volumetric lighting pipeline + terrain surface shader.  The
     #     palette is the default (texture-derived) one plus the GI test-room
     #     debug materials: bright white/red/green bounce surfaces and an
@@ -1296,6 +1310,10 @@ def main() -> None:
         wind_worker = getattr(app, "wind_worker", None)
         if wind_worker is not None:
             wind_worker.stop(join=True)
+        # Stop the terrain LOD worker pool (daemon threads; belt-and-suspenders).
+        lod_pool = getattr(app, "lod_pool", None)
+        if lod_pool is not None:
+            lod_pool.stop(join=True)
 
 
 def _to_ground_texture():

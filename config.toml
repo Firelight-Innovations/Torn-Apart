@@ -23,6 +23,11 @@ debug_demo_building = true # spawn the feature-showcase demo house in front of s
 mesh_style = "faceted"         # "faceted" = flat-shaded surface nets (semi-smooth Daggerfall look); "blocky" = classic cubes
 facet_shade_strength = 0.25    # [0,1] normal-based facet accent shading baked into vertex colors (0 = off)
 ground_texels_per_m = 16.0    # virtual texels/m for the GPU shader's non-repeating world-space ground pattern (~0.0625 m pixels); LOD octaves fade with distance
+# Threaded terrain LOD streaming (world/terrain/lod/). Scheduling only — never affects mesh output (deterministic).
+lod_streaming_enabled = true   # use the off-thread LodStreamer path (false = synchronous stream_frame, the baked-light/editor path)
+lod_worker_threads = 4         # TerrainLodPool worker thread count
+lod_submit_per_frame = 16      # max chunk mesh jobs submitted per stream_frame
+lod_max_uploads_per_frame = 8  # max finished meshes uploaded to the scene graph per frame (nearest-first)
 
 [lighting]
 lighting_backend = "gpu"       # "gpu" = volumetric radiance cascades (GLSL compute); "cpu" = legacy baked vertex sunlight

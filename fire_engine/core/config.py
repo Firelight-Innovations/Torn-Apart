@@ -62,6 +62,12 @@ class Config:
     mesh_style: str = "faceted"
     facet_shade_strength: float = 0.25
     ground_texels_per_m: float = 16.0
+    # Threaded terrain LOD streaming ([terrain] table; world/terrain/lod/).
+    # These tune SCHEDULING only — never mesh output (determinism preserved).
+    lod_streaming_enabled: bool = True  # use the off-thread LodStreamer path (vs sync stream_frame)
+    lod_worker_threads: int = 4  # TerrainLodPool worker thread count
+    lod_submit_per_frame: int = 16  # max chunk mesh jobs submitted per stream_frame
+    lod_max_uploads_per_frame: int = 8  # max finished meshes uploaded to the scene graph per frame
     lighting_backend: str = "gpu"
     light_c0_cells: int = 96
     light_c0_cell_m: float = 0.5

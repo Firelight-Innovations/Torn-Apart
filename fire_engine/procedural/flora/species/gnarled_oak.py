@@ -42,7 +42,9 @@ _D = math.radians
 @register_def
 class GnarledOakDef(TreeSpeciesDef):
     """
-    Gnarled wasteland oak — 5–7 m, crooked trunk, blocky tiered limbs.
+    Gnarled wasteland oak — 5–7 m, crooked trunk, blocky tiered limbs
+    carrying a full, dense leafy crown (limbs → twigs → fine twiglets, all
+    foliated; ~1.3–1.4 k leaf cards per variant).
 
     Registered name: ``"tree_gnarled_oak"``.  8 variants per world.
 
@@ -61,7 +63,8 @@ class GnarledOakDef(TreeSpeciesDef):
     LEAF_HOLE_THRESH = 0.16
 
     def grow(self, rng: np.random.Generator, variant: int) -> tuple[TreeSkeleton, Leaves]:
-        """Crooked trunk → near-90° limbs (shorter near the crown) → twigs.
+        """Crooked trunk → near-90° limbs (shorter near the crown) → twigs →
+        fine upturned twiglets, foliated end-to-end into a dense crown.
 
         Docs: docs/systems/procedural.flora.species.md
         """
@@ -89,23 +92,37 @@ class GnarledOakDef(TreeSpeciesDef):
         )
         twigs = sb.branches(
             limbs,
-            count=(1, 2),
+            count=(2, 3),
             pitch_set=(_D(85),),
             length_ratio=(0.35, 0.5),
             radius_ratio=0.5,
             upturn_rad=_D(25),
         )
+        # Third level: fine upturned twiglets off every twig.  This is the
+        # extra wood that makes the crown ~4× leafier without bigger leaves —
+        # more short, thin branches ⇒ more length to foliate ⇒ a full canopy
+        # of small cards hugging a rich twig structure.
+        twiglets = sb.branches(
+            twigs,
+            count=(1, 2),
+            pitch_set=(_D(60), _D(80)),
+            pitch_jitter_rad=_D(10),
+            length_ratio=(0.45, 0.7),
+            radius_ratio=0.55,
+            min_radius_m=0.012,
+            upturn_rad=_D(30),
+        )
         sk = sb.skeleton()
-        # CA canopy: each twig tip hydrates a ~0.8 m dome of individual
-        # leaves; the ragged-oak silhouette is the twig layout itself.
+        # Dense ragged-oak crown: leaves cling ALONG limbs + twigs + the fine
+        # twiglets, so the silhouette reads as a full leafy crown rather than
+        # sparse tufts.  Count scales with the (now much longer) twig wood.
         leaves = leaves_at_tips(
             sk,
-            np.concatenate([limbs, twigs]),
+            np.concatenate([limbs, twigs, twiglets]),
             rng,
-            cell_m=0.26,
-            rounds=3,
             density=0.85,
             leaf_size_m=(0.12, 0.18),
-            max_leaves=420,
+            leaves_per_m=90.0,
+            max_leaves=1200,
         )
         return sk, leaves

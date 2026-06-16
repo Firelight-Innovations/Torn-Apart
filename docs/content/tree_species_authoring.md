@@ -1,5 +1,5 @@
 # Authoring Tree & Bush Species
-keywords: tree, bush, species, authoring, grow, SkeletonBuilder, trunk, branches, pitch_set, yaw_mode, spiral, opposite, random, length_ratio, length_m, length_scale_by_height, radius_ratio, upturn, droop, wobble, lean, leaves_at_tips, cellular automaton, CA, hydration, rounds, cell_m, density, per_cell, leaf_size_m, max_leaves, individual leaves, leaf card, TreeSpeciesDef, TreeVariantSet, BARK_PALETTE, LEAF_PALETTE, berry, BERRY_COLOR, LEAF_HOLE_THRESH, variants, variant pool, preview_tree, OBJ, impostor, determinism, validate_skeleton, floating canopy, species_mix, register_def, dynamic trees, 3D tree, node graph
+keywords: tree, bush, species, authoring, grow, SkeletonBuilder, trunk, branches, pitch_set, yaw_mode, spiral, opposite, random, length_ratio, length_m, length_scale_by_height, radius_ratio, upturn, droop, wobble, lean, leaves_at_tips, along-wood, along the wood, leaves_per_m, max_offset_m, twiglet, sub-stem, continuous-tube, density, leaf_size_m, max_leaves, individual leaves, leaf card, cellular automaton, CA, hydration, rounds, cell_m, per_cell, TreeSpeciesDef, TreeVariantSet, BARK_PALETTE, LEAF_PALETTE, berry, BERRY_COLOR, LEAF_HOLE_THRESH, variants, variant pool, preview_tree, OBJ, impostor, determinism, validate_skeleton, floating canopy, species_mix, register_def, dynamic trees, 3D tree, node graph
 
 This is the guide for writing a **new tree or bush species** for Torn Apart.
 A species is one Python script in `fire_engine/procedural/flora/species/`
@@ -11,9 +11,12 @@ The model is **Unreal's node-graph editor, but in straight Python**: a small
 library of helper calls (`trunk`, `branches`, `leaves_at_tips`)
 chained however you like, with full `if`/loop/rng freedom between calls.
 Trees and bushes are the SAME system — a bush is a species whose trunk is a
-0.15 m stub.  Leaves are **individual cards** grown by a cellular automaton
-seeded at the branch tips (the Dynamic-Trees leaf rule), all batched into
-the variant's single mesh — hundreds of leaves, still one draw.
+0.15 m stub.  Leaves are **individual cards anchored ALONG the branch wood**
+(every card sits just off the surface of a real twig — it can never float),
+all batched into the variant's single mesh — hundreds to a couple thousand
+leaves, still one draw.  Because the leaf count scales with how much
+leaf-bearing branch length you grow, a fuller crown comes from **more, finer
+twigs** (another `branches()` level), not from bigger leaves.
 
 ## The 60-second version
 
@@ -47,9 +50,11 @@ class WillowSnagDef(TreeSpeciesDef):
         limbs = sb.branches(trunk, count=(1, 2), pitch_set=(_D(70), _D(85)),
                             yaw_mode="spiral", length_ratio=(0.4, 0.6),
                             droop_rad=_D(30), segments=2)     # willow droop
+        twigs = sb.branches(limbs, count=(2, 3), pitch_set=(_D(80),),
+                            length_ratio=(0.4, 0.6))          # more leaf-bearing wood
         sk = sb.skeleton()
-        leaves = leaves_at_tips(sk, limbs, rng,
-                                cell_m=0.25, rounds=2, density=0.7)
+        leaves = leaves_at_tips(sk, np.concatenate([limbs, twigs]), rng,
+                                density=0.85, leaves_per_m=90, max_leaves=1200)
         return sk, leaves
 ```
 
@@ -124,27 +129,48 @@ canopy is structurally impossible, and `validate_skeleton` double-checks.
 Returns ALL created sub-segment ids — feed them back in as the next level's
 `parents`, or into `leaves_at_tips`.
 
-### `leaves_at_tips(sk, ids, rng, ...)` — the leaf cellular automaton
+### `leaves_at_tips(sk, ids, rng, ...)` — leaves along the wood
 
-Grows INDIVIDUAL leaves around the **tip** segments among `ids` (segments
-nothing grew from).  Each tip seeds "hydration" into a coarse cell grid;
-each CA round hydration spreads one cell to the 6 axis neighbours losing a
-level, then every surviving cell sprouts leaf cards — so the canopy shape
-IS the branch structure, voxel-grown like Dynamic Trees.
+Grows INDIVIDUAL leaves **along** the leaf-bearing segments in `ids` (the
+twigs and outer limbs).  For each leaf a host segment is chosen (biased
+toward the thinner / outer twigs), a point is drawn along the segment axis
+(biased toward the segment end so the rim stays leafy), and the leaf is
+pushed RADIALLY off the bark by a small bounded amount — so every card sits
+just off the surface of a real branch and **can never float**.  The canopy
+silhouette is therefore the twig layout itself: more / finer twigs ⇒ a
+denser, leafier crown.
+
+The leaf **count** scales with the branch structure:
+
+```
+count = round(density · leaves_per_m · Σ leaf-bearing-segment-length)   then capped at max_leaves
+```
 
 | Knob | Meaning |
 |---|---|
-| `cell_m` (0.25) | CA cell edge — the canopy's "leaf voxel" size. Smaller = tighter packing. |
-| `rounds` (3) | hydration radius in cells.  **`rounds=1` = a single-cell tuft** (no spread — seeds start at hydration 1); 2 = a hand-sized clump; 3 = a ~0.8 m dome per tip. |
-| `density` (0.6) | base leaf probability per hydrated cell, falling toward the canopy rim — interiors fill, silhouettes stay ragged. |
-| `per_cell` (1, 2) | leaves per surviving cell. |
-| `leaf_size_m` (0.09, 0.14) | per-leaf half-size — cards are 2× this across. |
+| `density` (0.6) | overall count multiplier (`0` ⇒ empty).  Higher = fuller. |
+| `leaves_per_m` (60) | target leaves per metre of leaf-bearing wood, before `density`.  **Raise it for a denser canopy.** |
+| `max_leaves` (600) | deterministic thinning cap — YOUR vertex budget lever (4 verts/leaf).  May be a few thousand on a big tree (oak ships `1200`). |
+| `leaf_size_m` (0.09, 0.14) | per-leaf half-size — cards are 2× this across.  **Tune density via twigs + the knobs above, NOT by enlarging this.** |
 | `sway_min` (0.85) | wind-weight floor (foliage always rides gusts harder than wood). |
-| `max_leaves` (600) | deterministic thinning cap — YOUR vertex budget lever (4 verts/leaf). |
+| `max_offset_m` (None) | hard cap on how far a leaf may sit off the wood axis.  `None` → `segment_radius + 1.5·leaf_size` per leaf (the anti-floating guarantee). |
+
+`cell_m`, `rounds`, `per_cell` are **legacy** knobs from the old
+cellular-automaton placement — still accepted for call-site compatibility
+but ignored, EXCEPT `rounds <= 0` (or `density <= 0`) still means "no
+foliage" ⇒ `Leaves.empty()`.  Don't feature them in new species.
 
 A leafless species returns `Leaves.empty()`.  The mesher gives every leaf
 its own upward-biased random orientation, so sunlight dapples the canopy
 leaf by leaf.
+
+**Density recipe (how the built-ins hit ~4× a sparse first draft):** add
+another `branches()` level of finer twigs and foliate it too, then raise
+`max_leaves`.  The oak grows a 3rd "twiglet" level off its twigs and
+foliates limbs + twigs + twiglets (`density=0.85, leaves_per_m=90,
+max_leaves=1200` → ~1.3 k cards/variant); `berry_bush` / `scrub_bush` add a
+fine **sub-stem** level for the same reason (berry a full dome, scrub kept
+see-through).  Leaf *size* never changes.
 
 ### `sb.skeleton() -> TreeSkeleton`
 
@@ -172,10 +198,10 @@ Override `palettes(rng) -> (bark, leaf)` for per-world colour drift
 
 | Script | Demonstrates |
 |---|---|
-| `species/gnarled_oak.py` | the canonical tree: tiered near-90° limbs, spiral yaw, `length_scale_by_height` crown taper, twig level, `rounds=3` CA canopy |
-| `species/dead_tree.py` | leafless/sparse: `count=(0, 2)`, wide `pitch_set`, droop + bend, hand-thinned tip subset + `rounds=2` micro-tufts, some variants `Leaves.empty()` |
-| `species/scrub_bush.py` | the bush pattern: stub trunk, splayed absolute-length stems (`length_m`), random yaw, small-cell CA |
-| `species/berry_bush.py` | texture customisation: berry speckles, `palettes()` override, high-density CA dome |
+| `species/gnarled_oak.py` | the canonical tree: tiered near-90° limbs, spiral yaw, `length_scale_by_height` crown taper, **3 branch levels (limbs → twigs → twiglets)**, dense along-wood crown (`leaves_per_m=90, max_leaves=1200`) |
+| `species/dead_tree.py` | leafless/sparse: `count=(0, 2)`, wide `pitch_set`, droop + bend, hand-thinned tip subset + a tiny dry tuft (`max_leaves=36`), some variants `Leaves.empty()` |
+| `species/scrub_bush.py` | the bush pattern: stub trunk, splayed absolute-length stems (`length_m`), random yaw, a fine sub-stem level, deliberately **see-through** foliage |
+| `species/berry_bush.py` | texture customisation: berry speckles, `palettes()` override, stems + sub-stems foliated into a **full** living-green dome |
 
 ## Checklist before you ship a species
 
@@ -188,9 +214,11 @@ Override `palettes(rng) -> (bark, leaf)` for per-world colour drift
 3. **Scale sanity** — trees 3–8 m tall, ≤ ~0.35 m base radius; bushes ≤ 1.5 m.
    The renderer pads culling bounds from `max_height_m`/`max_radius_m`, so
    a 40 m monster "works" but wrecks culling and the impostor raster scale.
-4. **Budget** — keep a variant under ~2 500 vertices (oak peaks ≈ 2 480).
-   Vertex count ≈ `segments × 16 + leaves × 4`; `max_leaves` is the lever.
-   Instanced thousands of times, it adds up.
+4. **Budget** — vertex count ≈ `segments × 16 + leaves × 4`, so `max_leaves`
+   dominates; the dense oak runs ~106 segments × 16 + 1 200 leaves × 4 ≈
+   6.5 k verts/variant.  Keep it tight — instanced thousands of times it adds
+   up — but density buys a lot of look per vertex, so spend it on `max_leaves`
+   and finer twigs rather than on bigger cards.
 5. **Preview** — `python tools/preview_tree.py <name> --obj --png`; open a
    couple of OBJs, check the atlas reads at 64×64 and every impostor cell
    has a grounded trunk.
@@ -203,11 +231,13 @@ Override `palettes(rng) -> (bark, leaf)` for per-world colour drift
 - `grow` is called once per variant with a variant-specific rng — draw all
   randomness inside, never at module scope.
 - `branches` returns sub-segment ids of EVERY branch it grew (a 2-segment
-  branch contributes 2 ids).  `leaves_at_tips` filters to tips itself, so
-  passing the whole array is correct and idiomatic.
-- **`rounds=1` does not spread** — seeds start at hydration `rounds`, and a
-  neighbour gets `rounds − 1`; at 1 that's zero, so you get one cell per
-  tip.  Use `rounds=2` with a small `cell_m` for visible tufts.
+  branch contributes 2 ids).  Pass the leaf-bearing levels (typically the
+  outer `branches()` returns, concatenated) to `leaves_at_tips` — it grows
+  leaves along ALL of them, weighted toward the thinner twigs.
+- **Foliate the finer levels.** Leaf count = `density · leaves_per_m · Σ
+  leaf-bearing length`, so leaves follow whatever ids you pass.  For a full
+  crown, grow an extra twig level and include it (e.g.
+  `np.concatenate([limbs, twigs, twiglets])`); leaf *size* stays fixed.
 - Bark UVs live in the atlas's left half, the single leaf in the right —
   handled by `mesh_branches`/`mesh_leaves` defaults; don't pass custom
   `uv_rect`s unless you also change `AtlasLayout`.

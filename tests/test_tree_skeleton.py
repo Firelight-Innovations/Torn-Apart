@@ -159,20 +159,32 @@ class TestLeaves:
     CELL = 0.26
     ROUNDS = 3
 
-    def test_leaves_grow_around_tips(self):
+    def test_leaves_hug_the_wood(self):
+        # New contract (along-wood placement, replacing the old CA blob): every
+        # leaf sits just OFF a leaf-bearing branch segment — within its radius
+        # plus ~1.5 leaf-sizes of the nearest point on the wood — never
+        # floating free in the canopy volume.
         set_world_seed(9)
         rng = for_domain("test", "leaves")
         sk, _, limbs, twigs = _grow_oak(rng)
-        ids = np.concatenate([limbs, twigs])
-        leaves = leaves_at_tips(sk, ids, rng, cell_m=self.CELL, rounds=self.ROUNDS, density=0.8)
+        ids = np.unique(np.concatenate([limbs, twigs]))
+        leaves = leaves_at_tips(sk, ids, rng, density=0.8)
         assert leaves.n_leaves > 0
-        # Every leaf sits within the CA growth reach of SOME tip end point:
-        # hydration spreads `rounds − 1` cells from the seed cell, plus the
-        # seed-snap and in-cell jitter (≤ ~1 cell each diagonal).
-        tips = sk.tip_ids(ids)
-        d = np.linalg.norm(leaves.center[:, None, :] - sk.end[tips][None, :, :], axis=2).min(axis=1)
-        reach = (self.ROUNDS + 1.0) * self.CELL * math.sqrt(3.0)
-        assert (d <= reach + 1e-5).all()
+        a = sk.start[ids].astype(np.float64)  # (S,3)
+        b = sk.end[ids].astype(np.float64)
+        ab = b - a
+        denom = np.maximum(np.sum(ab * ab, axis=1), 1e-12)
+        c = leaves.center.astype(np.float64)[:, None, :]  # (L,1,3)
+        t = np.clip(np.sum((c - a[None]) * ab[None], axis=2) / denom[None], 0.0, 1.0)
+        nearest = a[None] + ab[None] * t[..., None]
+        dist = np.linalg.norm(c - nearest, axis=2)  # (L,S)
+        j = np.argmin(dist, axis=1)
+        li = np.arange(leaves.n_leaves)
+        r_near = (
+            sk.radius_start[ids][j] + (sk.radius_end[ids][j] - sk.radius_start[ids][j]) * t[li, j]
+        )
+        allowed = r_near + 1.5 * leaves.radius.astype(np.float64) + 1e-3
+        assert (dist[li, j] <= allowed).all()
         assert (leaves.sway >= 0.85).all() and (leaves.sway <= 1.0).all()
 
     def test_canopy_emerges_from_branches(self):

@@ -58,7 +58,8 @@ class ScrubBushDef(TreeSpeciesDef):
     LEAF_HOLE_THRESH = 0.22
 
     def grow(self, rng: np.random.Generator, variant: int) -> tuple[TreeSkeleton, Leaves]:
-        """Stub trunk → splayed stems (absolute lengths) → foliage.
+        """Stub trunk → splayed stems (absolute lengths) → short sub-stems →
+        loose see-through foliage.
 
         Docs: docs/systems/procedural.flora.species.md
         """
@@ -78,17 +79,32 @@ class ScrubBushDef(TreeSpeciesDef):
             bend_rad=0.25,
             segments=2,
         )
+        # A few short crooked sub-stems off each stem give the dry leaves real
+        # twig wood to cling to (no floating tufts) while the scrub stays
+        # airy — more, smaller branches, not bigger leaves.
+        twigs = sb.branches(
+            stems,
+            count=(1, 2),
+            pitch_set=(_D(45), _D(70)),
+            pitch_jitter_rad=_D(12),
+            yaw_mode="random",
+            length_m=(0.12, 0.26),
+            radius_ratio=0.6,
+            min_radius_m=0.01,
+            upturn_rad=_D(15),
+            bend_rad=0.3,
+        )
         sk = sb.skeleton()
-        # Small dry leaves in loose tufts — scrub stays see-through.
+        # Small dry leaves in loose tufts along stems + sub-stems — richer
+        # twig attachment but scrub stays deliberately SEE-THROUGH.
         leaves = leaves_at_tips(
             sk,
-            stems,
+            np.concatenate([stems, twigs]),
             rng,
-            cell_m=0.16,
-            rounds=2,
             density=0.8,
             leaf_size_m=(0.07, 0.11),
             sway_min=0.8,
-            max_leaves=240,
+            leaves_per_m=40.0,
+            max_leaves=220,
         )
         return sk, leaves

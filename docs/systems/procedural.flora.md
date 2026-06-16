@@ -1,5 +1,5 @@
 # procedural.flora — System Doc
-keywords: flora, tree, bush, 3D tree, 3-D tree, TreeSpeciesDef, TreeVariantSet, TreeSkeleton, SkeletonBuilder, validate_skeleton, Leaves, leaves_at_tips, TreeMesh, mesh_branches, mesh_leaves, merge_parts, mesh_leaf_area_m2, AtlasLayout, bark_texture, leaf_texture, compose_atlas, rasterize_impostor, impostor_atlas, species script, grow, palettes, branch skeleton, branch, trunk, limbs, twigs, impostor, billboard LOD, far-LOD sprite, canopy, individual leaves, leaf card, cellular automaton, CA, hydration, sway, sway weight, wind, pixel art, atlas, bark, leaf, species, gnarled_oak, dead_tree, scrub_bush, berry_bush, variant pool, variants, pixel_noise, determinism
+keywords: flora, tree, bush, 3D tree, 3-D tree, TreeSpeciesDef, TreeVariantSet, TreeSkeleton, SkeletonBuilder, validate_skeleton, Leaves, leaves_at_tips, TreeMesh, mesh_branches, mesh_leaves, merge_parts, mesh_leaf_area_m2, AtlasLayout, bark_texture, leaf_texture, compose_atlas, rasterize_impostor, impostor_atlas, species script, grow, palettes, branch skeleton, branch, trunk, limbs, twigs, impostor, billboard LOD, far-LOD sprite, canopy, individual leaves, leaf card, cellular automaton, CA, hydration, sway, sway weight, wind, pixel art, atlas, bark, leaf, species, gnarled_oak, dead_tree, scrub_bush, berry_bush, variant pool, variants, pixel_noise, determinism, along-wood leaves, leaf attachment, leaves_per_m, max_offset_m, continuous tube, welded tube, rotation-minimizing frame, no gap, joint, socketed fork, mesh cohesion, mesh integrity, cohesion test, density
 
 > One doc per code package; filename matches the package exactly (`docs/systems/procedural.flora.md` ↔ `fire_engine/procedural/flora/`).
 
@@ -10,8 +10,8 @@ keywords: flora, tree, bush, 3D tree, 3-D tree, TreeSpeciesDef, TreeVariantSet, 
 The pipeline has five stages:
 
 1. A **species script** (in `flora/species/*.py`) subclasses `TreeSpeciesDef` and uses `SkeletonBuilder` to grow a `TreeSkeleton`: a struct-of-arrays of tapering branch segments rooted at the origin.
-2. `leaves_at_tips` runs a cellular automaton (the *Dynamic Trees* leaf rule) seeded at branch tips to grow hundreds of **individual leaves** (`Leaves` struct-of-arrays) — the canopy shape emerges from the wood.
-3. `mesh_branches` / `mesh_leaves` / `merge_parts` emit `TreeMesh` arrays in the engine's V3N3T2C4 interleaved vertex layout with per-vertex sway weights baked into `color.a`.
+2. `leaves_at_tips` places hundreds of **individual leaves** (`Leaves` struct-of-arrays) **along the leaf-bearing branch wood** — each leaf is anchored to a real segment (biased toward the thinner outer twigs and the segment ends) and pushed just off the surface by a bounded radial offset, so a leaf can never float free of the canopy. Leaf count scales with total twig length, so finer twigs ⇒ a denser crown.
+3. `mesh_branches` / `mesh_leaves` / `merge_parts` emit `TreeMesh` arrays in the engine's V3N3T2C4 interleaved vertex layout with per-vertex sway weights baked into `color.a`. `mesh_branches` builds **continuous welded tubes** (rotation-minimizing frames along each chain, shared ring vertices at every joint), so connected segments never gap or twist apart.
 4. `bark_texture` / `leaf_texture` / `compose_atlas` produce the species' 64×64 pixel-art texture atlas (bark left half, single leaf card right half).
 5. `rasterize_impostor` / `impostor_atlas` software-rasterise far-LOD billboard sprite cells for every variant — deterministic, no GPU bake needed.
 
@@ -43,14 +43,14 @@ All symbols below are re-exported from `fire_engine.procedural.flora` (`__init__
 | Symbol | Description |
 |---|---|
 | `Leaves` | Per-leaf struct-of-arrays: `center` (float32 (L,3) m), `radius` (float32 (L,) m), `sway` (float32 (L,) in [0.85,1]). Properties: `n_leaves`, `empty()`. |
-| `leaves_at_tips(sk, ids, rng, cell_m, rounds, density, per_cell, leaf_size_m, sway_min, max_leaves)` | Cellular automaton seeded at tip segments: hydration radiates `rounds` cells outward, surviving cells sprout leaf cards. Returns `Leaves`. |
+| `leaves_at_tips(sk, ids, rng, density, leaf_size_m, sway_min, max_leaves, leaves_per_m, max_offset_m, ...)` | Anchor leaves **along** the leaf-bearing segments in `ids`: count = `round(density · leaves_per_m · Σ segment_length)` (capped at `max_leaves`), each leaf placed at a point on a host segment offset radially off the wood by ≤ `radius + 1.5·leaf_size` (the anti-floating bound). Returns `Leaves`. Legacy CA kwargs (`cell_m`, `rounds`, `per_cell`) are still accepted for back-compat; only `rounds<=0`/`density<=0` (⇒ empty) still have effect. |
 
 ### Mesher (`mesher.py`)
 
 | Symbol | Description |
 |---|---|
 | `TreeMesh` | V3N3T2C4 mesh arrays: `positions` (float32 (N,3) m), `normals` (float32 (N,3)), `uvs` (float32 (N,2)), `colors` (float32 (N,4) — A = sway weight), `indices` (uint32 (M,)). `height_m`, `radius_m`. |
-| `mesh_branches(sk, sides, uv_rect, tint, cap_tips)` | Tapered `sides`-gon prisms for every skeleton segment, flat-shaded. `sides=4` gives the blocky pixel-art look. |
+| `mesh_branches(sk, sides, uv_rect, tint, cap_tips, weld_tol_m)` | Continuous welded tubes: tapered `sides`-gon cross-sections carried along each chain by rotation-minimizing frames, with the ring at every continuation joint shared between segments (no gaps/twists) and forks socketed into their parent. Flat-shaded; `sides=4` gives the blocky pixel-art look; caps only on childless tips. |
 | `mesh_leaves(leaves, rng, uv_rect, tilt_range_rad, size_jitter, tint)` | One small oriented quad per individual leaf; random yaw + tilt for per-leaf Lambert dappling. |
 | `merge_parts(*parts)` | Concatenate mesh parts (re-offset indices) into one draw-ready `TreeMesh`. |
 | `mesh_leaf_area_m2(mesh)` | Total one-sided leaf area (m²) — leaf triangles identified by atlas UV x >= 0.5. Used by lighting occluders. |
@@ -135,7 +135,7 @@ class MyTreeDef(TreeSpeciesDef):
         trunk = sb.trunk(height_m=5.0, base_radius_m=0.25, segments=3)
         limbs = sb.branches(trunk, count=(2, 3), pitch_set=(math.radians(85),))
         sk = sb.skeleton()
-        leaves = leaves_at_tips(sk, limbs, rng, rounds=3, density=0.7)
+        leaves = leaves_at_tips(sk, limbs, rng, density=0.8, max_leaves=1200)
         return sk, leaves
 
 # Add import in fire_engine/procedural/flora/species/__init__.py
@@ -150,3 +150,5 @@ class MyTreeDef(TreeSpeciesDef):
 4. **Per-variant child RNGs are independent.** `TreeSpeciesDef.generate` derives child rngs via `np.random.default_rng(int(grow_seeds[v]))` — one per variant. Consuming the parent rng after `grow_seeds = rng.integers(...)` does NOT destabilize variant 0.
 5. **`mesh_leaf_area_m2` uses the UV x >= 0.5 rule.** This matches `AtlasLayout.leaf_rect = (0.5, 0.0, 1.0, 1.0)`. If you change the atlas layout, `mesh_leaf_area_m2` (and lighting occluders) will give wrong results.
 6. **Impostor scale is pool-wide.** All variant cells share one `px_per_m` derived from the tallest/widest mesh so the renderer's single billboard quad size fits every variant. Pass `px_per_m=None` only for single-tree previews.
+7. **Density comes from twigs, not bigger leaves.** Leaf count scales with `Σ` leaf-bearing segment length, so a fuller crown means adding another `branches()` level / more twigs — not raising `leaf_size_m`. Leaves auto-attach along whatever segments you pass to `leaves_at_tips`, so foliate the finest level (e.g. `np.concatenate([limbs, twigs, twiglets])`).
+8. **Geometry correctness is machine-checked.** `tests/procedural/flora/test_tree_cohesion.py` asserts the mesh invariants — continuous (gap-free) trunks, no degenerate triangles, and every leaf hugging the wood — for every species and variant. A recipe that produces a torn trunk or a floating leaf fails the suite, not just the eye.

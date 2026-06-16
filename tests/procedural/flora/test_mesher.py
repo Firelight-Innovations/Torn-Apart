@@ -191,6 +191,73 @@ class TestMeshBranches:
         assert np.allclose(w.colors[:, 1], tint[1])
         assert np.allclose(w.colors[:, 2], tint[2])
 
+    def test_trunk_joints_welded_no_gap(self):
+        # Continuous-tube contract: along a straight multi-segment trunk every
+        # child segment's start ring must coincide EXACTLY with its parent's
+        # end ring (welded), so the trunk reads as one tube with no joint gap.
+        set_world_seed(7)
+        rng = for_domain("test", "weld")
+        sb = SkeletonBuilder(rng)
+        # No wobble/lean -> a perfectly collinear trunk: every joint is a true
+        # continuation (start == parent end) and must weld.
+        sb.trunk(height_m=5.0, base_radius_m=0.25, segments=5, wobble_m=0.0)
+        sk = sb.skeleton()
+        sides = 4
+        m = mesh_branches(sk, sides=sides, cap_tips=False)
+        # Side-face verts are laid out (S, sides, 4, 3); per (s, k) quad the
+        # vertices are [ring0_k, ring0_{k+1}, ring1_{k+1}, ring1_k].  So
+        # ring0 corner k of segment s = vert ((s*sides + k)*4 + 0); ring1
+        # corner k of segment s = vert ((s*sides + k)*4 + 3).
+        pos = m.positions
+
+        def ring0_corner(s, k):
+            return pos[(s * sides + k) * 4 + 0]
+
+        def ring1_corner(s, k):
+            return pos[(s * sides + k) * 4 + 3]
+
+        for child in range(1, sk.n_segments):
+            parent = int(sk.parent[child])
+            if parent < 0 or not np.allclose(sk.start[child], sk.end[parent], atol=1e-4):
+                continue
+            for k in range(sides):
+                np.testing.assert_allclose(
+                    ring0_corner(child, k), ring1_corner(parent, k), atol=1e-6
+                )
+
+    def test_bark_uvs_in_left_half(self):
+        # UV CONTRACT: every bark vertex must keep uv.x < 0.5 so leaf-area /
+        # occluder code (which keys on uv.x >= 0.5) never sees bark as leaves.
+        sk, _, _ = _build_sk_and_leaves(seed=13)
+        m = mesh_branches(sk)
+        assert (m.uvs[:, 0] < 0.5 + 1e-6).all()
+
+    def test_tip_caps_only_on_childless_segments(self):
+        # cap_tips=True caps ONLY tips: vertex/index counts grow by exactly
+        # one fan (sides verts, sides-2 tris) per tip vs the uncapped mesh.
+        sk, _, _ = _build_sk_and_leaves(seed=21)
+        sides = 4
+        uncapped = mesh_branches(sk, sides=sides, cap_tips=False)
+        capped = mesh_branches(sk, sides=sides, cap_tips=True)
+        n_tips = int(sk.tip_ids().size)
+        assert capped.n_vertices == uncapped.n_vertices + n_tips * sides
+        assert capped.indices.shape[0] == uncapped.indices.shape[0] + n_tips * (sides - 2) * 3
+
+    def test_bark_counts_pinned(self):
+        # Pin the new continuous-tube bark vertex/triangle counts for the
+        # shared test skeleton (seed 77).  Counts changed from the old
+        # per-segment mesher (interior caps dropped — only tips capped now);
+        # this golden-master catches accidental geometry regressions.
+        sk, _, _ = _build_sk_and_leaves(seed=77)
+        sides = 4
+        m = mesh_branches(sk, sides=sides, cap_tips=True)
+        n_seg = sk.n_segments
+        n_tips = int(sk.tip_ids().size)
+        # Side faces: n_seg * sides quads (4 verts / 6 idx each).
+        # Tip caps: n_tips fans (sides verts / (sides-2)*3 idx each).
+        assert m.n_vertices == n_seg * sides * 4 + n_tips * sides
+        assert m.indices.shape[0] == n_seg * sides * 6 + n_tips * (sides - 2) * 3
+
     def test_empty_skeleton_returns_empty_mesh(self):
         # SkeletonBuilder.skeleton() raises if nothing was grown — cover the
         # direct zero-segment path by constructing a bare TreeSkeleton manually.

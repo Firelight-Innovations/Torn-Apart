@@ -656,3 +656,32 @@ See `docs/sessions/standards-remediation-spec.md` and the session note.
 - **Q:** With the browser harness gone, how does an AI agent observe the world it edits over the `editor_client.py` RPC?
 - **Choice:** Add a `world.screenshot` daemon RPC (protocol v7). The panda3d-free daemon temp-saves its live `EditorSession` and spawns a separate render subprocess (`python -m fire_engine.render.offscreen`) that loads the save with the session's seed, renders the world **offscreen** (`window-type offscreen`, no visible window) from a camera pose, writes a PNG, and returns the file path. CLI: `editor_client.py screenshot --px … --py … --pz … [--yaw --pitch --width --height --frames --out]`.
 - **Why:** Keeps Hard Rule 1 intact (panda3d only in the render subprocess; the daemon stays headless-testable) while giving agents a true render of the *current live-edited* world — terrain edits + authored scene objects — not a separate browser approximation. Returning a file path (vs. inlining bytes over the RPC) keeps the wire protocol small and lets the agent read the image back with its own tools. GPU required on the daemon host (a missing GL context surfaces as a clear `RpcError`, never a hang).
+
+## 2026-06-16 — `.asset` GameObject/prefab file format (`assets/`)
+
+A new headless `fire_engine/assets/` package serialises a `GameObject` subtree as a standalone, reusable `.asset` file ("prefab"), decoupled from world saves. Four format choices were owner-confirmed; recorded here because ARCHITECTURE.md did not pin them.
+
+### On-disk encoding: JSON (not YAML)
+- **Q:** What text format backs `.asset`?
+- **Choice:** UTF-8 JSON (`indent=2`, `sort_keys=True`, trailing newline); binary payloads are Base64 numpy blobs inside the JSON.
+- **Why:** Zero new deps, already the project's text format (`.model.json`/`.manifest.json`), byte-stable round-trips for clean git diffs, no whitespace footguns. YAML's only real win (inline comments) is unneeded.
+
+### Cross-scene reference: linked, not baked
+- **Q:** Does a scene embed a copy of an asset, or reference it?
+- **Choice:** Linked — a reserved `PrefabInstance` component `{asset_path, overrides}` on an empty object; the scene-load runtime instantiates the asset's subtree under it. Editing the `.asset` updates every referencing scene. v1 ships the codec + `Prefab` + `instantiate_into` foundation; the component registration + scene-load resolver land with the consuming editor/buildings branch. Per-instance `overrides` stubbed (`{}`), deferred.
+- **Why:** Matches the "author once, reuse across scenes, come back and change later" workflow; baking would fork every copy.
+
+### Identity = path (GUID reserved, not generated)
+- **Q:** How is an asset identified for cross-scene reference?
+- **Choice:** The path relative to `assets/` is the identity. A `guid` envelope field is reserved for a future rename-safe layer but is **always `null` in v1** (no GUID generation).
+- **Why:** Simple, and GUID generation would tangle with the determinism/RNG rule. The reserved field keeps the door open without paying for `.meta` sidecars now.
+
+### Directory convention under `assets/`
+- **Q:** Where do `.asset` files live, given CLAUDE.md's "`assets/` is hand-crafted only" note?
+- **Choice:** `assets/prefabs/*.asset` (generic) and `assets/buildings/*.asset` (buildings). Generated-then-hand-edited buildings count as authored content. The on-disk `assets/` tree is already in the standards `exclude` list, so `.asset` files are never linted as code.
+- **Why:** Keeps authored content under `assets/` (where the Resource Manager expects authored data) without a new top-level directory. **Flagged for owner** at confirmation time; confirmed.
+
+### Placement: lands on master as a shared foundation
+- **Q:** Which branch owns this code?
+- **Choice:** Its own branch off `master` (`feature/asset-file-system`), merged to master so the buildings branch can pick it up. `assets/` must not import `buildings/`; the runtime dependency direction is `scene/buildings → assets` (assets imports only `numpy` at runtime; `scene` only under `TYPE_CHECKING`).
+- **Why:** It is foundational, not building code; co-owning it with buildings would invert the dependency.

@@ -1,5 +1,5 @@
 # core._impl — System Doc
-keywords: config_loader, load_config, resolve_graphics_preset, GRAPHICS_PRESETS, quat, Quat, quaternion, worker, QueueWorker, profiler_scope, NullScope, _ScopeCtx, _alloc_profiler_buffers, profiler_report, frame_time_stats, build_snapshot, write_profiler_snapshot, commit_frame, private implementation, overflow split, module count limit
+keywords: config_loader, load_config, resolve_graphics_preset, GRAPHICS_PRESETS, quat, Quat, quaternion, worker, QueueWorker, worker_pool, WorkerPool, thread pool, n_workers, profiler_scope, NullScope, _ScopeCtx, _alloc_profiler_buffers, profiler_report, frame_time_stats, build_snapshot, write_profiler_snapshot, commit_frame, private implementation, overflow split, module count limit
 
 > One doc per code package; filename matches the package exactly (`docs/systems/core._impl.md` ↔ `fire_engine/core/_impl/`).
 
@@ -17,7 +17,8 @@ Modules:
 |---|---|---|
 | `config_loader.py` | `GRAPHICS_PRESETS`, `load_config`, `resolve_graphics_preset` | `fire_engine.core.config` |
 | `quat.py` | `Quat` unit-quaternion class | `fire_engine.core.math3d`, `fire_engine.core` |
-| `worker.py` | `QueueWorker` generic background-thread base | imported directly by `world/wind/` and `lighting/` subclasses |
+| `worker.py` | `QueueWorker` generic single-background-thread base | imported directly by `world/wind/` and `lighting/` subclasses |
+| `worker_pool.py` | `WorkerPool` generic N-thread pool base | imported directly by the terrain LOD subclass |
 | `profiler_scope.py` | `NullScope`, `_ScopeCtx`, `_alloc_profiler_buffers`, `_NULL_SCOPE` | `fire_engine.core.profiler` |
 | `profiler_report.py` | `frame_time_stats`, `build_snapshot`, `write_profiler_snapshot`, `commit_frame` | `fire_engine.core.profiler` |
 
@@ -32,6 +33,7 @@ Re-exported symbols (for grep convenience):
 - `resolve_graphics_preset(table) -> dict` — expand a `[graphics]` TOML table into flat `gfx_*` kwargs using the `preset` key; falls back to `"high"` on unknown preset names (never raises).
 - `Quat(w, x, y, z)` — unit quaternion, scalar-first float32 numpy storage.
 - `QueueWorker` — generic single-daemon-thread worker; subclasses implement `_process`.
+- `WorkerPool` — generic N-daemon-thread pool variant of `QueueWorker` (one shared in/out queue fanned across `n_workers` threads), used by the terrain LOD system to parallelise independent mesh-build/decimation jobs; subclasses implement `_process` and must keep it pure (it may run concurrently). `stop()` enqueues one `None` sentinel per thread.
 - `NullScope` — shared no-op timing scope for a disabled `Profiler`.
 - `_ScopeCtx` — pooled timing scope context manager (private helper).
 - `_alloc_profiler_buffers(prof)` — allocate numpy ring-buffer arrays on a `Profiler` (private helper).
@@ -62,6 +64,7 @@ Subscribed: none.
 - `Quat` components are **float32**; rotation axes are in **radians**.
 - `frame_time_stats` expects `frames_ms` in **milliseconds** and `budget_ms` in **milliseconds**; returns floats only (JSON-serializable).
 - `QueueWorker` uses a daemon thread — a missed `stop()` never blocks process exit.
+- `WorkerPool` uses `n_workers` daemon threads (clamped to ≥1) sharing one in/out queue; `_pending` is mutated only on the main thread (`submit`/`drain_results`) so it needs no lock, but `_process` may run on several threads at once and must be pure.
 - `_alloc_profiler_buffers` sets all numpy arrays to zero on construction; the ring buffer is correctly sized to `0` when the profiler is disabled (no memory used).
 - `write_profiler_snapshot` uses `os.replace` (atomic on POSIX; near-atomic on Windows via tmp file in the same directory) so readers never see a half-written JSON file.
 

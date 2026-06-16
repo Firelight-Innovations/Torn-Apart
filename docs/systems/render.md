@@ -121,7 +121,7 @@ All symbols below are re-exported from `fire_engine.render` (`__init__.py`).
 
 | Symbol | Description |
 |---|---|
-| `App(config, clock, event_bus)` | Panda3D ShowBase wrapper. 1280Ã—720, vsync, FPS meter. |
+| `App(config, clock, event_bus, headless=False)` | Panda3D ShowBase wrapper. 1280Ã—720, vsync, FPS meter. `headless=True` skips the window props / mouse capture / FPS meter / focus reasserts so it can render into an offscreen buffer (see `_impl/offscreen.py`). |
 | `app.input_state: InputState` | Read each frame by FlyController. |
 | `app.camera_go: GameObject` | The camera entity (spawns at `(0, -20, 10)`). |
 | `app.camera_comp: CameraComponent` | Camera sync component. |
@@ -135,6 +135,15 @@ All symbols below are re-exported from `fire_engine.render` (`__init__.py`).
 `App.__init__` sets `render.set_shader_input("u_hdr_output", 0.0)` so surface shaders tonemap internally by default; the post-process pipeline flips it to `1.0`.  When `gfx_post_process` is on it also loads `textures-power-2 none` (NPOT render targets) **before** the GSG is created, so full-window HDR buffers aren't padded to a power-of-two (which would otherwise show the scene in a sub-rectangle).
 
 **Terrain-render injection (not engine-coupled).** `App` does not *require* terrain â€” headless tooling can construct a bare `App`.  `main.py` wires rendering by setting `app.chunk_manager` / `app.light_sampler` after construction, then calling `app.setup_terrain_rendering(fallback_tex, material_textures)`.  The per-frame `App._stream_and_upload_terrain()` (called from `_frame_task` after `run_frame`, before `event_bus.drain()`) streams chunks, converts each `MeshArrays` to a `GeomNode` via `geometry_bridge.to_geom_node`, and parents it under `terrain_root` with **no offset** (mesh positions are absolute world meters).  Lighting needs no per-frame hook: `SunlightComputer` is event-driven (subscribed to the bus), so the lighting step in `_frame_task` is intentionally a `pass`.
+
+### Offscreen render (`render/_impl/offscreen.py`)
+
+| Symbol | Description |
+|---|---|
+| `render_offscreen(save_path, seed, px, py, pz, out_path, yaw=None, pitch=None, width=1280, height=720, frames=180)` | Build the world from `save_path` (regenerated at `seed`), pose the camera, step `frames`, capture the framebuffer to `out_path` (PNG). Returns the `Path`. |
+| `main(argv=None)` | CLI: `python -m fire_engine.render._impl.offscreen --save … --seed … --px … --py … --pz … [--yaw --pitch --width --height --frames] --out …`. Prints `SCREENSHOT_RESULT {json}` and `os._exit(0)`. |
+
+This is the render subprocess behind the editor's `world.screenshot` RPC (see `docs/systems/editor.md`). It sets `window-type offscreen` + `win-size W H` via `loadPrcFileData` **before** `build_demo(..., headless=True)` so the engine renders into an offscreen `GraphicsBuffer` with no visible window. Camera convention matches `tools/screenshot.py`: forward at `yaw=pitch=0` is +Y, yaw about +Z, pitch about +X (negative pitch looks down); when both `yaw`/`pitch` are omitted the camera looks at the world origin. Needs a real GL context (a GPU). **Seed trap:** the save's `world_seed`/`config_digest` must match the config, so the caller passes the *same* seed the save was written with (the daemon passes `session.seed`); otherwise `SaveManager.load` raises `SaveIncompatibleError`.
 
 ### Bridges (panda3d-backed; `None` when panda3d is absent)
 

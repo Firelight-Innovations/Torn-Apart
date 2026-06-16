@@ -79,6 +79,15 @@ async def _cmd_save(c: EditorClient, args) -> object:
     return await c.request("world.save", {"path": args.path})
 
 
+async def _cmd_screenshot(c: EditorClient, args) -> object:
+    params: dict = {"px": args.px, "py": args.py, "pz": args.pz}
+    for k in ("yaw", "pitch", "width", "height", "frames", "out"):
+        v = getattr(args, k)
+        if v is not None:
+            params["out_path" if k == "out" else k] = v
+    return await c.request("world.screenshot", params)
+
+
 async def _cmd_ground_lut(c: EditorClient, args) -> object:
     return await c.request("world.ground_lut", {})
 
@@ -227,6 +236,7 @@ async def _cmd_watch(c: EditorClient, args) -> object:
 _HANDLERS = {
     "open": _cmd_open,
     "save": _cmd_save,
+    "screenshot": _cmd_screenshot,
     "ground-lut": _cmd_ground_lut,
     "set-center": _cmd_set_center,
     "tree": _cmd_tree,
@@ -317,6 +327,17 @@ def _build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("save", help="save the open world to a path")
     s.add_argument("--path", required=True)
+
+    s = sub.add_parser("screenshot", help="render the open world offscreen to a PNG (needs a GPU)")
+    s.add_argument("--px", type=float, required=True, help="camera X (meters)")
+    s.add_argument("--py", type=float, required=True, help="camera Y (meters)")
+    s.add_argument("--pz", type=float, required=True, help="camera Z (meters)")
+    s.add_argument("--yaw", type=float, help="yaw degrees (default: look at origin)")
+    s.add_argument("--pitch", type=float, help="pitch degrees (default: look at origin)")
+    s.add_argument("--width", type=int, help="pixels (default 1280)")
+    s.add_argument("--height", type=int, help="pixels (default 720)")
+    s.add_argument("--frames", type=int, help="frames to step before capture (default 180)")
+    s.add_argument("--out", help="output PNG path (default: a temp file)")
 
     sub.add_parser("ground-lut", help="ship the procedural-ground LUT texture frame")
 

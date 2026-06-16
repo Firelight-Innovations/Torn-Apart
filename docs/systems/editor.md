@@ -141,6 +141,27 @@ method). To *see* the live-edited world, call `world.screenshot` (CLI:
 and returns a PNG file path the agent can read back. See **Offscreen screenshots**
 below and `docs/systems/render.md` (`offscreen.py`).
 
+**Offscreen screenshots (`world.screenshot`):** the daemon is panda3d-free
+(hard rule 1), so it cannot render in-process. The handler temp-saves the live
+`EditorSession` into a fresh temp dir (a dedicated dir, not an open handle —
+`SaveManager.save` does an atomic `os.replace` that fails on open files on
+Windows), then spawns a separate render subprocess
+(`python -m fire_engine.render._impl.offscreen`) with `PYTHONPATH`/`cwd` wired
+like `spawn_daemon`. The subprocess reloads the save **with the session seed**
+(`SaveManager.load` rejects a mismatched `world_seed`/`config_digest`), renders
+offscreen and writes a PNG; the daemon returns `{ok, path, width, height}` and
+cleans the temp save dir. Params: `px/py/pz` (camera world meters), optional
+`yaw/pitch` (degrees; default looks at the origin), `width/height` (default
+1280×720), `frames` (steps before capture so chunks stream + lighting/sky settle,
+default 180), `out_path` (default a temp PNG the caller owns). CLI:
+`editor_client.py --port <p> screenshot --px 0 --py -20 --pz 12 [--yaw --pitch
+--width --height --frames --out]`. **Requires a GPU/GL context on the daemon
+host** — a missing context is reported as an `APP_ERROR` (never a hang; the
+subprocess `os._exit`s and a 180 s timeout kills a stuck render). v1 scope: the
+procedural world + terrain edits + authored scene objects; component lights need
+the GPU lighting backend (the repo default). See `docs/systems/render.md`
+(`offscreen.py`).
+
 **Protocol — `editor/protocol/` (single source):**
 - `schema.json` — the one source of truth for the wire protocol.
 - `codegen.py` — regenerates `fire_editor/_generated.py` and `extension/src/protocol/generated.ts`. Run `python editor/protocol/codegen.py` after any `schema.json` change (hard rule 6).

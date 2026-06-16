@@ -35,6 +35,7 @@ ShowBase, so ``app.accept(event, fn)`` registers the bindings.
 
 from __future__ import annotations
 
+import dataclasses
 import math
 import sys
 from functools import partial
@@ -564,21 +565,34 @@ def _do_boot_load(app, save_manager, scene_runtime, load_path: str) -> None:
             _log.info("Player start set by authored spawn point: %s", scene_runtime.spawn_position)
 
 
-def build_demo(load_path: str | None = None):
+def build_demo(
+    load_path: str | None = None,
+    seed: int | None = None,
+    headless: bool = False,
+):
     """
     Boot the engine and wire the demo, returning the constructed ``App``.
 
     Does everything EXCEPT call ``app.run()`` — so callers can either run the
     blocking main loop (``main()``) or step the task manager headlessly for an
-    offscreen screenshot (``tools/screenshot.py``).
+    offscreen screenshot (``tools/screenshot.py``, ``fire_engine.render.offscreen``).
 
     Parameters
     ----------
     load_path : str | None
         Optional ``.ta`` save/scene to load at boot (``python main.py --load
-        scenes/foo.ta``).  The file's world seed must match ``config.toml``'s
+        scenes/foo.ta``).  The file's world seed must match the active
         ``world_seed`` or the load is refused (logged, not fatal).  When given,
         F5/F9 also target this path for the session instead of the quick slot.
+    seed : int | None
+        Override ``config.toml``'s ``world_seed`` for this boot (mirrors
+        ``EditorSession.from_seed``).  REQUIRED to match the seed of a
+        ``load_path`` save written by an editor session opened with ``--seed N``,
+        or ``SaveManager.load`` rejects the save (``SaveIncompatibleError``).
+    headless : bool
+        Render to an offscreen buffer with no visible window, mouse capture, or
+        FPS meter.  The caller must set ``window-type offscreen`` (+ ``win-size``)
+        via ``loadPrcFileData`` BEFORE calling this.
 
     Follows ARCHITECTURE §4a.1 startup order exactly.  Constructs the App
     (window) before registering panda3d resource loaders (they need the global
@@ -596,6 +610,8 @@ def build_demo(load_path: str | None = None):
 
     # 1. Config + global seed + logging.
     cfg = load_config()
+    if seed is not None:
+        cfg = dataclasses.replace(cfg, world_seed=int(seed))
     set_world_seed(cfg.world_seed)
     _log.info("Booting Torn Apart (seed=%d)", cfg.world_seed)
 
@@ -610,7 +626,7 @@ def build_demo(load_path: str | None = None):
     #    (Constructed before step 4 so the Panda3D global loader exists.)
     from fire_engine.render.app import App  # panda3d import lives behind world/
 
-    app = App(cfg, clock, bus)
+    app = App(cfg, clock, bus, headless=headless)
 
     # Which GPU did Windows actually give us?  On hybrid laptops an "Intel"
     # renderer here means the integrated GPU — _ensure_dedicated_gpu() has

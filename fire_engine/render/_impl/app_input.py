@@ -113,6 +113,9 @@ def window_event(self_obj: App, win: Any) -> None:
 
     Docs: docs/systems/render.md
     """
+    # Headless/offscreen: no OS focus, no cursor to reassert.
+    if getattr(self_obj, "_headless", False):
+        return
     if win is not self_obj.win:
         return
     has_focus = bool(win.get_properties().get_foreground())

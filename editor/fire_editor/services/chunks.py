@@ -9,7 +9,12 @@ computed (CPU) before meshing so vertex colours match the game.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
+import os
+import shutil
+import sys
+import tempfile
 
 from fire_engine.core.math3d import Vec3
 from fire_engine.save import SaveIncompatibleError
@@ -27,6 +32,14 @@ log = logging.getLogger("fire_editor.chunks")
 
 _STREAM_YIELD_EVERY = 8  # mesh this many chunks, then yield to the event loop
 _NEIGHBORS = ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1))
+
+# world.screenshot: the render subprocess module + a generous timeout (cold GL +
+# shader compiles make the first render slow).
+_OFFSCREEN_MODULE = "fire_engine.render._impl.offscreen"
+_SCREENSHOT_TIMEOUT_S = 180.0
+_DEFAULT_SHOT_WIDTH = 1280
+_DEFAULT_SHOT_HEIGHT = 720
+_DEFAULT_SHOT_FRAMES = 180
 
 
 class ChunkService:
@@ -51,6 +64,7 @@ class ChunkService:
         d.register(Method.TERRAIN_BRUSH, self.brush)
         d.register(Method.EDIT_UNDO, self.undo)
         d.register(Method.EDIT_REDO, self.redo)
+        d.register(Method.WORLD_SCREENSHOT, self.screenshot)
 
     # ------------------------------------------------------------------ #
     # World lifecycle
@@ -100,6 +114,118 @@ class ChunkService:
         except OSError as e:
             raise RpcError(ErrorCode.APP_ERROR, f"save failed: {e}") from e
         return {"ok": True, "path": path, "edited_chunks": session.edited_chunk_count()}
+
+    async def screenshot(self, params: dict) -> dict:
+        """Render the current live-edited world offscreen; return the PNG path.
+
+        The daemon is panda3d-free (hard rule 1), so it cannot render in-process.
+        Instead it temp-saves its session and spawns a separate render subprocess
+        (``python -m fire_engine.render._impl.offscreen``) that reloads the save
+        with the session seed, renders offscreen and writes the PNG. Requires a
+        GPU/GL context on the daemon host; failures surface as APP_ERROR.
+        """
+        session = self._require_session()
+        try:
+            px = float(params["px"])
+            py = float(params["py"])
+            pz = float(params["pz"])
+        except (KeyError, TypeError, ValueError) as e:
+            raise RpcError(ErrorCode.INVALID_PARAMS, f"px/py/pz must be floats: {e}") from e
+        width = int(params.get("width") or _DEFAULT_SHOT_WIDTH)
+        height = int(params.get("height") or _DEFAULT_SHOT_HEIGHT)
+        frames = int(params.get("frames") or _DEFAULT_SHOT_FRAMES)
+
+        editor_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        repo_root = os.path.dirname(editor_dir)
+
+        # Resolve the output PNG before the temp save dir is cleaned up. A missing
+        # out_path writes a persistent temp PNG the caller owns.
+        out_is_temp = not params.get("out_path")
+        if out_is_temp:
+            fd, out_path = tempfile.mkstemp(prefix="fire_shot_", suffix=".png")
+            os.close(fd)
+        else:
+            out_path = os.path.abspath(str(params["out_path"]))
+
+        # Temp-save the live session into a FRESH DIR (no open handle): SaveManager
+        # does an atomic os.replace, which fails on an open file on Windows.
+        save_dir = tempfile.mkdtemp(prefix="fire_save_")
+        save_path = os.path.join(save_dir, "scene.ta")
+        try:
+            try:
+                session.save(save_path)
+            except OSError as e:
+                raise RpcError(ErrorCode.APP_ERROR, f"temp-save failed: {e}") from e
+
+            argv = [
+                "-m",
+                _OFFSCREEN_MODULE,
+                "--save",
+                save_path,
+                "--seed",
+                str(session.seed),
+                "--px",
+                repr(px),
+                "--py",
+                repr(py),
+                "--pz",
+                repr(pz),
+                "--width",
+                str(width),
+                "--height",
+                str(height),
+                "--frames",
+                str(frames),
+                "--out",
+                out_path,
+            ]
+            if params.get("yaw") is not None:
+                argv += ["--yaw", repr(float(params["yaw"]))]
+            if params.get("pitch") is not None:
+                argv += ["--pitch", repr(float(params["pitch"]))]
+
+            env = dict(os.environ)
+            env["PYTHONPATH"] = os.pathsep.join(
+                p for p in (repo_root, editor_dir, env.get("PYTHONPATH")) if p
+            )
+            returncode, stderr = await self._run_offscreen(argv, repo_root, env)
+            wrote = os.path.exists(out_path) and os.path.getsize(out_path) > 0
+            if returncode != 0 or not wrote:
+                if out_is_temp:  # don't litter our own empty temp PNG
+                    with contextlib.suppress(OSError):
+                        os.remove(out_path)
+                tail = "\n".join(stderr.strip().splitlines()[-20:]) or "no output"
+                raise RpcError(
+                    ErrorCode.APP_ERROR,
+                    f"offscreen render failed (rc={returncode}): {tail}",
+                )
+            return {"ok": True, "path": out_path, "width": width, "height": height}
+        finally:
+            shutil.rmtree(save_dir, ignore_errors=True)
+
+    async def _run_offscreen(self, argv: list, cwd: str, env: dict) -> tuple[int, str]:
+        """Spawn the offscreen render subprocess; return ``(returncode, stderr)``.
+
+        Factored out as the single subprocess seam so tests can stub the render
+        without a GPU. Mirrors ``client.spawn_daemon``'s env/cwd wiring.
+        """
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable,
+            *argv,
+            cwd=cwd,
+            env=env,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            _out, err = await asyncio.wait_for(proc.communicate(), _SCREENSHOT_TIMEOUT_S)
+        except TimeoutError as e:
+            with contextlib.suppress(ProcessLookupError):
+                proc.kill()
+            with contextlib.suppress(asyncio.TimeoutError):
+                await asyncio.wait_for(proc.wait(), 5.0)
+            raise RpcError(ErrorCode.APP_ERROR, "offscreen render timed out") from e
+        return proc.returncode or 0, (err.decode(errors="replace") if err else "")
 
     async def ground_lut(self, params: dict) -> dict:
         """Ship the procedural-ground palette LUT as a TEXTURE binary frame."""

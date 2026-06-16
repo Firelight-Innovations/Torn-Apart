@@ -273,8 +273,8 @@ def _add_wall(soup: _Soup, wall: Wall, zb: float, zt: float, qpq: int) -> None:
         in_z = (z_mid > zb + op.sill_m + _EPS) & (z_mid < zb + op.head_m - _EPS)
         hole |= in_s[:, None] & in_z[None, :]
 
-    soup.add_quads(*_panel_grid(front, offv, s_mid, zlev, hole, outward=True))
-    soup.add_quads(*_panel_grid(back, -offv, s_mid, zlev, hole, outward=False))
+    soup.add_quads(*_panel_grid(front, offv, s_mid, zlev, hole))
+    soup.add_quads(*_panel_grid(back, -offv, s_mid, zlev, hole))
 
     # ---- reveals around each opening -------------------------------------
     for op in wall.openings:
@@ -303,9 +303,13 @@ def _panel_grid(
     s_mid: np.ndarray,
     zlev: np.ndarray,
     hole: np.ndarray,
-    outward: bool,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Build the solid panel quads of one wall face (front or back)."""
+    """Build the solid panel quads of one wall face (front or back).
+
+    The outward normal direction is carried by the SIGN of ``offv`` (the front
+    face passes ``offv``, the back face passes ``-offv``), so no separate
+    orientation flag is needed.
+    """
     keep = ~hole  # (m-1, nz-1)
     ki, ji = np.nonzero(keep)
     q = ki.shape[0]

@@ -37,89 +37,25 @@ Example
 
     # look_at — forward points toward origin
     child.look_at(Vec3.ZERO)
+
+Docs: docs/systems/render.md
 """
 
 from __future__ import annotations
 
-from enum import Enum, auto
 from typing import TYPE_CHECKING
 
 import numpy as np
 
 from fire_engine.core.math3d import Quat, Vec3
+from fire_engine.render._impl.transform_math import mat3_to_quat, trs_matrix
+from fire_engine.render.enums import Space  # re-export for backward compatibility
 
 if TYPE_CHECKING:
     pass  # no circular imports needed currently
 
-
-# ---------------------------------------------------------------------------
-# Space enum
-# ---------------------------------------------------------------------------
-
-
-class Space(Enum):
-    """
-    Reference-frame selector used by Transform.translate and Transform.rotate.
-
-    SELF  — operations are expressed in the transform's own local frame.
-    WORLD — operations are expressed in world space.
-
-    Example
-    -------
-        t.translate(Vec3(0, 1, 0), relative_to=Space.SELF)   # move 1 m forward
-        t.translate(Vec3(0, 1, 0), relative_to=Space.WORLD)  # move 1 m along world +Y
-    """
-
-    SELF = auto()
-    WORLD = auto()
-
-
-# ---------------------------------------------------------------------------
-# 4×4 matrix helpers (pure numpy, float64 internally for precision)
-# ---------------------------------------------------------------------------
-
-
-def _trs_matrix(pos: Vec3, rot: Quat, scale: Vec3) -> np.ndarray:
-    """
-    Build a 4×4 TRS (translation × rotation × scale) matrix.
-
-    Uses float64 internally; callers may cast if needed.
-
-    Parameters
-    ----------
-    pos   : Vec3 — translation in meters
-    rot   : Quat — rotation quaternion (unit)
-    scale : Vec3 — scale per axis
-
-    Returns
-    -------
-    np.ndarray shape (4, 4) float64
-    """
-    w, x, y, z = (float(c) for c in rot._data)
-    sx, sy, sz = float(scale.x), float(scale.y), float(scale.z)
-
-    # Rotation matrix from quaternion
-    m = np.array(
-        [
-            [1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y), 0.0],
-            [2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x), 0.0],
-            [2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y), 0.0],
-            [0.0, 0.0, 0.0, 1.0],
-        ],
-        dtype=np.float64,
-    )
-
-    # Apply scale to rotation columns
-    m[0, :3] *= sx
-    m[1, :3] *= sy
-    m[2, :3] *= sz
-
-    # Translation
-    m[0, 3] = float(pos.x)
-    m[1, 3] = float(pos.y)
-    m[2, 3] = float(pos.z)
-
-    return m
+# Re-export Space so existing ``from fire_engine.render.transform import Space`` still works.
+__all__ = ["Space", "Transform"]
 
 
 # ---------------------------------------------------------------------------
@@ -289,7 +225,7 @@ class Transform:
     def _world_mat(self) -> np.ndarray:
         """Return the cached (or freshly computed) world matrix."""
         if self._dirty or self._world_matrix is None:
-            local = _trs_matrix(
+            local = trs_matrix(
                 self._local_position,
                 self._local_rotation,
                 self._local_scale,
@@ -467,7 +403,7 @@ class Transform:
 
         # Convert rotation matrix to quaternion
         # Using Shepperd's method
-        world_rot = _mat3_to_quat(m3)
+        world_rot = mat3_to_quat(m3)
         self.rotation = world_rot
 
     def transform_point(self, p: Vec3) -> Vec3:
@@ -538,61 +474,3 @@ class Transform:
             f"children={len(self._children)}, "
             f"parent={'yes' if self._parent else 'no'})"
         )
-
-
-# ---------------------------------------------------------------------------
-# Helper: 3×3 rotation matrix → Quat  (Shepperd's method)
-# ---------------------------------------------------------------------------
-
-
-def _mat3_to_quat(m: np.ndarray) -> Quat:
-    """
-    Convert a 3×3 rotation matrix to a unit quaternion (Shepperd's method).
-
-    Parameters
-    ----------
-    m : np.ndarray shape (3, 3) — orthonormal rotation matrix.
-        Rows = output axes in the *input* frame:
-            m[0] = new X-axis (right)
-            m[1] = new Y-axis (forward)
-            m[2] = new Z-axis (up)
-
-    Returns
-    -------
-    Quat — unit quaternion
-
-    Note
-    ----
-    The matrix is stored with rows as the destination axes for each local
-    basis vector (i.e. the *transpose* of a column-basis matrix).
-    """
-    trace = m[0, 0] + m[1, 1] + m[2, 2]
-
-    if trace > 0.0:
-        s = 0.5 / np.sqrt(trace + 1.0)
-        w = 0.25 / s
-        x = (m[2, 1] - m[1, 2]) * s
-        y = (m[0, 2] - m[2, 0]) * s
-        z = (m[1, 0] - m[0, 1]) * s
-    elif m[0, 0] > m[1, 1] and m[0, 0] > m[2, 2]:
-        s = 2.0 * np.sqrt(1.0 + m[0, 0] - m[1, 1] - m[2, 2])
-        w = (m[2, 1] - m[1, 2]) / s
-        x = 0.25 * s
-        y = (m[0, 1] + m[1, 0]) / s
-        z = (m[0, 2] + m[2, 0]) / s
-    elif m[1, 1] > m[2, 2]:
-        s = 2.0 * np.sqrt(1.0 + m[1, 1] - m[0, 0] - m[2, 2])
-        w = (m[0, 2] - m[2, 0]) / s
-        x = (m[0, 1] + m[1, 0]) / s
-        y = 0.25 * s
-        z = (m[1, 2] + m[2, 1]) / s
-    else:
-        s = 2.0 * np.sqrt(1.0 + m[2, 2] - m[0, 0] - m[1, 1])
-        w = (m[1, 0] - m[0, 1]) / s
-        x = (m[0, 2] + m[2, 0]) / s
-        y = (m[1, 2] + m[2, 1]) / s
-        z = 0.25 * s
-
-    q = Quat.__new__(Quat)
-    q._data = np.array([w, x, y, z], dtype=np.float32)
-    return q.normalized()

@@ -37,6 +37,9 @@ and a count — never a particle array.
     Alpha-blended (leaves are opaque-ish), lit by the SAME cascades as the grass
     (``mote_leaf.frag`` copies ``grass.frag``'s lighting/fog taps).
 
+    Implementation lives in ``_impl.leaf_litter``; re-exported here so the
+    public import path is unchanged.
+
 Both are **GPU lighting backend only** (they need the live ``GpuLightingPipeline``
 binding the inherited uniforms on ``terrain_root``); on the CPU backend — or with
 no wind field — they disable themselves with a log line, exactly like grass.
@@ -49,6 +52,8 @@ Example (wired by main.py)
     leaf_go = instantiate()
     leaf_go.add_component(LeafLitterComponent, base=app, zone_store=zone_store,
                           lighting_pipeline=pipeline)
+
+Docs: docs/systems/render.vegetation.md
 """
 
 from __future__ import annotations
@@ -59,14 +64,8 @@ from typing import Any
 from panda3d.core import (
     BoundingBox,
     ColorBlendAttrib,
-    Geom,
     GeomNode,
-    GeomTriangles,
-    GeomVertexData,
-    GeomVertexFormat,
-    GeomVertexWriter,
     LPoint3,
-    LVecBase3f,
     NodePath,
     Shader,
     TransparencyAttrib,
@@ -76,66 +75,13 @@ from fire_engine.core import get_logger
 from fire_engine.core.rng import for_domain
 from fire_engine.render.component import Component
 from fire_engine.render.vegetation import mote_shaders
-from fire_engine.zones import leaf_hash_seed, leaf_instance_count
+from fire_engine.render.vegetation._impl.leaf_litter import LeafLitterComponent
+from fire_engine.render.vegetation._impl.mote_utils import build_quad_geom as _build_quad_geom
+from fire_engine.render.vegetation._impl.mote_utils import mote_texture as _mote_texture
 
 __all__ = ["DustMoteComponent", "LeafLitterComponent"]
 
 _log = get_logger("world.motes")
-
-# Leaf carry reach used to pad each volume's culling box (meters): a leaf can
-# stream out of its volume by roughly (gust-scaled carry) × life — a few meters
-# is plenty for the demo densities, and over-padding only relaxes culling.
-_LEAF_CARRY_PAD_M = 6.0
-
-
-# ---------------------------------------------------------------------------
-# Shared billboard quad (built once per component, drawn N times via instancing)
-# ---------------------------------------------------------------------------
-
-
-def _build_quad_geom() -> Geom:
-    """
-    Build the shared unit billboard quad: corners at xy ∈ {-1,+1}, z=0, UV 0–1.
-
-    The vertex shaders offset these corners (in view space for dust, after a
-    tumble rotation for leaves), so one tiny 4-vertex / 2-triangle Geom is the
-    base for every instance — a fixed handful of vertices, never a per-particle
-    array.
-    """
-    fmt = GeomVertexFormat.get_v3t2()
-    vdata = GeomVertexData("mote_quad", fmt, Geom.UH_static)
-    vdata.set_num_rows(4)
-    vw = GeomVertexWriter(vdata, "vertex")
-    tw = GeomVertexWriter(vdata, "texcoord")
-    corners = (
-        (-1.0, -1.0, 0.0, 0.0),
-        (1.0, -1.0, 1.0, 0.0),
-        (1.0, 1.0, 1.0, 1.0),
-        (-1.0, 1.0, 0.0, 1.0),
-    )
-    for x, y, u, v in corners:
-        vw.add_data3(x, y, 0.0)
-        tw.add_data2(u, v)
-    tris = GeomTriangles(Geom.UH_static)
-    tris.add_vertices(0, 1, 2)
-    tris.add_vertices(0, 2, 3)
-    geom = Geom(vdata)
-    geom.add_primitive(tris)
-    return geom
-
-
-def _mote_texture(name: str) -> Any:
-    """The procedural ``name`` texture as a Panda3D texture (linear-filtered
-    so the soft dust falloff / leaf edges don't look chunky billboarded)."""
-    from panda3d.core import SamplerState
-
-    from fire_engine.procedural import get as get_procedural
-    from fire_engine.render.bridges.texture_bridge import to_panda_texture
-
-    tex = to_panda_texture(get_procedural(name))
-    tex.set_minfilter(SamplerState.FT_linear)
-    tex.set_magfilter(SamplerState.FT_linear)
-    return tex
 
 
 # ---------------------------------------------------------------------------
@@ -247,150 +193,6 @@ class DustMoteComponent(Component):
         if self._node is not None:
             self._node.remove_node()
             self._node = None
-
-
-# ---------------------------------------------------------------------------
-# Leaf litter
-# ---------------------------------------------------------------------------
-
-
-class LeafLitterComponent(Component):
-    """
-    Render component for GPU-instanced leaf litter on ``"trees"`` volumes.
-
-    One instanced node per :class:`~fire_engine.zones.ZoneVolume` tagged
-    ``"trees"`` (the grass per-volume pattern).  Rebuilds when the
-    ``ZoneStore.version`` changes, so a future tree/forest system that registers
-    canopy volumes tagged ``"trees"`` gets leaf litter with zero wind-system
-    changes.
-
-    Parameters (pass as ``add_component`` kwargs)
-    ---------------------------------------------
-    base : world.app.App
-        The application — provides ``terrain_root`` and ``_config``.
-    zone_store : fire_engine.zones.ZoneStore
-        Volumes tagged ``"trees"`` get litter; ``version`` triggers a rebuild.
-    lighting_pipeline : GpuLightingPipeline | None
-        Must be the active GPU lighting pipeline; ``None`` disables.
-
-    Units: meters, seconds.  World-space Z-up.
-    """
-
-    def __init__(
-        self, base: Any = None, zone_store: Any = None, lighting_pipeline: Any = None
-    ) -> None:
-        super().__init__()
-        self.base = base
-        self.zone_store = zone_store
-        self.lighting_pipeline = lighting_pipeline
-        self._root: NodePath | None = None
-        self._shader: Shader | None = None
-        self._quad_geom: Geom | None = None
-        self._leaf_tex = None
-        self._volume_nodes: dict[int, NodePath] = {}
-        self._store_version_built: int = -1
-        self._time_s: float = 0.0
-
-    def start(self) -> None:
-        """Build the shared geom/shader and per-volume instanced nodes (once)."""
-        if self.base is None or self.zone_store is None:
-            _log.warning("LeafLitterComponent: missing base/zone_store — disabled")
-            self.enabled = False
-            return
-        if self.lighting_pipeline is None:
-            _log.warning(
-                "LeafLitterComponent: GPU lighting pipeline required "
-                '(lighting_backend = "gpu") — disabled'
-            )
-            self.enabled = False
-            return
-
-        self._quad_geom = _build_quad_geom()
-        self._leaf_tex = _mote_texture("leaf_sprite")
-        self._root = self.base.terrain_root.attach_new_node("leaf_litter_root")
-        self._shader = Shader.make(
-            Shader.SL_GLSL, vertex=mote_shaders.LEAF_VERTEX, fragment=mote_shaders.LEAF_FRAGMENT
-        )
-        # Leaves are opaque-ish billboards drawn with an alpha-test discard; use
-        # dual transparency so the fragment discard works and depth stays sane.
-        self._root.set_transparency(TransparencyAttrib.M_binary)
-        self._root.set_two_sided(True)
-        # u_time_s is the shared real-time animation clock; grass binds it on its
-        # own node, so bind + refresh our own on leaf_litter_root (ShaderInput
-        # attribs COMPOSE down to the per-volume nodes even though those carry
-        # their own node-level shader for instancing — same split as grass).
-        self._root.set_shader_input("u_time_s", 0.0)
-
-        self._build_volumes()
-
-    def late_update(self, dt: float) -> None:
-        """Advance the animation clock; rebuild nodes if the zone store changed."""
-        if self._root is None:
-            return
-        self._time_s += dt
-        self._root.set_shader_input("u_time_s", self._time_s)
-        if self.zone_store.version != self._store_version_built:
-            self._build_volumes()
-
-    def on_destroy(self) -> None:
-        """Detach all leaf nodes."""
-        if self._root is not None:
-            self._root.remove_node()
-            self._root = None
-        self._volume_nodes.clear()
-
-    # ------------------------------------------------------------------
-
-    def _build_volumes(self) -> None:
-        """(Re)create one instanced node per ``"trees"`` volume."""
-        for node in self._volume_nodes.values():
-            node.remove_node()
-        self._volume_nodes.clear()
-
-        assert self._root is not None
-        cfg = self.base._config
-        total = 0
-        for vol in self.zone_store.volumes("trees"):
-            count = leaf_instance_count(vol, cfg)
-            if count <= 0:
-                continue
-            geom_node = GeomNode(f"leaf_vol_{vol.id}")
-            geom_node.add_geom(self._quad_geom)
-            node = self._root.attach_new_node(geom_node)
-            # Shader + instance count on the SAME node (node-level ShaderAttrib
-            # replaces inherited; ShaderInputs compose — same caveat as grass).
-            node.set_shader(self._shader)
-            node.set_instance_count(count)
-            node.set_shader_input("u_bounds_min", LVecBase3f(*vol.min_corner))
-            node.set_shader_input("u_bounds_max", LVecBase3f(*vol.max_corner))
-            node.set_shader_input("u_hash_seed", leaf_hash_seed(vol))
-            node.set_shader_input("u_leaf_size_m", float(cfg.wind_leaf_size_m))
-            node.set_shader_input("u_leaf_life_s", float(cfg.wind_mote_life_s))
-            node.set_shader_input("u_leaf_tex", self._leaf_tex)
-
-            # Instances are shader-positioned (and stream out of the volume on
-            # gusts) — Panda3D would cull by the base quad's origin bounds.  Give
-            # the node the volume box padded by the carry reach + leaf size, and
-            # stop bounds recomputation (grass culling caveat).
-            pad = _LEAF_CARRY_PAD_M + float(cfg.wind_leaf_size_m)
-            geom_node.set_bounds(
-                BoundingBox(
-                    LPoint3(
-                        vol.min_corner[0] - pad, vol.min_corner[1] - pad, vol.min_corner[2] - pad
-                    ),
-                    LPoint3(
-                        vol.max_corner[0] + pad, vol.max_corner[1] + pad, vol.max_corner[2] + pad
-                    ),
-                )
-            )
-            geom_node.set_final(True)
-            self._volume_nodes[vol.id] = node
-            total += count
-
-        self._store_version_built = self.zone_store.version
-        _log.info(
-            "Leaf litter built: %d volume(s), %d instances total", len(self._volume_nodes), total
-        )
 
 
 # ---------------------------------------------------------------------------

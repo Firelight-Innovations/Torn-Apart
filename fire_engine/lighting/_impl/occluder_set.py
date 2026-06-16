@@ -40,6 +40,8 @@ class OccluderSet:
     >>> mins, maxs, count = occ.pack()
     >>> count
     1
+
+    Docs: docs/systems/lighting._impl.md
     """
 
     def __init__(self) -> None:
@@ -51,7 +53,10 @@ class OccluderSet:
 
     @property
     def count(self) -> int:
-        """Number of active occluder boxes."""
+        """Number of active occluder boxes.
+
+        Docs: docs/systems/lighting._impl.md
+        """
         return self._count
 
     def set_boxes(
@@ -70,6 +75,8 @@ class OccluderSet:
         Returns
         -------
         bool — True when the set changed (``version`` was bumped).
+
+        Docs: docs/systems/lighting._impl.md
         """
         if len(boxes) > MAX_OCCLUDERS and not self._warned:
             self._warned = True
@@ -101,5 +108,7 @@ class OccluderSet:
 
         Rows past ``count`` are zero.  Layout mirrors ``u_box_min`` /
         ``u_box_max`` / ``u_num_boxes`` in ``lighting/glsl.py``.
+
+        Docs: docs/systems/lighting._impl.md
         """
         return self._mins, self._maxs, self._count

@@ -27,6 +27,7 @@ Example (wired by main.py when ``config.lighting_backend == "gpu"``)
     app.lighting_pipeline = pipeline          # App.update calls it per frame
     apply_terrain_shader(app.terrain_root, pipeline)   # world/terrain_shader
     pipeline.bind_surface_inputs(app.render)  # lit-surface contract for ALL
+Docs: docs/systems/lighting.md
 """
 
 from __future__ import annotations
@@ -123,11 +124,10 @@ class GpuLightingPipeline:
         (``mult ** 0.35``) so a dark-adapted eye brightens the terrain
         without washing the night sky milky (stars/galaxy composite in LDR
         and would lose all contrast at the full multiplier).
+    Docs: docs/systems/lighting.md
     """
 
-    # ------------------------------------------------------------------
     # Class-level attribute annotations (for mypy and _impl helpers)
-    # ------------------------------------------------------------------
     _config: Config
     _base: Any
     _provider: Any
@@ -264,9 +264,7 @@ class GpuLightingPipeline:
             "x".join(map(str, self._fog_dim)) if self.fog_enabled else "off",
         )
 
-    # ------------------------------------------------------------------
     # Event handlers
-    # ------------------------------------------------------------------
 
     def _on_terrain_edited(self, event: TerrainEditedEvent) -> None:
         """Brush edit → reassemble the affected cascades immediately."""
@@ -304,9 +302,7 @@ class GpuLightingPipeline:
                 return True
         return False
 
-    # ------------------------------------------------------------------
     # Per-frame driver
-    # ------------------------------------------------------------------
 
     def update(self, camera_pos: Any, sky_state: SkyState | None, dt: float) -> None:
         """
@@ -321,6 +317,7 @@ class GpuLightingPipeline:
             back to a fixed overhead white sun (tooling without a sky).
         dt : float
             Real frame seconds (transient-light fades).
+        Docs: docs/systems/lighting.md
         """
         self.lights.update(dt)
         self._load_dirty_timer += dt
@@ -389,9 +386,7 @@ class GpuLightingPipeline:
         if self.fog_enabled:
             _dispatch_fog_fn(self, camera_pos, sun, sky_state, engine, gsg)
 
-    # ------------------------------------------------------------------
     # Public API
-    # ------------------------------------------------------------------
 
     def set_static_occluders(self, occluders: TreeOccluderSet | None) -> None:
         """
@@ -411,6 +406,7 @@ class GpuLightingPipeline:
         occluders : TreeOccluderSet | None
             Merged instance set for ALL tree/bush volumes.  ``None`` or an
             empty set clears tree occlusion entirely.
+        Docs: docs/systems/lighting.md
         """
         if occluders is not None and occluders.count == 0:
             occluders = None
@@ -432,11 +428,14 @@ class GpuLightingPipeline:
         ----------
         provider : GeometryOccupancyProvider
             Structural provider (no import coupling to the buildings package).
+        Docs: docs/systems/lighting.md
         """
         self._geometry_providers.append(provider)
 
     def geometry_providers(self) -> tuple[Any, ...]:
-        """The registered geometry providers (store-only in v1)."""
+        """The registered geometry providers (store-only in v1).
+        Docs: docs/systems/lighting.md
+        """
         return tuple(self._geometry_providers)
 
     def bind_surface_inputs(self, node: NodePath) -> None:
@@ -448,6 +447,7 @@ class GpuLightingPipeline:
         future buildings/NPCs — inherits the contract scene-graph-wide.
         Per-frame values are refreshed by :meth:`update_surface_inputs`.
         Shaders that don't declare these uniforms simply ignore them.
+        Docs: docs/systems/lighting.md
         """
         _bind_surface_inputs_fn(self, node)
 
@@ -461,6 +461,7 @@ class GpuLightingPipeline:
             Same node given to :meth:`bind_surface_inputs` (``app.render``).
         sky_state : SkyState | None
             For sun/moon direction + radiance uniforms.
+        Docs: docs/systems/lighting.md
         """
         _update_surface_inputs_fn(self, node, sky_state)
 
@@ -469,6 +470,7 @@ class GpuLightingPipeline:
         Stop the background assembly worker.  Call once on app exit.
 
         Idempotent and safe to call when running unthreaded (no-op).
+        Docs: docs/systems/lighting.md
         """
         if self._assembly_worker is not None:
             self._assembly_worker.stop(join=True)

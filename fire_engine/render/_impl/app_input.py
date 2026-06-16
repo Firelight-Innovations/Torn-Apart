@@ -24,6 +24,8 @@ def collect_input(self_obj: App) -> None:
 
     Mouse delta is read from the pointer and recentred.  This is the
     ONLY place panda3d input is read; everything else uses InputState.
+
+    Docs: docs/systems/render.md
     """
     ks = self_obj._key_state
     inp = self_obj.input_state
@@ -79,6 +81,8 @@ def set_mouse_capture(self_obj: App, captured: bool) -> None:
 
     Re-enabling capture arms ``_skip_mouse_delta`` so the first post-capture
     frame doesn't snap the view by the pre-capture pointer offset.
+
+    Docs: docs/systems/render.md
     """
     props = WindowProperties()
     props.set_cursor_hidden(captured)
@@ -106,6 +110,8 @@ def window_event(self_obj: App, win: Any) -> None:
     self_obj : App — the App instance
     win : panda3d.core.GraphicsWindow
         The window the event is about (ignored unless it is ``self_obj.win``).
+
+    Docs: docs/systems/render.md
     """
     if win is not self_obj.win:
         return
@@ -122,6 +128,8 @@ def push_input_to_controllers(self_obj: App) -> None:
 
     FlyController.set_input_state(inp) is called here — the controller
     stays panda3d-free and reads the state on its next update().
+
+    Docs: docs/systems/render.md
     """
     # Import lazily to avoid circular imports
     try:

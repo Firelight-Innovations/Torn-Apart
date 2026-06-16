@@ -154,6 +154,8 @@ class Building:
 
         Ids are unique within one building and stable across save/load (the
         counter itself is serialized).
+
+        Docs: docs/systems/buildings.md
         """
         eid = self._next_eid
         self._next_eid += 1
@@ -173,6 +175,8 @@ class Building:
             Floor-to-floor height; ``None`` → ``defaults.storey_height_m``.
         slab_m : float | None
             Floor slab thickness; ``None`` → ``defaults.slab_thickness_m``.
+
+        Docs: docs/systems/buildings.md
         """
         storey = Storey(
             self,
@@ -199,6 +203,8 @@ class Building:
             should pass an explicit polygon).
         depth_m : float | None
             Slab depth; ``None`` → ``defaults.foundation_depth_m``.
+
+        Docs: docs/systems/buildings.md
         """
         poly = self._auto_footprint() if polygon is None else np.array(polygon, dtype=np.float64)
         self.foundation = Foundation(
@@ -218,6 +224,8 @@ class Building:
             :meth:`set_foundation`.
         thickness_m : float | None
             Slab thickness; ``None`` → ``defaults.slab_thickness_m``.
+
+        Docs: docs/systems/buildings.md
         """
         poly = self._auto_footprint() if polygon is None else np.array(polygon, dtype=np.float64)
         self.roof = RoofSlab(
@@ -236,6 +244,8 @@ class Building:
         """
         Local z of storey ``index``'s floor-slab bottom in meters
         (sum of the heights of all storeys below; storey 0 → 0.0).
+
+        Docs: docs/systems/buildings.md
         """
         if not 0 <= index < len(self.storeys):
             raise IndexError(f"storey index {index} out of range")
@@ -243,7 +253,10 @@ class Building:
 
     @property
     def total_height_m(self) -> float:
-        """Local z of the top of the highest storey (roof slab excluded)."""
+        """Local z of the top of the highest storey (roof slab excluded).
+
+        Docs: docs/systems/buildings.md
+        """
         return float(sum(s.height_m for s in self.storeys))
 
     def world_aabb(self) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
@@ -255,6 +268,8 @@ class Building:
         the full z range) with its 8 corners transformed by the building's
         rotation + position.  Used for lighting invalidation
         (``BuildingChangedEvent``) and broad-phase queries.
+
+        Docs: docs/systems/buildings.md
         """
         # Wall centerlines get padded by half the thickest wall; slab
         # polygons are already true outlines and are merged unpadded.
@@ -310,6 +325,8 @@ class Building:
 
         Round-trips exactly: ``Building.from_dict(b.to_dict()).to_dict()
         == b.to_dict()``.
+
+        Docs: docs/systems/buildings.md
         """
         return {
             "id": int(self.id),
@@ -326,7 +343,10 @@ class Building:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Building:
-        """Inverse of :meth:`to_dict`."""
+        """Inverse of :meth:`to_dict`.
+
+        Docs: docs/systems/buildings.md
+        """
         pos = d["position"]
         rot = d["rotation"]
         building = cls(

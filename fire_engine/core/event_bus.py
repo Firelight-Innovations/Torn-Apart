@@ -42,6 +42,8 @@ Example
     bus.subscribe(ChunkLoadedEvent, on_loaded)
     bus.publish(ChunkLoadedEvent(coord=(0, 0, 0)))  # → prints immediately
     bus.unsubscribe(ChunkLoadedEvent, on_loaded)
+
+Docs: docs/systems/core.md
 """
 
 from __future__ import annotations
@@ -109,6 +111,8 @@ class EventBus:
     - If the same handler is registered twice for the same type it will be
       called twice; callers are responsible for avoiding duplicate subscriptions.
     - Exceptions raised by handlers propagate immediately (no swallowing).
+
+    Docs: docs/systems/core.md
     """
 
     def __init__(self) -> None:
@@ -132,6 +136,8 @@ class EventBus:
             The exact event class (e.g. ``ChunkLoadedEvent``).
         handler    : Callable[[event], None]
             Called with the event object as its sole argument.
+
+        Docs: docs/systems/core.md
         """
         self._handlers[event_type].append(handler)
 
@@ -145,6 +151,8 @@ class EventBus:
         ----------
         event_type : type
         handler    : Callable[[event], None]
+
+        Docs: docs/systems/core.md
         """
         handlers = self._handlers.get(event_type)
         if handlers is not None:
@@ -167,6 +175,8 @@ class EventBus:
         Example
         -------
         >>> bus.publish(ChunkLoadedEvent(coord=(1, 2, 0)))
+
+        Docs: docs/systems/core.md
         """
         handlers = self._handlers.get(type(event))
         if handlers:
@@ -183,6 +193,8 @@ class EventBus:
         Parameters
         ----------
         event : frozen dataclass instance
+
+        Docs: docs/systems/core.md
         """
         self._deferred.append(event)
 
@@ -198,6 +210,8 @@ class EventBus:
         -------
         >>> bus.publish_deferred(ChunkLoadedEvent(coord=(0, 0, 1)))
         >>> bus.drain()   # handler called now
+
+        Docs: docs/systems/core.md
         """
         # Snapshot: swap out the current queue for a fresh one
         to_dispatch = self._deferred

@@ -37,7 +37,6 @@ Example
 
     # look_at — forward points toward origin
     child.look_at(Vec3.ZERO)
-
 Docs: docs/systems/render.md
 """
 
@@ -58,9 +57,7 @@ if TYPE_CHECKING:
 __all__ = ["Space", "Transform"]
 
 
-# ---------------------------------------------------------------------------
 # Transform
-# ---------------------------------------------------------------------------
 
 
 class Transform:
@@ -95,6 +92,7 @@ class Transform:
     forward : Vec3   — +Y axis in world space (facing direction)
     right   : Vec3   — +X axis in world space
     up      : Vec3   — +Z axis in world space
+    Docs: docs/systems/render.md
     """
 
     __slots__ = (
@@ -121,18 +119,20 @@ class Transform:
 
         self.game_object = None  # filled in by GameObject.__init__
 
-    # ------------------------------------------------------------------
     # Hierarchy
-    # ------------------------------------------------------------------
 
     @property
     def parent(self) -> Transform | None:
-        """Parent transform, or None if this is a root transform."""
+        """Parent transform, or None if this is a root transform.
+        Docs: docs/systems/render.md
+        """
         return self._parent
 
     @property
     def children(self) -> tuple[Transform, ...]:
-        """Read-only tuple of immediate child transforms."""
+        """Read-only tuple of immediate child transforms.
+        Docs: docs/systems/render.md
+        """
         return tuple(self._children)
 
     def set_parent(
@@ -155,6 +155,7 @@ class Transform:
             child.set_parent(parent)          # child keeps world position
             child.set_parent(None)            # detach from parent
             child.set_parent(other, False)    # keep local coords, world jumps
+        Docs: docs/systems/render.md
         """
         if p is self:
             raise ValueError("A Transform cannot be its own parent.")
@@ -184,43 +185,54 @@ class Transform:
 
         self._mark_dirty()
 
-    # ------------------------------------------------------------------
     # Local TRS accessors
-    # ------------------------------------------------------------------
 
     @property
     def local_position(self) -> Vec3:
-        """Position relative to the parent frame (meters)."""
+        """Position relative to the parent frame (meters).
+        Docs: docs/systems/render.md
+        """
         return self._local_position
 
     @local_position.setter
     def local_position(self, value: Vec3) -> None:
+        """Set position relative to the parent frame (meters).
+        Docs: docs/systems/render.md
+        """
         self._local_position = value
         self._mark_dirty()
 
     @property
     def local_rotation(self) -> Quat:
-        """Rotation relative to the parent frame (unit quaternion)."""
+        """Rotation relative to the parent frame (unit quaternion).
+        Docs: docs/systems/render.md
+        """
         return self._local_rotation
 
     @local_rotation.setter
     def local_rotation(self, value: Quat) -> None:
+        """Set rotation relative to the parent frame (unit quaternion).
+        Docs: docs/systems/render.md
+        """
         self._local_rotation = value.normalized()
         self._mark_dirty()
 
     @property
     def local_scale(self) -> Vec3:
-        """Scale relative to the parent frame."""
+        """Scale relative to the parent frame.
+        Docs: docs/systems/render.md
+        """
         return self._local_scale
 
     @local_scale.setter
     def local_scale(self, value: Vec3) -> None:
+        """Set scale relative to the parent frame.
+        Docs: docs/systems/render.md
+        """
         self._local_scale = value
         self._mark_dirty()
 
-    # ------------------------------------------------------------------
     # World-space position/rotation (derived through parent chain)
-    # ------------------------------------------------------------------
 
     def _world_mat(self) -> np.ndarray:
         """Return the cached (or freshly computed) world matrix."""
@@ -243,12 +255,16 @@ class Transform:
         World-space position in meters.
 
         Setting this recomputes local_position relative to the current parent.
+        Docs: docs/systems/render.md
         """
         m = self._world_mat()
         return Vec3(float(m[0, 3]), float(m[1, 3]), float(m[2, 3]))
 
     @position.setter
     def position(self, world_pos: Vec3) -> None:
+        """Set world-space position in meters; recomputes local_position.
+        Docs: docs/systems/render.md
+        """
         if self._parent is None:
             self._local_position = world_pos
         else:
@@ -261,6 +277,7 @@ class Transform:
         World-space rotation (unit quaternion).
 
         Setting this recomputes local_rotation relative to the current parent.
+        Docs: docs/systems/render.md
         """
         if self._parent is None:
             return self._local_rotation
@@ -268,6 +285,9 @@ class Transform:
 
     @rotation.setter
     def rotation(self, world_rot: Quat) -> None:
+        """Set world-space rotation; recomputes local_rotation relative to current parent.
+        Docs: docs/systems/render.md
+        """
         if self._parent is None:
             self._local_rotation = world_rot.normalized()
         else:
@@ -275,28 +295,30 @@ class Transform:
             self._local_rotation = (parent_inv * world_rot).normalized()
         self._mark_dirty()
 
-    # ------------------------------------------------------------------
     # Direction vectors (world-space)
-    # ------------------------------------------------------------------
 
     @property
     def forward(self) -> Vec3:
-        """World-space forward direction (+Y in local space, Z-up convention)."""
+        """World-space forward direction (+Y in local space, Z-up convention).
+        Docs: docs/systems/render.md
+        """
         return self.rotation.rotate(Vec3.FORWARD)
 
     @property
     def right(self) -> Vec3:
-        """World-space right direction (+X in local space)."""
+        """World-space right direction (+X in local space).
+        Docs: docs/systems/render.md
+        """
         return self.rotation.rotate(Vec3.RIGHT)
 
     @property
     def up(self) -> Vec3:
-        """World-space up direction (+Z in local space)."""
+        """World-space up direction (+Z in local space).
+        Docs: docs/systems/render.md
+        """
         return self.rotation.rotate(Vec3.UP)
 
-    # ------------------------------------------------------------------
     # Operations
-    # ------------------------------------------------------------------
 
     def translate(self, v: Vec3, relative_to: Space = Space.SELF) -> None:
         """
@@ -312,6 +334,7 @@ class Transform:
         -------
             t.translate(Vec3(0, 1, 0))               # 1 m forward (local)
             t.translate(Vec3(0, 0, 1), Space.WORLD)  # 1 m up (world)
+        Docs: docs/systems/render.md
         """
         if relative_to is Space.SELF:
             self._local_position = self._local_position + self.rotation.rotate(v)
@@ -335,6 +358,7 @@ class Transform:
         -------
             t.rotate(Quat.from_axis_angle(Vec3.UP, pi/4))          # yaw 45° local
             t.rotate(Quat.from_axis_angle(Vec3.UP, pi/4), Space.WORLD)  # yaw 45° world
+        Docs: docs/systems/render.md
         """
         if relative_to is Space.SELF:
             self._local_rotation = (self._local_rotation * q).normalized()
@@ -362,6 +386,7 @@ class Transform:
         -------
             camera_transform.look_at(Vec3(10, 20, 0))
             # camera.forward ≈ direction toward (10,20,0)
+        Docs: docs/systems/render.md
         """
         world_pos = self.position
         fwd = target - world_pos
@@ -423,6 +448,7 @@ class Transform:
             # An object at (10,0,0) world, rotated 90° yaw:
             # its local +Y forward maps to world −X
             world_pt = t.transform_point(Vec3(0, 1, 0))
+        Docs: docs/systems/render.md
         """
         m = self._world_mat()
         hp = np.array([p.x, p.y, p.z, 1.0], dtype=np.float64)
@@ -445,6 +471,7 @@ class Transform:
         -------
             local_pt = t.inverse_transform_point(world_pt)
             # round-trip: t.transform_point(local_pt) ≈ world_pt
+        Docs: docs/systems/render.md
         """
         m = self._world_mat()
         inv = np.linalg.inv(m)
@@ -452,9 +479,7 @@ class Transform:
         lp = inv @ hp
         return Vec3(float(lp[0]), float(lp[1]), float(lp[2]))
 
-    # ------------------------------------------------------------------
     # Dirty-flag propagation
-    # ------------------------------------------------------------------
 
     def _mark_dirty(self) -> None:
         """Mark this transform and all descendants dirty (world matrix stale)."""
@@ -463,9 +488,7 @@ class Transform:
             for child in self._children:
                 child._mark_dirty()
 
-    # ------------------------------------------------------------------
     # Debug
-    # ------------------------------------------------------------------
 
     def __repr__(self) -> str:
         pos = self._local_position

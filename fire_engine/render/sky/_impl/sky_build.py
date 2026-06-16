@@ -67,6 +67,8 @@ def build_dome(self_obj: SkyRendererComponent, star_count: int) -> None:
     in ``self_obj._dome_np``.  Also initialises ``self_obj._fog_tex_bound``.
 
     Extracted from ``SkyRendererComponent._build_dome`` (sky_renderer.py).
+
+    Docs: docs/systems/render.sky._impl.md
     """
     node = _build_dome_node(_DOME_RADIUS_M, _DOME_STACKS, _DOME_SLICES)
     dome = self_obj.base.render.attach_new_node(node)
@@ -164,6 +166,8 @@ def build_clouds(self_obj: SkyRendererComponent) -> None:
     (``None`` when ``gfx_clouds`` is disabled).
 
     Extracted from ``SkyRendererComponent._build_clouds`` (sky_renderer.py).
+
+    Docs: docs/systems/render.sky._impl.md
     """
     cfg = getattr(self_obj.base, "_config", None)
     if not bool(getattr(cfg, "gfx_clouds", True)):

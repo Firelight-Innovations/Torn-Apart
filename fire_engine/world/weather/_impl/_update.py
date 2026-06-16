@@ -71,6 +71,8 @@ def classified_state(ws: WeatherSystem, lw: LocalWeather, abs_t: float) -> Weath
     """
     Hysteresis-stabilised :func:`classify`: a changed label must persist
     ``HYSTERESIS_SECONDS`` before it becomes the committed state.
+
+    Docs: docs/systems/world.weather._impl.md
     """
     from fire_engine.world.weather.system import HYSTERESIS_SECONDS
 
@@ -98,6 +100,8 @@ def emit_lightning(ws: WeatherSystem, abs_t: float, cells: list[StormCell]) -> N
     last update, for every active THUNDERSTORM cell.
 
     Pure-schedule emission (load-resume safe — see lightning.py).
+
+    Docs: docs/systems/world.weather._impl.md
     """
     from fire_engine.world.weather.cells import CellKind
     from fire_engine.world.weather.lightning import cell_id_int, scheduled_strikes
@@ -137,7 +141,10 @@ def emit_lightning(ws: WeatherSystem, abs_t: float, cells: list[StormCell]) -> N
 
 
 def update_gust_fronts(ws: WeatherSystem, t: float, player_pos: tuple[float, float]) -> None:
-    """Register / release gust-front wind modifiers for nearby storm cells."""
+    """Register / release gust-front wind modifiers for nearby storm cells.
+
+    Docs: docs/systems/world.weather._impl.md
+    """
     if ws._wind_field is None:
         return
     from fire_engine.world.wind import GustFront
@@ -163,7 +170,17 @@ def update_gust_fronts(ws: WeatherSystem, t: float, player_pos: tuple[float, flo
                 ws._active_fronts[cell.id] = front
     for cid in list(ws._active_fronts):
         if cid not in near_ids:
-            ws._release_front(cid)
+            release_front(ws, cid)
+
+
+def release_front(ws: WeatherSystem, cell_id: str) -> None:
+    """Remove the gust-front wind modifier registered for *cell_id*, if any.
+
+    Docs: docs/systems/world.weather._impl.md
+    """
+    front = ws._active_fronts.pop(cell_id, None)
+    if front is not None and ws._wind_field is not None:
+        ws._wind_field.remove_modifier(front)
 
 
 def do_update(
@@ -179,6 +196,8 @@ def do_update(
 
     Samples the weather, advances the override/label state, publishes events.
     Returns the local sample (override-blended if forced).
+
+    Docs: docs/systems/world.weather._impl.md
     """
     from fire_engine.world.weather._impl._sampling import sample_local, temperature
 

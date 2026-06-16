@@ -53,6 +53,8 @@ Example
 
     # App calls this each frame before registry.run_frame:
     ctrl.set_input_state(input_state)
+
+Docs: docs/systems/simulation.player.md
 """
 
 from __future__ import annotations
@@ -88,6 +90,8 @@ class FlyController(Component):
     yaw   : float — accumulated heading angle in radians (world Z rotation).
     pitch : float — accumulated pitch angle in radians (local X rotation),
                     clamped to ±89°.
+
+    Docs: docs/systems/simulation.player.md
     """
 
     __slots__ = (
@@ -128,6 +132,8 @@ class FlyController(Component):
         Parameters
         ----------
         state : InputState — snapshot of keyboard/mouse state for this frame.
+
+        Docs: docs/systems/simulation.player.md
         """
         self._input = state
 
@@ -136,7 +142,10 @@ class FlyController(Component):
     # ------------------------------------------------------------------
 
     def awake(self) -> None:
-        """Read initial rotation from the transform (yaw/pitch from world rotation)."""
+        """Read initial rotation from the transform (yaw/pitch from world rotation).
+
+        Docs: docs/systems/simulation.player.md
+        """
         if self.transform is not None:
             h, p, _r = self.transform.local_rotation.as_euler()
             self.yaw = h
@@ -149,6 +158,8 @@ class FlyController(Component):
         Parameters
         ----------
         dt : float — real frame delta in seconds.
+
+        Docs: docs/systems/simulation.player.md
         """
         if self._input is None or self.transform is None:
             return

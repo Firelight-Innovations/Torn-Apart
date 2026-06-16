@@ -29,6 +29,8 @@ def trs_matrix(pos: Vec3, rot: Quat, scale: Vec3) -> np.ndarray:
     Returns
     -------
     np.ndarray shape (4, 4) float64
+
+    Docs: docs/systems/render.md
     """
     w, x, y, z = (float(c) for c in rot._data)
     sx, sy, sz = float(scale.x), float(scale.y), float(scale.z)
@@ -77,6 +79,8 @@ def mat3_to_quat(m: np.ndarray) -> Quat:
     ----
     The matrix is stored with rows as the destination axes for each local
     basis vector (i.e. the *transpose* of a column-basis matrix).
+
+    Docs: docs/systems/render.md
     """
     trace = m[0, 0] + m[1, 1] + m[2, 2]
 

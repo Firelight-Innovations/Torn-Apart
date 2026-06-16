@@ -39,6 +39,8 @@ Usage
     set_world_seed(42)
     arr = get("moon_surface")    # np.ndarray (256, 256, 4) uint8
     # python tools/preview_texture.py moon_surface
+
+Docs: docs/systems/procedural.textures.sky.md
 """
 
 from __future__ import annotations
@@ -73,6 +75,8 @@ class MoonSurfaceDef(ProceduralTextureDef):
 
     Returns ``(size, size, 4) uint8`` RGBA; alpha 255 inside the unit disc,
     0 outside.  Deterministic per world seed.
+
+    Docs: docs/systems/procedural.textures.sky.md
     """
 
     name = "moon_surface"
@@ -91,6 +95,8 @@ class MoonSurfaceDef(ProceduralTextureDef):
         Returns
         -------
         numpy.ndarray — ``uint8 (size, size, 4)`` RGBA.
+
+        Docs: docs/systems/procedural.textures.sky.md
         """
         size = int(params.get("size", 256))
         crater_count = int(params.get("crater_count", 56))

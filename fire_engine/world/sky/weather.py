@@ -9,6 +9,8 @@ existing imports (``from fire_engine.world.sky.weather import WeatherSystem,
 WeatherType``) keep working.
 
 New code should import from :mod:`fire_engine.world.weather` directly.
+
+Docs: docs/systems/world.sky.md
 """
 
 from __future__ import annotations

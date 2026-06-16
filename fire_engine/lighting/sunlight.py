@@ -46,6 +46,8 @@ Constants
 ---------
 LIGHT_FULL    = 255  (from light_grid)
 LIGHT_AMBIENT = 40   (from light_grid)
+
+Docs: docs/systems/lighting.md
 """
 
 from __future__ import annotations
@@ -72,9 +74,7 @@ from fire_engine.lighting.light_grid import (
 _log = get_logger("lighting.sunlight")
 
 
-# ---------------------------------------------------------------------------
 # Public sampler factory (plugs into build_mesh's light_sampler argument)
-# ---------------------------------------------------------------------------
 
 
 def make_light_sampler(
@@ -137,6 +137,8 @@ def make_light_sampler(
     >>> positions = np.array([[0.5, 0.5, 0.5]], dtype=np.float32)
     >>> sampler(positions)   # no light data → full bright fallback
     array([1.], dtype=float32)
+
+    Docs: docs/systems/lighting.md
     """
     chunk_m = float(config.chunk_meters)  # 16.0
     cell_m = float(config.light_cell_meters)  # 1.0
@@ -223,9 +225,7 @@ def make_light_sampler(
     return _sampler
 
 
-# ---------------------------------------------------------------------------
 # SunlightComputer
-# ---------------------------------------------------------------------------
 
 
 class SunlightComputer:
@@ -303,6 +303,8 @@ class SunlightComputer:
     >>> lg = LightGrid()
     >>> sc = SunlightComputer(cfg, cm, lg, bus)
     >>> sc.recompute_all_loaded()
+
+    Docs: docs/systems/lighting.md
     """
 
     def __init__(
@@ -325,9 +327,7 @@ class SunlightComputer:
         bus.subscribe(TerrainEditedEvent, self._on_terrain_edited)
         bus.subscribe(ChunkLoadedEvent, self._on_chunk_loaded)
 
-    # ------------------------------------------------------------------
     # Event handlers
-    # ------------------------------------------------------------------
 
     def _on_terrain_edited(self, event: TerrainEditedEvent) -> None:
         """
@@ -361,9 +361,7 @@ class SunlightComputer:
         cx, cy, _ = event.coord
         self._recompute_column_and_mark_dirty(cx, cy)
 
-    # ------------------------------------------------------------------
     # Public recompute API
-    # ------------------------------------------------------------------
 
     def recompute_column(self, cx: int, cy: int) -> None:
         """
@@ -379,6 +377,8 @@ class SunlightComputer:
             X chunk coordinate of the column.
         cy : int
             Y chunk coordinate of the column.
+
+        Docs: docs/systems/lighting.md
         """
         chunks_dict = self._provider.chunks
         g = self._grid_cells  # 16
@@ -411,9 +411,7 @@ class SunlightComputer:
         # Stack along axis 2: shape (16, 16, T).
         occ_stack = np.concatenate(chunk_occ, axis=2).astype(np.uint8)  # (16,16,T)
 
-        # ------------------------------------
         # Column pass: cumulative-OR downward.
-        # ------------------------------------
         # Sunlight comes from +Z (top).  Shadowed = has_solid_at_or_above.
         # Reverse Z so index 0 = top (highest Z) for accumulate, then flip back.
         occ_rev = occ_stack[:, :, ::-1]  # (16,16,T) with index 0 = topmost layer
@@ -424,9 +422,7 @@ class SunlightComputer:
         # Map: shadowed → LIGHT_AMBIENT, unshadowed → LIGHT_FULL.
         light_float = np.where(shadow, float(LIGHT_AMBIENT), float(LIGHT_FULL))
 
-        # ------------------------------------
         # Box blur: 3×3×3 uniform filter.
-        # ------------------------------------
         # Build padded array: (18, 18, T+2) with edge replicate (clamp).
         padded = np.pad(
             light_float,
@@ -447,9 +443,7 @@ class SunlightComputer:
         blurred_clamped = np.clip(blurred, float(LIGHT_AMBIENT), float(LIGHT_FULL))
         light_uint8 = blurred_clamped.round().astype(np.uint8)  # (16, 16, T)
 
-        # ------------------------------------
         # Split back into per-chunk arrays.
-        # ------------------------------------
         for chunk_idx, (_cz, coord, _) in enumerate(column_chunks):
             z_start = chunk_idx * g
             z_end = z_start + g
@@ -485,6 +479,8 @@ class SunlightComputer:
         the initial set of chunks has been streamed, or after loading a save.
         It is also safe to call every N frames for full correctness at the cost
         of CPU time (not required for v0).
+
+        Docs: docs/systems/lighting.md
         """
         chunks_dict = self._provider.chunks
         columns: set[tuple[int, int]] = {(coord[0], coord[1]) for coord in chunks_dict}

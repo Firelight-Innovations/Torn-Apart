@@ -40,6 +40,8 @@ Example
 1
 >>> arr.shape
 (64, 12)
+
+Docs: docs/systems/lighting.md
 """
 
 from __future__ import annotations
@@ -97,6 +99,8 @@ class LightSet:
     >>> ls.update(0.6)            # transient expired
     >>> ls.count
     0
+
+    Docs: docs/systems/lighting.md
     """
 
     def __init__(self) -> None:
@@ -108,11 +112,17 @@ class LightSet:
 
     @property
     def count(self) -> int:
-        """Number of active lights."""
+        """Number of active lights.
+
+        Docs: docs/systems/lighting.md
+        """
         return len(self._entries)
 
     def add(self, light: PointLight | AreaLight) -> int:
-        """Register a light; returns its id (use with ``remove``)."""
+        """Register a light; returns its id (use with ``remove``).
+
+        Docs: docs/systems/lighting.md
+        """
         lid = self._next_id
         self._next_id += 1
         self._entries[lid] = _Entry(light)
@@ -120,12 +130,18 @@ class LightSet:
         return lid
 
     def remove(self, light_id: int) -> None:
-        """Remove a light by id (no-op when absent)."""
+        """Remove a light by id (no-op when absent).
+
+        Docs: docs/systems/lighting.md
+        """
         if self._entries.pop(light_id, None) is not None:
             self.version += 1
 
     def clear(self) -> None:
-        """Remove all lights."""
+        """Remove all lights.
+
+        Docs: docs/systems/lighting.md
+        """
         if self._entries:
             self._entries.clear()
             self.version += 1
@@ -138,11 +154,16 @@ class LightSet:
         mutate the light's ``position``/``direction`` fields directly, then
         call this so the GPU pipeline re-injects.  Cheap — call only when the
         light actually moved (re-injection is the expensive part).
+
+        Docs: docs/systems/lighting.md
         """
         self.version += 1
 
     def get(self, light_id: int) -> PointLight | AreaLight | SpotLight | None:
-        """Return the registered light object for ``light_id`` (or None)."""
+        """Return the registered light object for ``light_id`` (or None).
+
+        Docs: docs/systems/lighting.md
+        """
         e = self._entries.get(light_id)
         return e.light if e is not None else None
 
@@ -154,6 +175,8 @@ class LightSet:
         by remaining lifetime) and are removed once expired.  Permanent
         lights are untouched.  Bumps ``version`` whenever any transient
         light exists (its fade changes the packed data every frame).
+
+        Docs: docs/systems/lighting.md
         """
         if not self._entries:
             return
@@ -194,6 +217,8 @@ class LightSet:
         -------
         tuple[numpy.ndarray, int]
             ``(array, active_count)``.
+
+        Docs: docs/systems/lighting.md
         """
         out = np.zeros((max_lights, 12), dtype=np.float32)
         n = 0

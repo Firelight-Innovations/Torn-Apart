@@ -35,6 +35,8 @@ Usage
     set_world_seed(1337)
     arr = get("grass_tuft")       # (32, 32, 4) uint8, alpha mask
     # Preview: python tools/preview_texture.py grass_tuft
+
+Docs: docs/systems/procedural.textures.sprites.md
 """
 
 from __future__ import annotations
@@ -90,6 +92,8 @@ class GrassTuftDef(ProceduralTextureDef):
         set_world_seed(7)
         arr = get("grass_tuft")
         assert ((arr[..., 3] == 0) | (arr[..., 3] == 255)).all()
+
+    Docs: docs/systems/procedural.textures.sprites.md
     """
 
     name = "grass_tuft"
@@ -113,6 +117,8 @@ class GrassTuftDef(ProceduralTextureDef):
         -------
         numpy.ndarray
             ``(H, W, 4) uint8`` RGBA with binary alpha.
+
+        Docs: docs/systems/procedural.textures.sprites.md
         """
         W = int(params.get("width", self.DEFAULT_WIDTH))
         H = int(params.get("height", self.DEFAULT_HEIGHT))

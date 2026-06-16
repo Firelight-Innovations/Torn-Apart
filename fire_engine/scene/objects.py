@@ -29,6 +29,8 @@ Example::
     store.set_transform(cube["id"], position=(4.0, 0.0, 2.0))
     store.reparent(child["id"], parent=None)   # promote to a root
     tree = store.tree()                          # flat, DFS-ordered list of dicts
+
+Docs: docs/systems/scene.md
 """
 
 from __future__ import annotations
@@ -74,6 +76,8 @@ class SceneObjectStore:
 
     Implements the ``Saveable`` protocol (``save_key`` + ``get_delta`` /
     ``apply_delta``) so the scene persists inside the world's ``.ta`` save.
+
+    Docs: docs/systems/scene.md
     """
 
     save_key: str = "editor_scene"
@@ -89,6 +93,10 @@ class SceneObjectStore:
         return len(self._objects)
 
     def get(self, obj_id: int) -> SceneObject:
+        """Return the :class:`SceneObject` for ``obj_id``; raises :class:`SceneError` if missing.
+
+        Docs: docs/systems/scene.md
+        """
         obj = self._objects.get(int(obj_id))
         if obj is None:
             raise SceneError(f"no scene object with id {obj_id}")
@@ -110,7 +118,10 @@ class SceneObjectStore:
         return out
 
     def tree(self) -> list[dict[str, Any]]:
-        """Flat, depth-first list of object dicts (roots first, siblings ordered)."""
+        """Flat, depth-first list of object dicts (roots first, siblings ordered).
+
+        Docs: docs/systems/scene.md
+        """
         out: list[dict[str, Any]] = []
 
         def walk(parent: int | None) -> None:
@@ -132,7 +143,10 @@ class SceneObjectStore:
         name: str | None = None,
         position: Vec3T = _ZERO,
     ) -> dict[str, Any]:
-        """Create a new object; returns its dict form. Raises on bad kind/parent."""
+        """Create a new object; returns its dict form. Raises on bad kind/parent.
+
+        Docs: docs/systems/scene.md
+        """
         k = str(kind).lower()
         if k not in KINDS:
             raise SceneError(f"unknown kind {kind!r}; expected one of {sorted(KINDS)}")
@@ -151,12 +165,19 @@ class SceneObjectStore:
         return obj.to_dict()
 
     def rename(self, obj_id: int, name: str) -> dict[str, Any]:
+        """Rename the object at ``obj_id``; returns its updated dict form.
+
+        Docs: docs/systems/scene.md
+        """
         obj = self.get(obj_id)
         obj.name = str(name)
         return obj.to_dict()
 
     def reparent(self, obj_id: int, parent: int | None) -> dict[str, Any]:
-        """Move ``obj_id`` under ``parent`` (``None`` = root). Rejects cycles."""
+        """Move ``obj_id`` under ``parent`` (``None`` = root). Rejects cycles.
+
+        Docs: docs/systems/scene.md
+        """
         obj = self.get(obj_id)
         if parent is not None:
             pid = int(parent)
@@ -179,6 +200,14 @@ class SceneObjectStore:
         rotation: QuatT | None = None,
         scale: Vec3T | None = None,
     ) -> dict[str, Any]:
+        """Set the local TRS of ``obj_id``; returns the updated dict form.
+
+        All keyword arguments are optional — omit to keep the current value.
+        Positions are in meters (local to parent); rotation is a quaternion
+        ``(w, x, y, z)``; scale is a unitless multiplier ``(x, y, z)``.
+
+        Docs: docs/systems/scene.md
+        """
         obj = self.get(obj_id)
         if position is not None:
             obj.position = tuple(float(v) for v in position)  # type: ignore[assignment]
@@ -197,6 +226,8 @@ class SceneObjectStore:
         Components are independent of ``kind`` (Unity-style) — an ``empty`` can
         be given a Light. Singletons (every built-in) reject a second instance.
         Raises :class:`SceneError` on unknown type or singleton violation.
+
+        Docs: docs/systems/scene.md
         """
         obj = self.get(obj_id)
         t = str(type_name)
@@ -210,7 +241,10 @@ class SceneObjectStore:
         return obj.to_dict()
 
     def remove_component(self, obj_id: int, index: int) -> dict[str, Any]:
-        """Remove the component at ``index`` (0-based). Raises on a bad index."""
+        """Remove the component at ``index`` (0-based). Raises on a bad index.
+
+        Docs: docs/systems/scene.md
+        """
         obj = self.get(obj_id)
         i = int(index)
         if i < 0 or i >= len(obj.components):
@@ -228,7 +262,10 @@ class SceneObjectStore:
     ) -> dict[str, Any]:
         """Edit the component at ``index``: merge validated ``params`` and/or
         toggle ``enabled``. Unknown/extraneous param keys are dropped and values
-        are coerced to the catalog field types. Raises on a bad index."""
+        are coerced to the catalog field types. Raises on a bad index.
+
+        Docs: docs/systems/scene.md
+        """
         obj = self.get(obj_id)
         i = int(index)
         if i < 0 or i >= len(obj.components):
@@ -242,7 +279,10 @@ class SceneObjectStore:
         return obj.to_dict()
 
     def delete(self, obj_id: int) -> list[int]:
-        """Delete ``obj_id`` and all its descendants; returns removed ids."""
+        """Delete ``obj_id`` and all its descendants; returns removed ids.
+
+        Docs: docs/systems/scene.md
+        """
         obj = self.get(obj_id)
         removed = self._descendants(obj.id) | {obj.id}
         for rid in removed:
@@ -250,7 +290,10 @@ class SceneObjectStore:
         return sorted(removed)
 
     def clear(self) -> None:
-        """Drop all objects (e.g. on ``world.open``); resets the id counter."""
+        """Drop all objects (e.g. on ``world.open``); resets the id counter.
+
+        Docs: docs/systems/scene.md
+        """
         self._objects.clear()
         self._next_id = 1
 
@@ -258,7 +301,10 @@ class SceneObjectStore:
     # Saveable protocol
     # ------------------------------------------------------------------ #
     def get_delta(self) -> dict[str, Any]:
-        """Deviation from the empty baseline: the full object list (or ``{}``)."""
+        """Deviation from the empty baseline: the full object list (or ``{}``).
+
+        Docs: docs/systems/scene.md
+        """
         if not self._objects:
             return {}
         return {
@@ -267,7 +313,10 @@ class SceneObjectStore:
         }
 
     def apply_delta(self, delta: dict[str, Any]) -> None:
-        """Restore objects saved by :meth:`get_delta` onto the empty baseline."""
+        """Restore objects saved by :meth:`get_delta` onto the empty baseline.
+
+        Docs: docs/systems/scene.md
+        """
         self.clear()
         objs = delta.get("objects", [])
         for d in objs:

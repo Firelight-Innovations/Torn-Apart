@@ -38,13 +38,19 @@ def _fmt(value: object) -> str:
 
 
 def camera_xy(self_obj: DevOverlay) -> tuple[float, float]:
-    """Player/camera world XY (meters) — the summon + readout reference."""
+    """Player/camera world XY (meters) — the summon + readout reference.
+
+    Docs: docs/systems/render.overlay.md
+    """
     p = self_obj._app.camera_go.transform.position
     return (float(p.x), float(p.y))
 
 
 def time_abs(self_obj: DevOverlay) -> float:
-    """Absolute game seconds from the clock (day·86400 + time-of-day)."""
+    """Absolute game seconds from the clock (day·86400 + time-of-day).
+
+    Docs: docs/systems/render.overlay.md
+    """
     clk = self_obj._app._clock
     day = int(getattr(clk, "game_day", 0))
     tod = float(getattr(clk, "game_time_of_day", 0.0))
@@ -62,6 +68,8 @@ def build_weather_control(self_obj: DevOverlay) -> tuple[list[Section], list[But
     the local weather class and the nearest cell's kind / distance / bearing
     / ETA.  Every engine access is guarded so a weather-API shift degrades to
     blanks rather than crashing the overlay.
+
+    Docs: docs/systems/render.overlay.md
     """
     sections = [
         Section(
@@ -129,7 +137,10 @@ def build_weather_control(self_obj: DevOverlay) -> tuple[list[Section], list[But
 
 
 def wx_local_class(self_obj: DevOverlay) -> str:
-    """Read-out: local weather class from the WeatherSystem (guarded)."""
+    """Read-out: local weather class from the WeatherSystem (guarded).
+
+    Docs: docs/systems/render.overlay.md
+    """
     try:
         return str(getattr(self_obj._weather.current, "value", "?"))
     except Exception:
@@ -137,7 +148,10 @@ def wx_local_class(self_obj: DevOverlay) -> str:
 
 
 def wx_local_sample(self_obj: DevOverlay) -> Any:
-    """Return the local WeatherSample at the camera position (guarded)."""
+    """Return the local WeatherSample at the camera position (guarded).
+
+    Docs: docs/systems/render.overlay.md
+    """
     try:
         return self_obj._weather.sample_local(camera_xy(self_obj), time_abs(self_obj))
     except Exception:
@@ -145,7 +159,10 @@ def wx_local_sample(self_obj: DevOverlay) -> Any:
 
 
 def wx_nearest(self_obj: DevOverlay) -> tuple[Any, float, float, float] | None:
-    """(cell, dist_m, bearing_deg, eta_s) for the nearest active cell."""
+    """(cell, dist_m, bearing_deg, eta_s) for the nearest active cell.
+
+    Docs: docs/systems/render.overlay.md
+    """
     try:
         w = self_obj._weather
         cells = list(w.cells)
@@ -167,7 +184,10 @@ def wx_nearest(self_obj: DevOverlay) -> tuple[Any, float, float, float] | None:
 
 
 def wx_near_eta(self_obj: DevOverlay) -> str:
-    """ETA string for the nearest weather cell (guarded)."""
+    """ETA string for the nearest weather cell (guarded).
+
+    Docs: docs/systems/render.overlay.md
+    """
     n = wx_nearest(self_obj)
     if not n:
         return "-"
@@ -183,7 +203,10 @@ def wx_near_eta(self_obj: DevOverlay) -> str:
 
 
 def summon(self_obj: DevOverlay, method_name: str) -> None:
-    """Call a WeatherSystem summon wrapper aimed at the camera."""
+    """Call a WeatherSystem summon wrapper aimed at the camera.
+
+    Docs: docs/systems/render.overlay.md
+    """
     w = self_obj._weather
     if w is None:
         return
@@ -192,13 +215,19 @@ def summon(self_obj: DevOverlay, method_name: str) -> None:
 
 
 def clear_skies(self_obj: DevOverlay) -> None:
-    """Clear summoned cells + suppress the current natural weather."""
+    """Clear summoned cells + suppress the current natural weather.
+
+    Docs: docs/systems/render.overlay.md
+    """
     with contextlib.suppress(Exception):
         self_obj._weather.clear_all()
 
 
 def summon_cell_at_camera(self_obj: DevOverlay) -> None:
-    """Debug key (K): stamp a synthetic thunderstorm right at the camera."""
+    """Debug key (K): stamp a synthetic thunderstorm right at the camera.
+
+    Docs: docs/systems/render.overlay.md
+    """
     w = self_obj._weather
     if w is None:
         return
@@ -216,7 +245,10 @@ def summon_cell_at_camera(self_obj: DevOverlay) -> None:
 
 
 def raycast_ground(self_obj: DevOverlay, origin: Vec3, direction: Vec3) -> Vec3 | None:
-    """World point where a ray hits terrain, or ``None`` (voxel raycast)."""
+    """World point where a ray hits terrain, or ``None`` (voxel raycast).
+
+    Docs: docs/systems/render.overlay.md
+    """
     cm = getattr(self_obj._app, "chunk_manager", None)
     if cm is None:
         return None
@@ -236,6 +268,8 @@ def fire_lightning_at_crosshair(self_obj: DevOverlay) -> None:
     per the M7 contract.  The import resolves at boot once M7's event is
     merged into ``core/event_bus`` — this file is excluded from the headless
     suite, so it never needs the event to exist at test time.
+
+    Docs: docs/systems/render.overlay.md
     """
     bus = getattr(self_obj._app, "_event_bus", None) or getattr(self_obj._app, "event_bus", None)
     if bus is None:
@@ -280,6 +314,8 @@ def toggle_rain_cover_overlay(self_obj: DevOverlay) -> None:
     Draws a flat card spanning the cover field's footprint at the field
     origin; a second press removes it.  Best-effort: no-op if the rain
     component / cover field is not wired in.
+
+    Docs: docs/systems/render.overlay.md
     """
     if self_obj._rain_cover_np is not None:
         self_obj._rain_cover_np.remove_node()
@@ -308,7 +344,10 @@ def toggle_rain_cover_overlay(self_obj: DevOverlay) -> None:
 
 
 def rain_cover_field(self_obj: DevOverlay) -> Any:
-    """Locate the headless ``RainCoverField`` owned by the rain component."""
+    """Locate the headless ``RainCoverField`` owned by the rain component.
+
+    Docs: docs/systems/render.overlay.md
+    """
     rain_go = getattr(self_obj._app, "rain_go", None)
     if rain_go is None:
         return None

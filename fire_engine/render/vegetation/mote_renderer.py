@@ -99,6 +99,8 @@ class DustMoteComponent(Component):
         disables the component (no wind field / inherited uniforms there).
 
     Units: meters, seconds.  World-space Z-up.
+
+    Docs: docs/systems/render.vegetation.md
     """
 
     def __init__(self, base: Any = None, lighting_pipeline: Any = None) -> None:
@@ -109,7 +111,10 @@ class DustMoteComponent(Component):
         self._time_s: float = 0.0
 
     def start(self) -> None:
-        """Build the instanced mote node (once) and bind its uniforms."""
+        """Build the instanced mote node (once) and bind its uniforms.
+
+        Docs: docs/systems/render.vegetation.md
+        """
         if self.base is None:
             _log.warning("DustMoteComponent: missing base — disabled")
             self.enabled = False
@@ -165,14 +170,20 @@ class DustMoteComponent(Component):
         )
 
     def late_update(self, dt: float) -> None:
-        """Advance the shared animation clock (the wind advection rides on it)."""
+        """Advance the shared animation clock (the wind advection rides on it).
+
+        Docs: docs/systems/render.vegetation.md
+        """
         if self._node is None:
             return
         self._time_s += dt
         self._node.set_shader_input("u_time_s", self._time_s)
 
     def on_destroy(self) -> None:
-        """Detach the mote node."""
+        """Detach the mote node.
+
+        Docs: docs/systems/render.vegetation.md
+        """
         if self._node is not None:
             self._node.remove_node()
             self._node = None

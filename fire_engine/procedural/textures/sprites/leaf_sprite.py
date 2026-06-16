@@ -50,6 +50,8 @@ Usage
     set_world_seed(1337)
     arr = get("leaf_sprite")      # (32, 96, 4) uint8 — 3 leaves in a row
     # Preview: python tools/preview_texture.py leaf_sprite
+
+Docs: docs/systems/procedural.textures.sprites.md
 """
 
 from __future__ import annotations
@@ -109,6 +111,8 @@ class LeafSpriteDef(ProceduralTextureDef):
         arr = get("leaf_sprite")
         assert arr.shape == (32, 96, 4)
         assert arr[16, 16, 3] == 255           # centre of leaf 0 is opaque
+
+    Docs: docs/systems/procedural.textures.sprites.md
     """
 
     name = "leaf_sprite"
@@ -132,6 +136,8 @@ class LeafSpriteDef(ProceduralTextureDef):
         -------
         numpy.ndarray
             ``(H, W, 4) uint8`` RGBA leaf atlas.
+
+        Docs: docs/systems/procedural.textures.sprites.md
         """
         W = int(params.get("width", self.DEFAULT_WIDTH))
         H = int(params.get("height", self.DEFAULT_HEIGHT))

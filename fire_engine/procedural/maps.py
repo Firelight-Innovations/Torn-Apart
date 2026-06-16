@@ -19,6 +19,8 @@ Example
 ((8, 8, 4), dtype('uint8'))
 >>> tuple(nm[0, 0, :3])     # flat input → flat "up" normal (128, 128, 255)
 (128, 128, 255)
+
+Docs: docs/systems/procedural.md
 """
 
 from __future__ import annotations
@@ -50,6 +52,8 @@ def derive_normal_map(rgba: np.ndarray, strength: float = 1.4) -> np.ndarray:
     -------
     numpy.ndarray
         ``uint8 (H, W, 4)`` normal map, alpha 255.
+
+    Docs: docs/systems/procedural.md
     """
     lum = (
         rgba[..., :3].astype(np.float32) @ np.asarray([0.299, 0.587, 0.114], dtype=np.float32)
@@ -77,7 +81,24 @@ def derive_normal_map(rgba: np.ndarray, strength: float = 1.4) -> np.ndarray:
 
 
 def flat_normal_map(size: int = 4) -> np.ndarray:
-    """``uint8 (size, size, 4)`` all-flat normal map (128, 128, 255, 255)."""
+    """
+    Return an all-flat tangent-space normal map of shape ``(size, size, 4) uint8``.
+
+    Every texel encodes the +Z normal (128, 128, 255, 255) — used as a no-op
+    normal map for surfaces that have no geometric relief.
+
+    Parameters
+    ----------
+    size : int
+        Edge length in texels.  Default 4.
+
+    Returns
+    -------
+    numpy.ndarray
+        ``uint8 (size, size, 4)`` — all pixels are (128, 128, 255, 255).
+
+    Docs: docs/systems/procedural.md
+    """
     out = np.empty((size, size, 4), dtype=np.uint8)
     out[..., 0] = 128
     out[..., 1] = 128
@@ -87,7 +108,24 @@ def flat_normal_map(size: int = 4) -> np.ndarray:
 
 
 def black_emission_map(size: int = 4) -> np.ndarray:
-    """``uint8 (size, size, 4)`` all-black (non-emissive) emission map."""
+    """
+    Return an all-black (non-emissive) emission map of shape ``(size, size, 4) uint8``.
+
+    Every texel is (0, 0, 0, 255) — used as a placeholder emission map for
+    surfaces that emit no light.
+
+    Parameters
+    ----------
+    size : int
+        Edge length in texels.  Default 4.
+
+    Returns
+    -------
+    numpy.ndarray
+        ``uint8 (size, size, 4)`` — RGB channels are 0, alpha is 255.
+
+    Docs: docs/systems/procedural.md
+    """
     out = np.zeros((size, size, 4), dtype=np.uint8)
     out[..., 3] = 255
     return out

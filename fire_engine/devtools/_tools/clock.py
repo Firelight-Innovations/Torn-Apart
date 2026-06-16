@@ -28,6 +28,8 @@ class ClockTool(DevTool):
     Parameters
     ----------
     clock : Clock — the engine clock (duck-typed: ``game_day`` / ``game_time_of_day``).
+
+    Docs: docs/systems/devtools.md
     """
 
     tool_id = "clock"
@@ -43,6 +45,11 @@ class ClockTool(DevTool):
         return f"{(total_min // 60) % 24:02d}:{total_min % 60:02d}"
 
     def build(self) -> Panel:
+        """
+        Build the current-frame Panel with day number and time-of-day.
+
+        Docs: docs/systems/devtools.md
+        """
         c = self._clock
         return Panel(
             self.tool_id,

@@ -27,6 +27,8 @@ map has no see-through floor.  "Bottom of the world" is determined by the
 caller via the ``world_floor`` flag on the missing −Z neighbour entry (the
 chunk manager passes ``world_floor=True`` when the chunk below is absent and
 this chunk sits at/below the lowest streamed Z band — see chunk_manager.py).
+
+Docs: docs/systems/world.terrain.md
 """
 
 from __future__ import annotations
@@ -97,6 +99,8 @@ class MeshArrays:
     ``face_count``  = number of exposed faces
     ``vertex_count``= ``verts_per_face * face_count``
     ``tri_count``   = ``2 * face_count``
+
+    Docs: docs/systems/world.terrain.md
     """
 
     positions: np.ndarray
@@ -109,22 +113,34 @@ class MeshArrays:
 
     @property
     def face_count(self) -> int:
-        """Number of exposed faces emitted."""
+        """Number of exposed faces emitted.
+
+        Docs: docs/systems/world.terrain.md
+        """
         return int(self.positions.shape[0]) // self.verts_per_face
 
     @property
     def vertex_count(self) -> int:
-        """Number of vertices (``verts_per_face`` per face)."""
+        """Number of vertices (``verts_per_face`` per face).
+
+        Docs: docs/systems/world.terrain.md
+        """
         return int(self.positions.shape[0])
 
     @property
     def tri_count(self) -> int:
-        """Number of triangles (2 per face)."""
+        """Number of triangles (2 per face).
+
+        Docs: docs/systems/world.terrain.md
+        """
         return int(self.indices.shape[0]) // 3
 
     @property
     def is_empty(self) -> bool:
-        """True when no faces were emitted (fully buried or empty chunk)."""
+        """True when no faces were emitted (fully buried or empty chunk).
+
+        Docs: docs/systems/world.terrain.md
+        """
         return bool(self.positions.shape[0] == 0)
 
 
@@ -301,6 +317,8 @@ def build_mesh(
     >>> mesh = build_mesh(c)              # no neighbours → all edges open
     >>> mesh.face_count, mesh.tri_count, mesh.vertex_count
     (6, 12, 24)
+
+    Docs: docs/systems/world.terrain.md
     """
     n = chunk.materials.shape[0]
     vs = float(chunk._voxel_size)

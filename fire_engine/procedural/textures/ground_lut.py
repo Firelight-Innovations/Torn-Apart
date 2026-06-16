@@ -34,6 +34,8 @@ Example
         2: (GRASS_PALETTE, GRASS_THRESHOLDS),
     })
     # lut.shape == (3, 256, 4), lut.dtype == uint8
+
+Docs: docs/systems/procedural.textures.md
 """
 
 from __future__ import annotations
@@ -75,6 +77,8 @@ def build_ground_lut(
     -----
     Uses the same ``np.searchsorted(thresholds, value, side="right")`` rule as
     the texture defs' ``_posterise`` so the ramps match bucket-for-bucket.
+
+    Docs: docs/systems/procedural.textures.md
     """
     if not entries:
         raise ValueError("build_ground_lut requires at least one material entry")

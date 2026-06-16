@@ -36,6 +36,8 @@ Usage
     set_world_seed(1337)
     arr = get("plaster_wall")        # np.ndarray (64, 64, 4) uint8
     # python tools/preview_texture.py plaster_wall
+
+Docs: docs/systems/procedural.textures.ground.md
 """
 
 from __future__ import annotations
@@ -102,6 +104,8 @@ class PlasterWallDef(ProceduralTextureDef):
 
         set_world_seed(7)
         arr = get("plaster_wall")        # (64, 64, 4) uint8
+
+    Docs: docs/systems/procedural.textures.ground.md
     """
 
     name = "plaster_wall"
@@ -124,6 +128,8 @@ class PlasterWallDef(ProceduralTextureDef):
         -------
         numpy.ndarray
             ``(H, W, 4)`` uint8.
+
+        Docs: docs/systems/procedural.textures.ground.md
         """
         w = int(params.get("width", self.DEFAULT_WIDTH))
         h = int(params.get("height", self.DEFAULT_HEIGHT))

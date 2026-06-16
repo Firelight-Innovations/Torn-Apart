@@ -26,7 +26,10 @@ if TYPE_CHECKING:
 
 
 def local_to_dict(lw: LocalWeather) -> dict[str, Any]:
-    """Serialise a LocalWeather to plain primitives (Saveable)."""
+    """Serialise a LocalWeather to plain primitives (Saveable).
+
+    Docs: docs/systems/world.weather._impl.md
+    """
     return {
         "cloud_coverage": float(lw.cloud_coverage),
         "cloud_density": float(lw.cloud_density),
@@ -41,7 +44,10 @@ def local_to_dict(lw: LocalWeather) -> dict[str, Any]:
 
 
 def local_from_dict(d: dict[str, Any]) -> LocalWeather:
-    """Inverse of :func:`local_to_dict`."""
+    """Inverse of :func:`local_to_dict`.
+
+    Docs: docs/systems/world.weather._impl.md
+    """
     return LocalWeather(
         cloud_coverage=float(d["cloud_coverage"]),
         cloud_density=float(d["cloud_density"]),
@@ -61,7 +67,10 @@ def local_from_dict(d: dict[str, Any]) -> LocalWeather:
 
 
 def cell_to_dict(c: StormCell) -> dict[str, Any]:
-    """Serialise a summoned :class:`StormCell` to plain primitives (Saveable)."""
+    """Serialise a summoned :class:`StormCell` to plain primitives (Saveable).
+
+    Docs: docs/systems/world.weather._impl.md
+    """
     return {
         "id": str(c.id),
         "kind": c.kind.value,
@@ -78,6 +87,8 @@ def cell_from_dict(d: dict[str, Any]) -> StormCell:
     """Inverse of :func:`cell_to_dict`.
 
     Raises ``KeyError``/``ValueError`` on malformed input — caller guards.
+
+    Docs: docs/systems/world.weather._impl.md
     """
     return StormCell(
         id=str(d["id"]),
@@ -104,6 +115,8 @@ def get_delta(ws: WeatherSystem) -> dict[str, Any]:
     release blend) exist.  Otherwise a small dict of plain primitives (no live
     objects, no pickle, Hard Rule 3):
     ``summoned``, ``summon_seq``, ``suppressed``, and legacy override keys.
+
+    Docs: docs/systems/world.weather._impl.md
     """
     delta: dict[str, Any] = {}
 
@@ -132,7 +145,10 @@ def get_delta(ws: WeatherSystem) -> dict[str, Any]:
 
 
 def apply_delta_summons(ws: WeatherSystem, delta: dict[str, Any]) -> None:
-    """Rebuild summoned cells + suppression set from delta (M8)."""
+    """Rebuild summoned cells + suppression set from delta (M8).
+
+    Docs: docs/systems/world.weather._impl.md
+    """
     summoned: list[StormCell] = []
     for d in delta.get("summoned", ()) or ():
         try:
@@ -154,7 +170,10 @@ def apply_delta_summons(ws: WeatherSystem, delta: dict[str, Any]) -> None:
 
 
 def apply_delta_override(ws: WeatherSystem, delta: dict[str, Any]) -> None:
-    """Restore legacy dev-override shim state from delta."""
+    """Restore legacy dev-override shim state from delta.
+
+    Docs: docs/systems/world.weather._impl.md
+    """
     if "override" in delta:
         ws._override = WeatherType(delta["override"])
         ws._override_start_abs_t = (

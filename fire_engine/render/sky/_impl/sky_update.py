@@ -68,6 +68,8 @@ def update_dome(
 
     Extracted from ``SkyRendererComponent._update_dome`` (sky_renderer.py).
     Invariant: ``self_obj._dome_np`` is not None (caller guarantees this).
+
+    Docs: docs/systems/render.sky._impl.md
     """
     dome = self_obj._dome_np
     assert dome is not None
@@ -141,6 +143,8 @@ def update_shooting_star(
 
     Extracted from ``SkyRendererComponent._update_shooting_star`` (sky_renderer.py).
     Invariant: ``self_obj._dome_np`` is not None (caller guarantees this).
+
+    Docs: docs/systems/render.sky._impl.md
     """
     dome = self_obj._dome_np
     assert dome is not None
@@ -199,6 +203,8 @@ def update_clouds(
 
     Extracted from ``SkyRendererComponent._update_clouds`` (sky_renderer.py).
     No-ops when ``self_obj._cloud_np`` is None (clouds disabled).
+
+    Docs: docs/systems/render.sky._impl.md
     """
     clouds = self_obj._cloud_np
     if clouds is None:
@@ -234,6 +240,8 @@ def update_fog_and_light(self_obj: SkyRendererComponent, st: Any) -> None:
     """Exponential fog + clear colour + global terrain light scale.
 
     Extracted from ``SkyRendererComponent._update_fog_and_light`` (sky_renderer.py).
+
+    Docs: docs/systems/render.sky._impl.md
     """
     if self_obj.external_lighting:
         # GPU pipeline owns terrain light + fog; keep a plain horizon

@@ -25,7 +25,10 @@ __all__ = ["impostor_geom", "mesh_geom", "species_atlas", "species_impostor"]
 
 
 def mesh_geom(self_obj: TreeRendererComponent, name: str, variant: int, vs: Any) -> Geom:
-    """The species' variant mesh as a Geom (uploaded once, shared)."""
+    """The species' variant mesh as a Geom (uploaded once, shared).
+
+    Docs: docs/systems/render.vegetation._impl.md
+    """
     key = (name, variant)
     geom = self_obj._mesh_geoms.get(key)
     if geom is None:
@@ -37,7 +40,10 @@ def mesh_geom(self_obj: TreeRendererComponent, name: str, variant: int, vs: Any)
 
 
 def impostor_geom(self_obj: TreeRendererComponent, name: str, vs: Any) -> Geom:
-    """Crossed-quad billboard sized to the species' impostor raster."""
+    """Crossed-quad billboard sized to the species' impostor raster.
+
+    Docs: docs/systems/render.vegetation._impl.md
+    """
     geom = self_obj._impostor_geoms.get(name)
     if geom is None:
         geom = _build_cross_geom(vs.impostor_height_m, vs.impostor_width_m, 2)
@@ -46,7 +52,10 @@ def impostor_geom(self_obj: TreeRendererComponent, name: str, vs: Any) -> Geom:
 
 
 def species_atlas(self_obj: TreeRendererComponent, name: str, vs: Any) -> Texture:
-    """The species' bark/leaf atlas as a nearest-filtered texture."""
+    """The species' bark/leaf atlas as a nearest-filtered texture.
+
+    Docs: docs/systems/render.vegetation._impl.md
+    """
     tex = self_obj._atlas_tex.get(name)
     if tex is None:
         from fire_engine.render.bridges.texture_bridge import to_panda_texture
@@ -57,7 +66,10 @@ def species_atlas(self_obj: TreeRendererComponent, name: str, vs: Any) -> Textur
 
 
 def species_impostor(self_obj: TreeRendererComponent, name: str, vs: Any) -> Texture:
-    """The species' impostor sprite strip as a texture."""
+    """The species' impostor sprite strip as a texture.
+
+    Docs: docs/systems/render.vegetation._impl.md
+    """
     tex = self_obj._impostor_tex.get(name)
     if tex is None:
         from fire_engine.render.bridges.texture_bridge import to_panda_texture

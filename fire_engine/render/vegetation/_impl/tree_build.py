@@ -37,7 +37,10 @@ _LIGHT_OFFSET_FRAC = 0.45
 
 
 def build_volumes(self_obj: TreeRendererComponent) -> None:
-    """(Re)create every volume's draw nodes from the zone store."""
+    """(Re)create every volume's draw nodes from the zone store.
+
+    Docs: docs/systems/render.vegetation._impl.md
+    """
     from fire_engine.render.vegetation.tree_renderer import _TREE_KINDS
 
     for nodes in self_obj._volume_nodes.values():
@@ -69,7 +72,10 @@ def build_volumes(self_obj: TreeRendererComponent) -> None:
 
 
 def rebuild_volume(self_obj: TreeRendererComponent, key: tuple[str, int]) -> None:
-    """Re-bake + rebuild one volume (terrain under it changed)."""
+    """Re-bake + rebuild one volume (terrain under it changed).
+
+    Docs: docs/systems/render.vegetation._impl.md
+    """
     from fire_engine.core import get_logger
     from fire_engine.render.vegetation._impl.tree_occluders import push_occluders
     from fire_engine.render.vegetation.tree_renderer import _TREE_KINDS
@@ -87,7 +93,10 @@ def rebuild_volume(self_obj: TreeRendererComponent, key: tuple[str, int]) -> Non
 
 
 def build_volume(self_obj: TreeRendererComponent, kind: Any, vol: Any) -> None:
-    """Bake one volume's placements and create its mesh+impostor draws."""
+    """Bake one volume's placements and create its mesh+impostor draws.
+
+    Docs: docs/systems/render.vegetation._impl.md
+    """
     from fire_engine.procedural import get as get_procedural
     from fire_engine.render.bridges.texture_bridge import to_data_texture_f32
     from fire_engine.render.vegetation._impl.tree_occluders import (

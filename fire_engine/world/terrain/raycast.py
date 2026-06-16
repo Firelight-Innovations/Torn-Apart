@@ -8,6 +8,8 @@ turn a mouse click (camera ray) into a brush centre — e.g. left-click → fire
 This is the ONE place a short Python loop is allowed (CLAUDE.md Hard Rule 4):
 the DDA steps voxel-by-voxel, bounded to ≤200 steps, and runs once per click —
 not per voxel of the world.
+
+Docs: docs/systems/world.terrain.md
 """
 
 from __future__ import annotations
@@ -44,6 +46,8 @@ class Hit:
         place an ADD brush against the surface, or to nudge a REMOVE brush.
     distance : float
         Distance from the ray origin to ``point`` in meters.
+
+    Docs: docs/systems/world.terrain.md
     """
 
     point: Vec3
@@ -98,6 +102,8 @@ def raycast_voxel(
     >>> hit = raycast_voxel(Vec3(8, -4, 10), Vec3(0, 0, -1), provider)
     >>> if hit:
     ...     print(hit.chunk_coord, hit.point)
+
+    Docs: docs/systems/world.terrain.md
     """
     o = origin.to_numpy().astype(np.float64)
     d = direction.to_numpy().astype(np.float64)

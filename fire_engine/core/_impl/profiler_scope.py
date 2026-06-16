@@ -27,6 +27,8 @@ class NullScope:
 
     ``with profiler.scope(...)`` then costs one boolean check + this object's
     trivial enter/exit — no timing, no allocation.
+
+    Docs: docs/systems/core._impl.md
     """
 
     __slots__ = ()

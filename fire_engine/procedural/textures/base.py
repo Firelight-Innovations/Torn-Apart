@@ -35,6 +35,8 @@ a single broadcast expression:
             + BR *      wx  *      wy)
 
 where ``wx, wy`` are sub-cell fractional offsets computed via ``np.meshgrid``.
+
+Docs: docs/systems/procedural.textures.md
 """
 
 from __future__ import annotations
@@ -122,6 +124,8 @@ def value_noise(
 
     3-D noise hint: call ``value_noise`` independently per Z-slice with
     deterministic per-slice RNGs (e.g. ``for_domain("terrain","cave",cz)``).
+
+    Docs: docs/systems/procedural.textures.md
     """
     H, W = shape
 
@@ -255,6 +259,8 @@ def pixel_noise(
     Use ``pixel_noise`` for ground/terrain surface textures where you want
     pixel-art aesthetics.  Use ``value_noise`` for smooth continuous fields
     (heightmaps, fog density) where crisp edges would look wrong.
+
+    Docs: docs/systems/procedural.textures.md
     """
     H, W = shape
 
@@ -358,6 +364,8 @@ class ProceduralTextureDef(ProceduralDef):
         assert arr.shape == (256, 256, 4)
         assert arr.dtype == np.uint8
         assert (arr[..., 3] == 255).all()   # fully opaque
+
+    Docs: docs/systems/procedural.textures.md
     """
 
     def generate(self, rng: np.random.Generator, **params: Any) -> np.ndarray:
@@ -378,6 +386,8 @@ class ProceduralTextureDef(ProceduralDef):
         -------
         numpy.ndarray
             Shape ``(H, W, 4)``, dtype ``uint8``, RGBA channel order.
+
+        Docs: docs/systems/procedural.textures.md
         """
         raise NotImplementedError(
             f"{type(self).__name__}.generate() not implemented. "

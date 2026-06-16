@@ -51,6 +51,8 @@ class WindSnapshot:
     >>> snap = field.snapshot
     >>> snap.field.shape
     (64, 64, 4)
+
+    Docs: docs/systems/world.wind.md
     """
 
     field: np.ndarray
@@ -98,6 +100,8 @@ class VenturiJob:
         Sideways-deflection gain (``config.wind_deflect_gain``, 0.15).
     seq : int
         Monotonic id; lets the consumer drop a superseded result.
+
+    Docs: docs/systems/world.wind.md
     """
 
     origin_cell: tuple[int, int]
@@ -132,6 +136,8 @@ class VenturiResult:
         walls.  Scaled by the mean-wind magnitude when applied.
     seq : int
         Echoes the job's ``seq``.
+
+    Docs: docs/systems/world.wind.md
     """
 
     origin_cell: tuple[int, int]

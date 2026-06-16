@@ -31,6 +31,8 @@ Example
 
     set_world_seed(1337)
     shape = bake_shape_noise(64)        # (64, 64, 64, 4) uint8, deterministic
+
+Docs: docs/systems/world.sky.md
 """
 
 from __future__ import annotations
@@ -164,6 +166,8 @@ def bake_shape_noise(size: int = 64) -> np.ndarray:
     numpy.ndarray
         ``(size, size, size, 4)`` uint8, channel order RGBA, indexed
         ``[z, y, x, c]``.
+
+    Docs: docs/systems/world.sky.md
     """
     rng = for_domain("sky", "cloud_shape")
     perlin = _value_fbm(size, 4, 4, rng)
@@ -197,6 +201,8 @@ def bake_detail_noise(size: int = 32) -> np.ndarray:
     -------
     numpy.ndarray
         ``(size, size, size, 4)`` uint8, RGBA, indexed ``[z, y, x, c]``.
+
+    Docs: docs/systems/world.sky.md
     """
     rng = for_domain("sky", "cloud_detail")
     out = np.empty((size, size, size, 4), np.uint8)

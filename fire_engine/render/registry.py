@@ -53,6 +53,8 @@ Example
     assert t.ticks == 1
 
     ComponentRegistry.clear()           # reset for next test
+
+Docs: docs/systems/render.md
 """
 
 from __future__ import annotations
@@ -87,9 +89,7 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
-# ---------------------------------------------------------------------------
 # _RegistryState — all mutable singleton state in one object (easy to clear)
-# ---------------------------------------------------------------------------
 
 
 class _RegistryState:
@@ -115,9 +115,7 @@ class _RegistryState:
 _STATE: _RegistryState = _RegistryState()
 
 
-# ---------------------------------------------------------------------------
 # ComponentRegistry — public singleton facade
-# ---------------------------------------------------------------------------
 
 
 class _ComponentRegistry:
@@ -130,9 +128,7 @@ class _ComponentRegistry:
     Thread-safety: single-threaded only (Python GIL keeps frame loop safe).
     """
 
-    # ------------------------------------------------------------------
     # Internal scheduling (called by GameObject)
-    # ------------------------------------------------------------------
 
     def _schedule_awake(self, component: Component) -> None:
         """Add a newly created component to the pending-awake queue."""
@@ -149,9 +145,7 @@ class _ComponentRegistry:
         """Schedule a component for end-of-frame teardown."""
         _STATE.pending_destroy_components.append(component)
 
-    # ------------------------------------------------------------------
     # Main run_frame
-    # ------------------------------------------------------------------
 
     def run_frame(self, clock: Clock) -> None:
         """
@@ -283,9 +277,7 @@ class _ComponentRegistry:
             if go in _STATE.objects:
                 _STATE.objects.remove(go)
 
-    # ------------------------------------------------------------------
     # Module-level Unity statics
-    # ------------------------------------------------------------------
 
     def instantiate(
         self,
@@ -420,9 +412,7 @@ class _ComponentRegistry:
         """
         return [go for go in _STATE.objects if go.tag == tag]
 
-    # ------------------------------------------------------------------
     # Test isolation
-    # ------------------------------------------------------------------
 
     def clear(self) -> None:
         """
@@ -438,9 +428,7 @@ class _ComponentRegistry:
         _STATE = _RegistryState()
 
 
-# ---------------------------------------------------------------------------
 # Module-level singleton
-# ---------------------------------------------------------------------------
 
 ComponentRegistry: _ComponentRegistry = _ComponentRegistry()
 
@@ -462,6 +450,8 @@ def instantiate(
     Returns
     -------
     GameObject
+
+    Docs: docs/systems/render.md
     """
     return ComponentRegistry.instantiate(
         template=template,
@@ -476,15 +466,23 @@ def destroy(obj_or_component: GameObject | Component, delay: float = 0.0) -> Non
     Schedule destruction of a GameObject or Component at end of frame.
 
     Delegates to ComponentRegistry.destroy.
+
+    Docs: docs/systems/render.md
     """
     ComponentRegistry.destroy(obj_or_component, delay=delay)
 
 
 def find_with_tag(tag: str) -> GameObject | None:
-    """Return the first registered GameObject with the given tag, or None."""
+    """Return the first registered GameObject with the given tag, or None.
+
+    Docs: docs/systems/render.md
+    """
     return ComponentRegistry.find_with_tag(tag)
 
 
 def find_objects_with_tag(tag: str) -> list[GameObject]:
-    """Return all registered GameObjects with the given tag."""
+    """Return all registered GameObjects with the given tag.
+
+    Docs: docs/systems/render.md
+    """
     return ComponentRegistry.find_objects_with_tag(tag)

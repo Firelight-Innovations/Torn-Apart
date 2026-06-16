@@ -28,6 +28,8 @@ class ChunkLoadedEvent:
     ----------
     coord : tuple[int, int, int]
         Chunk grid coordinate (cx, cy, cz). Each unit = 16 meters.
+
+    Docs: docs/systems/core.md
     """
 
     coord: tuple[int, int, int]
@@ -42,6 +44,8 @@ class ChunkUnloadedEvent:
     ----------
     coord : tuple[int, int, int]
         Chunk grid coordinate (cx, cy, cz).
+
+    Docs: docs/systems/core.md
     """
 
     coord: tuple[int, int, int]
@@ -60,6 +64,8 @@ class TerrainEditedEvent:
     brush : object
         The brush object used (SphereBrush, BoxBrush, etc.).
         Typed loosely as ``object`` to avoid an import cycle with terrain/.
+
+    Docs: docs/systems/core.md
     """
 
     chunk_coords: tuple[int, ...]
@@ -86,6 +92,8 @@ class WeatherChangedEvent:
         The ``WeatherType.value`` string of the incoming state.
     day : int
         In-game day number on which the change occurred.
+
+    Docs: docs/systems/core.md
     """
 
     previous: str
@@ -125,6 +133,8 @@ class LightningStrikeEvent:
         (the cell's stable string id digested deterministically).
     intensity : float
         0–1 strike brightness / scale (peak cell intensity at strike time).
+
+    Docs: docs/systems/core.md
     """
 
     pos: tuple[float, float, float]
@@ -158,6 +168,8 @@ class ThunderEvent:
         Absolute game time of the originating flash, seconds.
     intensity : float
         0–1 strike intensity (drives the rumble loudness / low-pass roll-off).
+
+    Docs: docs/systems/core.md
     """
 
     pos: tuple[float, float, float]
@@ -178,6 +190,8 @@ class GameDayTickEvent:
     ----------
     day : int
         The new day number (starts at 0; increments each in-game day).
+
+    Docs: docs/systems/core.md
     """
 
     day: int
@@ -203,6 +217,8 @@ class BuildingChangedEvent:
         bounds so listeners can invalidate the vacated region.
     bounds_max : tuple[float, float, float]
         World-space AABB maximum corner in meters.
+
+    Docs: docs/systems/core.md
     """
 
     building_id: int

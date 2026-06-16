@@ -17,14 +17,20 @@ __all__ = [
 
 
 class WallKind(Enum):
-    """Derived wall geometry kind — see :attr:`Wall.kind` (never stored)."""
+    """Derived wall geometry kind — see :attr:`Wall.kind` (never stored).
+
+    Docs: docs/systems/buildings.md
+    """
 
     SEGMENT = "segment"
     ARC = "arc"
 
 
 class OpeningKind(Enum):
-    """What an :class:`Opening` cuts out of a wall."""
+    """What an :class:`Opening` cuts out of a wall.
+
+    Docs: docs/systems/buildings.md
+    """
 
     WINDOW = "window"
     DOOR = "door"

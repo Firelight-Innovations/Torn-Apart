@@ -34,6 +34,8 @@ Usage
     arr = get("rain_streak")                    # (512, 128, 4) uint8
     arr = get("rain_streak", streak_count=48)   # heavier rain sheet
     # Preview: python tools/preview_texture.py rain_streak
+
+Docs: docs/systems/procedural.textures.sky.md
 """
 
 from __future__ import annotations
@@ -90,6 +92,8 @@ class RainStreakDef(ProceduralTextureDef):
         arr = get("rain_streak")
         assert arr.shape == (512, 128, 4) and arr.dtype == "uint8"
         # V-tileability: rolling the array vertically is still a valid sheet.
+
+    Docs: docs/systems/procedural.textures.sky.md
     """
 
     name = "rain_streak"
@@ -114,6 +118,8 @@ class RainStreakDef(ProceduralTextureDef):
         -------
         numpy.ndarray — shape ``(H, W, 4)``, dtype ``uint8``, RGBA,
         tileable in both axes.
+
+        Docs: docs/systems/procedural.textures.sky.md
         """
         W = int(params.get("width", self.DEFAULT_WIDTH))
         H = int(params.get("height", self.DEFAULT_HEIGHT))

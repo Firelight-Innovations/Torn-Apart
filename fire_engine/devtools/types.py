@@ -53,6 +53,8 @@ class Field:
     ``get``/``set`` are intentionally closures, not a cached value: the panel
     a tool returns each frame stays in sync with live engine state without the
     tool having to diff anything.
+
+    Docs: docs/systems/devtools.md
     """
 
     label: str
@@ -65,7 +67,11 @@ class Field:
 
     @property
     def read_only(self) -> bool:
-        """True when this field has no setter (display only)."""
+        """
+        True when this field has no setter (display only).
+
+        Docs: docs/systems/devtools.md
+        """
         return self.set is None
 
 
@@ -80,6 +86,8 @@ class Section:
         Section heading (e.g. ``"Transform"``, ``"FlyController"``).
     fields : list[Field]
         The rows in this section, top-to-bottom.
+
+    Docs: docs/systems/devtools.md
     """
 
     title: str
@@ -98,6 +106,8 @@ class Button:
     on_click : Callable[[], None]
         Invoked when the user presses the button.  Should be cheap / fire-and-
         forget; long work belongs off the UI path.
+
+    Docs: docs/systems/devtools.md
     """
 
     label: str
@@ -129,6 +139,8 @@ class Panel:
         renderer rebuilds its widgets only when ``revision`` changes; between
         bumps it just polls ``Field.get`` to refresh values.  Editing a value
         does **not** bump the revision.
+
+    Docs: docs/systems/devtools.md
     """
 
     tool_id: str
@@ -154,6 +166,8 @@ class Handle:
     axis : int
         ``0=X / 1=Y / 2=Z``.  For PLANE/RING it is the plane's *normal* axis;
         for UNIFORM it is unused (always 0).
+
+    Docs: docs/systems/devtools.md
     """
 
     type: HandleType
@@ -168,6 +182,8 @@ class DragState:
     Holds the object's pose at grab time plus the one reference quantity the
     handle needs (axis parameter, plane point, ring angle, or radial distance),
     so :func:`update_drag` can compute an absolute new pose each frame.
+
+    Docs: docs/systems/devtools.md
     """
 
     mode: GizmoMode

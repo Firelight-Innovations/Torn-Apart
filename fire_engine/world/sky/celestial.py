@@ -31,6 +31,8 @@ Example
 
     noon = sun_direction(12 * 3600.0)     # Vec3, unit length, z ≈ 0.94
     mid  = sun_direction(0.0)             # z ≈ -0.94 (below horizon)
+
+Docs: docs/systems/world.sky.md
 """
 
 from __future__ import annotations
@@ -104,6 +106,8 @@ def smoothstep(x: float, lo: float, hi: float) -> float:
     -------
     >>> smoothstep(0.5, 0.0, 1.0)
     0.5
+
+    Docs: docs/systems/world.sky.md
     """
     t = (x - lo) / (hi - lo)
     t = min(1.0, max(0.0, t))
@@ -128,6 +132,8 @@ def lerp_color(
     -------
     >>> lerp_color((0.0, 0.0, 0.0), (1.0, 1.0, 1.0), 0.5)
     (0.5, 0.5, 0.5)
+
+    Docs: docs/systems/world.sky.md
     """
     t = min(1.0, max(0.0, t))
     return (
@@ -165,6 +171,8 @@ def color_ramp(
     >>> ramp = ((0.0, (0.0, 0.0, 0.0)), (1.0, (1.0, 0.5, 0.0)))
     >>> color_ramp(0.5, ramp)
     (0.5, 0.25, 0.0)
+
+    Docs: docs/systems/world.sky.md
     """
     keys = np.array([k for k, _ in keyframes], dtype=np.float64)
     cols = np.array([c for _, c in keyframes], dtype=np.float64)  # (N, 3)
@@ -239,6 +247,8 @@ def sun_direction(time_of_day_s: float) -> Vec3:
     True
     >>> abs(sun_direction(6 * 3600.0).z) < 0.15 # sunrise, on the horizon
     True
+
+    Docs: docs/systems/world.sky.md
     """
     return _arc_direction(_sun_phase(time_of_day_s), SUN_ARC_TILT_RAD)
 
@@ -265,6 +275,8 @@ def moon_direction(time_of_day_s: float) -> Vec3:
     -------
     >>> moon_direction(0.0).z > 0.9     # midnight: moon near its peak
     True
+
+    Docs: docs/systems/world.sky.md
     """
     phase = _sun_phase(time_of_day_s) + math.pi + MOON_PHASE_OFFSET_RAD
     return _arc_direction(phase, MOON_ARC_TILT_RAD)
@@ -293,6 +305,8 @@ def daylight_factor(time_of_day_s: float) -> float:
     1.0
     >>> daylight_factor(0.0)            # midnight
     0.0
+
+    Docs: docs/systems/world.sky.md
     """
     z = sun_direction(time_of_day_s).z
     return smoothstep(float(z), DAYLIGHT_Z_LO, DAYLIGHT_Z_HI)

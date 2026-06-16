@@ -10,7 +10,10 @@ from enum import Enum
 
 
 class BrushMode(Enum):
-    """Whether a brush adds solid material or removes it."""
+    """Whether a brush adds solid material or removes it.
+
+    Docs: docs/systems/world.terrain.md
+    """
 
     ADD = "add"
     REMOVE = "remove"

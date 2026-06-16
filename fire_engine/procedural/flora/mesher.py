@@ -27,6 +27,8 @@ Everything here is headless, deterministic and vectorized over all segments/
 clusters at once (Hard Rules 1, 2, 4).
 
 Units: meters, Z-up, tree-local (trunk base at the origin).
+
+Docs: docs/systems/procedural.flora.md
 """
 
 from __future__ import annotations
@@ -73,6 +75,8 @@ class TreeMesh:
         Top of the mesh above the base (m).
     radius_m : float
         Max horizontal reach from the trunk axis (m) — for render bounds.
+
+    Docs: docs/systems/procedural.flora.md
     """
 
     positions: np.ndarray
@@ -85,12 +89,18 @@ class TreeMesh:
 
     @property
     def n_vertices(self) -> int:
-        """Vertex count ``N``."""
+        """Vertex count ``N``.
+
+        Docs: docs/systems/procedural.flora.md
+        """
         return int(self.positions.shape[0])
 
     @staticmethod
     def empty() -> TreeMesh:
-        """A zero-vertex mesh part."""
+        """A zero-vertex mesh part.
+
+        Docs: docs/systems/procedural.flora.md
+        """
         return TreeMesh(
             positions=np.empty((0, 3), dtype=np.float32),
             normals=np.empty((0, 3), dtype=np.float32),
@@ -131,6 +141,8 @@ def mesh_leaf_area_m2(mesh: TreeMesh) -> float:
     >>> from fire_engine.procedural.flora.mesher import TreeMesh, mesh_leaf_area_m2
     >>> mesh_leaf_area_m2(TreeMesh.empty())
     0.0
+
+    Docs: docs/systems/procedural.flora.md
     """
     if mesh.indices.shape[0] == 0:
         return 0.0
@@ -201,6 +213,8 @@ def mesh_branches(
     -------
     TreeMesh
         ``S × sides`` quads (+ caps); ``colors[:, 3]`` carries sway.
+
+    Docs: docs/systems/procedural.flora.md
     """
     S = sk.n_segments
     if S == 0:
@@ -321,6 +335,8 @@ def mesh_leaves(
     -------
     TreeMesh
         ``colors[:, 3]`` carries the per-leaf sway weight on every vertex.
+
+    Docs: docs/systems/procedural.flora.md
     """
     L = leaves.n_leaves
     if L == 0:
@@ -378,6 +394,8 @@ def merge_parts(*parts: TreeMesh) -> TreeMesh:
     Returns
     -------
     TreeMesh
+
+    Docs: docs/systems/procedural.flora.md
     """
     live = [p for p in parts if p.n_vertices > 0]
     if not live:

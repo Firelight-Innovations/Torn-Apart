@@ -103,9 +103,7 @@ if TYPE_CHECKING:
 __all__ = ["App", "InputState"]
 
 
-# ---------------------------------------------------------------------------
 # App
-# ---------------------------------------------------------------------------
 
 
 class App(ShowBase):  # type: ignore[misc]  # panda3d ShowBase has no stubs; Any base is expected
@@ -135,6 +133,8 @@ class App(ShowBase):  # type: ignore[misc]  # panda3d ShowBase has no stubs; Any
         clock = Clock(fixed_dt=cfg.fixed_dt, bus=bus)
         app   = App(cfg, clock, bus)
         app.run()
+
+    Docs: docs/systems/render.md
     """
 
     # Class-level attribute annotations so mypy resolves attributes set by _impl helpers.
@@ -218,10 +218,8 @@ class App(ShowBase):  # type: ignore[misc]  # panda3d ShowBase has no stubs; Any
         # opens focused with the cursor captured.
         self._had_focus = True
 
-        # ------------------------------------------------------------------
         # Terrain-render injection slots (set by main.py after construction).
         # Left None so the engine shell can run without terrain (tooling).
-        # ------------------------------------------------------------------
         self.chunk_manager = None  # ChunkManager | None
         self.light_sampler = None  # Callable | None
         # GPU volumetric lighting (Phase 4 GPU backend) — set by main.py when
@@ -236,9 +234,7 @@ class App(ShowBase):  # type: ignore[misc]  # panda3d ShowBase has no stubs; Any
         # Per-chunk NodePath bookkeeping: coord -> NodePath under terrain_root.
         self._chunk_nodes: dict[tuple[int, int, int], NodePath] = {}
 
-        # ------------------------------------------------------------------
         # Window setup
-        # ------------------------------------------------------------------
         props = WindowProperties()
         props.set_size(1280, 720)
         props.set_title("Torn Apart")
@@ -264,9 +260,7 @@ class App(ShowBase):  # type: ignore[misc]  # panda3d ShowBase has no stubs; Any
         # Set on ``render`` so all surface shaders inherit one source of truth.
         self.render.set_shader_input("u_hdr_output", 0.0)
 
-        # ------------------------------------------------------------------
         # Disable Panda3D's default camera controller
-        # ------------------------------------------------------------------
         self.disableMouse()
 
         # Capture the mouse immediately so free-look works the moment the window
@@ -276,9 +270,7 @@ class App(ShowBase):  # type: ignore[misc]  # panda3d ShowBase has no stubs; Any
         self.input_state.mouse_captured = True
         self._set_mouse_capture(True)
 
-        # ------------------------------------------------------------------
         # Camera GameObject
-        # ------------------------------------------------------------------
         self.camera_go = instantiate()
         self.camera_go.name = "MainCamera"
         from fire_engine.core.math3d import Vec3
@@ -286,9 +278,7 @@ class App(ShowBase):  # type: ignore[misc]  # panda3d ShowBase has no stubs; Any
         self.camera_go.transform.local_position = Vec3(0.0, -20.0, 10.0)
         self.camera_comp = self.camera_go.add_component(CameraComponent, base=self)
 
-        # ------------------------------------------------------------------
         # Terrain root NodePath
-        # ------------------------------------------------------------------
         # Every streamed chunk's GeomNode is parented under this single node.
         # Chunk mesh positions are ABSOLUTE WORLD METERS (see meshing.py:
         # MeshArrays.positions doc — "vertex positions in world meters"), so
@@ -296,9 +286,7 @@ class App(ShowBase):  # type: ignore[misc]  # panda3d ShowBase has no stubs; Any
         # NO per-chunk offset.  Offsetting here would double the world position.
         self.terrain_root = self.render.attach_new_node("terrain_root")
 
-        # ------------------------------------------------------------------
         # Key bindings (Panda3D event strings)
-        # ------------------------------------------------------------------
         self._key_state = {}
         for key in [
             "w",
@@ -317,27 +305,19 @@ class App(ShowBase):  # type: ignore[misc]  # panda3d ShowBase has no stubs; Any
             self.accept(key + "-up", self._key_up, [key])
         self.accept("escape", self._on_escape)
 
-        # ------------------------------------------------------------------
         # Profiler render-side wiring (overlay + PStats bridge) — only when on.
-        # ------------------------------------------------------------------
         self._setup_profiler()
 
-        # ------------------------------------------------------------------
         # Register the per-frame task
-        # ------------------------------------------------------------------
         self.taskMgr.add(self._frame_task, "TornApartFrame")
 
-    # ------------------------------------------------------------------
     # Profiler setup (boot wiring) — delegated to _impl
-    # ------------------------------------------------------------------
 
     def _setup_profiler(self) -> None:
         """Wire the render-side profiler pieces when ``profiler_enabled``."""
         setup_profiler(self)
 
-    # ------------------------------------------------------------------
     # Input handlers
-    # ------------------------------------------------------------------
 
     def _key_down(self, key: str) -> None:
         self._key_state[key] = True
@@ -367,6 +347,8 @@ class App(ShowBase):  # type: ignore[misc]  # panda3d ShowBase has no stubs; Any
         ----------
         win : panda3d.core.GraphicsWindow
             The window the event is about (ignored unless it is ``self.win``).
+
+        Docs: docs/systems/render.md
         """
         super().windowEvent(win)
         _window_event_impl(self, win)
@@ -380,9 +362,7 @@ class App(ShowBase):  # type: ignore[misc]  # panda3d ShowBase has no stubs; Any
         """
         set_mouse_capture(self, captured)
 
-    # ------------------------------------------------------------------
     # Frame task
-    # ------------------------------------------------------------------
 
     def _frame_task(self, task: Any) -> Any:
         """
@@ -478,9 +458,7 @@ class App(ShowBase):  # type: ignore[misc]  # panda3d ShowBase has no stubs; Any
         """Forward the current InputState to all FlyController components."""
         push_input_to_controllers(self)
 
-    # ------------------------------------------------------------------
     # Terrain rendering (Phase 3 integration) — delegated to _impl
-    # ------------------------------------------------------------------
 
     def setup_terrain_rendering(
         self, ground_texture: Any = None, material_textures: Any = None
@@ -490,6 +468,8 @@ class App(ShowBase):  # type: ignore[misc]  # panda3d ShowBase has no stubs; Any
 
         Call after injecting ``self.chunk_manager``.  See
         render/_impl/app_terrain.py for the full docstring.
+
+        Docs: docs/systems/render.md
         """
         _setup_terrain_impl(self, ground_texture, material_textures)
 

@@ -72,6 +72,8 @@ class DemoHouseDef(BuildingDef):
     ground_z : float — local z=0 world height when ``position`` is omitted
         (default 8.0; main.py passes ``Config.ground_height_m``).
     yaw_deg  : float — yaw about world +Z in degrees (default 18).
+
+    Docs: docs/systems/buildings.md
     """
 
     name = "building_demo_house"
@@ -86,6 +88,24 @@ class DemoHouseDef(BuildingDef):
     _INT_T = 0.15  # interior partition thickness
 
     def generate(self, rng: np.random.Generator, **params: Any) -> Building:
+        """
+        Generate the two-storey demo house building.
+
+        Parameters
+        ----------
+        rng : numpy.random.Generator
+            Seeded by the procedural registry (unused — layout is fixed).
+        **params : Any
+            Optional overrides: ``ground_z`` (float, default 8.0 m),
+            ``position`` (x, y, z), ``yaw_deg`` (float, default 18.0).
+
+        Returns
+        -------
+        Building
+            A fully authored two-storey ~12×8 m house exercising all v1 features.
+
+        Docs: docs/systems/buildings.md
+        """
         ground_z = float(params.get("ground_z", 8.0))
         pos = params.get("position", (-26.0, 6.0, ground_z))
         yaw = math.radians(float(params.get("yaw_deg", 18.0)))

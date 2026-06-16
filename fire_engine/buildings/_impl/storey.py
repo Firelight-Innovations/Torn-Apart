@@ -48,6 +48,8 @@ class Storey:
     >>> s.add_opening(w.id, OpeningKind.WINDOW, offset_m=1.0, width_m=1.2,
     ...               sill_m=1.0, head_m=2.2)  # doctest: +ELLIPSIS
     Opening(...)
+
+    Docs: docs/systems/buildings.md
     """
 
     def __init__(
@@ -92,6 +94,8 @@ class Storey:
         height_m : float | None
             Wall height above the floor-slab top; ``None`` → fill the storey
             band (``height_m - slab_m``).
+
+        Docs: docs/systems/buildings.md
         """
         if math.hypot(b[0] - a[0], b[1] - a[1]) <= 1e-9:
             raise ValueError("wall endpoints are coincident")
@@ -145,6 +149,8 @@ class Storey:
         KeyError   — unknown ``wall_id`` on this storey.
         ValueError — opening exceeds the wall's length or height band, or
                      ``sill_m >= head_m``.
+
+        Docs: docs/systems/buildings.md
         """
         wall = next((w for w in self.walls if w.id == wall_id), None)
         if wall is None:
@@ -183,6 +189,8 @@ class Storey:
             Semantic label for future furnishing ("kitchen", ...).
         meta : dict | None
             Free-form primitives for future systems.
+
+        Docs: docs/systems/buildings.md
         """
         poly = np.array(polygon, dtype=np.float64)
         if poly.ndim != 2 or poly.shape[0] < 3 or poly.shape[1] != 2:
@@ -211,6 +219,8 @@ class Storey:
         """
         Reserve a stair run from this storey upward — data only in v1
         (no geometry; see :class:`StairsStub`).
+
+        Docs: docs/systems/buildings.md
         """
         stub = StairsStub(
             id=self._building.allocate_eid(),
@@ -243,6 +253,8 @@ class Storey:
         -------
         list[Room]
             The newly detected rooms (also appended to :attr:`rooms`).
+
+        Docs: docs/systems/buildings.md
         """
         from fire_engine.buildings.rooms import detect_room_polygons
 
@@ -262,7 +274,10 @@ class Storey:
     # ------------------------------------------------------------------
 
     def to_dict(self) -> dict[str, Any]:
-        """Plain-primitive dict (delta-save payload)."""
+        """Plain-primitive dict (delta-save payload).
+
+        Docs: docs/systems/buildings.md
+        """
         return {
             "id": int(self.id),
             "index": int(self.index),
@@ -275,7 +290,10 @@ class Storey:
 
     @classmethod
     def from_dict(cls, building: Building, d: dict[str, Any]) -> Storey:
-        """Inverse of :meth:`to_dict` (re-wires the building back-ref)."""
+        """Inverse of :meth:`to_dict` (re-wires the building back-ref).
+
+        Docs: docs/systems/buildings.md
+        """
         storey = cls(
             building,
             eid=int(d["id"]),

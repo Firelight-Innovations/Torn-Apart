@@ -19,6 +19,8 @@ Cylinder mode
 The cheap low-preset path: the old nested camera-following cylinders, but the
 fragment shader now applies the SAME heightmap cull + precip gate per fragment,
 so even the cheap mode stops raining under cover.
+
+Docs: docs/systems/render.sky.md
 """
 
 from __future__ import annotations

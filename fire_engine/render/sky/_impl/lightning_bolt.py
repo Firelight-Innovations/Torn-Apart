@@ -78,6 +78,8 @@ def upload_bolt(
 
     Extracted from ``LightningRendererComponent._upload_bolt``
     (lightning_renderer.py).
+
+    Docs: docs/systems/render.sky._impl.md
     """
     n = len(geom)
     vdata = GeomVertexData("bolt", self_obj._fmt, Geom.UH_dynamic)
@@ -155,6 +157,8 @@ def advance_bolt(bolt: _Bolt, dt: float) -> None:
 
     Extracted from ``LightningRendererComponent._advance_bolt``
     (lightning_renderer.py).
+
+    Docs: docs/systems/render.sky._impl.md
     """
     bolt.age_s += dt
     if bolt.age_s >= bolt.life_s:
@@ -173,6 +177,8 @@ def bolt_envelope(bolt: _Bolt) -> tuple[float, float]:
 
     Extracted from ``LightningRendererComponent._envelope``
     (lightning_renderer.py).
+
+    Docs: docs/systems/render.sky._impl.md
     """
     t = bolt.age_s
     if t < _LEADER_S:
@@ -200,6 +206,8 @@ def bolt_sky_flash(bolt: _Bolt) -> float:
 
     Extracted from ``LightningRendererComponent._bolt_sky_flash``
     (lightning_renderer.py).
+
+    Docs: docs/systems/render.sky._impl.md
     """
     _, flash = bolt_envelope(bolt)
     # Normalise the bolt flash (peak ~_RETURN_FLASH) to the sky pulse range,
@@ -216,6 +224,8 @@ def add_flash_light(
 
     Extracted from ``LightningRendererComponent._add_flash_light``
     (lightning_renderer.py).
+
+    Docs: docs/systems/render.sky._impl.md
     """
     lights = getattr(self_obj.lighting_pipeline, "lights", None)
     if lights is None:
@@ -240,6 +250,8 @@ def refresh_cover(self_obj: LightningRendererComponent) -> None:
 
     Extracted from ``LightningRendererComponent._refresh_cover``
     (lightning_renderer.py).
+
+    Docs: docs/systems/render.sky._impl.md
     """
     cover = self_obj._cover
     if cover is None:
@@ -272,6 +284,8 @@ def cover_z(
 
     Extracted from ``LightningRendererComponent._cover_z``
     (lightning_renderer.py).
+
+    Docs: docs/systems/render.sky._impl.md
     """
     from fire_engine.world.terrain.rain_cover import OPEN_SKY_Z
 

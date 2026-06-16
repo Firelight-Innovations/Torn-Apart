@@ -67,6 +67,8 @@ class AssemblyJob:
     canopy_gain : float
         Multiplier on the per-instance leaf-derived canopy extinction
         (``config.light_tree_canopy_extinction_gain``).
+
+    Docs: docs/systems/lighting._impl.md
     """
 
     cascade_index: int
@@ -97,6 +99,8 @@ class AssemblyResult:
         Page-major BGRA 3-D-texture RAM images (see ``volume.pack_volume``).
     seq : int
         Echoes the job's ``seq``.
+
+    Docs: docs/systems/lighting._impl.md
     """
 
     cascade_index: int
@@ -129,6 +133,8 @@ class PointLight:
     ttl_s : float | None
         Lifetime in seconds; ``None`` = permanent.  Transient lights fade
         linearly over their lifetime and are removed at expiry.
+
+    Docs: docs/systems/lighting._impl.md
     """
 
     position: tuple[float, float, float]
@@ -157,6 +163,8 @@ class AreaLight:
         Falloff window in meters measured from the box *surface*.
     ttl_s : float | None
         Lifetime in seconds; ``None`` = permanent.
+
+    Docs: docs/systems/lighting._impl.md
     """
 
     center: tuple[float, float, float]
@@ -203,6 +211,8 @@ class SpotLight:
     >>> lid = ls.add(torch)
     >>> torch.position = (0, 2, 10)   # follow the camera...
     >>> ls.notify_changed()           # ...then mark the packed data stale
+
+    Docs: docs/systems/lighting._impl.md
     """
 
     position: tuple[float, float, float]
@@ -242,6 +252,8 @@ class GeometryVolume:
         World cell index of texel (0,0,0) at assembly time.
     cell_m : float
         Cell edge in meters.
+
+    Docs: docs/systems/lighting._impl.md
     """
 
     albedo_occ: np.ndarray

@@ -10,6 +10,8 @@ The vertex shader expands each bolt SEGMENT (uploaded as a quad with the segment
 endpoints in custom vertex columns) into a camera-facing ribbon, hidden below a
 top-down ``u_reveal`` front; the fragment shader emits a hot HDR core + soft glow
 scaled by the per-phase ``u_flash`` brightness (additive, so it blooms in post).
+
+Docs: docs/systems/render.sky.md
 """
 
 from __future__ import annotations

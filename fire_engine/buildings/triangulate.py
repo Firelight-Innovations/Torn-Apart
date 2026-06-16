@@ -10,6 +10,8 @@ vertices (dozens, not thousands — flagged per Hard Rule 4); the ear test
 The single public function returns triangle index triples into the *input*
 polygon's vertices so callers can place those vertices at any z without
 re-running the triangulation.
+
+Docs: docs/systems/buildings.md
 """
 
 from __future__ import annotations
@@ -53,6 +55,8 @@ def triangulate_polygon(polygon: np.ndarray) -> np.ndarray:
     np.ndarray
         ``uint32 (T, 3)`` triangle indices into ``polygon`` (``T = N - 2`` for
         a clean simple polygon; fewer if degenerate vertices are skipped).
+
+    Docs: docs/systems/buildings.md
     """
     poly = np.asarray(polygon, dtype=np.float64)
     n = poly.shape[0]

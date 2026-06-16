@@ -20,6 +20,8 @@ near-leafless species (dead trees) pass fewer ids / lower ``rounds`` and
 ``density``, or return ``Leaves.empty()``.
 
 Units: meters, Z-up, tree-local space (trunk base at the origin).
+
+Docs: docs/systems/procedural.flora.md
 """
 
 from __future__ import annotations
@@ -55,6 +57,8 @@ class Leaves:
     sway : numpy.ndarray
         ``float32 (L,)`` — wind-sway weight in ``[0, 1]`` (≈0.85–1.0:
         leaves ride gusts harder than the wood they grow on).
+
+    Docs: docs/systems/procedural.flora.md
     """
 
     center: np.ndarray
@@ -63,12 +67,18 @@ class Leaves:
 
     @property
     def n_leaves(self) -> int:
-        """Number of leaves ``L``."""
+        """Number of leaves ``L``.
+
+        Docs: docs/systems/procedural.flora.md
+        """
         return int(self.radius.shape[0])
 
     @staticmethod
     def empty() -> Leaves:
-        """A zero-leaf instance (leafless species)."""
+        """A zero-leaf instance (leafless species).
+
+        Docs: docs/systems/procedural.flora.md
+        """
         return Leaves(
             center=np.empty((0, 3), dtype=np.float32),
             radius=np.empty(0, dtype=np.float32),
@@ -140,6 +150,8 @@ def leaves_at_tips(
 
         leaves = leaves_at_tips(sk, np.concatenate([limbs, twigs]), rng,
                                 cell_m=0.28, rounds=3, density=0.6)
+
+    Docs: docs/systems/procedural.flora.md
     """
     tips = sk.tip_ids(ids)
     if tips.size == 0 or rounds <= 0 or density <= 0.0:

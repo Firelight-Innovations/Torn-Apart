@@ -14,6 +14,8 @@ Source files (loaded verbatim via ``load_glsl``, which expands the
 
 See ``world/building_renderer.py`` for the render component and
 ``docs/systems/world.md`` for the full reference.
+
+Docs: docs/systems/render.vegetation.md
 """
 
 from __future__ import annotations

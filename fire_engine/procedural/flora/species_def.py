@@ -33,6 +33,8 @@ Subclass, set the class attributes, implement :meth:`grow`::
 Then ``procedural.get("tree_my_tree")`` does the rest: per-variant child
 rngs, skeleton validation, meshing, atlas composition, impostor raster.
 Preview with ``python tools/preview_tree.py tree_my_tree --obj --png``.
+
+Docs: docs/systems/procedural.flora.md
 """
 
 from __future__ import annotations
@@ -99,6 +101,8 @@ class TreeSpeciesDef(ProceduralDef):
     palettes(rng) -> dict
         Optional — return ``{"bark": ..., "leaf": ...}`` ramps; override to
         drift hues per world.  Default returns the class palettes.
+
+    Docs: docs/systems/procedural.flora.md
     """
 
     variants: int = 6
@@ -136,6 +140,8 @@ class TreeSpeciesDef(ProceduralDef):
         (TreeSkeleton, Leaves)
             From ``SkeletonBuilder.skeleton()`` and ``leaves_at_tips``
             (``Leaves.empty()`` for leafless species).
+
+        Docs: docs/systems/procedural.flora.md
         """
         raise NotImplementedError(
             f"{type(self).__name__}.grow() not implemented — see "
@@ -143,7 +149,10 @@ class TreeSpeciesDef(ProceduralDef):
         )
 
     def palettes(self, rng: np.random.Generator) -> dict[str, np.ndarray]:
-        """``{"bark", "leaf"}`` ramps; override for per-world hue drift."""
+        """``{"bark", "leaf"}`` ramps; override for per-world hue drift.
+
+        Docs: docs/systems/procedural.flora.md
+        """
         return {"bark": self.BARK_PALETTE, "leaf": self.LEAF_PALETTE}
 
     # ------------------------------------------------------------------
@@ -165,6 +174,8 @@ class TreeSpeciesDef(ProceduralDef):
         Returns
         -------
         TreeVariantSet
+
+        Docs: docs/systems/procedural.flora.md
         """
         n = max(1, int(params.get("variants", self.variants)))
         layout = self.atlas_layout

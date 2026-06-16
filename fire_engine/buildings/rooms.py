@@ -34,6 +34,8 @@ are not vectorized (Hard Rule 4 — flagged here intentionally); the geometry
 inside each step is numpy.
 
 This module imports only numpy + the model layer — no panda3d, no RNG.
+
+Docs: docs/systems/buildings.md
 """
 
 from __future__ import annotations
@@ -188,6 +190,8 @@ def detect_room_polygons(
     list[np.ndarray]
         One ``float64 (N, 2)`` CCW polygon per detected room, ordered as the
         face trace found them.  Empty when nothing encloses.
+
+    Docs: docs/systems/buildings.md
     """
     if snap_eps_m <= 0.0:
         raise ValueError("snap_eps_m must be positive")

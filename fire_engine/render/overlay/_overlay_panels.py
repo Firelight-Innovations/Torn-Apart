@@ -57,7 +57,10 @@ def _fmt(value: object) -> str:
 
 
 def clear_widgets(self_obj: DevOverlay) -> None:
-    """Destroy all live DirectGui widgets and clear per-frame updaters."""
+    """Destroy all live DirectGui widgets and clear per-frame updaters.
+
+    Docs: docs/systems/render.overlay.md
+    """
     for w in self_obj._widgets:
         with contextlib.suppress(Exception):
             w.destroy()
@@ -71,7 +74,10 @@ def clear_widgets(self_obj: DevOverlay) -> None:
 
 
 def rebuild(self_obj: DevOverlay) -> None:
-    """Tear down all widgets and rebuild them from the current panel list."""
+    """Tear down all widgets and rebuild them from the current panel list.
+
+    Docs: docs/systems/render.overlay.md
+    """
     clear_widgets(self_obj)
     left_z = _TOP_Z
     right_z = _TOP_Z
@@ -93,7 +99,10 @@ def rebuild(self_obj: DevOverlay) -> None:
 def build_panel(
     self_obj: DevOverlay, panel: Panel, parent: Any, x: float, z: float, width: float
 ) -> float:
-    """Render one panel starting at ``z``; return the z below the panel."""
+    """Render one panel starting at ``z``; return the z below the panel.
+
+    Docs: docs/systems/render.overlay.md
+    """
     top = z
     rows: list[tuple[str, Any]] = []  # deferred widget creation so the bg frame sits behind
 
@@ -145,7 +154,10 @@ def mk_label(
     fg: Any,
     scale: float,
 ) -> DirectLabel:
-    """Create and register a single DirectLabel."""
+    """Create and register a single DirectLabel.
+
+    Docs: docs/systems/render.overlay.md
+    """
     lbl = DirectLabel(
         parent=parent,
         text=str(text),
@@ -162,7 +174,10 @@ def mk_label(
 def mk_field(
     self_obj: DevOverlay, parent: Any, x: float, z: float, fld: Field, width: float
 ) -> None:
-    """Build the appropriate widget(s) for a single panel field."""
+    """Build the appropriate widget(s) for a single panel field.
+
+    Docs: docs/systems/render.overlay.md
+    """
     # Field name on the left.
     mk_label(self_obj, parent, x + 0.01, z, fld.label, _VALUE_FG, _TEXT_SCALE * 0.9)
     vx = x + _LABEL_COL
@@ -198,7 +213,10 @@ def mk_field(
 
 
 def mk_field_vec3(self_obj: DevOverlay, parent: Any, vx: float, z: float, fld: Field) -> None:
-    """Build a three-component VEC3 entry row and wire up submit + refresh."""
+    """Build a three-component VEC3 entry row and wire up submit + refresh.
+
+    Docs: docs/systems/render.overlay.md
+    """
     entries: list[DirectEntry] = []
     for i in range(3):
         e = mk_entry(self_obj, parent, vx + i * 0.15, z, width=4)
@@ -222,7 +240,10 @@ def mk_field_vec3(self_obj: DevOverlay, parent: Any, vx: float, z: float, fld: F
 
 
 def mk_field_scalar(self_obj: DevOverlay, parent: Any, vx: float, z: float, fld: Field) -> None:
-    """Build a single-value entry row (FLOAT / INT / STRING) and wire it up."""
+    """Build a single-value entry row (FLOAT / INT / STRING) and wire it up.
+
+    Docs: docs/systems/render.overlay.md
+    """
     entry = mk_entry(self_obj, parent, vx, z, width=8)
 
     def submit_scalar(_: Any = None, f: Field = fld, e: DirectEntry = entry) -> None:
@@ -246,7 +267,10 @@ def mk_field_scalar(self_obj: DevOverlay, parent: Any, vx: float, z: float, fld:
 
 
 def mk_entry(self_obj: DevOverlay, parent: Any, x: float, z: float, width: int) -> DirectEntry:
-    """Create and register a DirectEntry widget."""
+    """Create and register a DirectEntry widget.
+
+    Docs: docs/systems/render.overlay.md
+    """
     e = DirectEntry(
         parent=parent,
         scale=_ENTRY_SCALE,
@@ -265,7 +289,10 @@ def mk_entry(self_obj: DevOverlay, parent: Any, x: float, z: float, width: int) 
 def mk_buttons(
     self_obj: DevOverlay, parent: Any, x: float, z: float, buttons: list[Button]
 ) -> None:
-    """Create and register DirectButton widgets for a panel button row."""
+    """Create and register DirectButton widgets for a panel button row.
+
+    Docs: docs/systems/render.overlay.md
+    """
     bx = x + 0.02
     for b in buttons:
         btn = DirectButton(
@@ -295,16 +322,23 @@ def mk_buttons(
 
 
 def checkbox(value: bool) -> str:
-    """Return a visual checkbox string."""
+    """Return a visual checkbox string.
+
+    Docs: docs/systems/render.overlay.md
+    """
     return "[x]" if value else "[ ]"
 
 
 def is_focused(entry: DirectEntry) -> bool:
-    """Return True when a DirectEntry is being actively edited by the user."""
-    # The PGEntry method is get_focus() — the old is_focused() never existed,
-    # so this used to always raise → always return False → the per-frame
-    # refresh stomped whatever the user was typing.  With real focus state,
-    # a focused entry is left untouched until Enter / click-off commits it.
+    """Return True when a DirectEntry is being actively edited by the user.
+
+    The PGEntry method is get_focus() — the old is_focused() never existed,
+    so this used to always raise → always return False → the per-frame
+    refresh stomped whatever the user was typing.  With real focus state,
+    a focused entry is left untouched until Enter / click-off commits it.
+
+    Docs: docs/systems/render.overlay.md
+    """
     try:
         return bool(entry.guiItem.get_focus())
     except Exception:
@@ -312,14 +346,20 @@ def is_focused(entry: DirectEntry) -> bool:
 
 
 def refresh_scalar(self_obj: DevOverlay, entry: DirectEntry, fld: Field) -> None:
-    """Update a scalar DirectEntry with the field's current value (unless focused)."""
+    """Update a scalar DirectEntry with the field's current value (unless focused).
+
+    Docs: docs/systems/render.overlay.md
+    """
     if is_focused(entry):
         return
     entry.set(_fmt(fld.get()))
 
 
 def refresh_vec3(self_obj: DevOverlay, entries: list[DirectEntry], fld: Field) -> None:
-    """Update three DirectEntry widgets with the field's current Vec3 value."""
+    """Update three DirectEntry widgets with the field's current Vec3 value.
+
+    Docs: docs/systems/render.overlay.md
+    """
     vals = fld.get()
     for e, v in zip(entries, vals, strict=False):
         if is_focused(e):

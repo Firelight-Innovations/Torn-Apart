@@ -97,19 +97,28 @@ class QueueWorker(ABC, Generic[_Job, _Result]):
     # ------------------------------------------------------------------
 
     def start(self) -> None:
-        """Spawn the worker thread (idempotent)."""
+        """Spawn the worker thread (idempotent).
+
+        Docs: docs/systems/core._impl.md
+        """
         if self._thread is not None:
             return
         self._thread = threading.Thread(target=self._run, name=self._thread_name, daemon=True)
         self._thread.start()
 
     def submit(self, job: _Job) -> None:
-        """Enqueue a job (main thread, non-blocking)."""
+        """Enqueue a job (main thread, non-blocking).
+
+        Docs: docs/systems/core._impl.md
+        """
         self._pending += 1
         self._in.put(job)
 
     def drain_results(self) -> list[_Result]:
-        """Pop and return all finished results (main thread, non-blocking)."""
+        """Pop and return all finished results (main thread, non-blocking).
+
+        Docs: docs/systems/core._impl.md
+        """
         out: list[_Result] = []
         while True:
             try:
@@ -121,11 +130,17 @@ class QueueWorker(ABC, Generic[_Job, _Result]):
         return out
 
     def pending(self) -> int:
-        """Jobs submitted but not yet drained."""
+        """Jobs submitted but not yet drained.
+
+        Docs: docs/systems/core._impl.md
+        """
         return self._pending
 
     def stop(self, *, join: bool = True, timeout: float = 2.0) -> None:
-        """Signal the worker to exit and (optionally) join it."""
+        """Signal the worker to exit and (optionally) join it.
+
+        Docs: docs/systems/core._impl.md
+        """
         if self._thread is None:
             return
         self._in.put(None)  # sentinel

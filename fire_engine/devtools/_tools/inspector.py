@@ -29,6 +29,8 @@ class InspectorTool(DevTool):
     Parameters
     ----------
     selection : Selection — shared selection state.
+
+    Docs: docs/systems/devtools.md
     """
 
     tool_id = "inspector"
@@ -39,10 +41,20 @@ class InspectorTool(DevTool):
 
     @property
     def revision(self) -> int:
+        """
+        Mirrors the :class:`~fire_engine.devtools.selection.Selection` revision.
+
+        Docs: docs/systems/devtools.md
+        """
         # Selection changes are the only thing that reshapes this panel.
         return self._selection.revision
 
     def build(self) -> Panel:
+        """
+        Build the inspector Panel for the currently-selected object.
+
+        Docs: docs/systems/devtools.md
+        """
         go = self._selection.current
         if go is None:
             return Panel(

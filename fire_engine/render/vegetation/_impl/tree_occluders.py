@@ -23,7 +23,10 @@ __all__ = ["push_occluders", "species_canopy_sigma", "species_splat_rgb"]
 
 
 def push_occluders(self_obj: TreeRendererComponent) -> None:
-    """Merge every volume's occluder set and hand it to the pipeline."""
+    """Merge every volume's occluder set and hand it to the pipeline.
+
+    Docs: docs/systems/render.vegetation._impl.md
+    """
     if self_obj.lighting_pipeline is None:
         return
     sets = [s for s in self_obj._volume_occluders.values() if s.count]
@@ -42,6 +45,8 @@ def species_canopy_sigma(self_obj: TreeRendererComponent, name: str, vs: Any) ->
     ``X`` meters of crown centre is then ``exp(-sigma·X)`` — a leafy
     oak shades hard, a two-tuft snag barely dims the ground.  Cached
     per species; deterministic (meshes are seeded procedural content).
+
+    Docs: docs/systems/render.vegetation._impl.md
     """
     sigma = self_obj._species_sigma.get(name)
     if sigma is None:
@@ -65,6 +70,8 @@ def species_splat_rgb(self_obj: TreeRendererComponent, name: str, vs: Any) -> tu
     right half (binary alpha) — averaging each half gives the GI bounce
     colour for trunk/canopy cells without any new species API.  Cached
     per species; deterministic (the atlas is seeded procedural content).
+
+    Docs: docs/systems/render.vegetation._impl.md
     """
     cached = self_obj._species_occ_rgb.get(name)
     if cached is None:

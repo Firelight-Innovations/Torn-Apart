@@ -53,6 +53,8 @@ shared state, no time.  Same chunks + origin + config ⇒ bit-identical result, 
 the worker thread or called inline in a test.
 
 No panda3d.  No per-voxel Python loops.
+
+Docs: docs/systems/world.wind.md
 """
 
 from __future__ import annotations
@@ -132,6 +134,8 @@ def column_solid_fraction(job: VenturiJob) -> np.ndarray:
     -------
     numpy.ndarray
         ``float32 (cells, cells)`` indexed ``[x, y]`` in ``0..1``.
+
+    Docs: docs/systems/world.wind.md
     """
     n = int(job.cells)
     cell_m = float(job.cell_m)
@@ -260,6 +264,8 @@ def solve_venturi(job: VenturiJob) -> VenturiResult:
     -------
     >>> # res = solve_venturi(job)
     >>> # res.speedup.shape == (job.cells, job.cells)
+
+    Docs: docs/systems/world.wind.md
     """
     solid = column_solid_fraction(job).astype(np.float32)
     open_ = (1.0 - solid).astype(np.float32)

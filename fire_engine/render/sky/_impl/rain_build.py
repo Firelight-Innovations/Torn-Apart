@@ -134,6 +134,8 @@ def build_particles(self_obj: RainRendererComponent, cfg: Any) -> None:
     Extracted from ``RainRendererComponent._build_particles`` (rain_renderer.py).
     Disables ``self_obj`` (sets ``self_obj.enabled = False``) when
     ``gfx_rain_particles <= 0``; stores the node in ``self_obj._particle_node``.
+
+    Docs: docs/systems/render.sky._impl.md
     """
     count = int(getattr(cfg, "gfx_rain_particles", 0))
     if count <= 0:
@@ -182,6 +184,8 @@ def build_cylinders(self_obj: RainRendererComponent, cfg: Any) -> None:
     Extracted from ``RainRendererComponent._build_cylinders`` (rain_renderer.py).
     Appends to ``self_obj._cyl_layers`` and stores the root in
     ``self_obj._cyl_root``.
+
+    Docs: docs/systems/render.sky._impl.md
     """
     rain_tex = _rain_streak_texture()
     shader = Shader.make(
@@ -227,6 +231,8 @@ def update_cylinders(
     (rain_renderer.py).
     Invariant: ``self_obj._cyl_root`` is not None (caller guarantees this in
     cylinder mode after build).
+
+    Docs: docs/systems/render.sky._impl.md
     """
     assert self_obj._cyl_root is not None
     st = getattr(self_obj.sky_system, "state", None)

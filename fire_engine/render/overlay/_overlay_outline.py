@@ -20,7 +20,10 @@ _OUTLINE_COLOR = (0.40, 1.0, 0.35, 1.0)
 
 
 def update_outline(self_obj: DevOverlay) -> None:
-    """Remove the previous outline and draw a fresh one around the selection."""
+    """Remove the previous outline and draw a fresh one around the selection.
+
+    Docs: docs/systems/render.overlay.md
+    """
     if self_obj._outline_np is not None:
         self_obj._outline_np.remove_node()
         self_obj._outline_np = None
@@ -41,6 +44,8 @@ def selection_aabb(self_obj: DevOverlay, go: Any) -> tuple[Any, Any] | None:
     A picked terrain chunk outlines its full 16 m cube (origin → origin +
     size); a registered object uses its :class:`Selectable` box; anything
     else (e.g. the camera, which has no box) returns ``None``.
+
+    Docs: docs/systems/render.overlay.md
     """
     from fire_engine.devtools import is_chunk
 
@@ -55,7 +60,10 @@ def selection_aabb(self_obj: DevOverlay, go: Any) -> tuple[Any, Any] | None:
 
 
 def draw_box(self_obj: DevOverlay, bmin: Any, bmax: Any) -> None:
-    """Attach a LineSegs wireframe box to the scene graph."""
+    """Attach a LineSegs wireframe box to the scene graph.
+
+    Docs: docs/systems/render.overlay.md
+    """
     x0, y0, z0 = float(bmin[0]), float(bmin[1]), float(bmin[2])
     x1, y1, z1 = float(bmax[0]), float(bmax[1]), float(bmax[2])
     corners = [

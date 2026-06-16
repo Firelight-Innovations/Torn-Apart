@@ -213,7 +213,10 @@ class LightningRendererComponent(Component):
     # ------------------------------------------------------------------
 
     def start(self) -> None:
-        """Build the bolt pool + shader and subscribe to strikes (once)."""
+        """Build the bolt pool + shader and subscribe to strikes (once).
+
+        Docs: docs/systems/render.sky.md
+        """
         if self.base is None:
             _log.warning("LightningRendererComponent: missing base — disabled")
             self.enabled = False
@@ -290,7 +293,10 @@ class LightningRendererComponent(Component):
         )
 
     def late_update(self, dt: float) -> None:
-        """Advance every active bolt's envelope and the sky flash pulse."""
+        """Advance every active bolt's envelope and the sky flash pulse.
+
+        Docs: docs/systems/render.sky.md
+        """
         if self._root is None:
             return
         refresh_cover(self)
@@ -308,7 +314,10 @@ class LightningRendererComponent(Component):
             self._sky_flash = sky_flash
 
     def on_destroy(self) -> None:
-        """Unsubscribe and detach the bolt nodes."""
+        """Unsubscribe and detach the bolt nodes.
+
+        Docs: docs/systems/render.sky.md
+        """
         if self.bus is not None:
             self.bus.unsubscribe(LightningStrikeEvent, self._on_strike)
             self.bus.unsubscribe(ChunkLoadedEvent, self._on_chunk_loaded)

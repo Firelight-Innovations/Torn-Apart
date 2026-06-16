@@ -37,6 +37,8 @@ Example
     # each frame:
     mult = meter.update(camera_pos, sky_state, chunks, lights.pack(64), dt)
     effective_exposure = cfg.light_exposure * mult
+
+Docs: docs/systems/lighting.md
 """
 
 from __future__ import annotations
@@ -160,6 +162,8 @@ class ExposureMeter:
                             light_set.pack(cfg.light_max_point_lights),
                             dt=0.016)
         shader_exposure = cfg.light_exposure * mult
+
+    Docs: docs/systems/lighting.md
     """
 
     def __init__(self, config: Any) -> None:
@@ -188,6 +192,8 @@ class ExposureMeter:
 
         Multiply into ``config.light_exposure`` before tonemapping.
         Always within ``[min(exposure_min, 1.0), max(exposure_max, 1.0)]``.
+
+        Docs: docs/systems/lighting.md
         """
         return self._exposure
 
@@ -238,6 +244,8 @@ class ExposureMeter:
             mult = meter.update(cam.get_pos(), sky.state,
                                 chunk_manager.chunks, light_set.pack(64),
                                 globalClock.get_dt())
+
+        Docs: docs/systems/lighting.md
         """
         if not self._enabled or sky_state is None:
             target = 1.0

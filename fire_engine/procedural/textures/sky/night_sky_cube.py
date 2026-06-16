@@ -113,6 +113,8 @@ class NightSkyCubeDef(ProceduralTextureDef):
         Returns
         -------
         numpy.ndarray — ``(6, face_size, face_size, 4)`` uint8 RGBA.
+
+        Docs: docs/systems/procedural.textures.sky.md
         """
         S = int(params.get("face_size", self.DEFAULT_FACE_SIZE))
         n_stars = int(params.get("star_count", self.DEFAULT_STAR_COUNT))

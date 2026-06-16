@@ -32,6 +32,8 @@ Example
 The GLSL source now lives in ``world/shaders/terrain.vert`` and
 ``world/shaders/terrain.frag`` (loaded via ``core.shader_source.load_glsl``)
 for editor syntax highlighting + LSP support.
+
+Docs: docs/systems/render.bridges.md
 """
 
 from __future__ import annotations
@@ -97,6 +99,8 @@ def apply_terrain_shader(
         (e.g. the GI test-room white/red/green/glow surfaces) so they colour
         from a flat palette instead of clamping to the last LUT row.  Palettes
         are sRGB-encoded uint8 (the shader gamma-decodes via ``pow(alb, 2.2)``).
+
+    Docs: docs/systems/render.bridges.md
     """
     shader = Shader.make(Shader.SL_GLSL, vertex=TERRAIN_VERTEX, fragment=TERRAIN_FRAGMENT)
     terrain_root.set_shader(shader)

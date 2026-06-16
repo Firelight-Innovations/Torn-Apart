@@ -31,6 +31,8 @@ class FieldSpec:
         min, max: Optional inclusive clamp for ``float`` fields.
         choices: Allowed values for an ``enum`` field.
         label: Human label for the inspector (defaults to ``name``).
+
+    Docs: docs/systems/scene.md
     """
 
     name: str
@@ -52,6 +54,8 @@ class ComponentSpec:
         multiple: Whether an object may carry more than one of this type
             (all current built-ins are singletons).
         fields: Editable parameters, in display order.
+
+    Docs: docs/systems/scene.md
     """
 
     type: str
@@ -96,6 +100,8 @@ class SceneObject:
             :mod:`fire_engine.scene.components`). ``kind`` seeds these on
             creation; thereafter the list is the source of truth for visuals.
             The Transform is intrinsic (the TRS fields) and is NOT in this list.
+
+    Docs: docs/systems/scene.md
     """
 
     id: int
@@ -108,7 +114,10 @@ class SceneObject:
     components: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
-        """Wire/serialisation form: plain JSON-friendly primitives."""
+        """Wire/serialisation form: plain JSON-friendly primitives.
+
+        Docs: docs/systems/scene.md
+        """
         return {
             "id": self.id,
             "name": self.name,
@@ -122,7 +131,10 @@ class SceneObject:
 
     @staticmethod
     def from_dict(d: dict[str, Any]) -> SceneObject:
-        """Deserialise from a wire/save dict; migrates pre-component saves."""
+        """Deserialise from a wire/save dict; migrates pre-component saves.
+
+        Docs: docs/systems/scene.md
+        """
         # Local import to avoid a circular dependency: types <- components <- types.
         from fire_engine.scene.components import default_components_for_kind
 

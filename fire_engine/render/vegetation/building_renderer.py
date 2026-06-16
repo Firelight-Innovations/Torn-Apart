@@ -26,6 +26,8 @@ Example (wired by main.py, behind ``debug_demo_building``)
     go = instantiate()
     go.add_component(BuildingRendererComponent, base=app,
                      building_manager=mgr, lighting_pipeline=pipeline, bus=bus)
+
+Docs: docs/systems/render.vegetation.md
 """
 
 from __future__ import annotations
@@ -68,6 +70,8 @@ class BuildingRendererComponent(Component):
         Subscribed to ``BuildingChangedEvent``.
 
     Units: meters, radians; world-space Z-up.
+
+    Docs: docs/systems/render.vegetation.md
     """
 
     def __init__(
@@ -96,7 +100,10 @@ class BuildingRendererComponent(Component):
     # ------------------------------------------------------------------
 
     def start(self) -> None:
-        """Compile the shader, build the root, and draw every building once."""
+        """Compile the shader, build the root, and draw every building once.
+
+        Docs: docs/systems/render.vegetation.md
+        """
         if self.base is None or self.manager is None:
             _log.warning("BuildingRendererComponent: missing base/manager — disabled")
             self.enabled = False
@@ -128,7 +135,10 @@ class BuildingRendererComponent(Component):
             self.bus.subscribe(BuildingChangedEvent, self._on_changed)
 
     def late_update(self, dt: float) -> None:
-        """Process queued rebuilds/removals; full rebuild on a version jump."""
+        """Process queued rebuilds/removals; full rebuild on a version jump.
+
+        Docs: docs/systems/render.vegetation.md
+        """
         if self._root is None:
             return
         if (
@@ -148,7 +158,10 @@ class BuildingRendererComponent(Component):
         self._store_version_built = self.manager.version
 
     def on_destroy(self) -> None:
-        """Detach all building nodes and unsubscribe from the bus."""
+        """Detach all building nodes and unsubscribe from the bus.
+
+        Docs: docs/systems/render.vegetation.md
+        """
         if self.bus is not None:
             self.bus.unsubscribe(BuildingChangedEvent, self._on_changed)
         if self._root is not None:

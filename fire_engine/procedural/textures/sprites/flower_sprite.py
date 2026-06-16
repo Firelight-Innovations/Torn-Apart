@@ -41,6 +41,8 @@ Usage
     set_world_seed(1337)
     arr = get("flower_sprite")     # (32, 128, 4) uint8 — 4 flowers in a row
     # Preview: python tools/preview_texture.py flower_sprite
+
+Docs: docs/systems/procedural.textures.sprites.md
 """
 
 from __future__ import annotations
@@ -108,6 +110,8 @@ class FlowerSpriteDef(ProceduralTextureDef):
         arr = get("flower_sprite")
         assert arr.shape == (32, 128, 4)
         assert ((arr[..., 3] == 0) | (arr[..., 3] == 255)).all()
+
+    Docs: docs/systems/procedural.textures.sprites.md
     """
 
     name = "flower_sprite"
@@ -131,6 +135,8 @@ class FlowerSpriteDef(ProceduralTextureDef):
         -------
         numpy.ndarray
             ``(H, W, 4) uint8`` RGBA flower atlas with binary alpha.
+
+        Docs: docs/systems/procedural.textures.sprites.md
         """
         W = int(params.get("width", self.DEFAULT_WIDTH))
         H = int(params.get("height", self.DEFAULT_HEIGHT))

@@ -32,6 +32,8 @@ class InputState:
     mouse_dy      : float — raw mouse delta Y since last frame (pixels)
     mouse_captured: bool  — True when the cursor is locked to the window
     escape_pressed: bool  — True on the frame ESC was pressed (toggle mouse capture)
+
+    Docs: docs/systems/render.md
     """
 
     move_forward: bool = False

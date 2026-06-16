@@ -38,4 +38,6 @@ class SaveIncompatibleError(Exception):
             save_manager.load("saves/quick.ta")
         except SaveIncompatibleError as exc:
             print(f"Cannot load save: {exc}")
+
+    Docs: docs/systems/save.md
     """

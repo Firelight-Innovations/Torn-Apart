@@ -153,6 +153,8 @@ class StormCell:
     ...                   3600.0, 500.0, 0.8, (0.0, 0.0))
     >>> float(cell.intensity(1800.0))            # mid-life: at plateau
     0.8
+
+    Docs: docs/systems/world.weather.md
     """
 
     id: str
@@ -180,18 +182,26 @@ class StormCell:
         return grow * decay
 
     def intensity(self, t: float) -> float:
-        """Peak-scaled strength 0–``peak_intensity`` at absolute time *t*."""
+        """Peak-scaled strength 0–``peak_intensity`` at absolute time *t*.
+
+        Docs: docs/systems/world.weather.md
+        """
         return self.peak_intensity * self._envelope(t)
 
     def radius(self, t: float) -> float:
         """
         Footprint radius (m) at *t*: 55 % of ``radius_m`` at birth/death,
         growing to full ``radius_m`` at plateau (cells spread as they mature).
+
+        Docs: docs/systems/world.weather.md
         """
         return self.radius_m * (0.55 + 0.45 * self._envelope(t))
 
     def active(self, t: float) -> bool:
-        """True while the cell is alive (``spawn_time < t < end``)."""
+        """True while the cell is alive (``spawn_time < t < end``).
+
+        Docs: docs/systems/world.weather.md
+        """
         return 0.0 < (t - self.spawn_time) < self.duration_s
 
     def center(self, t: float, synoptic: Synoptic) -> np.ndarray:
@@ -201,6 +211,8 @@ class StormCell:
         Rides the **raw** synoptic displacement ``D(t) − D(spawn_time)`` plus
         the per-cell ``drift_bias``.  Pass the system's :class:`Synoptic`
         instance; never the gameplay-multiplied wind (see synoptic.py gotcha).
+
+        Docs: docs/systems/world.weather.md
         """
         dt = t - self.spawn_time
         shift = synoptic.displacement(t) - synoptic.displacement(self.spawn_time)
@@ -226,6 +238,8 @@ class StormCell:
         -------
         np.ndarray — shape ``(N,)``: ``intensity(t)·exp(−(d/radius(t))²·k)``,
         the soft Gaussian footprint.  Zero everywhere when the cell is dead.
+
+        Docs: docs/systems/world.weather.md
         """
         pts = np.asarray(points_xy, dtype=np.float64).reshape(-1, 2)
         amp = self.intensity(t)
@@ -249,6 +263,8 @@ def day_regime(day: int) -> Regime:
 
     Drawn from ``for_domain("weather", "regime", day)`` against
     ``_REGIME_P``; identical across processes and restarts.
+
+    Docs: docs/systems/world.weather.md
     """
     rng = for_domain("weather", "regime", int(day))
     idx = int(rng.choice(len(_REGIME_ORDER), p=list(_REGIME_P)))
@@ -256,7 +272,10 @@ def day_regime(day: int) -> Regime:
 
 
 def regime_ambient(regime: Regime) -> tuple[float, float]:
-    """Ambient ``(cloud_coverage, cloud_density)`` away from any cell."""
+    """Ambient ``(cloud_coverage, cloud_density)`` away from any cell.
+
+    Docs: docs/systems/world.weather.md
+    """
     return _REGIME_AMBIENT[regime]
 
 
@@ -281,6 +300,8 @@ def natural_cells(day: int, config: Config) -> list[StormCell]:
     Returns
     -------
     list[StormCell] — possibly empty; deterministic for (seed, day).
+
+    Docs: docs/systems/world.weather.md
     """
     day = int(day)
     regime = day_regime(day)

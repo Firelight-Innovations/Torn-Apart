@@ -31,6 +31,8 @@ in gusts, tumbling under two hashed angular rates about two hashed axes, and
 picking one of the 3 ``leaf_sprite`` atlas variants from a hash.  Fragment: the
 SAME radiance-cascade + froxel-fog taps as ``grass.frag`` (so leaves are lit by
 the scene), alpha-blended with the grass discard threshold.
+
+Docs: docs/systems/render.vegetation.md
 """
 
 from __future__ import annotations

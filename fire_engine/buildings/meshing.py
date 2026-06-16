@@ -35,6 +35,8 @@ is correct regardless of how the corners were listed.
 Vectorized throughout (Hard Rule 4): the only Python loops iterate walls,
 storeys and openings (a building has dozens, not thousands); every per-vertex
 array is numpy.  Determinism: no RNG — identical buildings mesh byte-identically.
+
+Docs: docs/systems/buildings.md
 """
 
 from __future__ import annotations
@@ -168,7 +170,10 @@ def _add_slab(soup: _Soup, polygon: np.ndarray, z0: float, z1: float) -> None:
 
 
 def mesh_slab(polygon: np.ndarray, z0: float, z1: float) -> MeshArrays:
-    """Mesh a single horizontal slab between ``z0`` and ``z1`` (meters)."""
+    """Mesh a single horizontal slab between ``z0`` and ``z1`` (meters).
+
+    Docs: docs/systems/buildings.md
+    """
     soup = _Soup()
     _add_slab(soup, polygon, float(z0), float(z1))
     return soup.build()
@@ -216,6 +221,8 @@ def mesh_wall(
         ``z_bottom``.
     arc_segments_per_quarter : int
         Arc tessellation density (``Config.building_arc_segments_per_quarter``).
+
+    Docs: docs/systems/buildings.md
     """
     soup = _Soup()
     _add_wall(soup, wall, float(z_bottom), float(z_top), int(arc_segments_per_quarter))
@@ -406,6 +413,8 @@ def mesh_building(building: Building, cfg: Config) -> MeshArrays:
     MeshArrays
         Building-LOCAL positions (the renderer applies the node transform);
         ``colors`` flat white, ``face_materials=None``, ``verts_per_face=3``.
+
+    Docs: docs/systems/buildings.md
     """
     qpq = int(cfg.building_arc_segments_per_quarter)
     soup = _Soup()

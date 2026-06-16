@@ -29,6 +29,8 @@ Example::
     default_components_for_kind("light")        # -> [{"type": "Light", ...}]
     c = make_component("Mesh")                   # -> a Mesh with default params
     c["params"]["primitive"] = "sphere"
+
+Docs: docs/systems/scene.md
 """
 
 from __future__ import annotations
@@ -82,7 +84,10 @@ COMPONENT_CATALOG: dict[str, ComponentSpec] = {
 
 
 def is_known(type_name: str) -> bool:
-    """True if ``type_name`` is a registered component type."""
+    """True if ``type_name`` is a registered component type.
+
+    Docs: docs/systems/scene.md
+    """
     return type_name in COMPONENT_CATALOG
 
 
@@ -91,6 +96,8 @@ def default_params(type_name: str) -> dict[str, Any]:
 
     Raises:
         KeyError: if ``type_name`` is not a registered component type.
+
+    Docs: docs/systems/scene.md
     """
     spec = COMPONENT_CATALOG[type_name]
     return {f.name: copy.deepcopy(f.default) for f in spec.fields}
@@ -101,6 +108,8 @@ def make_component(type_name: str, *, enabled: bool = True) -> dict[str, Any]:
 
     Raises:
         KeyError: if ``type_name`` is not a registered component type.
+
+    Docs: docs/systems/scene.md
     """
     return {"type": type_name, "enabled": bool(enabled), "params": default_params(type_name)}
 
@@ -110,6 +119,8 @@ def default_components_for_kind(kind: str) -> list[dict[str, Any]]:
 
     ``kind`` is only the creation archetype; the returned list becomes editable
     and the source of truth thereafter.
+
+    Docs: docs/systems/scene.md
     """
     k = str(kind).lower()
     if k == "cube":
@@ -129,6 +140,8 @@ def coerce_params(type_name: str, params: dict[str, Any]) -> dict[str, Any]:
     Returns only recognised keys, each coerced to its field's type (floats
     clamped to min/max, enums snapped to a valid choice, colors/vec3 to a
     3-list of floats). Unknown keys are dropped. Unknown ``type_name`` -> ``{}``.
+
+    Docs: docs/systems/scene.md
     """
     spec = COMPONENT_CATALOG.get(type_name)
     if spec is None:
@@ -144,7 +157,10 @@ def coerce_params(type_name: str, params: dict[str, Any]) -> dict[str, Any]:
 
 
 def catalog_payload() -> dict[str, Any]:
-    """JSON-friendly catalog for the ``scene.catalog`` RPC / the inspector."""
+    """JSON-friendly catalog for the ``scene.catalog`` RPC / the inspector.
+
+    Docs: docs/systems/scene.md
+    """
     return {
         "types": [
             {

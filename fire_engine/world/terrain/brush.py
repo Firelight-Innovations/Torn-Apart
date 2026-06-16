@@ -201,6 +201,8 @@ def apply_brush(
     ...                       BrushMode.ADD, chunk_provider=provider)
     >>> (0, 0, 0) in touched
     True
+
+    Docs: docs/systems/world.terrain.md
     """
     center_np = center.to_numpy().astype(np.float64)
     mn, mx = brush.aabb(center_np)

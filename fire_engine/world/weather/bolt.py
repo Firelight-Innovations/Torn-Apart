@@ -40,6 +40,8 @@ Example
                          config=load_config())
     bolt.a.shape        # (N, 3) segment start points
     bolt.is_main.any()  # True — at least one channel reached the ground
+
+Docs: docs/systems/world.weather.md
 """
 
 from __future__ import annotations
@@ -82,6 +84,8 @@ class BoltGeometry:
     * All five arrays share the same length ``N`` (``len(bolt)``).
     * The main channel's last segment endpoint ``b`` is at (or within a step of)
       ``ground_z``; branch endpoints stay above ground.
+
+    Docs: docs/systems/world.weather.md
     """
 
     a: np.ndarray
@@ -374,6 +378,8 @@ def generate_bolt(
     >>> b = generate_bolt(7, (0.0, 0.0, 200.0), 8.0, load_config())
     >>> len(b) > 0 and b.is_main.any()
     True
+
+    Docs: docs/systems/world.weather.md
     """
     start_arr = np.asarray(start, dtype=np.float64)
     gz = float(ground_z)

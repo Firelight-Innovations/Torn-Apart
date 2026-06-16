@@ -18,6 +18,8 @@ Passes (added across phases; the loader lists only what exists today):
 
 The GLSL lives in ``world/shaders/*.vert`` / ``*.frag`` (loaded via
 ``load_glsl``) so editors get syntax highlighting + LSP.
+
+Docs: docs/systems/render.bridges.md
 """
 
 from __future__ import annotations

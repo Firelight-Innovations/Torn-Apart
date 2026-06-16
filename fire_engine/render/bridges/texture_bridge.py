@@ -27,6 +27,8 @@ Usage
     tex = to_panda_texture(arr)                 # panda3d.core.Texture
     # Attach to geometry:
     #   node_path.set_texture(tex)
+
+Docs: docs/systems/render.bridges.md
 """
 
 from __future__ import annotations
@@ -93,6 +95,8 @@ def to_panda_texture(rgba: np.ndarray) -> Texture:
         tex = to_panda_texture(arr)
         assert tex.get_x_size() == 4
         assert tex.get_y_size() == 4
+
+    Docs: docs/systems/render.bridges.md
     """
     if rgba.ndim != 3 or rgba.shape[2] != 4:
         raise ValueError(f"to_panda_texture expects shape (H, W, 4), got {rgba.shape}")
@@ -146,6 +150,8 @@ def to_panda_cubemap(faces: np.ndarray) -> Texture:
         (not linear) keeps the engine-wide **retro hard-pixel** look — the
         star/galaxy sky reads as crisp pixels instead of a smeared bilinear
         blur.
+
+    Docs: docs/systems/render.bridges.md
     """
     if (
         faces.ndim != 4
@@ -192,6 +198,8 @@ def to_panda_texture_3d(volume: np.ndarray, *, linear: bool = True, repeat: bool
     -------
     panda3d.core.Texture
         A 3-D ``F_rgba`` texture ready for ``set_shader_input`` (sampler3D).
+
+    Docs: docs/systems/render.bridges.md
     """
     if volume.ndim != 4 or volume.shape[3] != 4:
         raise ValueError(f"to_panda_texture_3d expects shape (N, N, N, 4), got {volume.shape}")
@@ -240,6 +248,8 @@ def to_data_texture_f32(block: np.ndarray) -> Texture:
     -------
     panda3d.core.Texture
         ``F_rgba32`` texture, ``cols × rows`` texels, nearest/clamped.
+
+    Docs: docs/systems/render.bridges.md
     """
     if block.ndim != 3 or block.shape[2] != 4:
         raise ValueError(f"to_data_texture_f32 expects shape (rows, cols, 4), got {block.shape}")
@@ -280,6 +290,8 @@ def to_field_texture(rgba: np.ndarray) -> Texture:
     -------
     panda3d.core.Texture
         Nearest-filtered, edge-clamped 2-D texture.
+
+    Docs: docs/systems/render.bridges.md
     """
     if rgba.ndim != 3 or rgba.shape[2] != 4:
         raise ValueError(f"to_field_texture expects shape (H, W, 4), got {rgba.shape}")

@@ -156,6 +156,8 @@ class TreeRendererComponent(Component):
         the ground).
 
     Units: meters, seconds, radians.  World-space Z-up.
+
+    Docs: docs/systems/render.vegetation.md
     """
 
     # Class-level annotations for attributes set by init_zone_renderer and
@@ -224,7 +226,10 @@ class TreeRendererComponent(Component):
     # ------------------------------------------------------------------
 
     def start(self) -> None:
-        """Compile shaders, build the root and every volume's draws (once)."""
+        """Compile shaders, build the root and every volume's draws (once).
+
+        Docs: docs/systems/render.vegetation.md
+        """
         if self.base is None or self.zone_store is None or self.chunk_provider is None:
             _log.warning("TreeRendererComponent: missing base/zone_store/chunk_provider — disabled")
             self.enabled = False
@@ -284,7 +289,10 @@ class TreeRendererComponent(Component):
         subscribe_terrain_events(self)
 
     def late_update(self, dt: float) -> None:
-        """Sync scalar sway uniforms; rebuild/re-bake what changed."""
+        """Sync scalar sway uniforms; rebuild/re-bake what changed.
+
+        Docs: docs/systems/render.vegetation.md
+        """
         if self._root is None:
             return
 
@@ -298,7 +306,10 @@ class TreeRendererComponent(Component):
         sync_sway_uniforms(self, dt)
 
     def on_destroy(self) -> None:
-        """Detach all tree nodes and unsubscribe from the bus."""
+        """Detach all tree nodes and unsubscribe from the bus.
+
+        Docs: docs/systems/render.vegetation.md
+        """
         unsubscribe_terrain_events(self)
         if self._root is not None:
             self._root.remove_node()

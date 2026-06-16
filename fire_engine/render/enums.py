@@ -22,6 +22,8 @@ class Space(Enum):
     -------
         t.translate(Vec3(0, 1, 0), relative_to=Space.SELF)   # move 1 m forward
         t.translate(Vec3(0, 1, 0), relative_to=Space.WORLD)  # move 1 m along world +Y
+
+    Docs: docs/systems/render.md
     """
 
     SELF = auto()

@@ -143,6 +143,8 @@ class GustFront:
             Field evaluation time (seconds).
         vx, vy, turb : numpy.ndarray
             Field arrays mutated in place (``float32 (cells, cells)``).
+
+        Docs: docs/systems/world.wind.md
         """
         dx, dy = self.dir
         # Distance of each cell along the travel direction (meters).

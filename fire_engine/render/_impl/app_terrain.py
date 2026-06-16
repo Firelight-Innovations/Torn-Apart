@@ -54,6 +54,8 @@ def setup_terrain_rendering(
     - The geom vertex format (geometry_bridge.make_vertex_format) includes a
       C4 colour column, so vertex colours are active by default — no
       ``set_color_off`` is issued.
+
+    Docs: docs/systems/render.md
     """
     self_obj.material_textures = material_textures
     if ground_texture is not None:
@@ -80,6 +82,8 @@ def stream_and_upload_terrain(self_obj: App) -> None:
 
     All scene-graph writes are bulk Geom uploads (Hard Rule 7); no per-vertex
     Python loops (those live in the headless mesher / geometry_bridge).
+
+    Docs: docs/systems/render.md
     """
     cm = self_obj.chunk_manager
     if cm is None:

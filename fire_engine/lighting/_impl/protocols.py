@@ -40,6 +40,8 @@ class GeometryOccupancyProvider(Protocol):
     worker, so it must read an immutable snapshot of its geometry, never live
     mutable state.  (v1's building provider is a documented no-op; live
     snapshot wiring is future scope — see ``buildings/occlusion.py``.)
+
+    Docs: docs/systems/lighting._impl.md
     """
 
     def rasterize_occupancy(
@@ -68,5 +70,7 @@ class GeometryOccupancyProvider(Protocol):
             ``uint8 (cells, cells, cells, 4)`` — emissive RGB (÷EMISSION_SCALE)
             for self-lit surfaces (e.g. future glowing windows); usually
             untouched.
+
+        Docs: docs/systems/lighting._impl.md
         """
         ...  # pragma: no cover

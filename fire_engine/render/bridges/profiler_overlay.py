@@ -26,6 +26,8 @@ Example
     overlay = ProfilerOverlay(app, get_profiler(), config)
     app.accept("f3", overlay.toggle)
     # ... each frame: overlay.update()  (throttled internally)
+
+Docs: docs/systems/render.bridges.md
 """
 
 from __future__ import annotations
@@ -84,6 +86,8 @@ class ProfilerOverlay:
     -----
     Starts hidden; :meth:`toggle` shows/hides it.  :meth:`update` is cheap when
     hidden (early return) and throttled to ``profiler_overlay_hz`` when shown.
+
+    Docs: docs/systems/render.bridges.md
     """
 
     def __init__(self, base: Any, profiler: Profiler, config: Config) -> None:
@@ -137,7 +141,10 @@ class ProfilerOverlay:
     # ------------------------------------------------------------------
 
     def toggle(self) -> None:
-        """Show/hide the overlay (F3).  Forces a refresh when shown."""
+        """Show/hide the overlay (F3).  Forces a refresh when shown.
+
+        Docs: docs/systems/render.bridges.md
+        """
         self._visible = not self._visible
         if self._visible:
             self._root.show()
@@ -148,6 +155,10 @@ class ProfilerOverlay:
 
     @property
     def visible(self) -> bool:
+        """Whether the overlay is currently shown (``bool``).
+
+        Docs: docs/systems/render.bridges.md
+        """
         return self._visible
 
     # ------------------------------------------------------------------
@@ -158,6 +169,8 @@ class ProfilerOverlay:
         """
         Called every frame by the app.  Cheap when hidden; refreshes the text +
         graph only at ``profiler_overlay_hz``.
+
+        Docs: docs/systems/render.bridges.md
         """
         if not self._visible or not self._prof.enabled:
             return
@@ -288,5 +301,8 @@ class ProfilerOverlay:
         self._graph_root.attach_new_node(poly.create())
 
     def destroy(self) -> None:
-        """Tear down the overlay nodes."""
+        """Tear down the overlay nodes.
+
+        Docs: docs/systems/render.bridges.md
+        """
         self._root.remove_node()

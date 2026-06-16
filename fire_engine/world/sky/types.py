@@ -76,6 +76,8 @@ class SkyState:
     >>> state = sky_system.update()
     >>> if state.sun_dir.z > 0.0:
     ...     render_sun(state.sun_dir, state.sun_color, state.sun_intensity)
+
+    Docs: docs/systems/world.sky.md
     """
 
     # celestial

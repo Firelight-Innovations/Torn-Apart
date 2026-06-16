@@ -36,6 +36,8 @@ class CallbackTool(DevTool):
     -------
         CallbackTool("env", "Environment",
                      lambda: ([Section("Time", [...])], [Button("Noon", set_noon)]))
+
+    Docs: docs/systems/devtools.md
     """
 
     def __init__(
@@ -52,8 +54,18 @@ class CallbackTool(DevTool):
 
     @property
     def revision(self) -> int:
+        """
+        Structural revision sourced from the optional ``revision_fn``, or 0.
+
+        Docs: docs/systems/devtools.md
+        """
         return self._revision_fn() if self._revision_fn is not None else 0
 
     def build(self) -> Panel:
+        """
+        Invoke ``build_fn`` and wrap the result in a :class:`~fire_engine.devtools.types.Panel`.
+
+        Docs: docs/systems/devtools.md
+        """
         sections, buttons = self._build_fn()
         return Panel(self.tool_id, self.title, sections, buttons=buttons, revision=self.revision)

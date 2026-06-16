@@ -36,6 +36,8 @@ Usage
     set_world_seed(1337)
     arr = get("dust_mote")        # (32, 32, 4) uint8, soft radial alpha
     # Preview: python tools/preview_texture.py dust_mote
+
+Docs: docs/systems/procedural.textures.sprites.md
 """
 
 from __future__ import annotations
@@ -81,6 +83,8 @@ class DustMoteDef(ProceduralTextureDef):
         arr = get("dust_mote")
         assert arr.shape == (32, 32, 4)
         assert arr[16, 16, 3] > arr[0, 0, 3]   # centre brighter than corner
+
+    Docs: docs/systems/procedural.textures.sprites.md
     """
 
     name = "dust_mote"
@@ -103,6 +107,8 @@ class DustMoteDef(ProceduralTextureDef):
         -------
         numpy.ndarray
             ``(H, W, 4) uint8`` RGBA, smooth alpha mask.
+
+        Docs: docs/systems/procedural.textures.sprites.md
         """
         W = int(params.get("width", self.DEFAULT_WIDTH))
         H = int(params.get("height", self.DEFAULT_HEIGHT))

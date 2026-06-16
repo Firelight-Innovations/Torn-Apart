@@ -20,6 +20,8 @@ Usage example:
     pos   = Vec3(1.0, 2.0, 3.0)                        # meters
     rot   = Quat.from_axis_angle(Vec3.UP, pi / 2)       # 90° yaw about world Z
     fwd   = rot.rotate(Vec3.FORWARD)                    # → approx Vec3(-1, 0, 0)
+
+Docs: docs/systems/core.md
 """
 
 from __future__ import annotations
@@ -54,6 +56,8 @@ class Vec3:
     >>> v = Vec3(1, 2, 3)
     >>> v.normalized().dot(Vec3.UP)
     np.float32(0.8017837)
+
+    Docs: docs/systems/core.md
     """
 
     __slots__ = ("_data",)
@@ -96,6 +100,8 @@ class Vec3:
         -------
         >>> Vec3.from_numpy(np.array([0, 0, 1], dtype=np.float32))
         Vec3(0.0, 0.0, 1.0)
+
+        Docs: docs/systems/core.md
         """
         v = cls.__new__(cls)
         v._data = np.asarray(arr, dtype=np.float32).copy()
@@ -107,27 +113,42 @@ class Vec3:
 
     @property
     def x(self) -> float:
-        """X component (meters)."""
+        """X component (meters).
+
+        Docs: docs/systems/core.md
+        """
         return float(self._data[0])
 
     @property
     def y(self) -> float:
-        """Y component (meters)."""
+        """Y component (meters).
+
+        Docs: docs/systems/core.md
+        """
         return float(self._data[1])
 
     @property
     def z(self) -> float:
-        """Z component (meters)."""
+        """Z component (meters).
+
+        Docs: docs/systems/core.md
+        """
         return float(self._data[2])
 
     @property
     def length(self) -> float:
-        """Euclidean length in meters."""
+        """Euclidean length in meters.
+
+        Docs: docs/systems/core.md
+        """
         return float(np.sqrt(np.dot(self._data, self._data)))
 
     @property
     def length_squared(self) -> float:
-        """Squared Euclidean length (avoids sqrt when only relative comparisons are needed)."""
+        """Squared Euclidean length (avoids sqrt when only relative comparisons are needed).
+
+        Docs: docs/systems/core.md
+        """
         return float(np.dot(self._data, self._data))
 
     # ------------------------------------------------------------------
@@ -177,6 +198,8 @@ class Vec3:
         -------
         >>> Vec3(1, 0, 0).approx_eq(Vec3(1 + 1e-7, 0, 0))
         True
+
+        Docs: docs/systems/core.md
         """
         return bool(np.all(np.abs(self._data - other._data) <= eps))
 
@@ -194,6 +217,8 @@ class Vec3:
         1.0
         >>> Vec3.UP.dot(Vec3.FORWARD)
         0.0
+
+        Docs: docs/systems/core.md
         """
         return float(np.dot(self._data, other._data))
 
@@ -205,6 +230,8 @@ class Vec3:
         -------
         >>> Vec3.RIGHT.cross(Vec3.FORWARD)  # +X × +Y = +Z
         Vec3(0.0, 0.0, 1.0)
+
+        Docs: docs/systems/core.md
         """
         return Vec3.from_numpy(np.cross(self._data, other._data))
 
@@ -216,6 +243,8 @@ class Vec3:
         -------
         >>> Vec3(3, 0, 0).normalized()
         Vec3(1.0, 0.0, 0.0)
+
+        Docs: docs/systems/core.md
         """
         n = self.length
         if n < 1e-12:
@@ -235,6 +264,8 @@ class Vec3:
         -------
         >>> Vec3(0, 0, 0).lerp(Vec3(2, 0, 0), 0.5)
         Vec3(1.0, 0.0, 0.0)
+
+        Docs: docs/systems/core.md
         """
         return Vec3.from_numpy(self._data + float(t) * (other._data - self._data))
 
@@ -243,7 +274,10 @@ class Vec3:
     # ------------------------------------------------------------------
 
     def to_numpy(self) -> np.ndarray:
-        """Return a float32 copy of the underlying (3,) array."""
+        """Return a float32 copy of the underlying (3,) array.
+
+        Docs: docs/systems/core.md
+        """
         return self._data.copy()
 
     def __iter__(self) -> Iterator[float]:

@@ -84,6 +84,8 @@ Example (wired by main.py)
     weather_go.add_component(
         WeatherMapComponent,
         base=app, sky_system=sky_system)
+
+Docs: docs/systems/render.sky.md
 """
 
 from __future__ import annotations
@@ -134,6 +136,8 @@ class WeatherMapComponent(Component):
         absolute sample time.  Defaults to ``sky_system._clock`` when omitted.
 
     Units: meters, game seconds.  World-space Z-up.
+
+    Docs: docs/systems/render.sky.md
     """
 
     def __init__(self, base: Any = None, sky_system: Any = None, clock: Any = None) -> None:
@@ -160,7 +164,10 @@ class WeatherMapComponent(Component):
     # ------------------------------------------------------------------
 
     def start(self) -> None:
-        """Allocate the weather texture and bind the uniform contract (once)."""
+        """Allocate the weather texture and bind the uniform contract (once).
+
+        Docs: docs/systems/render.sky.md
+        """
         if self.base is None or self.sky_system is None:
             _log.warning(
                 "WeatherMapComponent: missing base/sky_system — "
@@ -218,7 +225,10 @@ class WeatherMapComponent(Component):
         )
 
     def late_update(self, dt: float) -> None:
-        """Re-raster around the player (on recenter), upload, refresh origin."""
+        """Re-raster around the player (on recenter), upload, refresh origin.
+
+        Docs: docs/systems/render.sky.md
+        """
         if not self._enabled_feature or self._tex is None or self._map is None:
             return
 
@@ -241,7 +251,10 @@ class WeatherMapComponent(Component):
             self._reraster(self._center[0], self._center[1])
 
     def on_destroy(self) -> None:
-        """Drop the texture reference (the render graph owns the binding)."""
+        """Drop the texture reference (the render graph owns the binding).
+
+        Docs: docs/systems/render.sky.md
+        """
         self._tex = None
         self._map = None
 

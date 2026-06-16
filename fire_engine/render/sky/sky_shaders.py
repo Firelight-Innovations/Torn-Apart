@@ -82,6 +82,8 @@ list; the GLSL lives in ``world/shaders/cloud_volumetric.{vert,frag}``.
 
 The GLSL source lives in ``world/shaders/*.vert`` / ``*.frag`` (loaded verbatim
 via ``load_glsl``) so editors get syntax highlighting + LSP support.
+
+Docs: docs/systems/render.sky.md
 """
 
 from __future__ import annotations

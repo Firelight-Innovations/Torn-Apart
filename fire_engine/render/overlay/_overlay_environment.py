@@ -37,6 +37,8 @@ def build_environment(
 
     All engine access is guarded (``getattr`` / ``try``) so a change in the
     concurrent sky API degrades to blanks rather than crashing the overlay.
+
+    Docs: docs/systems/render.overlay.md
     """
 
     def get_tod_hours() -> float:
@@ -108,7 +110,10 @@ def build_environment(
 
 
 def cycle_weather(self_obj: DevOverlay, weather: Any) -> None:
-    """Advance the forced-weather override one step (last step = natural)."""
+    """Advance the forced-weather override one step (last step = natural).
+
+    Docs: docs/systems/render.overlay.md
+    """
     if not self_obj._weather_types:
         return
     self_obj._wx = (self_obj._wx + 1) % len(self_obj._weather_types)

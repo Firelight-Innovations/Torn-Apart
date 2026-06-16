@@ -159,6 +159,8 @@ def classify_genus(
     Returns
     -------
     tuple | (ndarray, ndarray, ndarray) — (high, mid, low) genus per band.
+
+    Docs: docs/systems/world.weather.md
     """
     cov = np.asarray(coverage, dtype=np.float64)
     den = np.asarray(density, dtype=np.float64)
@@ -264,6 +266,8 @@ def cloud_layers(
     True
     >>> float(L.density[0]) < 0.5         # cirrus is always thin
     True
+
+    Docs: docs/systems/world.weather.md
     """
     cov = float(np.clip(coverage, 0.0, 1.0))
     den = float(np.clip(density, 0.0, 1.0))

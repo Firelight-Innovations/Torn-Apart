@@ -295,7 +295,10 @@ class DevOverlay:
     # ------------------------------------------------------------------
 
     def toggle(self) -> None:
-        """Flip overlay visibility (bound to F1)."""
+        """Flip overlay visibility (bound to F1).
+
+        Docs: docs/systems/render.overlay.md
+        """
         self.set_enabled(not self.manager.enabled)
 
     def set_enabled(self, value: bool) -> None:
@@ -308,6 +311,8 @@ class DevOverlay:
         Parameters
         ----------
         value : bool
+
+        Docs: docs/systems/render.overlay.md
         """
         self.manager.enabled = value
         self._app.input_state.mouse_captured = not value
@@ -339,6 +344,8 @@ class DevOverlay:
         object, it falls back to a voxel raycast against terrain so the owner can
         click a chunk and inspect its properties; a full miss (empty sky)
         deselects.
+
+        Docs: docs/systems/render.overlay.md
         """
         if not self.manager.enabled or self._app.input_state.mouse_captured:
             return False
@@ -394,7 +401,10 @@ class DevOverlay:
     # ------------------------------------------------------------------
 
     def end_gizmo_drag(self) -> None:
-        """Release an in-progress gizmo drag (bound to ``mouse1-up`` in main)."""
+        """Release an in-progress gizmo drag (bound to ``mouse1-up`` in main).
+
+        Docs: docs/systems/render.overlay.md
+        """
         self._gizmo_drag = None
 
     # ------------------------------------------------------------------
@@ -409,6 +419,8 @@ class DevOverlay:
         Returns
         -------
         GameObject — the spawned object.
+
+        Docs: docs/systems/render.overlay.md
         """
         return _spawn_cube(self)
 
@@ -419,6 +431,8 @@ class DevOverlay:
         Emissive props register an :class:`~fire_engine.lighting.lights.AreaLight`
         matching their world bounds on the GPU lighting pipeline.
         No-op without the GPU lighting backend or with nothing selected.
+
+        Docs: docs/systems/render.overlay.md
         """
         _toggle_emissive(self)
 

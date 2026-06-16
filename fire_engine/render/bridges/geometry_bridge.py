@@ -13,6 +13,8 @@ Each vertex array and the index array is written with **one bulk memoryview /
 blow the per-frame budget once chunks stream).  We lay out a single interleaved
 vertex buffer (V3N3T2C4 format) and ``memoryview``-copy the whole thing once,
 then copy the index buffer once.
+
+Docs: docs/systems/render.bridges.md
 """
 
 from __future__ import annotations
@@ -60,6 +62,8 @@ def make_material_state(entry: Any) -> RenderState:
     Returns
     -------
     panda3d.core.RenderState
+
+    Docs: docs/systems/render.bridges.md
     """
     if entry is None:
         return RenderState.make_empty()
@@ -86,6 +90,8 @@ def make_vertex_format() -> GeomVertexFormat:
     -------
     panda3d.core.GeomVertexFormat
         A registered interleaved format (V3 N3 T2 C4).
+
+    Docs: docs/systems/render.bridges.md
     """
     arr = GeomVertexArrayFormat()
     arr.add_column("vertex", 3, GeomEnums.NT_float32, GeomEnums.C_point)
@@ -124,6 +130,8 @@ def to_geom(mesh: Any) -> Geom:
     single ``memoryview`` assignment on ``modify_array(0)``.  The index buffer
     is copied once via ``modify_handle().copy_data_from``.  No per-vertex Python
     loops — satisfies the bulk-write rule (CLAUDE.md Hard Rule 7).
+
+    Docs: docs/systems/render.bridges.md
     """
     fmt = make_vertex_format()
     n_verts = int(mesh.positions.shape[0])
@@ -214,6 +222,8 @@ def to_geom_node(
     — no per-vertex Python loops (Hard Rule 7).  Geom-level RenderStates
     compose *over* NodePath states, so per-material textures win over any
     node-level fallback texture.
+
+    Docs: docs/systems/render.bridges.md
     """
     node = GeomNode(name)
     face_mats = getattr(mesh, "face_materials", None)

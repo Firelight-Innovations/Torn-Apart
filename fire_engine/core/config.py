@@ -18,6 +18,8 @@ Example
 
     cfg = load_config("config.toml")
     print(cfg.chunk_meters)   # 16.0
+
+Docs: docs/systems/core.md
 """
 
 from __future__ import annotations
@@ -372,6 +374,8 @@ class Config:
         World-space side length of one chunk in meters.
 
         ``chunk_size * voxel_size`` — always 16.0 m with the locked defaults.
+
+        Docs: docs/systems/core.md
         """
         return float(self.chunk_size) * self.voxel_size
 
@@ -381,6 +385,8 @@ class Config:
         World-space side length of one light-grid cell in meters.
 
         ``voxel_size * light_grid_scale`` — always 1.0 m with the locked defaults.
+
+        Docs: docs/systems/core.md
         """
         return self.voxel_size * float(self.light_grid_scale)
 

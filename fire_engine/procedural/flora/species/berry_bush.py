@@ -16,6 +16,8 @@ Usage
     set_world_seed(1337)
     berries = get("bush_berry")           # TreeVariantSet, 6 unique meshes
     # Preview: python tools/preview_tree.py bush_berry --obj --png
+
+Docs: docs/systems/procedural.flora.species.md
 """
 
 from __future__ import annotations
@@ -40,6 +42,8 @@ class BerryBushDef(TreeSpeciesDef):
     Berry bush — compact living-green dome flecked with red berries.
 
     Registered name: ``"bush_berry"``.  6 variants per world.
+
+    Docs: docs/systems/procedural.flora.species.md
     """
 
     name = "bush_berry"
@@ -57,14 +61,20 @@ class BerryBushDef(TreeSpeciesDef):
 
     def palettes(self, rng: np.random.Generator) -> dict[str, np.ndarray]:
         """Drift the green channel a touch per world (±8) — no two worlds'
-        berry thickets read quite the same hue."""
+        berry thickets read quite the same hue.
+
+        Docs: docs/systems/procedural.flora.species.md
+        """
         drift = int(rng.integers(-8, 9))
         leaf = self.LEAF_PALETTE.astype(np.int16)
         leaf[:, 1] = np.clip(leaf[:, 1] + drift, 0, 255)
         return {"bark": self.BARK_PALETTE, "leaf": leaf.astype(np.uint8)}
 
     def grow(self, rng: np.random.Generator, variant: int) -> tuple[TreeSkeleton, Leaves]:
-        """Stub trunk → upcurled stems → dense overlapping foliage dome."""
+        """Stub trunk → upcurled stems → dense overlapping foliage dome.
+
+        Docs: docs/systems/procedural.flora.species.md
+        """
         sb = SkeletonBuilder(rng)
         stub = sb.trunk(height_m=0.12, base_radius_m=0.05, segments=1, wobble_m=0.0)
         stems = sb.branches(

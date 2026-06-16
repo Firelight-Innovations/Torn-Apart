@@ -30,6 +30,8 @@ class ActionsTool(DevTool):
     -------
         tools = ActionsTool("World", {"Spawn Cube": spawn_cube})
         tools.add_action("Fire Explosion", explode_at_camera)
+
+    Docs: docs/systems/devtools.md
     """
 
     tool_id = "actions"
@@ -45,13 +47,27 @@ class ActionsTool(DevTool):
 
     @property
     def revision(self) -> int:
+        """
+        Structure revision; bumps each time an action is added.
+
+        Docs: docs/systems/devtools.md
+        """
         return self._revision
 
     def add_action(self, label: str, handler: Callable[[], None]) -> None:
-        """Append an action button and rebuild the panel next frame."""
+        """
+        Append an action button and rebuild the panel next frame.
+
+        Docs: docs/systems/devtools.md
+        """
         self._actions.append((label, handler))
         self._revision += 1
 
     def build(self) -> Panel:
+        """
+        Build the current-frame Panel with all registered action buttons.
+
+        Docs: docs/systems/devtools.md
+        """
         buttons = [Button(label, fn) for label, fn in self._actions]
         return Panel(self.tool_id, self.title, [], buttons=buttons, revision=self._revision)

@@ -23,7 +23,6 @@ Example
     ws = WeatherSystem(load_config(), EventBus())
     lw = ws.update(game_day=3, game_time_of_day=8.5 * 3600.0, player_pos=(0.0, 0.0))
     print(ws.current, lw.cloud_coverage, lw.rain_intensity)
-
 Docs: docs/systems/world.weather.md
 """
 
@@ -88,7 +87,6 @@ class WeatherSystem:
     True
     >>> ws.get_delta()
     {}
-
     Docs: docs/systems/world.weather.md
     """
 
@@ -197,9 +195,7 @@ class WeatherSystem:
         self._release_from: LocalWeather | None = None
         self._release_start_abs_t: float | None = None
 
-    # ------------------------------------------------------------------
     # Cells
-    # ------------------------------------------------------------------
 
     def _cells_for_day(self, day: int) -> list[StormCell]:
         """Memoised natural cells of *day* (pure fn of seed+day)."""
@@ -222,7 +218,9 @@ class WeatherSystem:
 
     @property
     def cells(self) -> list[StormCell]:
-        """Active cells as of the last :meth:`update`, nearest player first."""
+        """Active cells as of the last :meth:`update`, nearest player first.
+        Docs: docs/systems/world.weather.md
+        """
         return self._cells
 
     def cell_eta_s(self, cell: StormCell, t: float, player_pos: tuple[float, float]) -> float:
@@ -230,6 +228,7 @@ class WeatherSystem:
         Approximate game seconds until *cell*'s leading edge reaches the player.
 
         Returns ``0.0`` if already under the cell, ``inf`` if receding.
+        Docs: docs/systems/world.weather.md
         """
         origin = np.array(player_pos, dtype=np.float64)
         center = cell.center(t, self.synoptic)
@@ -246,9 +245,7 @@ class WeatherSystem:
             return float("inf")
         return edge / closing
 
-    # ------------------------------------------------------------------
     # M8 — Summon API (delegates to _impl/_summon.py)
-    # ------------------------------------------------------------------
 
     def summon_cell(
         self,
@@ -270,6 +267,7 @@ class WeatherSystem:
         ...                      player_pos=(0.0, 0.0))
         >>> cid.startswith("s:")
         True
+        Docs: docs/systems/world.weather.md
         """
         return _summon.summon_cell(
             self,
@@ -285,13 +283,17 @@ class WeatherSystem:
     def summon_rainstorm(
         self, *, time_abs: float, player_pos: tuple[float, float], **kw: Any
     ) -> str:
-        """Convenience: summon a SHOWER (rainstorm) drifting toward the player."""
+        """Convenience: summon a SHOWER (rainstorm) drifting toward the player.
+        Docs: docs/systems/world.weather.md
+        """
         return self.summon_cell(CellKind.SHOWER, time_abs=time_abs, player_pos=player_pos, **kw)
 
     def summon_thunderstorm(
         self, *, time_abs: float, player_pos: tuple[float, float], **kw: Any
     ) -> str:
-        """Convenience: summon a THUNDERSTORM (rain + lightning + gust)."""
+        """Convenience: summon a THUNDERSTORM (rain + lightning + gust).
+        Docs: docs/systems/world.weather.md
+        """
         return self.summon_cell(
             CellKind.THUNDERSTORM, time_abs=time_abs, player_pos=player_pos, **kw
         )
@@ -299,45 +301,38 @@ class WeatherSystem:
     def summon_fog_bank(
         self, *, time_abs: float, player_pos: tuple[float, float], **kw: Any
     ) -> str:
-        """Convenience: summon a FOG_BANK drifting toward the player."""
+        """Convenience: summon a FOG_BANK drifting toward the player.
+        Docs: docs/systems/world.weather.md
+        """
         return self.summon_cell(CellKind.FOG_BANK, time_abs=time_abs, player_pos=player_pos, **kw)
 
     def suppress(self, cell_id: str) -> None:
-        """Hide a cell from all future samples (see _impl/_summon.py)."""
+        """Hide a cell from all future samples (see _impl/_summon.py).
+        Docs: docs/systems/world.weather.md
+        """
         _summon.suppress(self, cell_id)
 
     def clear_all(self) -> None:
-        """Clear every summoned cell and suppress every natural cell active now."""
+        """Clear every summoned cell and suppress every natural cell active now.
+        Docs: docs/systems/world.weather.md
+        """
         _summon.clear_all(self)
 
-    # ------------------------------------------------------------------
     # M8 — GustFront coupling
-    # ------------------------------------------------------------------
 
     def attach_wind_field(self, wind_field: Any) -> None:
         """
         Wire the wind field so approaching storm cells register a gust front.
 
         ``None`` detaches and clears any live fronts.
+        Docs: docs/systems/world.weather.md
         """
         if wind_field is None:
             for cid in list(self._active_fronts):
-                self._release_front(cid)
+                _update.release_front(self, cid)
         self._wind_field = wind_field
 
-    def _release_front(self, cell_id: str) -> None:
-        """Remove the gust-front modifier registered for *cell_id*, if any."""
-        front = self._active_fronts.pop(cell_id, None)
-        if front is not None and self._wind_field is not None:
-            self._wind_field.remove_modifier(front)
-
-    def _update_gust_fronts(self, t: float, player_pos: tuple[float, float]) -> None:
-        """Register / release gust-front wind modifiers for nearby storm cells."""
-        _update.update_gust_fronts(self, t, player_pos)
-
-    # ------------------------------------------------------------------
     # Sampling (delegates to _impl/_sampling.py)
-    # ------------------------------------------------------------------
 
     def _sample_core(
         self, pts: np.ndarray, t: float
@@ -368,16 +363,21 @@ class WeatherSystem:
         Vectorised core sampling: the raster channels at every query point.
 
         Returns ``(coverage, density, rain, fog, storm_gust)``.
+        Docs: docs/systems/world.weather.md
         """
         return _sampling.sample_fields(self, points_xy, t_abs)
 
     def wetness_at(self, points_xy: np.ndarray, t_abs: float) -> np.ndarray:
-        """Closed-form ground wetness 0–1 at each query point."""
+        """Closed-form ground wetness 0–1 at each query point.
+        Docs: docs/systems/world.weather.md
+        """
         pts = np.asarray(points_xy, dtype=np.float64).reshape(-1, 2)
         return _sampling.wetness_at(self, pts, float(t_abs))
 
     def rain_recent_at(self, points_xy: np.ndarray, t_abs: float) -> np.ndarray:
-        """Closed-form recent-rain measure 0–1 at each query point."""
+        """Closed-form recent-rain measure 0–1 at each query point.
+        Docs: docs/systems/world.weather.md
+        """
         pts = np.asarray(points_xy, dtype=np.float64).reshape(-1, 2)
         return _sampling.wetness_at(self, pts, float(t_abs), use_recent=True)
 
@@ -387,12 +387,11 @@ class WeatherSystem:
 
         Single-point wrapper that resolves wind, wetness, and temperature into a
         complete :class:`LocalWeather`.
+        Docs: docs/systems/world.weather.md
         """
         return _sampling.sample_local(self, pos_xy, t_abs)
 
-    # ------------------------------------------------------------------
     # Classification + override hysteresis (delegates to _impl/_update.py)
-    # ------------------------------------------------------------------
 
     def _classified_state(self, lw: LocalWeather, abs_t: float) -> WeatherType:
         """Hysteresis-stabilised classify: changed label must persist HYSTERESIS_SECONDS."""
@@ -402,15 +401,14 @@ class WeatherSystem:
         """Publish LightningStrikeEvent per scheduled strike since last update."""
         _update.emit_lightning(self, abs_t, cells)
 
-    # ------------------------------------------------------------------
     # Public API
-    # ------------------------------------------------------------------
 
     @property
     def current(self) -> WeatherType:
         """
         Discrete label as of the last :meth:`update` (the dev override if one
         is active).  Before the first update, classifies at origin, t = 0.
+        Docs: docs/systems/world.weather.md
         """
         if self._override is not None:
             return self._override
@@ -439,6 +437,7 @@ class WeatherSystem:
         Returns
         -------
         LocalWeather — the local sample (override-blended if forced).
+        Docs: docs/systems/world.weather.md
         """
         return _update.do_update(
             self, game_day, game_time_of_day, player_pos, BLEND_SECONDS, _STATE_TARGETS
@@ -453,6 +452,7 @@ class WeatherSystem:
         -------
         >>> ws.force_weather(WeatherType.STORM)   # blend toward storm
         >>> ws.force_weather(None)                # blend back to natural
+        Docs: docs/systems/world.weather.md
         """
         if weather is not None:
             self._override = WeatherType(weather)
@@ -467,15 +467,14 @@ class WeatherSystem:
             self._override_start_abs_t = None
             self._override_from = None
 
-    # ------------------------------------------------------------------
     # Saveable protocol (delegates to _impl/_save.py)
-    # ------------------------------------------------------------------
 
     def get_delta(self) -> dict[str, Any]:
         """
         Deviations from the procedural baseline (Saveable protocol).
 
         Returns ``{}`` when no summons, no suppressions, and no dev override.
+        Docs: docs/systems/world.weather.md
         """
         return _save.get_delta(self)
 
@@ -492,6 +491,7 @@ class WeatherSystem:
         Restore summons / suppressions / override from :meth:`get_delta` output.
 
         A malformed summoned-cell entry is skipped rather than crashing the load.
+        Docs: docs/systems/world.weather.md
         """
         if not isinstance(delta, dict) or not delta:
             return

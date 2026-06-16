@@ -36,6 +36,8 @@ Usage
     arr = get("wasteland_ground")     # np.ndarray (256, 256, 4) uint8
     # Pass to world/texture_bridge.py for Panda3D use, or preview with:
     # python tools/preview_texture.py wasteland_ground
+
+Docs: docs/systems/procedural.textures.ground.md
 """
 
 from __future__ import annotations
@@ -144,6 +146,8 @@ class WastelandGroundDef(ProceduralTextureDef):
         arr = get("wasteland_ground")
         # arr.shape == (256, 256, 4), arr.dtype == uint8
         # Visualise: python tools/preview_texture.py wasteland_ground
+
+    Docs: docs/systems/procedural.textures.ground.md
     """
 
     name = "wasteland_ground"
@@ -169,6 +173,8 @@ class WastelandGroundDef(ProceduralTextureDef):
         -------
         numpy.ndarray
             Shape ``(H, W, 4)``, dtype ``uint8``.
+
+        Docs: docs/systems/procedural.textures.ground.md
         """
         W = int(params.get("width", self.DEFAULT_WIDTH))
         H = int(params.get("height", self.DEFAULT_HEIGHT))

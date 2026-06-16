@@ -72,6 +72,8 @@ def vertical_profile(z: np.ndarray, z_ground: float, cfg: Config) -> np.ndarray:
     True
     >>> bool(m[1] >= m[0] and m[2] >= m[1])          # monotone
     True
+
+    Docs: docs/systems/world.wind.md
     """
     shear = float(cfg.wind_shear)
     z_ref = float(cfg.wind_profile_z_ref)
@@ -114,6 +116,8 @@ def pack_wind_field(snap: WindSnapshot) -> bytes:
     >>> data = pack_wind_field(field.snapshot)
     >>> len(data) == field.snapshot.cells ** 2 * 4 * 2
     True
+
+    Docs: docs/systems/world.wind.md
     """
     f = snap.field  # (cells, cells, 4) [x, y]: vx, vy, turb, reserved
     vx = f[..., 0]

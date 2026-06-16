@@ -27,6 +27,8 @@ Example
 -------
 >>> from fire_engine.core.shader_source import load_glsl
 >>> GRASS_VERTEX = load_glsl(__file__, "grass.vert")   # reads ./shaders/grass.vert
+
+Docs: docs/systems/core.md
 """
 
 from __future__ import annotations
@@ -112,6 +114,8 @@ def load_glsl(anchor: str, name: str) -> str:
         If the shader file (or a file it includes) does not exist.
     ValueError
         If an included file itself contains an include directive.
+
+    Docs: docs/systems/core.md
     """
     shader_dir = _resolve_shader_dir(anchor, name)
     text = (shader_dir / name).read_text(encoding="utf-8")

@@ -154,6 +154,8 @@ def resolve_graphics_preset(graphics_table: dict[str, Any] | None = None) -> dic
     0.5
     >>> resolve_graphics_preset({"preset": "low", "gfx_fxaa": True})["gfx_fxaa"]
     True
+
+    Docs: docs/systems/core._impl.md
     """
     table = dict(graphics_table or {})
     requested = str(table.pop("preset", "high")).lower()
@@ -207,6 +209,8 @@ def load_config(path: str = "config.toml") -> Config:
     1337
     >>> cfg.chunk_meters
     16.0
+
+    Docs: docs/systems/core._impl.md
     """
     try:
         with open(path, "rb") as fh:

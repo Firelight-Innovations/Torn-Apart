@@ -33,6 +33,8 @@ Example (wired by main.py)
         FloraRendererComponent,
         base=app, sky_system=sky_system, zone_store=zone_store,
         chunk_provider=chunk_manager, lighting_pipeline=pipeline, bus=bus)
+
+Docs: docs/systems/render.vegetation.md
 """
 
 from __future__ import annotations
@@ -156,6 +158,8 @@ class FloraRendererComponent(Component):
         height-field re-bakes.
 
     Units: meters, seconds, radians.  World-space Z-up.
+
+    Docs: docs/systems/render.vegetation.md
     """
 
     # Class-level annotations for attributes set by init_zone_renderer and
@@ -201,7 +205,10 @@ class FloraRendererComponent(Component):
     # ------------------------------------------------------------------
 
     def start(self) -> None:
-        """Build the shared geoms, shader and per-kind/volume nodes (once)."""
+        """Build the shared geoms, shader and per-kind/volume nodes (once).
+
+        Docs: docs/systems/render.vegetation.md
+        """
         if self.base is None or self.zone_store is None or self.chunk_provider is None:
             _log.warning(
                 "FloraRendererComponent: missing base/zone_store/chunk_provider — disabled"
@@ -261,7 +268,10 @@ class FloraRendererComponent(Component):
         subscribe_terrain_events(self)
 
     def late_update(self, dt: float) -> None:
-        """Sync scalar sway uniforms; rebuild/re-bake what changed."""
+        """Sync scalar sway uniforms; rebuild/re-bake what changed.
+
+        Docs: docs/systems/render.vegetation.md
+        """
         if self._root is None:
             return
 
@@ -275,7 +285,10 @@ class FloraRendererComponent(Component):
         sync_sway_uniforms(self, dt)
 
     def on_destroy(self) -> None:
-        """Detach all flora nodes and unsubscribe from the bus."""
+        """Detach all flora nodes and unsubscribe from the bus.
+
+        Docs: docs/systems/render.vegetation.md
+        """
         unsubscribe_terrain_events(self)
         if self._root is not None:
             self._root.remove_node()

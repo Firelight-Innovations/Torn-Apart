@@ -35,6 +35,8 @@ Example (wired by main.py, behind the flag)
         ball_go = instantiate()
         ball_go.add_component(WindBallDebugComponent,
                               base=app, clock=clock, wind_field=wind_field)
+
+Docs: docs/systems/render.sky.md
 """
 
 from __future__ import annotations
@@ -92,6 +94,8 @@ class WindBallDebugComponent(Component):
         be left ``None`` (this component then only ever *samples*).
 
     Units: meters, seconds, m/s.  World-space Z-up.
+
+    Docs: docs/systems/render.sky.md
     """
 
     def __init__(
@@ -120,7 +124,10 @@ class WindBallDebugComponent(Component):
     # ------------------------------------------------------------------
 
     def start(self) -> None:
-        """Build the ball geometry and seat it on the ground near spawn."""
+        """Build the ball geometry and seat it on the ground near spawn.
+
+        Docs: docs/systems/render.sky.md
+        """
         if self.base is None or self.wind_field is None:
             _log.warning("WindBallDebugComponent: missing base/wind_field — disabled")
             self.enabled = False
@@ -159,7 +166,10 @@ class WindBallDebugComponent(Component):
         )
 
     def fixed_update(self, dt: float) -> None:
-        """Sample the wind at the ball and step the pure integrator (50 Hz)."""
+        """Sample the wind at the ball and step the pure integrator (50 Hz).
+
+        Docs: docs/systems/render.sky.md
+        """
         if self._node is None or self.wind_field is None or self._params is None:
             return
 
@@ -194,7 +204,10 @@ class WindBallDebugComponent(Component):
         self._node.set_pos(float(self._pos[0]), float(self._pos[1]), float(self._pos[2]))
 
     def on_destroy(self) -> None:
-        """Remove the ball geometry."""
+        """Remove the ball geometry.
+
+        Docs: docs/systems/render.sky.md
+        """
         if self._node is not None:
             self._node.remove_node()
             self._node = None

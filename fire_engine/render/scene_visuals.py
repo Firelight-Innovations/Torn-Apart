@@ -35,6 +35,8 @@ Example (wired by main.py)::
     runtime = SceneRuntime(visual_factory=factory)
     factory.runtime = runtime          # enables store write-back
     save_manager.register(runtime)
+
+Docs: docs/systems/render.md
 """
 
 from __future__ import annotations
@@ -73,6 +75,8 @@ class SceneVisualFactory:
             authored lights are skipped with one log line).
         dev_overlay: ``DevOverlay`` or ``None``; when present, authored objects
             register as click-pickable in the F1 overlay.
+
+    Docs: docs/systems/render.md
     """
 
     def __init__(self, app: Any, lighting_pipeline: Any = None, dev_overlay: Any = None) -> None:
@@ -96,6 +100,8 @@ class SceneVisualFactory:
 
         ``kind`` is only a fallback for pre-component data; the components list
         (Mesh, Light, ...) drives what is built. Disabled components are skipped.
+
+        Docs: docs/systems/render.md
         """
         self._ids[go] = int(obj["id"])
         components = obj.get("components")
@@ -165,6 +171,8 @@ class SceneVisualFactory:
         Called by the runtime before a rebuild (and safe to call repeatedly);
         must not wait on the engine's deferred GameObject destroy, or a double
         load within one frame would leak NodePaths/lights.
+
+        Docs: docs/systems/render.md
         """
         for np_ in self._nodes.values():
             np_.remove_node()

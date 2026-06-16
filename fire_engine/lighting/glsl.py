@@ -52,6 +52,8 @@ Froxel fog
 
 All units meters; world coordinates Z-up.  ``u_origin_m``/``u_cell_m``/
 ``u_cells`` define each cascade's window (see `lighting/volume.py`).
+
+Docs: docs/systems/lighting.md
 """
 
 from __future__ import annotations

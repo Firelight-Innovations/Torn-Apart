@@ -20,6 +20,8 @@ Example
     log = get_logger(__name__)
     log.info("Chunk (0, 0, 0) generated in 4.2 ms")
     log.warning("RNG domain 'npc' called before set_world_seed — using seed 0")
+
+Docs: docs/systems/core.md
 """
 
 from __future__ import annotations
@@ -49,6 +51,8 @@ def get_logger(name: str) -> logging.Logger:
     -------
     >>> log = get_logger("fire_engine.world.terrain.chunk_manager")
     >>> log.debug("Streaming chunk (1, 2, 0)")
+
+    Docs: docs/systems/core.md
     """
     global _handler_installed
     if not _handler_installed:

@@ -34,13 +34,18 @@ def build_quad_geom() -> Geom:
 
     Delegates to ``render._impl.quad.build_unit_quad`` with the legacy
     ``"mote_quad"`` profiler label preserved.
+
+    Docs: docs/systems/render.vegetation._impl.md
     """
     return build_unit_quad("mote_quad")
 
 
 def mote_texture(name: str) -> Any:
     """The procedural ``name`` texture as a Panda3D texture (linear-filtered
-    so the soft dust falloff / leaf edges don't look chunky billboarded)."""
+    so the soft dust falloff / leaf edges don't look chunky billboarded).
+
+    Docs: docs/systems/render.vegetation._impl.md
+    """
     from panda3d.core import SamplerState
 
     from fire_engine.procedural import get as get_procedural

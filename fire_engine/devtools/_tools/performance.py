@@ -31,6 +31,8 @@ class PerformanceTool(DevTool):
             "FPS":    lambda: round(globalClock.get_average_frame_rate(), 1),
             "chunks": lambda: len(chunk_manager.chunks),
         })
+
+    Docs: docs/systems/devtools.md
     """
 
     tool_id = "performance"
@@ -40,5 +42,10 @@ class PerformanceTool(DevTool):
         self._providers = dict(providers)
 
     def build(self) -> Panel:
+        """
+        Build the current-frame Panel with one LABEL row per provider.
+
+        Docs: docs/systems/devtools.md
+        """
         fields = [Field(label, FieldKind.LABEL, fn) for label, fn in self._providers.items()]
         return Panel(self.tool_id, self.title, [Section("Stats", fields)])

@@ -70,6 +70,8 @@ class ChunkBlockCache:
     >>> cache = ChunkBlockCache(max_entries=8192)
     >>> vol = assemble_geometry(win, chunks, palette, 32, 0.5, cache=cache)
     >>> cache.invalidate((cx, cy, cz))   # after a terrain edit in that chunk
+
+    Docs: docs/systems/lighting._impl.md
     """
 
     def __init__(self, max_entries: int = 4096) -> None:
@@ -89,6 +91,8 @@ class ChunkBlockCache:
 
         The returned arrays are read-only views into the cache — callers must
         not mutate them (``assemble_geometry`` only slices/copies out of them).
+
+        Docs: docs/systems/lighting._impl.md
         """
         key = (coord, float(cell_m))
         with self._lock:
@@ -108,6 +112,8 @@ class ChunkBlockCache:
 
         The arrays are frozen read-only (their ``WRITEABLE`` flag is cleared)
         so a later :meth:`get` can hand out references without copying.
+
+        Docs: docs/systems/lighting._impl.md
         """
         mat, cnt = block
         mat.setflags(write=False)
@@ -125,13 +131,18 @@ class ChunkBlockCache:
 
         Call when a terrain edit changes that chunk's material array so the
         next reassembly recomputes the affected blocks.
+
+        Docs: docs/systems/lighting._impl.md
         """
         with self._lock:
             for key in [k for k in self._store if k[0] == coord]:
                 del self._store[key]
 
     def clear(self) -> None:
-        """Drop all cached blocks (e.g. on world reload)."""
+        """Drop all cached blocks (e.g. on world reload).
+
+        Docs: docs/systems/lighting._impl.md
+        """
         with self._lock:
             self._store.clear()
 

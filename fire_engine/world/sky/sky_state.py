@@ -265,6 +265,8 @@ class SkySystem:
     >>> state = sky.update()        # once per frame
     >>> sky.state is state          # cached last snapshot
     True
+
+    Docs: docs/systems/world.sky.md
     """
 
     def __init__(self, config: Config, clock: Clock, bus: EventBus) -> None:
@@ -297,6 +299,8 @@ class SkySystem:
         -------
         SkyState — the freshly computed snapshot (also available via
         :attr:`state` until the next update).
+
+        Docs: docs/systems/world.sky.md
         """
         day = int(self._clock.game_day)
         tod = float(self._clock.game_time_of_day)
@@ -430,6 +434,8 @@ class SkySystem:
 
         If :meth:`update` has never been called, it is invoked lazily once
         so the renderer can always read a valid snapshot at boot.
+
+        Docs: docs/systems/world.sky.md
         """
         if self._state is None:
             return self.update()

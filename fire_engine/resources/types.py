@@ -35,6 +35,8 @@ class Handle:
         manager.acquire(handle)
         obj = handle.resource   # live resource
         manager.release(handle)
+
+    Docs: docs/systems/resources.md
     """
 
     __slots__ = ("path", "refcount", "resource")

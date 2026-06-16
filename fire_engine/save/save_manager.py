@@ -231,6 +231,8 @@ class SaveManager:
         ------
         TypeError
             If ``saveable`` does not satisfy the Saveable protocol.
+
+        Docs: docs/systems/save.md
         """
         if not isinstance(saveable, Saveable):
             raise TypeError(
@@ -274,6 +276,8 @@ class SaveManager:
         ------
         OSError
             If the parent directory is not writable.
+
+        Docs: docs/systems/save.md
         """
         path = Path(path)
         tmp_path = path.with_suffix(path.suffix + ".tmp")
@@ -344,6 +348,8 @@ class SaveManager:
             If the save cannot be loaded (version / seed / digest mismatch).
         FileNotFoundError
             If ``path`` does not exist.
+
+        Docs: docs/systems/save.md
         """
         path = Path(path)
         raw_data = path.read_bytes()

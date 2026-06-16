@@ -73,6 +73,8 @@ Example (wired by main.py)
         base=app, clock=clock, wind_field=wind_field, worker=venturi_worker,
         sky_system=sky_system, chunk_provider=chunk_manager,
         lighting_pipeline=pipeline, bus=bus)
+
+Docs: docs/systems/render.sky.md
 """
 
 from __future__ import annotations
@@ -145,6 +147,8 @@ class WindSystemComponent(Component):
         plumbing).
 
     Units: meters, seconds, radians.  World-space Z-up.
+
+    Docs: docs/systems/render.sky.md
     """
 
     def __init__(
@@ -179,7 +183,10 @@ class WindSystemComponent(Component):
     # ------------------------------------------------------------------
 
     def start(self) -> None:
-        """Allocate the wind texture and bind the uniform contract (once)."""
+        """Allocate the wind texture and bind the uniform contract (once).
+
+        Docs: docs/systems/render.sky.md
+        """
         if self.base is None or self.wind_field is None or self.clock is None:
             _log.warning(
                 "WindSystemComponent: missing base/wind_field/clock — "
@@ -259,7 +266,10 @@ class WindSystemComponent(Component):
         )
 
     def late_update(self, dt: float) -> None:
-        """Update the field, upload it, and refresh the origin (same frame)."""
+        """Update the field, upload it, and refresh the origin (same frame).
+
+        Docs: docs/systems/render.sky.md
+        """
         if self._tex is None or self.wind_field is None:
             return
 
@@ -302,7 +312,10 @@ class WindSystemComponent(Component):
             self._uploaded_once = True
 
     def on_destroy(self) -> None:
-        """Unsubscribe and stop the venturi worker (this component owns it)."""
+        """Unsubscribe and stop the venturi worker (this component owns it).
+
+        Docs: docs/systems/render.sky.md
+        """
         if self.bus is not None:
             self.bus.unsubscribe(TerrainEditedEvent, self._on_terrain_edited)
             self.bus.unsubscribe(ChunkLoadedEvent, self._on_chunk_loaded)

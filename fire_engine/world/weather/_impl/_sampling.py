@@ -55,7 +55,10 @@ _FOG_BANK_GAIN: float = 0.027
 
 
 def temperature(ws: WeatherSystem, tod_h: float) -> float:
-    """Local air temperature (°C): daily cosine peaking at 15:00."""
+    """Local air temperature (°C): daily cosine peaking at 15:00.
+
+    Docs: docs/systems/world.weather._impl.md
+    """
     return ws._temp_mean + ws._temp_amp * math.cos(2.0 * math.pi * (tod_h - 15.0) / 24.0)
 
 
@@ -72,6 +75,8 @@ def sample_core(
     emergent humidity-condensation term is added.  Delegates to
     ``ws._active_cells`` so summoned cells are included automatically.
     ``pts`` must already be a ``float64`` ``(N, 2)`` array.
+
+    Docs: docs/systems/world.weather._impl.md
     """
     n = pts.shape[0]
     day = int(t // _DAY_S)
@@ -116,6 +121,8 @@ def local_wind_speed(
     Vectorised local wind speed (m/s) at *t* for each point.
 
     ``syn_speed·(0.7 + 0.5·coverage) + storm_gust·storm_wind_max``.
+
+    Docs: docs/systems/world.weather._impl.md
     """
     _, syn_speed = ws.synoptic.wind(t)
     return syn_speed * (0.7 + 0.5 * coverage) + storm_gust * ws._storm_wind_max
@@ -135,6 +142,8 @@ def emergent_fog(
     recent rain + ground wetness) condenses into ground fog where it exceeds
     the temperature-dependent saturation humidity, gated off by wind.
     Returns ``(emergent_fog, humidity)`` — both shape ``(N,)``.
+
+    Docs: docs/systems/world.weather._impl.md
     """
     day = int(t // _DAY_S)
     tod = t - day * _DAY_S
@@ -168,6 +177,8 @@ def wetness_at(
     (``_wet_tau``/``_wet_step``/``_wet_samples``); when ``use_recent=True``
     uses the longer recent-rain window (``_recent_tau`` etc.) for the emergent
     humidity model.  Pure function of (seed, time, position).
+
+    Docs: docs/systems/world.weather._impl.md
     """
     if use_recent:
         tau = ws._recent_tau
@@ -201,6 +212,8 @@ def sample_fields(
     Single source of truth for the spatial weather field — ``sample_local``
     calls it with one point; the weather-map raster (M3) over a grid.  Returns
     ``(coverage, density, rain, fog, storm_gust)``.
+
+    Docs: docs/systems/world.weather._impl.md
     """
     pts = np.asarray(points_xy, dtype=np.float64).reshape(-1, 2)
     t = float(t_abs)
@@ -220,6 +233,8 @@ def sample_local(
 
     Single-point wrapper over :func:`sample_fields` that also resolves wind,
     wetness, and temperature into a complete :class:`LocalWeather`.
+
+    Docs: docs/systems/world.weather._impl.md
     """
     t = (
         float(t_abs)

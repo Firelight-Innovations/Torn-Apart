@@ -33,6 +33,8 @@ Usage
     from fire_engine.resources import load, acquire
     handle = acquire(load("assets/models/church.egg"))
     nodepath = handle.resource   # Panda3D NodePath
+
+Docs: docs/systems/render.bridges.md
 """
 
 from __future__ import annotations
@@ -232,6 +234,8 @@ def register_panda_loaders(resource_manager: ResourceManager) -> None:
         from fire_engine.resources import load, acquire
         h = acquire(load("assets/models/landmark_church.egg"))
         nodepath = h.resource   # Panda3D NodePath
+
+    Docs: docs/systems/render.bridges.md
     """
     _loaders = resource_manager._loaders  # honours the IoC contract; may be a test fake
 

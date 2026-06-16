@@ -41,6 +41,8 @@ Example
     inst = tp.bake_tree_instances(vol, cfg, chunk_manager.chunks, mix,
                                   {"tree_gnarled_oak": 8}, kind="trees")
     block = tp.instances_data_block(inst, inst.species_idx == 0)
+
+Docs: docs/systems/zones.md
 """
 
 from __future__ import annotations
@@ -116,6 +118,8 @@ class TreeInstances:
         ``int32 (N,)`` mesh-pool variant index within the species.
     species_names : tuple[str, ...]
         The species mix this bake drew from, in index order.
+
+    Docs: docs/systems/zones.md
     """
 
     x: np.ndarray
@@ -131,7 +135,10 @@ class TreeInstances:
 
     @property
     def count(self) -> int:
-        """Instance count ``N``."""
+        """Instance count ``N``.
+
+        Docs: docs/systems/zones.md
+        """
         return int(self.x.shape[0])
 
 
@@ -156,6 +163,8 @@ def species_mix_from_params(params: Mapping[str, object], default: str) -> list[
     -------
     >>> species_mix_from_params({"species_mix": "a:3, b"}, "c")
     [('a', 3.0), ('b', 1.0)]
+
+    Docs: docs/systems/zones.md
     """
     if "species_mix" in params:
         mix: list[tuple[str, float]] = []
@@ -214,6 +223,8 @@ def bake_tree_instances(
     -------
     TreeInstances
         May be empty (no ground in the Z window, density 0, …).
+
+    Docs: docs/systems/zones.md
     """
     prefix = _KIND_PREFIX[kind]
     scale_min, scale_span = SCALE_JITTER[kind]
@@ -310,6 +321,8 @@ def instances_data_block(inst: TreeInstances, mask: np.ndarray | None = None) ->
     numpy.ndarray
         ``float32 (n, 2, 4)`` — row-major rows = instances, columns =
         texels.  May be ``(0, 2, 4)``.
+
+    Docs: docs/systems/zones.md
     """
     sel = slice(None) if mask is None else np.asarray(mask, dtype=bool)
     block = np.stack(

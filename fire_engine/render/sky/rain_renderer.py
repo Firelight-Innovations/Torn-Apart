@@ -170,7 +170,10 @@ class RainRendererComponent(Component):
     # ------------------------------------------------------------------
 
     def start(self) -> None:
-        """Build the cover heightmap + the selected rain mode's nodes (once)."""
+        """Build the cover heightmap + the selected rain mode's nodes (once).
+
+        Docs: docs/systems/render.sky.md
+        """
         if self.base is None:
             _log.warning("RainRendererComponent: missing base — disabled")
             self.enabled = False
@@ -244,7 +247,10 @@ class RainRendererComponent(Component):
         )
 
     def late_update(self, dt: float) -> None:
-        """Advance the clock, refresh the cover heightmap, push per-frame state."""
+        """Advance the clock, refresh the cover heightmap, push per-frame state.
+
+        Docs: docs/systems/render.sky.md
+        """
         if self._cover is None or self._cover_tex is None:
             return
         self._time_s += dt
@@ -258,7 +264,10 @@ class RainRendererComponent(Component):
             update_cylinders(self, cam, dt)
 
     def on_destroy(self) -> None:
-        """Unsubscribe and detach all rain nodes."""
+        """Unsubscribe and detach all rain nodes.
+
+        Docs: docs/systems/render.sky.md
+        """
         if self.bus is not None:
             self.bus.unsubscribe(ChunkLoadedEvent, self._on_chunk_loaded)
             self.bus.unsubscribe(TerrainEditedEvent, self._on_terrain_edited)

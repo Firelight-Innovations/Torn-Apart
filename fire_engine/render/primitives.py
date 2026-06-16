@@ -8,6 +8,8 @@ here (world/ package, ARCHITECTURE §3).
 
 Sizes are normalised so a GameObject with ``local_scale == 1`` renders as a
 1 m primitive (engine unit = meters, Z-up).
+
+Docs: docs/systems/render.md
 """
 
 from __future__ import annotations
@@ -60,6 +62,8 @@ def build_sphere_geom(radius_m: float, segments: int = 16, rings: int = 8) -> Ge
     -------
         node = GeomNode("ball")
         node.add_geom(build_sphere_geom(0.5))   # a 1 m diameter sphere
+
+    Docs: docs/systems/render.md
     """
     fmt = GeomVertexFormat.get_v3n3()  # position + normal
     vdata = GeomVertexData("sphere", fmt, Geom.UH_static)
@@ -100,6 +104,8 @@ def make_sphere_node(name: str, radius_m: float = 0.5) -> NodePath:
         NodePath name (shows in scene-graph dumps).
     radius_m : float, default 0.5
         Sphere radius in meters at unit scale.
+
+    Docs: docs/systems/render.md
     """
     node = GeomNode(name)
     node.add_geom(build_sphere_geom(radius_m))
@@ -120,6 +126,8 @@ def load_cube_model(loader: Any) -> NodePath | None:
     Returns
     -------
     NodePath | None — ``None`` when neither stock model is available.
+
+    Docs: docs/systems/render.md
     """
     model = loader.load_model("models/misc/rgbCube")
     if model is None or model.is_empty():

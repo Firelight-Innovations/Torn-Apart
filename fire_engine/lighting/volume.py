@@ -37,6 +37,8 @@ True
 ...                         chunk_size=32, voxel_size=0.5)
 >>> vol.albedo_occ.shape
 (32, 32, 32, 4)
+
+Docs: docs/systems/lighting.md
 """
 
 from __future__ import annotations
@@ -102,6 +104,8 @@ class VolumeWindow:
     False
     >>> win.world_origin_m  # doctest: +ELLIPSIS
     (-24.0, -24.0, -24.0)
+
+    Docs: docs/systems/lighting.md
     """
 
     def __init__(
@@ -127,6 +131,8 @@ class VolumeWindow:
         """World position (meters) of the window's min corner.
 
         Raises ``ValueError`` if ``recenter`` has never been called.
+
+        Docs: docs/systems/lighting.md
         """
         if self.origin_cell is None:
             raise ValueError("VolumeWindow.recenter() never called")
@@ -138,7 +144,10 @@ class VolumeWindow:
 
     @property
     def size_m(self) -> float:
-        """World edge length of the window box in meters."""
+        """World edge length of the window box in meters.
+
+        Docs: docs/systems/lighting.md
+        """
         return self.cells * self.cell_m
 
     def _desired_origin(self, camera_pos: Any) -> tuple[int, int, int]:
@@ -160,6 +169,8 @@ class VolumeWindow:
         submit a job while leaving the *committed* origin (what the GPU volume
         and shader uniforms currently use) untouched until the new volume is
         actually uploaded.  See ``lighting/gpu.py``.
+
+        Docs: docs/systems/lighting.md
         """
         if self.origin_cell is None:
             return True
@@ -185,6 +196,8 @@ class VolumeWindow:
             True when ``origin_cell`` changed (caller must reassemble and
             re-upload the volume), False when the camera is still within the
             hysteresis margin.
+
+        Docs: docs/systems/lighting.md
         """
         if self.origin_cell is None:
             self.origin_cell = self._desired_origin(camera_pos)
@@ -326,6 +339,8 @@ def assemble_geometry(
     Deterministic: pure function of the chunk materials, window placement and
     palette.  Python iterates **chunks** only (≤ a few hundred); all per-cell
     work is numpy slicing (Hard Rule 4).
+
+    Docs: docs/systems/lighting.md
     """
     if window.origin_cell is None:
         raise ValueError("VolumeWindow.recenter() never called")
@@ -421,6 +436,8 @@ def window_chunk_span(
     list[tuple[int, int, int]]
         All ``(cx, cy, cz)`` chunk coords overlapping the window box.  Pure /
         deterministic; no chunk lookups (caller filters against loaded chunks).
+
+    Docs: docs/systems/lighting.md
     """
     k = round(cell_m / voxel_size)
     cells_per_chunk = chunk_size // k
@@ -442,6 +459,8 @@ def pack_volume(arr: np.ndarray) -> bytes:
     contiguous copy).  Factored out of ``lighting/gpu._upload_volume`` so the
     async assembly worker can run it off the main thread, leaving only the
     cheap ``Texture.set_ram_image(bytes)`` memcpy on the render thread.
+
+    Docs: docs/systems/lighting.md
     """
     data = np.ascontiguousarray(np.transpose(arr, (2, 1, 0, 3))[..., [2, 1, 0, 3]])
     return data.tobytes()

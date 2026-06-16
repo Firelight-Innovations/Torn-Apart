@@ -27,6 +27,8 @@ Example::
     save_manager.load("scenes/ambush.ta")            # → GameObjects exist now
     if runtime.spawn_position is not None:
         app.camera_go.transform.position = runtime.spawn_position
+
+Docs: docs/systems/scene.md
 """
 
 from __future__ import annotations
@@ -68,6 +70,8 @@ class SceneRuntime:
         visual_factory: Optional object with ``attach(go, kind, obj_dict)`` and
             ``teardown()`` — the panda3d half (``SceneVisualFactory``); ``None``
             keeps everything headless.
+
+    Docs: docs/systems/scene.md
     """
 
     save_key: str = "editor_scene"
@@ -84,11 +88,17 @@ class SceneRuntime:
     # Saveable protocol
     # ------------------------------------------------------------------ #
     def get_delta(self) -> dict[str, Any]:
-        """The authored scene as saved by the editor (empty dict when empty)."""
+        """The authored scene as saved by the editor (empty dict when empty).
+
+        Docs: docs/systems/scene.md
+        """
         return self.store.get_delta()
 
     def apply_delta(self, delta: dict[str, Any]) -> None:
-        """Restore the authored scene and (re)build its GameObjects."""
+        """Restore the authored scene and (re)build its GameObjects.
+
+        Docs: docs/systems/scene.md
+        """
         self.store.apply_delta(delta)
         self.rebuild()
 
@@ -107,6 +117,8 @@ class SceneRuntime:
         parent GameObject already exists when it is reached. Parenting uses
         ``keep_world=False`` and THEN writes local TRS — the store's transforms
         are local to the parent, exactly like ``scene.set_transform``.
+
+        Docs: docs/systems/scene.md
         """
         from fire_engine.render.registry import destroy, instantiate
 
@@ -148,6 +160,8 @@ class SceneRuntime:
 
         World, not local — a spawn parented under a moved group composes its
         parents' transforms.
+
+        Docs: docs/systems/scene.md
         """
         for obj in self.store.tree():
             if obj["kind"] == "spawn":

@@ -32,7 +32,10 @@ __all__ = ["build_snapshot", "commit_frame", "frame_time_stats", "write_profiler
 
 def commit_frame(prof: Profiler, total_ms: float) -> None:
     """Commit the open frame's accumulators into *prof*'s ring buffer + run
-    hitch detection.  Called by :meth:`Profiler.begin_frame` for the prior frame."""
+    hitch detection.  Called by :meth:`Profiler.begin_frame` for the prior frame.
+
+    Docs: docs/systems/core._impl.md
+    """
     i = prof._write_index
     prof._frame_ms[i] = total_ms
     prof._scope_ms[i, :] = prof._cur_scope_ns / 1e6
@@ -116,6 +119,8 @@ def frame_time_stats(frames_ms: np.ndarray, budget_ms: float) -> dict[str, float
     >>> s = frame_time_stats(np.array([4.0, 5.0, 6.0, 40.0]), budget_ms=5.0)
     >>> round(s["max"], 1)
     40.0
+
+    Docs: docs/systems/core._impl.md
     """
     n = int(frames_ms.size)
     if n == 0:
@@ -164,6 +169,8 @@ def build_snapshot(prof: Profiler) -> dict[str, Any]:
     Returns
     -------
     dict
+
+    Docs: docs/systems/core._impl.md
     """
     from fire_engine.core.profiler import SCHEMA_VERSION
 
@@ -242,6 +249,8 @@ def write_profiler_snapshot(prof: Profiler, path: str) -> None:
     ----------
     prof : Profiler
     path : str
+
+    Docs: docs/systems/core._impl.md
     """
     if not prof.enabled:
         return

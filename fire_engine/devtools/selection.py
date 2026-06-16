@@ -7,6 +7,8 @@ the overlay renderer reads it (draws the selection outline).  Keeping it in one
 small headless object means none of those three need to know about each other.
 
 No panda3d imports — headless-testable.
+
+Docs: docs/systems/devtools.md
 """
 
 from __future__ import annotations
@@ -39,6 +41,8 @@ class Selection:
         sel.set(some_gameobject)
         assert sel.current is some_gameobject
         sel.on_change(lambda go: print("selected", go.name if go else None))
+
+    Docs: docs/systems/devtools.md
     """
 
     __slots__ = ("_current", "_listeners", "_revision")
@@ -50,12 +54,20 @@ class Selection:
 
     @property
     def current(self) -> GameObject | None:
-        """The selected GameObject, or None."""
+        """
+        The selected GameObject, or None.
+
+        Docs: docs/systems/devtools.md
+        """
         return self._current
 
     @property
     def revision(self) -> int:
-        """Counter that increments on every selection change (never decreases)."""
+        """
+        Counter that increments on every selection change (never decreases).
+
+        Docs: docs/systems/devtools.md
+        """
         return self._revision
 
     def set(self, go: GameObject | None) -> None:
@@ -68,6 +80,8 @@ class Selection:
         Parameters
         ----------
         go : GameObject | None
+
+        Docs: docs/systems/devtools.md
         """
         if go is self._current:
             return
@@ -77,7 +91,11 @@ class Selection:
             cb(go)
 
     def clear(self) -> None:
-        """Deselect (equivalent to ``set(None)``)."""
+        """
+        Deselect (equivalent to ``set(None)``).
+
+        Docs: docs/systems/devtools.md
+        """
         self.set(None)
 
     def on_change(self, callback: Callable[[GameObject | None], None]) -> None:
@@ -87,5 +105,7 @@ class Selection:
         Parameters
         ----------
         callback : Callable[[GameObject | None], None]
+
+        Docs: docs/systems/devtools.md
         """
         self._listeners.append(callback)

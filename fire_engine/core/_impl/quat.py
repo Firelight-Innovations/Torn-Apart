@@ -64,6 +64,8 @@ class Quat:
     Vec3(-1.0, ..., ...)
     >>> q.inverse().rotate(q.rotate(Vec3.FORWARD)).approx_eq(Vec3.FORWARD)
     True
+
+    Docs: docs/systems/core._impl.md
     """
 
     __slots__ = ("_data",)
@@ -91,6 +93,8 @@ class Quat:
         >>> from fire_engine.core.math3d import Vec3, Quat
         >>> Quat.identity().rotate(Vec3.FORWARD)
         Vec3(0.0, 1.0, 0.0)
+
+        Docs: docs/systems/core._impl.md
         """
         q = cls.__new__(cls)
         q._data = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
@@ -118,6 +122,8 @@ class Quat:
         >>> from math import pi
         >>> Quat.from_axis_angle(Vec3.UP, pi/2).rotate(Vec3.FORWARD)
         Vec3(-1.0, ~0, ~0)   # +Y rotates to −X under 90° about +Z
+
+        Docs: docs/systems/core._impl.md
         """
         # axis._data is a float32 numpy (3,) array; axis.length is a float
         n = float(axis.length)
@@ -162,6 +168,8 @@ class Quat:
         >>> q = Quat.from_euler(pi/2, 0, 0)   # 90° yaw
         >>> q.rotate(Vec3.FORWARD).approx_eq(Vec3(-1, 0, 0), eps=1e-5)
         True
+
+        Docs: docs/systems/core._impl.md
         """
         # Import Vec3 at call time to avoid a circular module-level import.
         # math3d imports quat at the bottom (after Vec3 is defined), so this
@@ -179,18 +187,34 @@ class Quat:
 
     @property
     def w(self) -> float:
+        """Scalar (real) component of the quaternion.
+
+        Docs: docs/systems/core._impl.md
+        """
         return float(self._data[0])
 
     @property
     def x(self) -> float:
+        """X component of the quaternion's vector part.
+
+        Docs: docs/systems/core._impl.md
+        """
         return float(self._data[1])
 
     @property
     def y(self) -> float:
+        """Y component of the quaternion's vector part.
+
+        Docs: docs/systems/core._impl.md
+        """
         return float(self._data[2])
 
     @property
     def z(self) -> float:
+        """Z component of the quaternion's vector part.
+
+        Docs: docs/systems/core._impl.md
+        """
         return float(self._data[3])
 
     # ------------------------------------------------------------------
@@ -244,6 +268,8 @@ class Quat:
         >>> from math import pi
         >>> Quat.from_axis_angle(Vec3.UP, pi/2).rotate(Vec3.FORWARD)
         Vec3(-1.0, ~0, ~0)
+
+        Docs: docs/systems/core._impl.md
         """
         # Import Vec3 at call time to avoid a circular module-level import.
         from fire_engine.core.math3d import Vec3
@@ -263,6 +289,8 @@ class Quat:
         Return a unit-norm copy of this quaternion.
 
         Raises ValueError if the quaternion is zero.
+
+        Docs: docs/systems/core._impl.md
         """
         n = float(np.linalg.norm(self._data))
         if n < 1e-12:
@@ -283,6 +311,8 @@ class Quat:
         >>> q = Quat.from_axis_angle(Vec3.UP, 1.0)
         >>> (q * q.inverse()).approx_eq(Quat.identity())
         True
+
+        Docs: docs/systems/core._impl.md
         """
         q = Quat.__new__(Quat)
         q._data = self._data * np.array([1.0, -1.0, -1.0, -1.0], dtype=np.float32)
@@ -315,6 +345,8 @@ class Quat:
         >>> h, p, r = q.as_euler()
         >>> Quat.from_euler(h, p, r).approx_eq(q, eps=1e-5)
         True
+
+        Docs: docs/systems/core._impl.md
         """
         w, x, y, z = [float(c) for c in self._data]
 
@@ -385,6 +417,8 @@ class Quat:
         >>> q1 = Quat.from_axis_angle(Vec3.UP, pi)
         >>> Quat.slerp(q0, q1, 0.5).approx_eq(Quat.from_axis_angle(Vec3.UP, pi/2))
         True
+
+        Docs: docs/systems/core._impl.md
         """
         da = a._data.copy()
         db = b._data.copy()
@@ -441,6 +475,8 @@ class Quat:
         -------
         >>> Quat.identity().approx_eq(Quat.identity())
         True
+
+        Docs: docs/systems/core._impl.md
         """
         # Two quaternions represent the same rotation if q ≈ other OR q ≈ -other
         diff_pos = np.max(np.abs(self._data - other._data))

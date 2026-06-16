@@ -43,6 +43,8 @@ Path Normalisation
 All paths are normalised via ``os.path.normcase(os.path.normpath(path))``
 before cache lookup, so ``assets\\models\\foo.egg`` and
 ``assets/models/foo.egg`` hit the same cache entry.
+
+Docs: docs/systems/resources.md
 """
 
 from __future__ import annotations
@@ -112,6 +114,8 @@ class ResourceManager:
         handle = load("assets/models/landmark_church.egg")
         acquire(handle)
         nodepath = handle.resource
+
+    Docs: docs/systems/resources.md
     """
 
     def __init__(
@@ -157,6 +161,8 @@ class ResourceManager:
             handle = manager.load("assets/models/church.egg")
             manager.acquire(handle)
             nodepath = handle.resource
+
+        Docs: docs/systems/resources.md
         """
         key = self._normalise(path)
         if key in self._cache:
@@ -198,6 +204,8 @@ class ResourceManager:
         -------
             handle = manager.load("assets/audio/ambient.ogg")
             manager.acquire(handle)   # refcount → 1
+
+        Docs: docs/systems/resources.md
         """
         handle.refcount += 1
         return handle
@@ -219,6 +227,8 @@ class ResourceManager:
         -------
             manager.release(handle)   # refcount → 0
             manager.unload_unreferenced()  # handle evicted from cache
+
+        Docs: docs/systems/resources.md
         """
         if handle.refcount > 0:
             handle.refcount -= 1
@@ -245,6 +255,8 @@ class ResourceManager:
             manager.release(handle_a)
             n = manager.unload_unreferenced()
             # handle_a is gone; any handle with refcount > 0 remains.
+
+        Docs: docs/systems/resources.md
         """
         to_remove = [key for key, h in self._cache.items() if h.refcount == 0]
         for key in to_remove:
@@ -279,6 +291,8 @@ class ResourceManager:
             s = manager.stats()
             print(s["cache_size"])   # e.g. 4
             print(s["zero_ref"])     # e.g. 1  (ready to evict)
+
+        Docs: docs/systems/resources.md
         """
         handles = list(self._cache.values())
         refcounts = [h.refcount for h in handles]
@@ -341,6 +355,8 @@ def load(path: str) -> Handle:
         from fire_engine.resources import load, acquire
         handle = acquire(load("assets/models/church.egg"))
         nodepath = handle.resource
+
+    Docs: docs/systems/resources.md
     """
     return default_manager.load(path)
 
@@ -354,6 +370,8 @@ def acquire(handle: Handle) -> Handle:
     Example
     -------
         handle = acquire(load("assets/audio/wind.ogg"))
+
+    Docs: docs/systems/resources.md
     """
     return default_manager.acquire(handle)
 
@@ -363,6 +381,8 @@ def release(handle: Handle) -> None:
     Decrement the refcount of *handle* via the default manager.
 
     Convenience wrapper for ``default_manager.release(handle)``.
+
+    Docs: docs/systems/resources.md
     """
     default_manager.release(handle)
 
@@ -372,5 +392,7 @@ def unload_unreferenced() -> int:
     Evict all zero-refcount handles from the default manager.
 
     Returns the number of evicted handles.
+
+    Docs: docs/systems/resources.md
     """
     return default_manager.unload_unreferenced()

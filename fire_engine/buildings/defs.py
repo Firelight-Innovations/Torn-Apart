@@ -65,6 +65,34 @@ class BuildingDef(ProceduralDef):
     """
 
     def generate(self, rng: np.random.Generator, **params: Any) -> Building:
+        """
+        Generate and return a fully-authored :class:`Building`.
+
+        Parameters
+        ----------
+        rng : numpy.random.Generator
+            Seeded by the procedural registry — use it for every random choice
+            (Hard Rule 2: never ``random.*`` or unseeded ``np.random.*``).
+        **params : Any
+            Keyword arguments for placement and program, e.g.:
+            ``position`` ``(x, y, z)``, ``ground_z`` (float, meters),
+            ``yaw_deg`` (float, degrees), ``storeys`` (int), ``footprint`` (str).
+            Concrete subclasses document their own keys.
+
+        Returns
+        -------
+        Building
+            A complete building authored via the imperative API.  Must be a
+            pure function of ``rng`` + ``params`` — keep no references to the
+            return value (the manager clones it before assigning a world id).
+
+        Raises
+        ------
+        NotImplementedError
+            Always — subclasses must override this method.
+
+        Docs: docs/systems/buildings.md
+        """
         raise NotImplementedError(
             "BuildingDef subclasses must implement generate() -> Building. "
             "See ARCHITECTURE.md §5.7 and docs/systems/buildings.md."

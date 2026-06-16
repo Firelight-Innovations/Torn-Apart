@@ -27,6 +27,8 @@ class FieldKind(Enum):
               ``set``((x, y, z)).  Used for positions, scales, and
               euler-angle views of rotations.
     ENUM    — choice from ``choices``; ``get``→str, ``set``(str).
+
+    Docs: docs/systems/devtools.md
     """
 
     LABEL = auto()
@@ -39,7 +41,11 @@ class FieldKind(Enum):
 
 
 class GizmoMode(Enum):
-    """Which manipulator is active (mirrors Unity's W/E/R tools)."""
+    """
+    Which manipulator is active (mirrors Unity's W/E/R tools).
+
+    Docs: docs/systems/devtools.md
+    """
 
     TRANSLATE = "translate"
     ROTATE = "rotate"
@@ -54,6 +60,8 @@ class HandleType(Enum):
     PLANE   — a two-axis square (translate on the plane whose *normal* is ``axis``).
     RING    — a rotation ring in the plane whose *normal* is ``axis``.
     UNIFORM — the centre cube (uniform scale on all axes; ``axis`` ignored).
+
+    Docs: docs/systems/devtools.md
     """
 
     AXIS = "axis"

@@ -30,6 +30,8 @@ def spawn_cube(self_obj: DevOverlay) -> Any:
     Returns
     -------
     GameObject — the spawned object.
+
+    Docs: docs/systems/render.overlay.md
     """
     cam_tf = self_obj._app.camera_go.transform
     pos = cam_tf.position + cam_tf.forward * 5.0
@@ -63,6 +65,8 @@ def toggle_emissive(self_obj: DevOverlay) -> None:
     fog (the emission-map path for dynamic objects).  The visual gets a
     bright warm colour-scale so the prop itself reads as glowing.
     No-op without the GPU lighting backend or with nothing selected.
+
+    Docs: docs/systems/render.overlay.md
     """
     go = self_obj.manager.selection.current
     pipeline = getattr(self_obj._app, "lighting_pipeline", None)
@@ -100,6 +104,8 @@ def sync_spawned(self_obj: DevOverlay) -> None:
     occluders (shadow casting / god-ray cutting) and keep any emissive
     prop's AreaLight glued to its box.  ``OccluderSet.set_boxes`` is
     change-detected internally, so static props cost nothing.
+
+    Docs: docs/systems/render.overlay.md
     """
     pipeline = getattr(self_obj._app, "lighting_pipeline", None)
     boxes: list[tuple[tuple[float, float, float], tuple[float, float, float]]] = []

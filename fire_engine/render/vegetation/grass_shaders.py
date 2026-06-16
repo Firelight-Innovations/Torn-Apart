@@ -38,6 +38,8 @@ All cascade/fog/celestial uniforms use the ``GpuLightingPipeline`` surface
 contract names and are **inherited** from ``terrain_root`` (the pipeline
 binds and refreshes them there each frame); only the grass-specific uniforms
 are set by ``GrassRendererComponent``.
+
+Docs: docs/systems/render.vegetation.md
 """
 
 from __future__ import annotations

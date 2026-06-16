@@ -145,6 +145,8 @@ class SkeletonBuilder:
         limbs = sb.branches(trunk, count=(3, 5), length_ratio=(0.4, 0.7))
         twigs = sb.branches(limbs, count=(1, 2), length_ratio=(0.4, 0.6))
         sk = sb.skeleton()
+
+    Docs: docs/systems/procedural.flora.md
     """
 
     def __init__(self, rng: np.random.Generator) -> None:
@@ -231,6 +233,8 @@ class SkeletonBuilder:
         numpy.ndarray
             ``int32`` ids of the trunk segments (root first) — pass to
             :meth:`branches`.
+
+        Docs: docs/systems/procedural.flora.md
         """
         n = max(1, int(segments))
         tip_r = base_radius_m * 0.25 if tip_radius_m is None else tip_radius_m
@@ -345,6 +349,8 @@ class SkeletonBuilder:
         numpy.ndarray
             ``int32`` ids of ALL created sub-segments — feed to the next
             :meth:`branches` level or ``leaves_at_tips``.
+
+        Docs: docs/systems/procedural.flora.md
         """
         parents = np.asarray(parents, dtype=np.int64)
         if parents.size == 0:
@@ -455,6 +461,8 @@ class SkeletonBuilder:
         Returns
         -------
         TreeSkeleton
+
+        Docs: docs/systems/procedural.flora.md
         """
         if self._count == 0:
             raise ValueError("SkeletonBuilder: nothing grown — call trunk() before skeleton()")

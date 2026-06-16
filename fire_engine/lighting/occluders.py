@@ -57,6 +57,8 @@ Example
 ...                      trunk_occ=0.85, canopy_gain=1.0)
 >>> int(vol[16, 16, 9, 3]) > 0    # trunk cell just above the 4 m base
 True
+
+Docs: docs/systems/lighting.md
 """
 
 from __future__ import annotations
@@ -124,6 +126,8 @@ class TreeOccluderSet:
     ...                              canopy_r_m=2.0, canopy_sigma=0.25)
     >>> occ.count
     1
+
+    Docs: docs/systems/lighting.md
     """
 
     x: np.ndarray
@@ -137,7 +141,10 @@ class TreeOccluderSet:
 
     @property
     def count(self) -> int:
-        """Instance count ``N``."""
+        """Instance count ``N``.
+
+        Docs: docs/systems/lighting.md
+        """
         return int(self.x.shape[0])
 
     @classmethod
@@ -152,7 +159,10 @@ class TreeOccluderSet:
         bark_rgb: tuple[float, float, float] = _DEFAULT_BARK_RGB,
         leaf_rgb: tuple[float, float, float] = _DEFAULT_LEAF_RGB,
     ) -> TreeOccluderSet:
-        """One-instance set (tests / tools)."""
+        """One-instance set (tests / tools).
+
+        Docs: docs/systems/lighting.md
+        """
         f = np.float32
         return cls(
             x=np.asarray([x], f),
@@ -167,7 +177,10 @@ class TreeOccluderSet:
 
     @classmethod
     def merge(cls, sets: list[TreeOccluderSet]) -> TreeOccluderSet:
-        """Concatenate several sets (one per zone volume) into one."""
+        """Concatenate several sets (one per zone volume) into one.
+
+        Docs: docs/systems/lighting.md
+        """
         if not sets:
             return cls.empty()
         return cls(
@@ -183,7 +196,10 @@ class TreeOccluderSet:
 
     @classmethod
     def empty(cls) -> TreeOccluderSet:
-        """Zero-instance set."""
+        """Zero-instance set.
+
+        Docs: docs/systems/lighting.md
+        """
         f = np.empty(0, dtype=np.float32)
         c = np.empty((0, 3), dtype=np.float32)
         return cls(
@@ -246,6 +262,8 @@ def splat_tree_occluders(
     -----
     Occupancy is ``max``-combined and albedo written only where the splat
     raises occupancy — terrain solids win.  Deterministic, no RNG.
+
+    Docs: docs/systems/lighting.md
     """
     if occluders.count == 0 or (trunk_occ <= 0.0 and canopy_gain <= 0.0):
         return

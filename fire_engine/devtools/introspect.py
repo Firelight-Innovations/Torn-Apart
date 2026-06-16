@@ -19,6 +19,8 @@ Reflection is intentionally duck-typed: this module reads ``.transform``,
 so it (and its tests) stay clear of panda3d.
 
 No panda3d imports — headless-testable.
+
+Docs: docs/systems/devtools.md
 """
 
 from __future__ import annotations
@@ -69,6 +71,8 @@ def describe_object(go: GameObject) -> list[Section]:
     -------
         sections = describe_object(selected)
         # sections[1].title == "Transform"
+
+    Docs: docs/systems/devtools.md
     """
     sections: list[Section] = [_identity_section(go), _transform_section(go)]
     sections.extend(_component_section(comp) for comp in go._components)
@@ -88,6 +92,8 @@ def is_chunk(obj: Any) -> TypeGuard[Chunk]:
     *and* terrain-free): a chunk is anything carrying the voxel-array trio
     ``materials`` / ``coord`` / ``chunk_meters``.  Used by the Inspector to route
     a picked chunk to :func:`describe_chunk` instead of :func:`describe_object`.
+
+    Docs: docs/systems/devtools.md
     """
     return hasattr(obj, "materials") and hasattr(obj, "coord") and hasattr(obj, "chunk_meters")
 
@@ -117,6 +123,8 @@ def describe_chunk(chunk: Chunk) -> list[Section]:
     -------
         sections = describe_chunk(chunk)
         # sections[0].title == "Chunk"
+
+    Docs: docs/systems/devtools.md
     """
 
     def origin_str() -> str:

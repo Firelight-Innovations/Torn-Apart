@@ -31,6 +31,8 @@ Example
     attrs = gp.instance_attribs(np.arange(count), seed,
                                 vol.min_corner, vol.max_corner)
     field = gp.bake_grass_height_field(vol, chunk_manager.chunks, cfg)
+
+Docs: docs/systems/zones.md
 """
 
 from __future__ import annotations
@@ -94,6 +96,8 @@ def hash_lowbias32(x: np.ndarray) -> np.ndarray:
     -------
     numpy.ndarray
         uint32 array of hashed values, same shape.
+
+    Docs: docs/systems/zones.md
     """
     x = np.asarray(x).astype(np.uint32, copy=True)
     x ^= x >> np.uint32(16)
@@ -132,6 +136,8 @@ def instance_attribs(
         ``"x"``/``"y"`` world-space blade base positions (float32, meters),
         ``"rot"`` yaw in radians [0, 2π), ``"scale"`` size multiplier
         [0.7, 1.3), ``"phase"`` sway phase in radians [0, 2π).
+
+    Docs: docs/systems/zones.md
     """
     i = np.asarray(indices).astype(np.uint32, copy=False)
     h0 = hash_lowbias32(i ^ np.uint32(seed))
@@ -162,6 +168,8 @@ def grass_hash_seed(volume: ZoneVolume) -> int:
     Derived through ``for_domain("zones", "grass", volume.id)`` (Hard Rule 2)
     so the same world seed + volume id always places identical grass.
     Bounded to [0, 2**31) — Panda3D shader inputs pass it as a signed int.
+
+    Docs: docs/systems/zones.md
     """
     return int(for_domain("zones", "grass", volume.id).integers(0, 2**31))
 
@@ -182,6 +190,8 @@ def grass_instance_count(volume: ZoneVolume, config: Config) -> int:
     ...                params={"density": 8.0})
     >>> grass_instance_count(v, Config())
     800
+
+    Docs: docs/systems/zones.md
     """
     density = float(volume.params.get("density", config.grass_density_per_m2))
     count = int(volume.area_xy_m2 * max(density, 0.0))
@@ -199,6 +209,8 @@ def leaf_hash_seed(volume: ZoneVolume) -> int:
     feeds for grass.  Derived through ``for_domain("wind", "leaves", volume.id)``
     (Hard Rule 2) so the same world seed + volume id always scatters identical
     litter.  Bounded to ``[0, 2**31)`` (Panda3D passes it as a signed int).
+
+    Docs: docs/systems/zones.md
     """
     return int(for_domain("wind", "leaves", volume.id).integers(0, 2**31))
 
@@ -221,6 +233,8 @@ def leaf_instance_count(volume: ZoneVolume, config: Config) -> int:
     >>> v = ZoneVolume(1, "trees", (0.0, 0.0, 0.0), (20.0, 20.0, 8.0))
     >>> leaf_instance_count(v, Config())          # 400 m² × 0.15
     60
+
+    Docs: docs/systems/zones.md
     """
     density = float(volume.params.get("leaf_density", config.wind_leaf_density_per_m2))
     count = int(volume.area_xy_m2 * max(density, 0.0))
@@ -263,6 +277,8 @@ def bake_grass_height_field(
     numpy.ndarray
         ``uint8 (H, W, 4)`` with ``H`` texel rows along +Y and ``W`` columns
         along +X.  Deterministic for identical inputs.
+
+    Docs: docs/systems/zones.md
     """
     n = int(config.chunk_size)
     vs = float(config.voxel_size)

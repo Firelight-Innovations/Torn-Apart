@@ -51,6 +51,8 @@ Example
 >>> data = pack_weather_map(raster)
 >>> len(data) == raster.shape[0] * raster.shape[1] * 4 * 2   # fp16 RGBA
 True
+
+Docs: docs/systems/world.sky.md
 """
 
 from __future__ import annotations
@@ -105,6 +107,8 @@ def pack_weather_map(raster: np.ndarray) -> bytes:
     >>> data = pack_weather_map(r)
     >>> len(data) == 4 * 4 * 4 * 2
     True
+
+    Docs: docs/systems/world.sky.md
     """
     arr = np.asarray(raster)
     if arr.ndim != 3 or arr.shape[2] != 4 or arr.shape[0] != arr.shape[1]:

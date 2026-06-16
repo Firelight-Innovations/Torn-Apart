@@ -15,6 +15,8 @@ streams); palettes are species data, not separate registered defs.
 All output is ``(H, W, 4) uint8`` RGBA, nearest-filter pixel art, built with
 :func:`~fire_engine.procedural.textures.base.pixel_noise` (no per-pixel
 Python loops — Hard Rule 4).
+
+Docs: docs/systems/procedural.flora.md
 """
 
 from __future__ import annotations
@@ -41,6 +43,8 @@ class AtlasLayout:
         ``(u0, v0, u1, v1)`` sub-rects: bark fills the left half (opaque),
         leaves the right half (binary alpha cutout).  Pass these as the
         mesher's ``uv_rect`` arguments.
+
+    Docs: docs/systems/procedural.flora.md
     """
 
     width: int = 64
@@ -50,7 +54,10 @@ class AtlasLayout:
 
     @property
     def half_px(self) -> tuple[int, int]:
-        """(width, height) in texels of one half-atlas region."""
+        """(width, height) in texels of one half-atlas region.
+
+        Docs: docs/systems/procedural.flora.md
+        """
         return self.width // 2, self.height
 
 
@@ -87,6 +94,8 @@ def bark_texture(
         Vertical stretch factor (texels per noise row).  Default 6.
     shade_side : bool
         Darken the left tile half by one tier.  Default True.
+
+    Docs: docs/systems/procedural.flora.md
     """
     palette = np.asarray(palette, dtype=np.uint8)
     rows = max(1, height // max(1, streak_px))
@@ -144,6 +153,8 @@ def leaf_texture(
         RGB berry speckle color (e.g. washed red); ``None`` = no berries.
     berry_density : float
         Per-texel berry probability over the lower leaf half.  Default 0.
+
+    Docs: docs/systems/procedural.flora.md
     """
     palette = np.asarray(palette, dtype=np.uint8)
     yy, xx = np.mgrid[0:height, 0:width].astype(np.float32)
@@ -216,6 +227,8 @@ def compose_atlas(layout: AtlasLayout, bark_rgba: np.ndarray, leaf_rgba: np.ndar
     -------
     numpy.ndarray
         ``(layout.height, layout.width, 4) uint8``.
+
+    Docs: docs/systems/procedural.flora.md
     """
     hw, hh = layout.half_px
     for name, arr in (("bark", bark_rgba), ("leaf", leaf_rgba)):

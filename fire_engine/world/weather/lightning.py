@@ -40,6 +40,8 @@ Example
     cfg = load_config()
     cell = next(c for c in natural_cells(5, cfg) if c.kind is CellKind.THUNDERSTORM)
     strikes = scheduled_strikes(cell, cell.spawn_time, cell.spawn_time + 600.0, cfg)
+
+Docs: docs/systems/world.weather.md
 """
 
 from __future__ import annotations
@@ -75,6 +77,8 @@ class StrikeParams:
     seed : int — per-strike bolt RNG seed (deterministic geometry); derived from
         the cell id and the strike index so each strike's channel is distinct
         yet reproducible.
+
+    Docs: docs/systems/world.weather.md
     """
 
     time_abs: float
@@ -100,6 +104,8 @@ def cell_id_int(cell_id: str) -> int:
     Returns
     -------
     int — a 31-bit non-negative digest (fits a signed shader/event int).
+
+    Docs: docs/systems/world.weather.md
     """
     import hashlib
 
@@ -138,6 +144,8 @@ def scheduled_strikes(
     Returns
     -------
     list[StrikeParams] — strikes with ``t0 <= time_abs < t1``, in time order.
+
+    Docs: docs/systems/world.weather.md
     """
     from fire_engine.world.weather.cells import CellKind
 

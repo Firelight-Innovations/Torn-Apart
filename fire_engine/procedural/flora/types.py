@@ -72,7 +72,10 @@ class TreeSkeleton:
 
     @property
     def n_segments(self) -> int:
-        """Number of segments ``S``."""
+        """Number of segments ``S``.
+
+        Docs: docs/systems/procedural.flora.md
+        """
         return int(self.parent.shape[0])
 
     def sway_start(self) -> np.ndarray:
@@ -81,6 +84,8 @@ class TreeSkeleton:
 
         A segment's start sway is its parent's end sway (0 for roots), so
         sway is continuous along every branch path.
+
+        Docs: docs/systems/procedural.flora.md
         """
         s = np.where(self.parent >= 0, self.sway[np.maximum(self.parent, 0)], 0.0)
         return s.astype(np.float32)
@@ -94,6 +99,8 @@ class TreeSkeleton:
         ids : numpy.ndarray | None
             Restrict the answer to this id subset (e.g. the ids one
             ``branches()`` call returned).  ``None`` → all tips.
+
+        Docs: docs/systems/procedural.flora.md
         """
         is_parent = np.zeros(self.n_segments, dtype=bool)
         is_parent[self.parent[self.parent >= 0]] = True
@@ -199,5 +206,8 @@ class TreeVariantSet:
 
     @property
     def n_variants(self) -> int:
-        """Variant pool size."""
+        """Variant pool size.
+
+        Docs: docs/systems/procedural.flora.md
+        """
         return len(self.meshes)

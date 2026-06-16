@@ -32,6 +32,8 @@ Units
 No panda3d.  No per-cell Python loops — everything is numpy broadcasting over
 the ``(cells, cells, modes)`` mode axis.
 
+Docs: docs/systems/world.wind.md
+
 Example
 -------
 >>> from fire_engine.core.config import Config
@@ -83,6 +85,8 @@ class GustModes:
     amp : numpy.ndarray
         ``float32 (M,)`` — per-mode amplitude, red-noise weighted
         (∝ 1/wavelength) and normalised to ``sum == 1``.
+
+    Docs: docs/systems/world.wind.md
     """
 
     kx: np.ndarray
@@ -133,6 +137,8 @@ def build_modes(cfg: Config) -> GustModes:
     >>> modes = build_modes(Config())
     >>> float(modes.amp.sum())
     1.0
+
+    Docs: docs/systems/world.wind.md
     """
     m = int(cfg.wind_gust_modes)
     rng = for_domain("wind", "gusts")
@@ -215,6 +221,8 @@ def eval_gusts(
     >>> gx, gy = eval_gusts(modes, X, Y, 1.0, (3.0, 0.0))
     >>> gx.shape == X.shape
     True
+
+    Docs: docs/systems/world.wind.md
     """
     # Broadcast the (..., 1) sample grid against the (M,) mode constants → a
     # trailing mode axis we sum over.  No Python loop over cells or modes.

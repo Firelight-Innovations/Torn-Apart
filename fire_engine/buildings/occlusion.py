@@ -43,6 +43,8 @@ For each building overlapping the window ``[origin_cell, origin_cell+cells)`` at
 
 All of step 1-3 is numpy bulk work over the overlapping sub-box (Hard Rule 4);
 the only Python loop is over buildings/storeys (a handful).
+
+Docs: docs/systems/buildings.md
 """
 
 from __future__ import annotations
@@ -69,6 +71,8 @@ class BuildingOccupancyRasterizer:
 
         rasterizer = BuildingOccupancyRasterizer(building_manager)
         gpu_lighting.register_geometry_provider(rasterizer)   # store-only (v1)
+
+    Docs: docs/systems/buildings.md
     """
 
     def __init__(self, manager: Any) -> None:
@@ -99,6 +103,8 @@ class BuildingOccupancyRasterizer:
         Returns without touching the arrays, so a window assembled with this
         provider is byte-identical to one assembled without it (pinned by the
         lighting-volume test).  Logs once that occlusion is stubbed.
+
+        Docs: docs/systems/buildings.md
         """
         if not self._warned:
             _log.debug(

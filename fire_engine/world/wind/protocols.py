@@ -37,6 +37,8 @@ class WindModifier(Protocol):
     ...     def apply(self, X, Y, t, vx, vy, turb):
     ...         mask = (X**2 + Y**2) < 100.0
     ...         vx[mask] = 0.0; vy[mask] = 0.0
+
+    Docs: docs/systems/world.wind.md
     """
 
     def apply(
@@ -48,5 +50,9 @@ class WindModifier(Protocol):
         vy: np.ndarray,
         turb: np.ndarray,
     ) -> None:
-        """Mutate ``vx`` / ``vy`` / ``turb`` in place for time ``t``."""
+        """
+        Mutate ``vx`` / ``vy`` / ``turb`` in place for time ``t``.
+
+        Docs: docs/systems/world.wind.md
+        """
         ...

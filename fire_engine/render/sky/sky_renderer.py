@@ -227,7 +227,10 @@ class SkyRendererComponent(Component):
     # ------------------------------------------------------------------
 
     def start(self) -> None:
-        """Build all sky scene-graph nodes, shaders, and textures (once)."""
+        """Build all sky scene-graph nodes, shaders, and textures (once).
+
+        Docs: docs/systems/render.sky.md
+        """
         if self.base is None:
             _log.warning("SkyRendererComponent.start: no base — disabled")
             self.enabled = False
@@ -273,6 +276,8 @@ class SkyRendererComponent(Component):
         camera (M4).  Other readers (wind, the WeatherMapComponent's raster)
         consume the already-advanced weather system, so nothing else calls
         ``update`` (no double-advance).
+
+        Docs: docs/systems/render.sky.md
         """
         self._time_s += dt
         if self.sky_system is not None:
@@ -280,7 +285,10 @@ class SkyRendererComponent(Component):
             self._state = self.sky_system.update((cx, cy))
 
     def late_update(self, dt: float) -> None:
-        """Write this frame's SkyState to the GPU (bulk uniform/state writes)."""
+        """Write this frame's SkyState to the GPU (bulk uniform/state writes).
+
+        Docs: docs/systems/render.sky.md
+        """
         st = self._state if self._state is not None else getattr(self.sky_system, "state", None)
         if st is None or self._dome_np is None:
             return
@@ -298,7 +306,10 @@ class SkyRendererComponent(Component):
         update_fog_and_light(self, st)
 
     def on_destroy(self) -> None:
-        """Detach all sky nodes and clear the terrain fog."""
+        """Detach all sky nodes and clear the terrain fog.
+
+        Docs: docs/systems/render.sky.md
+        """
         for np_node in (self._dome_np, self._cloud_np):
             if np_node is not None:
                 np_node.remove_node()

@@ -19,6 +19,7 @@ Example
         advance_weather()
     prof.end_frame()
     snap = prof.snapshot()   # plain dict, JSON-serializable
+Docs: docs/systems/core.md
 """
 
 from __future__ import annotations
@@ -70,7 +71,6 @@ class Profiler:
     singleton.  Construct directly only for headless tests.
 
     See ``docs/systems/profiler.md`` for the full field / behaviour reference.
-
     Docs: docs/systems/core.md
     """
 
@@ -169,6 +169,7 @@ class Profiler:
         """
         (Re)configure in place from a :class:`Config`.  Mutates self so
         existing references stay valid.  Returns self.
+        Docs: docs/systems/core.md
         """
         self._configure(
             enabled=bool(getattr(config, "profiler_enabled", False)),
@@ -189,16 +190,18 @@ class Profiler:
         on_stop: Callable[[str], None],
     ) -> None:
         """Register start/stop callbacks (outermost scope enter/exit).
-        Used by the PStats bridge in ``render/profiler_bridge.py``."""
+        Used by the PStats bridge in ``render/profiler_bridge.py``.
+        Docs: docs/systems/core.md
+        """
         self._observers.append((on_start, on_stop))
 
     def add_counter_observer(self, on_counter: Callable[[str, float], None]) -> None:
-        """Register a callback invoked when a counter is set/added this frame."""
+        """Register a callback invoked when a counter is set/added this frame.
+        Docs: docs/systems/core.md
+        """
         self._counter_observers.append(on_counter)
 
-    # ------------------------------------------------------------------
     # Scope API
-    # ------------------------------------------------------------------
 
     def scope(self, name: str) -> NullScope | _ScopeCtx:
         """
@@ -211,6 +214,7 @@ class Profiler:
         -------
             with profiler.scope("Update:Weather"):
                 weather.update(...)
+        Docs: docs/systems/core.md
         """
         if not self.enabled:
             return _NULL_SCOPE
@@ -222,7 +226,9 @@ class Profiler:
         return ctx
 
     def profiled(self, name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-        """Decorator timing a whole function/method under *name*."""
+        """Decorator timing a whole function/method under *name*.
+        Docs: docs/systems/core.md
+        """
 
         def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
             @functools.wraps(fn)
@@ -237,7 +243,9 @@ class Profiler:
         return decorator
 
     def start(self, name: str) -> None:
-        """Manually open a scope (pair with :meth:`stop`)."""
+        """Manually open a scope (pair with :meth:`stop`).
+        Docs: docs/systems/core.md
+        """
         if not self.enabled:
             return
         sid = self._sid(name)
@@ -246,7 +254,9 @@ class Profiler:
 
     def stop(self, name: str) -> None:
         """Manually close a scope opened with :meth:`start`.
-        Raises ``ValueError`` on mismatch."""
+        Raises ``ValueError`` on mismatch.
+        Docs: docs/systems/core.md
+        """
         if not self.enabled:
             return
         sid = self._scope_ids.get(name, -1)
@@ -257,12 +267,12 @@ class Profiler:
             )
         self._stop_sid(sid)
 
-    # ------------------------------------------------------------------
     # Counters
-    # ------------------------------------------------------------------
 
     def set_counter(self, name: str, value: float) -> None:
-        """Set a per-frame counter (mirrors PStats ``set_level``)."""
+        """Set a per-frame counter (mirrors PStats ``set_level``).
+        Docs: docs/systems/core.md
+        """
         if not self.enabled:
             return
         cid = self._cid(name)
@@ -274,7 +284,9 @@ class Profiler:
             cb(name, float(value))
 
     def add_counter(self, name: str, delta: float = 1.0) -> None:
-        """Add *delta* to a per-frame counter (mirrors PStats ``add_level``)."""
+        """Add *delta* to a per-frame counter (mirrors PStats ``add_level``).
+        Docs: docs/systems/core.md
+        """
         if not self.enabled:
             return
         cid = self._cid(name)
@@ -285,12 +297,12 @@ class Profiler:
         for cb in self._counter_observers:
             cb(name, float(self._cur_counter[cid]))
 
-    # ------------------------------------------------------------------
     # Frame lifecycle
-    # ------------------------------------------------------------------
 
     def begin_frame(self) -> None:
-        """Open a new frame.  Commits the previous frame into the ring."""
+        """Open a new frame.  Commits the previous frame into the ring.
+        Docs: docs/systems/core.md
+        """
         if not self.enabled:
             return
         now = self._time()
@@ -309,7 +321,9 @@ class Profiler:
         self._pending = True
 
     def end_frame(self) -> None:
-        """Close the main-loop body.  Records ``frame_cpu_ms`` counter."""
+        """Close the main-loop body.  Records ``frame_cpu_ms`` counter.
+        Docs: docs/systems/core.md
+        """
         if not self.enabled or not self._pending:
             return
         self._cpu_ms = (self._time() - self._frame_start_ns) / 1e6
@@ -320,9 +334,7 @@ class Profiler:
             self._active_depth.fill(0)
         self.set_counter(self._CPU_MS_COUNTER, self._cpu_ms)
 
-    # ------------------------------------------------------------------
     # Internal scope timing (called by _ScopeCtx / start / stop)
-    # ------------------------------------------------------------------
 
     def _start_sid(self, sid: int) -> None:
         self._stack.append(sid)
@@ -356,9 +368,7 @@ class Profiler:
         ctx._sid = -1
         self._ctx_pool.append(ctx)
 
-    # ------------------------------------------------------------------
     # Name → column id registries
-    # ------------------------------------------------------------------
 
     def _sid(self, name: str) -> int:
         sid = self._scope_ids.get(name)
@@ -398,9 +408,7 @@ class Profiler:
             )
             self._capacity_warned = True
 
-    # ------------------------------------------------------------------
     # Stats / snapshot (commit + hitch + snapshot impl in profiler_report.py)
-    # ------------------------------------------------------------------
 
     def _valid_slice(self) -> tuple[slice, int]:
         valid = min(self._frames_written, self.history_frames)
@@ -411,11 +419,15 @@ class Profiler:
         return slice(0, self.history_frames), valid
 
     def frame_count(self) -> int:
-        """Number of frames currently held in the ring buffer."""
+        """Number of frames currently held in the ring buffer.
+        Docs: docs/systems/core.md
+        """
         return min(self._frames_written, self.history_frames)
 
     def recent_frame_ms(self, n: int) -> np.ndarray:
-        """Return the last *n* frame times (oldest→newest) for the overlay graph."""
+        """Return the last *n* frame times (oldest→newest) for the overlay graph.
+        Docs: docs/systems/core.md
+        """
         if not self.enabled or self._recent_count == 0:
             return np.zeros(0, dtype=np.float64)
         n = min(n, self._recent_count)
@@ -429,20 +441,24 @@ class Profiler:
 
     def snapshot(self) -> dict[str, Any]:
         """Plain-dict performance summary (AI-agent / overlay contract).
-        Delegates to :func:`~fire_engine.core.profiler_report.build_snapshot`."""
+        Delegates to :func:`~fire_engine.core.profiler_report.build_snapshot`.
+        Docs: docs/systems/core.md
+        """
         return build_snapshot(self)
 
     def write_snapshot(self, path: str) -> None:
-        """Atomically write :meth:`snapshot` to *path* as JSON.  No-op when disabled."""
+        """Atomically write :meth:`snapshot` to *path* as JSON.  No-op when disabled.
+        Docs: docs/systems/core.md
+        """
         write_profiler_snapshot(self, path)
 
-    # ------------------------------------------------------------------
     # Convenience for the overlay
-    # ------------------------------------------------------------------
 
     @property
     def last_frame_ms(self) -> float:
-        """Most recently committed full frame time in ms (0 if none)."""
+        """Most recently committed full frame time in ms (0 if none).
+        Docs: docs/systems/core.md
+        """
         if not self.enabled or self._frames_written == 0:
             return 0.0
         last = (self._write_index - 1) % self.history_frames
@@ -450,27 +466,33 @@ class Profiler:
 
     @property
     def hitch_count(self) -> int:
-        """Total hitches detected since (re)configuration."""
+        """Total hitches detected since (re)configuration.
+        Docs: docs/systems/core.md
+        """
         return self._hitch_count
 
     @property
     def recent_hitch(self) -> dict[str, Any] | None:
-        """The most recent hitch record (or None)."""
+        """The most recent hitch record (or None).
+        Docs: docs/systems/core.md
+        """
         return self._hitches[0] if self._hitches else None
 
 
-# ---------------------------------------------------------------------------
 # Process-wide singleton
-# ---------------------------------------------------------------------------
 
 _PROFILER = Profiler(enabled=False)
 
 
 def get_profiler() -> Profiler:
-    """Return the process-wide :class:`Profiler` singleton (disabled until boot)."""
+    """Return the process-wide :class:`Profiler` singleton (disabled until boot).
+    Docs: docs/systems/core.md
+    """
     return _PROFILER
 
 
 def init_profiler(config: Config) -> Profiler:
-    """Configure the singleton from :class:`Config` and return it.  Call once at boot."""
+    """Configure the singleton from :class:`Config` and return it.  Call once at boot.
+    Docs: docs/systems/core.md
+    """
     return _PROFILER.configure_from_config(config)

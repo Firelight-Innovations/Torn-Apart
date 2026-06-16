@@ -35,6 +35,8 @@ Example
     post = PostProcessPipeline(app, cfg)      # after lighting + sky are wired
     # ... each frame, after the lighting pipeline updates:
     post.update(app.lighting_pipeline)
+
+Docs: docs/systems/render.bridges.md
 """
 
 from __future__ import annotations
@@ -82,6 +84,8 @@ class PostProcessPipeline:
     depth_tex : Texture | None
         The scene depth buffer.  Used by the lens-flare pass to test whether the
         sun is occluded by terrain.
+
+    Docs: docs/systems/render.bridges.md
     """
 
     def __init__(self, base: Any, config: Config) -> None:
@@ -121,9 +125,7 @@ class PostProcessPipeline:
             self.enabled = False
             self._set_hdr_output(False)
 
-    # ------------------------------------------------------------------
     # Build
-    # ------------------------------------------------------------------
 
     def _build(self) -> None:
         from direct.filter.FilterManager import FilterManager
@@ -417,9 +419,7 @@ class PostProcessPipeline:
         """Set the ``u_hdr_output`` flag inherited by every surface shader."""
         self.base.render.set_shader_input("u_hdr_output", 1.0 if on else 0.0)
 
-    # ------------------------------------------------------------------
     # Extension seam (bloom / lens flare / god rays plug in here)
-    # ------------------------------------------------------------------
 
     def insert_pass_before_composite(self, card: Any) -> None:
         """
@@ -429,22 +429,28 @@ class PostProcessPipeline:
         NodePath produced by ``FilterManager.renderQuadInto`` (or set on the
         final quad); ordering is insertion order.  Kept as a simple list so the
         later phases own their own wiring without reshaping this scaffold.
+
+        Docs: docs/systems/render.bridges.md
         """
         self._mid_passes.append(card)
 
     @property
     def final_quad(self) -> Any:
-        """The screen-spanning composite card (set shader inputs on it)."""
+        """The screen-spanning composite card (set shader inputs on it).
+
+        Docs: docs/systems/render.bridges.md
+        """
         return self._final_quad
 
     @property
     def manager(self) -> Any:
-        """The underlying FilterManager (for renderQuadInto in later phases)."""
+        """The underlying FilterManager (for renderQuadInto in later phases).
+
+        Docs: docs/systems/render.bridges.md
+        """
         return self._manager
 
-    # ------------------------------------------------------------------
     # Per-frame
-    # ------------------------------------------------------------------
 
     def update(self, lighting_pipeline: Any = None) -> None:
         """
@@ -453,6 +459,8 @@ class PostProcessPipeline:
         Auto-exposure is applied inside the surface shaders (so it scales bloom
         too) and bloom/flare are screen-space self-contained, so the only
         per-frame work is feeding the god-ray pass the sun's screen position.
+
+        Docs: docs/systems/render.bridges.md
         """
         if not self.enabled or self._godray_quad is None:
             return

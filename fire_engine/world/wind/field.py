@@ -178,6 +178,8 @@ class WindField:
         """
         Register an in-place :class:`~fire_engine.world.wind.protocols.WindModifier`,
         applied (in registration order) on every subsequent :meth:`update`.
+
+        Docs: docs/systems/world.wind.md
         """
         self._modifiers.append(m)
 
@@ -186,6 +188,8 @@ class WindField:
         Unregister a previously-added modifier.  Removing the last-added
         modifier and re-running :meth:`update` restores the base field exactly
         (modifiers are pure / additive).  No-op if ``m`` is not registered.
+
+        Docs: docs/systems/world.wind.md
         """
         with contextlib.suppress(ValueError):
             self._modifiers.remove(m)
@@ -232,6 +236,8 @@ class WindField:
         chunks : dict | None, default None
             Loaded chunks for the venturi solver (passed only on a
             recenter / terrain-edit event; ``None`` ⇒ keep last correction).
+
+        Docs: docs/systems/world.wind.md
         """
         cfg = self._cfg
 
@@ -311,6 +317,8 @@ class WindField:
         The current atomically-published :class:`WindSnapshot`.
 
         Raises ``RuntimeError`` if :meth:`update` has never run (no field yet).
+
+        Docs: docs/systems/world.wind.md
         """
         snap = self._front
         if snap is None:
@@ -345,6 +353,8 @@ class WindField:
         >>> v = field.sample(np.array([[0.0, 0.0, 1.0], [10.0, 5.0, 2.0]]))
         >>> v.shape
         (2, 3)
+
+        Docs: docs/systems/world.wind.md
         """
         snap = self.snapshot
         P = np.asarray(positions, dtype=np.float32)

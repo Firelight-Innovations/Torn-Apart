@@ -109,6 +109,8 @@ def init_zone_renderer(
         The instance to initialise.
     base, sky_system, zone_store, chunk_provider, lighting_pipeline, bus
         Forwarded from the ``__init__`` keyword arguments.
+
+    Docs: docs/systems/render.vegetation._impl.md
     """
     self_obj.base = base
     self_obj.sky_system = sky_system
@@ -143,6 +145,8 @@ def set_volume_bounds(geom_node: GeomNode, vol: Any, pad: float) -> None:
     pad : float
         Extra margin in metres added on every side (e.g. blade reach +
         sway travel).
+
+    Docs: docs/systems/render.vegetation._impl.md
     """
     geom_node.set_bounds(
         BoundingBox(
@@ -176,6 +180,8 @@ def sync_sway_uniforms(self_obj: Any, dt: float) -> None:
         Must have ``._root``, ``._time_s``, and ``.sky_system`` attributes.
     dt : float
         Frame delta in seconds.
+
+    Docs: docs/systems/render.vegetation._impl.md
     """
     self_obj._time_s += dt
     root = self_obj._root
@@ -213,6 +219,8 @@ def subscribe_terrain_events(self_obj: Any) -> None:
 
     Call site: end of every zone-renderer ``start()``, after the initial
     ``_build_volumes()`` call.
+
+    Docs: docs/systems/render.vegetation._impl.md
     """
     if self_obj.bus is not None:
         self_obj.bus.subscribe(TerrainEditedEvent, self_obj._on_terrain_edited)
@@ -228,6 +236,8 @@ def unsubscribe_terrain_events(self_obj: Any) -> None:
     (the bus silently ignores unsubscribing a handler that was never added).
 
     Call site: every zone-renderer ``on_destroy``.
+
+    Docs: docs/systems/render.vegetation._impl.md
     """
     if self_obj.bus is not None:
         self_obj.bus.unsubscribe(TerrainEditedEvent, self_obj._on_terrain_edited)
@@ -241,6 +251,8 @@ def on_terrain_edited(self_obj: Any, event: TerrainEditedEvent) -> None:
 
     Call site: assigned as ``self._on_terrain_edited`` in each zone renderer,
     or called directly from the method body as a one-liner delegate.
+
+    Docs: docs/systems/render.vegetation._impl.md
     """
     coords: Any = event.chunk_coords
     if isinstance(coords, tuple) and len(coords) == 3 and isinstance(coords[0], int):
@@ -255,5 +267,7 @@ def on_chunk_loaded(self_obj: Any, event: ChunkLoadedEvent) -> None:
 
     Call site: assigned as ``self._on_chunk_loaded`` in each zone renderer,
     or called directly from the method body as a one-liner delegate.
+
+    Docs: docs/systems/render.vegetation._impl.md
     """
     self_obj._mark_dirty_for_coords((event.coord,))

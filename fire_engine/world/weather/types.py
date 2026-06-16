@@ -44,6 +44,8 @@ class CellKind(StrEnum):
         Clouds only — coverage/density, no precipitation.
     FOG_BANK
         Ground fog — raises the local fog coefficient, little cloud cover.
+
+    Docs: docs/systems/world.weather.md
     """
 
     SHOWER = "shower"
@@ -53,7 +55,10 @@ class CellKind(StrEnum):
 
 
 class Regime(StrEnum):
-    """Per-day synoptic regime — sets ambient sky and the cell spawn mix."""
+    """Per-day synoptic regime — sets ambient sky and the cell spawn mix.
+
+    Docs: docs/systems/world.weather.md
+    """
 
     HIGH_PRESSURE = "high_pressure"
     MIXED = "mixed"
@@ -168,7 +173,10 @@ class CloudLayers:
     detail_scale: np.ndarray
 
     def genus_for_band(self, band: CloudBand | int) -> CloudGenus:
-        """The chosen genus for *band* (0=high, 1=mid, 2=low)."""
+        """The chosen genus for *band* (0=high, 1=mid, 2=low).
+
+        Docs: docs/systems/world.weather.md
+        """
         return (self.genus_high, self.genus_mid, self.genus_low)[int(band)]
 
 

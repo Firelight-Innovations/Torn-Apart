@@ -89,6 +89,8 @@ def ray_plane_intersect(
 
     Returns the hit point (length-3 array) or ``None`` if the ray is parallel to
     the plane or only hits it behind the origin.
+
+    Docs: docs/systems/devtools.md
     """
     denom = float(n.dot(d))
     if abs(denom) < 1e-9:
@@ -107,6 +109,8 @@ def closest_on_axis(
 
     Returns ``(axis_t, ray_s, dist)``: the parameter along the axis (meters), the
     parameter along the ray, and the distance between the two closest points.
+
+    Docs: docs/systems/devtools.md
     """
     w0 = o - p
     A = float(d.dot(d))
@@ -153,6 +157,8 @@ class Gizmo:
         handle = giz.pick(ray_o, ray_d)
         if handle is not None:
             drag = giz.begin(handle, ray_o, ray_d, pos, rot, scale)
+
+    Docs: docs/systems/devtools.md
     """
 
     def __init__(self, pivot: Vec3, size: float, mode: GizmoMode) -> None:
@@ -170,6 +176,8 @@ class Gizmo:
         ----------
         ray_o, ray_d : Vec3
             World-space ray origin and direction (need not be normalised).
+
+        Docs: docs/systems/devtools.md
         """
         o, d, p = _np(ray_o), _np(ray_d), _np(self.pivot)
         R = self.size
@@ -279,6 +287,8 @@ class Gizmo:
         Returns
         -------
         DragState — feed to :func:`update_drag` each frame until release.
+
+        Docs: docs/systems/devtools.md
         """
         o, d, p = _np(ray_o), _np(ray_d), _np(self.pivot)
         st = DragState(
@@ -331,6 +341,8 @@ def update_drag(state: DragState, ray_o: Vec3, ray_d: Vec3) -> tuple[Vec3, Quat,
     Returns
     -------
     (Vec3, Quat, Vec3) — new local position, rotation, scale to assign.
+
+    Docs: docs/systems/devtools.md
     """
     o, d, p = _np(ray_o), _np(ray_d), _np(state.pivot)
     pos, rot, scl = state.start_position, state.start_rotation, state.start_scale

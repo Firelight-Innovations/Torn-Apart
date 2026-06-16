@@ -154,6 +154,8 @@ class NightSkyDef(ProceduralTextureDef):
         Returns
         -------
         numpy.ndarray — shape ``(H, W, 4)``, dtype ``uint8``, RGBA.
+
+        Docs: docs/systems/procedural.textures.sky.md
         """
         W = int(params.get("width", self.DEFAULT_WIDTH))
         H = int(params.get("height", self.DEFAULT_HEIGHT))

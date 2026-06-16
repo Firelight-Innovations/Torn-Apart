@@ -6,7 +6,6 @@ primitive value objects, geometry containers, and per-element plan entities.
 All types round-trip through plain dicts via ``to_dict()``/``from_dict()``
 (never pickle, never live references) so the ``Saveable`` protocol can persist
 them through delta saves.
-
 Docs: docs/systems/buildings.md
 """
 
@@ -18,6 +17,11 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+# Foundation + RoofSlab (the horizontal-slab value objects) live in
+# buildings/_impl/types.py to keep this module under the line cap; re-exported
+# here so `from fire_engine.buildings.types import Foundation` still resolves.
+from fire_engine.buildings._impl.types import Foundation as Foundation
+from fire_engine.buildings._impl.types import RoofSlab as RoofSlab
 from fire_engine.buildings.enums import OpeningKind, WallKind
 from fire_engine.core.config import Config
 
@@ -56,6 +60,7 @@ class BuildingDefaults:
     wall_thickness_m   : wall thickness when ``add_wall`` gets none.
     slab_thickness_m   : floor/ceiling/roof slab thickness.
     foundation_depth_m : foundation slab depth below local z=0.
+    Docs: docs/systems/buildings.md
     """
 
     storey_height_m: float
@@ -72,6 +77,7 @@ class BuildingDefaults:
         -------
         >>> BuildingDefaults.from_config(Config()).wall_thickness_m
         0.3
+        Docs: docs/systems/buildings.md
         """
         return cls(
             storey_height_m=cfg.building_default_storey_height_m,
@@ -81,7 +87,9 @@ class BuildingDefaults:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        """Plain-primitive dict (delta-save payload)."""
+        """Plain-primitive dict (delta-save payload).
+        Docs: docs/systems/buildings.md
+        """
         return {
             "storey_height_m": float(self.storey_height_m),
             "wall_thickness_m": float(self.wall_thickness_m),
@@ -91,7 +99,9 @@ class BuildingDefaults:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> BuildingDefaults:
-        """Inverse of :meth:`to_dict`."""
+        """Inverse of :meth:`to_dict`.
+        Docs: docs/systems/buildings.md
+        """
         return cls(
             storey_height_m=float(d["storey_height_m"]),
             wall_thickness_m=float(d["wall_thickness_m"]),
@@ -120,6 +130,7 @@ class Opening:
                ``0.0`` (they reach the wall base).
     head_m   : top of the opening above the floor-slab top (m); must exceed
                ``sill_m``.
+    Docs: docs/systems/buildings.md
     """
 
     id: int
@@ -130,7 +141,9 @@ class Opening:
     head_m: float
 
     def to_dict(self) -> dict[str, Any]:
-        """Plain-primitive dict (delta-save payload)."""
+        """Plain-primitive dict (delta-save payload).
+        Docs: docs/systems/buildings.md
+        """
         return {
             "id": int(self.id),
             "kind": self.kind.value,
@@ -142,7 +155,9 @@ class Opening:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Opening:
-        """Inverse of :meth:`to_dict`."""
+        """Inverse of :meth:`to_dict`.
+        Docs: docs/systems/buildings.md
+        """
         return cls(
             id=int(d["id"]),
             kind=OpeningKind(d["kind"]),
@@ -181,6 +196,7 @@ class Wall:
     ...          thickness_m=0.3)
     >>> w.kind is WallKind.SEGMENT and abs(w.length_m() - 4.0) < 1e-9
     True
+    Docs: docs/systems/buildings.md
     """
 
     id: int
@@ -197,15 +213,17 @@ class Wall:
 
     @property
     def kind(self) -> WallKind:
-        """Derived geometry kind: ``ARC`` when ``|bulge|`` is significant."""
+        """Derived geometry kind: ``ARC`` when ``|bulge|`` is significant.
+        Docs: docs/systems/buildings.md
+        """
         return WallKind.ARC if abs(self.bulge) > self._BULGE_EPS else WallKind.SEGMENT
 
-    # ------------------------------------------------------------------
     # Geometry queries
-    # ------------------------------------------------------------------
 
     def chord_m(self) -> float:
-        """Straight-line distance |b - a| in meters."""
+        """Straight-line distance |b - a| in meters.
+        Docs: docs/systems/buildings.md
+        """
         return math.hypot(self.b[0] - self.a[0], self.b[1] - self.a[1])
 
     def arc_params(self) -> tuple[PlanPoint, float, float, float]:
@@ -225,6 +243,7 @@ class Wall:
         ------
         ValueError
             For straight walls (``kind == SEGMENT``) or degenerate chords.
+        Docs: docs/systems/buildings.md
         """
         if self.kind is not WallKind.ARC:
             raise ValueError("arc_params() on a straight wall")
@@ -248,7 +267,9 @@ class Wall:
         return (cx, cy), abs(r), start, sweep
 
     def length_m(self) -> float:
-        """Centerline arclength in meters (chord length for straight walls)."""
+        """Centerline arclength in meters (chord length for straight walls).
+        Docs: docs/systems/buildings.md
+        """
         if self.kind is WallKind.SEGMENT:
             return self.chord_m()
         _, radius, _, sweep = self.arc_params()
@@ -268,6 +289,7 @@ class Wall:
         ----------
         arc_segments_per_quarter : int
             Chords per quarter circle (``Config.building_arc_segments_per_quarter``).
+        Docs: docs/systems/buildings.md
         """
         if self.kind is WallKind.SEGMENT:
             return np.array([self.a, self.b], dtype=np.float64)
@@ -281,12 +303,12 @@ class Wall:
         pts[-1] = self.b
         return pts
 
-    # ------------------------------------------------------------------
     # Serialisation
-    # ------------------------------------------------------------------
 
     def to_dict(self) -> dict[str, Any]:
-        """Plain-primitive dict (delta-save payload)."""
+        """Plain-primitive dict (delta-save payload).
+        Docs: docs/systems/buildings.md
+        """
         return {
             "id": int(self.id),
             "a": [float(self.a[0]), float(self.a[1])],
@@ -299,7 +321,9 @@ class Wall:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Wall:
-        """Inverse of :meth:`to_dict`."""
+        """Inverse of :meth:`to_dict`.
+        Docs: docs/systems/buildings.md
+        """
         h = d.get("height_m")
         return cls(
             id=int(d["id"]),
@@ -332,6 +356,7 @@ class Room:
     meta    : free-form dict of primitives for future systems.
     auto    : True when produced by room auto-detection (re-derivable),
               False when explicitly authored.
+    Docs: docs/systems/buildings.md
     """
 
     id: int
@@ -341,13 +366,17 @@ class Room:
     auto: bool = False
 
     def area_m2(self) -> float:
-        """Polygon area in m² (shoelace, vectorized; positive for CCW)."""
+        """Polygon area in m² (shoelace, vectorized; positive for CCW).
+        Docs: docs/systems/buildings.md
+        """
         x = self.polygon[:, 0]
         y = self.polygon[:, 1]
         return float(0.5 * np.sum(x * np.roll(y, -1) - np.roll(x, -1) * y))
 
     def centroid(self) -> PlanPoint:
-        """Polygon centroid in plan-space meters (vectorized shoelace form)."""
+        """Polygon centroid in plan-space meters (vectorized shoelace form).
+        Docs: docs/systems/buildings.md
+        """
         x = self.polygon[:, 0]
         y = self.polygon[:, 1]
         cross = x * np.roll(y, -1) - np.roll(x, -1) * y
@@ -359,7 +388,9 @@ class Room:
         return cx, cy
 
     def to_dict(self) -> dict[str, Any]:
-        """Plain-primitive dict (delta-save payload)."""
+        """Plain-primitive dict (delta-save payload).
+        Docs: docs/systems/buildings.md
+        """
         return {
             "id": int(self.id),
             "polygon": [[float(p[0]), float(p[1])] for p in self.polygon],
@@ -370,7 +401,9 @@ class Room:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Room:
-        """Inverse of :meth:`to_dict`."""
+        """Inverse of :meth:`to_dict`.
+        Docs: docs/systems/buildings.md
+        """
         return cls(
             id=int(d["id"]),
             polygon=np.array(d["polygon"], dtype=np.float64),
@@ -397,6 +430,7 @@ class StairsStub:
     anchor        : plan point of the bottom step's center.
     direction_rad : plan-space heading of ascent in radians (0 = +x, CCW).
     width_m       : stair width in meters.
+    Docs: docs/systems/buildings.md
     """
 
     id: int
@@ -407,7 +441,9 @@ class StairsStub:
     width_m: float
 
     def to_dict(self) -> dict[str, Any]:
-        """Plain-primitive dict (delta-save payload)."""
+        """Plain-primitive dict (delta-save payload).
+        Docs: docs/systems/buildings.md
+        """
         return {
             "id": int(self.id),
             "storey_from": int(self.storey_from),
@@ -419,7 +455,9 @@ class StairsStub:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> StairsStub:
-        """Inverse of :meth:`to_dict`."""
+        """Inverse of :meth:`to_dict`.
+        Docs: docs/systems/buildings.md
+        """
         return cls(
             id=int(d["id"]),
             storey_from=int(d["storey_from"]),
@@ -427,56 +465,4 @@ class StairsStub:
             anchor=(float(d["anchor"][0]), float(d["anchor"][1])),
             direction_rad=float(d["direction_rad"]),
             width_m=float(d["width_m"]),
-        )
-
-
-@dataclass
-class Foundation:
-    """
-    The foundation slab under the building.
-
-    Occupies local z ``[-depth_m, 0]`` across ``polygon`` (simple CCW
-    plan-space polygon, ``float64 (N, 2)``, not closed).
-    """
-
-    polygon: np.ndarray
-    depth_m: float
-
-    def to_dict(self) -> dict[str, Any]:
-        """Plain-primitive dict (delta-save payload)."""
-        return {
-            "polygon": [[float(p[0]), float(p[1])] for p in self.polygon],
-            "depth_m": float(self.depth_m),
-        }
-
-    @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> Foundation:
-        """Inverse of :meth:`to_dict`."""
-        return cls(polygon=np.array(d["polygon"], dtype=np.float64), depth_m=float(d["depth_m"]))
-
-
-@dataclass
-class RoofSlab:
-    """
-    Flat roof slab capping the top storey (pitched roofs are future scope).
-
-    Occupies local z ``[top, top + thickness_m]`` where ``top`` is the top of
-    the highest storey, across ``polygon`` (simple CCW plan-space polygon).
-    """
-
-    polygon: np.ndarray
-    thickness_m: float
-
-    def to_dict(self) -> dict[str, Any]:
-        """Plain-primitive dict (delta-save payload)."""
-        return {
-            "polygon": [[float(p[0]), float(p[1])] for p in self.polygon],
-            "thickness_m": float(self.thickness_m),
-        }
-
-    @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> RoofSlab:
-        """Inverse of :meth:`to_dict`."""
-        return cls(
-            polygon=np.array(d["polygon"], dtype=np.float64), thickness_m=float(d["thickness_m"])
         )

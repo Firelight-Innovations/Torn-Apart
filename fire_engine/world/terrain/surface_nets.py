@@ -47,6 +47,8 @@ brush edits dirty border neighbours — see ``apply_brush``).
 Units: positions in world **meters**, Z-up, voxel = 0.5 m.  Fully vectorised
 numpy — no per-voxel/per-face Python loops (Hard Rule 4); the only loops are
 over the 12 cube edges, 26 neighbour offsets, and 6 face directions.
+
+Docs: docs/systems/world.terrain.md
 """
 
 from __future__ import annotations
@@ -239,6 +241,8 @@ def build_mesh_faceted(
     >>> mesh = build_mesh_faceted(c)
     >>> mesh.face_count, mesh.tri_count, mesh.vertex_count
     (6, 12, 36)
+
+    Docs: docs/systems/world.terrain.md
     """
     n = chunk.materials.shape[0]
     vs = float(chunk._voxel_size)

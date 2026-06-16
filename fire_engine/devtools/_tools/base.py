@@ -21,6 +21,8 @@ class DevTool:
     ----------
     tool_id : str — stable id; the renderer keys persistent widgets off it.
     title   : str — panel caption.
+
+    Docs: docs/systems/devtools.md
     """
 
     tool_id: str = "tool"
@@ -33,11 +35,17 @@ class DevTool:
 
         The renderer rebuilds its widgets whenever this value changes and only
         polls ``Field.get`` otherwise.  A fixed-structure tool can leave it at 0.
+
+        Docs: docs/systems/devtools.md
         """
         return 0
 
     def build(self) -> Panel:
-        """Return the panel to display this frame.  Implemented by subclasses."""
+        """
+        Return the panel to display this frame.  Implemented by subclasses.
+
+        Docs: docs/systems/devtools.md
+        """
         raise NotImplementedError(
             "DevTool subclasses must implement build(); see ARCHITECTURE.md §6."
         )

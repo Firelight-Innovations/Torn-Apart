@@ -58,7 +58,10 @@ _OTHER_AXES: dict[int, tuple[int, int]] = {0: (1, 2), 1: (2, 0), 2: (0, 1)}
 
 
 def build_gizmo_panel(self_obj: DevOverlay) -> tuple[list[Section], list[Button]]:
-    """Build the Gizmo panel: a current-mode read-out + tool buttons."""
+    """Build the Gizmo panel: a current-mode read-out + tool buttons.
+
+    Docs: docs/systems/render.overlay.md
+    """
 
     def mode_label() -> str:
         return self_obj._gizmo_mode.value if self_obj._gizmo_mode is not None else "off"
@@ -74,7 +77,10 @@ def build_gizmo_panel(self_obj: DevOverlay) -> tuple[list[Section], list[Button]
 
 
 def set_gizmo_mode(self_obj: DevOverlay, mode: GizmoMode | None) -> None:
-    """Switch the active gizmo tool (``None`` hides the gizmo)."""
+    """Switch the active gizmo tool (``None`` hides the gizmo).
+
+    Docs: docs/systems/render.overlay.md
+    """
     self_obj._gizmo_mode = mode
     self_obj._gizmo_drag = None  # cancel any in-flight drag on a mode switch
 
@@ -91,6 +97,8 @@ def gizmo_target(self_obj: DevOverlay) -> Any:
     Only a registered, pickable GameObject qualifies — that excludes the
     camera (no AABB; ``FlyController`` overwrites its rotation anyway) and
     picked terrain chunks (not GameObjects), and requires an active mode.
+
+    Docs: docs/systems/render.overlay.md
     """
     if self_obj._gizmo_mode is None:
         return None
@@ -103,7 +111,10 @@ def gizmo_target(self_obj: DevOverlay) -> Any:
 
 
 def gizmo_pivot_size(self_obj: DevOverlay, go: Any) -> tuple[Vec3, float]:
-    """Gizmo pivot (object origin) + a camera-distance-scaled world size."""
+    """Gizmo pivot (object origin) + a camera-distance-scaled world size.
+
+    Docs: docs/systems/render.overlay.md
+    """
     pivot = go.transform.local_position
     cam = self_obj._app.camera_go.transform.position
     dist = (pivot - cam).length
@@ -121,6 +132,8 @@ def begin_gizmo(self_obj: DevOverlay, origin: Vec3, direction: Vec3) -> bool:
 
     Returns ``True`` (click consumed) when a drag began, so the click does
     not also re-select or deselect.
+
+    Docs: docs/systems/render.overlay.md
     """
     go = gizmo_target(self_obj)
     if go is None or self_obj._gizmo_mode is None:
@@ -144,7 +157,10 @@ def begin_gizmo(self_obj: DevOverlay, origin: Vec3, direction: Vec3) -> bool:
 
 
 def update_gizmo(self_obj: DevOverlay) -> None:
-    """Per-frame: apply an active drag and redraw the gizmo (or clear it)."""
+    """Per-frame: apply an active drag and redraw the gizmo (or clear it).
+
+    Docs: docs/systems/render.overlay.md
+    """
     if self_obj._gizmo_np is not None:
         self_obj._gizmo_np.remove_node()
         self_obj._gizmo_np = None
@@ -181,7 +197,10 @@ def update_gizmo(self_obj: DevOverlay) -> None:
 
 
 def gizmo_axis_col(i: int, htype: Any, hovered: Handle | None) -> tuple[float, float, float, float]:
-    """Return the per-axis colour (highlighted when the handle is hovered)."""
+    """Return the per-axis colour (highlighted when the handle is hovered).
+
+    Docs: docs/systems/render.overlay.md
+    """
     from fire_engine.devtools import HandleType
 
     hot = (
@@ -205,7 +224,10 @@ def draw_gizmo_axes(
     size: float,
     hovered: Handle | None,
 ) -> None:
-    """Draw the three axis arrows with cross-tip markers (translate + scale)."""
+    """Draw the three axis arrows with cross-tip markers (translate + scale).
+
+    Docs: docs/systems/render.overlay.md
+    """
     from fire_engine.devtools import HandleType
 
     for i, a in enumerate(_AXIS_DIR):
@@ -231,7 +253,10 @@ def draw_gizmo_rings(
     size: float,
     hovered: Handle | None,
 ) -> None:
-    """Draw three rotation rings (one per axis)."""
+    """Draw three rotation rings (one per axis).
+
+    Docs: docs/systems/render.overlay.md
+    """
     from fire_engine.devtools import HandleType
 
     seg = 48
@@ -255,7 +280,10 @@ def draw_gizmo(
     mode: GizmoMode | None,
     hovered: Handle | None,
 ) -> None:
-    """Assemble and attach the gizmo LineSegs node to the scene."""
+    """Assemble and attach the gizmo LineSegs node to the scene.
+
+    Docs: docs/systems/render.overlay.md
+    """
     from fire_engine.devtools import HandleType
 
     ls = LineSegs("gizmo")

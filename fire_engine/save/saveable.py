@@ -78,6 +78,8 @@ class Saveable(Protocol):
       is the registration order (``SaveManager.register`` call order).  Per
       ARCHITECTURE.md §4a.4 sequence diagram, terrain is applied before AI,
       which is applied before economy/politics.
+
+    Docs: docs/systems/save.md
     """
 
     save_key: str
@@ -96,6 +98,8 @@ class Saveable(Protocol):
             Plain dict of primitives / numpy arrays.  Keys must be serialisable
             to msgpack (strings, ints, floats, or tuples of those — tuple keys
             are encoded specially by SaveManager).
+
+        Docs: docs/systems/save.md
         """
         ...  # pragma: no cover
 
@@ -112,5 +116,7 @@ class Saveable(Protocol):
             As produced by :meth:`get_delta` (decoded from the save file).
             If the system's save_key was absent from the save file, this method
             is not called at all — the system retains its fresh-generated state.
+
+        Docs: docs/systems/save.md
         """
         ...  # pragma: no cover

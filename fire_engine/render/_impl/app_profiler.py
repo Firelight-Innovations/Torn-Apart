@@ -30,6 +30,8 @@ def setup_profiler(self_obj: App) -> None:
 
     Each piece is wrapped in try/except so a profiler failure never takes
     down the game — it logs and disables that piece.
+
+    Docs: docs/systems/render.md
     """
     cfg = self_obj._config
     if not getattr(cfg, "profiler_enabled", False):
@@ -66,7 +68,10 @@ def setup_profiler(self_obj: App) -> None:
 
 
 def maybe_write_snapshot(self_obj: App) -> None:
-    """Write the rolling profiler JSON snapshot if the interval elapsed."""
+    """Write the rolling profiler JSON snapshot if the interval elapsed.
+
+    Docs: docs/systems/render.md
+    """
     if self_obj._snapshot_path is None:
         return
     now = _time.perf_counter()

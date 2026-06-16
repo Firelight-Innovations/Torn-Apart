@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from fire_engine.world.weather._impl._update import release_front
 from fire_engine.world.weather.cells import CellKind, StormCell
 
 if TYPE_CHECKING:
@@ -58,6 +59,8 @@ def summon_cell(
     ...                   player_pos=(0.0, 0.0))
     >>> cid.startswith("s:")
     True
+
+    Docs: docs/systems/world.weather._impl.md
     """
     kind = CellKind(kind)
     r_def, d_def, p_def = ws._summon_defaults[kind]
@@ -95,11 +98,13 @@ def suppress(ws: WeatherSystem, cell_id: str) -> None:
 
     A natural-cell id (``"n:{day}:{slot}"``) is added to the suppression set;
     a summoned-cell id (``"s:{n}"``) is removed outright.  No-op for unknown id.
+
+    Docs: docs/systems/world.weather._impl.md
     """
     cid = str(cell_id)
     if cid.startswith("s:"):
         ws._summoned = [c for c in ws._summoned if c.id != cid]
-        ws._release_front(cid)
+        release_front(ws, cid)
     else:
         ws._suppressed.add(cid)
 
@@ -111,6 +116,8 @@ def clear_all(ws: WeatherSystem) -> None:
     Gives a dev a one-call "clear skies": summoned cells are dropped and the
     natural cells alive at the last update are added to the suppression set.
     Registered gust fronts are released cleanly.
+
+    Docs: docs/systems/world.weather._impl.md
     """
     ws._summoned.clear()
     t = ws._last_abs_t if ws._last_abs_t is not None else 0.0
@@ -118,4 +125,4 @@ def clear_all(ws: WeatherSystem) -> None:
     for c in ws._cells_for_day(day - 1) + ws._cells_for_day(day):
         ws._suppressed.add(c.id)
     for cid in list(ws._active_fronts):
-        ws._release_front(cid)
+        release_front(ws, cid)

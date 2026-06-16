@@ -32,6 +32,8 @@ Threading contract
 Determinism: a job's result depends only on its snapshot, origin, and palette,
 so worker output is byte-identical to a synchronous ``assemble_geometry`` +
 ``pack_volume`` for the same inputs (asserted in ``tests/``).
+
+Docs: docs/systems/lighting.md
 """
 
 from __future__ import annotations
@@ -72,6 +74,8 @@ def assemble_packed(
     cache : ChunkBlockCache, optional
         Per-chunk downsampled-block cache passed through to
         :func:`assemble_geometry`.  Output is byte-identical with or without it.
+
+    Docs: docs/systems/lighting.md
     """
     window = VolumeWindow(cells=job.cells, cell_m=job.cell_m)
     window.origin_cell = job.origin_cell  # placed directly; no recenter needed
@@ -120,6 +124,8 @@ class CascadeAssemblyWorker(QueueWorker[AssemblyJob, AssemblyResult]):
     block_cache : ChunkBlockCache
         Per-chunk coarse-block cache reused across reassemblies (see
         :class:`fire_engine.lighting.volume.ChunkBlockCache`).
+
+    Docs: docs/systems/lighting.md
     """
 
     def __init__(self, *, cache_max_entries: int = 4096) -> None:
@@ -148,9 +154,14 @@ class CascadeAssemblyWorker(QueueWorker[AssemblyJob, AssemblyResult]):
         """
         Drop the block cache's mini-blocks for ``coord`` (main thread, on a
         terrain edit) so the next reassembly recomputes them.  Thread-safe.
+
+        Docs: docs/systems/lighting.md
         """
         self.block_cache.invalidate(coord)
 
     def clear_cache(self) -> None:
-        """Drop the entire block cache (e.g. world reload).  Thread-safe."""
+        """Drop the entire block cache (e.g. world reload).  Thread-safe.
+
+        Docs: docs/systems/lighting.md
+        """
         self.block_cache.clear()

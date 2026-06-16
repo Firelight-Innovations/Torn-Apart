@@ -35,6 +35,8 @@ Example
 
     bridge = PStatsBridge(get_profiler(), connect=True)
     # ... run frames; the pstats GUI now shows Update:Weather etc.
+
+Docs: docs/systems/render.bridges.md
 """
 
 from __future__ import annotations
@@ -72,6 +74,8 @@ class PStatsBridge:
       ``Update`` in the GUI automatically.
     - Collectors are cached by name; creating one per unique scope is cheap and
       one-time.
+
+    Docs: docs/systems/render.bridges.md
     """
 
     def __init__(self, profiler: Profiler, connect: bool = False) -> None:
@@ -95,6 +99,8 @@ class PStatsBridge:
         Returns
         -------
         bool — True if connected (or already connected).
+
+        Docs: docs/systems/render.bridges.md
         """
         try:
             ok = PStatClient.connect(hostname, port)

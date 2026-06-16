@@ -39,6 +39,8 @@ Usage
     arr = get("grass_ground")     # np.ndarray (64, 64, 4) uint8
     # Pass to world/texture_bridge.py for Panda3D use, or preview with:
     # python tools/preview_texture.py grass_ground
+
+Docs: docs/systems/procedural.textures.ground.md
 """
 
 from __future__ import annotations
@@ -155,6 +157,8 @@ class GrassGroundDef(ProceduralTextureDef):
         arr = get("grass_ground")
         # arr.shape == (64, 64, 4), arr.dtype == uint8
         # Visualise: python tools/preview_texture.py grass_ground
+
+    Docs: docs/systems/procedural.textures.ground.md
     """
 
     name = "grass_ground"
@@ -179,6 +183,8 @@ class GrassGroundDef(ProceduralTextureDef):
         -------
         numpy.ndarray
             Shape ``(H, W, 4)``, dtype ``uint8``.
+
+        Docs: docs/systems/procedural.textures.ground.md
         """
         W = int(params.get("width", self.DEFAULT_WIDTH))
         H = int(params.get("height", self.DEFAULT_HEIGHT))

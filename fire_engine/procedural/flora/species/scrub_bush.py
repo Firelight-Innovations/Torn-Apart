@@ -16,6 +16,8 @@ Usage
     set_world_seed(1337)
     scrub = get("bush_scrub")             # TreeVariantSet, 6 unique meshes
     # Preview: python tools/preview_tree.py bush_scrub --obj --png
+
+Docs: docs/systems/procedural.flora.species.md
 """
 
 from __future__ import annotations
@@ -40,6 +42,8 @@ class ScrubBushDef(TreeSpeciesDef):
     Dry scrub bush — ≈1 m of splayed woody stems, dusty olive foliage.
 
     Registered name: ``"bush_scrub"``.  6 variants per world.
+
+    Docs: docs/systems/procedural.flora.species.md
     """
 
     name = "bush_scrub"
@@ -54,7 +58,10 @@ class ScrubBushDef(TreeSpeciesDef):
     LEAF_HOLE_THRESH = 0.22
 
     def grow(self, rng: np.random.Generator, variant: int) -> tuple[TreeSkeleton, Leaves]:
-        """Stub trunk → splayed stems (absolute lengths) → foliage."""
+        """Stub trunk → splayed stems (absolute lengths) → foliage.
+
+        Docs: docs/systems/procedural.flora.species.md
+        """
         sb = SkeletonBuilder(rng)
         stub = sb.trunk(height_m=0.15, base_radius_m=0.06, segments=1, wobble_m=0.0)
         stems = sb.branches(

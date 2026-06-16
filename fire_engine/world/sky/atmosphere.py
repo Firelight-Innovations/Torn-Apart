@@ -55,6 +55,8 @@ Example
         np.array([[0.0, 0.0, 1.0]]),            # zenith view ray
         np.array([0.34, 0.0, 0.94]),            # sun direction
     )                                           # (1, 3) linear HDR radiance
+
+Docs: docs/systems/world.sky.md
 """
 
 from __future__ import annotations
@@ -204,6 +206,8 @@ def transmittance(view_dirs: np.ndarray, samples: int = 64) -> np.ndarray:
     >>> T = transmittance(np.array([0.0, 0.0, 1.0]))   # zenith
     >>> bool(T[0, 0] > T[0, 2])                        # red survives best
     True
+
+    Docs: docs/systems/world.sky.md
     """
     d = _unit_rows(view_dirs)
     n = d.shape[0]
@@ -260,6 +264,8 @@ def sun_radiance(sun_z: float | np.ndarray, samples: int = 64) -> np.ndarray:
     True
     >>> bool(np.all(sun_radiance(-0.1) == 0.0))    # below the -4° cutoff
     True
+
+    Docs: docs/systems/world.sky.md
     """
     z = np.asarray(sun_z, dtype=np.float64)
     scalar = z.ndim == 0
@@ -316,6 +322,8 @@ def sky_radiance(
     >>> L = sky_radiance(np.array([0.0, 0.0, 1.0]), np.array([0.34, 0.0, 0.94]))
     >>> bool(L[0, 2] > L[0, 0])     # zenith is blue at midday
     True
+
+    Docs: docs/systems/world.sky.md
     """
     d = _unit_rows(view_dirs)
     s = _unit_rows(sun_dir)[0]
@@ -435,6 +443,8 @@ def sky_ambient(
     >>> amb = sky_ambient(0.94)
     >>> bool(amb[2] > amb[1] > amb[0])     # blue-dominant at noon
     True
+
+    Docs: docs/systems/world.sky.md
     """
     z = float(sun_z)
     sun = np.array([math.sqrt(max(1.0 - z * z, 0.0)), 0.0, z])

@@ -54,6 +54,8 @@ class LeafLitterComponent(Component):
         Must be the active GPU lighting pipeline; ``None`` disables.
 
     Units: meters, seconds.  World-space Z-up.
+
+    Docs: docs/systems/render.vegetation._impl.md
     """
 
     def __init__(
@@ -72,7 +74,10 @@ class LeafLitterComponent(Component):
         self._time_s: float = 0.0
 
     def start(self) -> None:
-        """Build the shared geom/shader and per-volume instanced nodes (once)."""
+        """Build the shared geom/shader and per-volume instanced nodes (once).
+
+        Docs: docs/systems/render.vegetation._impl.md
+        """
         if self.base is None or self.zone_store is None:
             _log.warning("LeafLitterComponent: missing base/zone_store — disabled")
             self.enabled = False
@@ -109,7 +114,10 @@ class LeafLitterComponent(Component):
         self._build_volumes()
 
     def late_update(self, dt: float) -> None:
-        """Advance the animation clock; rebuild nodes if the zone store changed."""
+        """Advance the animation clock; rebuild nodes if the zone store changed.
+
+        Docs: docs/systems/render.vegetation._impl.md
+        """
         if self._root is None:
             return
         self._time_s += dt
@@ -118,7 +126,10 @@ class LeafLitterComponent(Component):
             self._build_volumes()
 
     def on_destroy(self) -> None:
-        """Detach all leaf nodes."""
+        """Detach all leaf nodes.
+
+        Docs: docs/systems/render.vegetation._impl.md
+        """
         if self._root is not None:
             self._root.remove_node()
             self._root = None

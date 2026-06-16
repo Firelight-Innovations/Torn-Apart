@@ -31,6 +31,8 @@ byte-identical array, on any process or machine.  This is what keeps delta saves
 and reproducible bugs working (CLAUDE.md Hard Rule 2).
 
 Everything is fully vectorised — no per-voxel Python loops (Hard Rule 4).
+
+Docs: docs/systems/world.terrain.md
 """
 
 from __future__ import annotations
@@ -112,6 +114,8 @@ def surface_height(
     (2,)
     >>> bool(np.all(h == 8.0))
     True
+
+    Docs: docs/systems/world.terrain.md
     """
     ground_z = _ground_height(config)
     shape = np.broadcast(world_x, world_y).shape
@@ -167,6 +171,8 @@ def generate_chunk(coord: tuple[int, int, int], config: Config) -> np.ndarray:
     >>> m = generate_chunk((0, 0, 0), cfg)
     >>> m.shape, m.dtype
     ((32, 32, 32), dtype('uint8'))
+
+    Docs: docs/systems/world.terrain.md
     """
     n = int(config.chunk_size)
     vs = float(config.voxel_size)

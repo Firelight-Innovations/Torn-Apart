@@ -63,6 +63,8 @@ def build_unit_quad(name: str = "unit_quad") -> Geom:
         geom_node.add_geom(build_unit_quad("my_quad"))
         node = parent.attach_new_node(geom_node)
         node.set_instance_count(1000)
+
+    Docs: docs/systems/render.md
     """
     fmt = GeomVertexFormat.get_v3t2()
     vdata = GeomVertexData(name, fmt, Geom.UH_static)
@@ -111,6 +113,8 @@ def setup_additive_instanced_node(node: NodePath, geom_node: GeomNode) -> None:
         The instanced NodePath (has the shader + instance count).
     geom_node : GeomNode
         The underlying GeomNode added to *node*.
+
+    Docs: docs/systems/render.md
     """
     node.set_transparency(TransparencyAttrib.M_none)
     node.set_attrib(

@@ -31,8 +31,10 @@ import math
 import numpy as np
 
 from fire_engine.buildings._impl.soup import Soup
-from fire_engine.buildings.enums import RoofKind
+from fire_engine.buildings.enums import RoofKind, SurfaceMaterial
 from fire_engine.buildings.types import RoofSlab
+
+_ROOF = int(SurfaceMaterial.ROOF)
 
 
 def add_roof(soup: Soup, roof: RoofSlab, top_z: float, qpq: int) -> None:
@@ -48,7 +50,7 @@ def add_roof(soup: Soup, roof: RoofSlab, top_z: float, qpq: int) -> None:
     """
     del qpq  # roofs use the outline directly; no arc tessellation needed
     if roof.kind is RoofKind.FLAT:
-        soup.add_slab(roof.polygon, top_z, top_z + roof.thickness_m)
+        soup.add_slab(roof.polygon, top_z, top_z + roof.thickness_m, _ROOF)
         return
     frame = _ridge_frame(roof.polygon, roof.ridge_dir_rad)
     tan_p = math.tan(math.radians(roof.pitch_deg))
@@ -98,7 +100,7 @@ def _shed(soup: Soup, f: _Frame, top_z: float, tan_p: float, oh: float, thick: f
             f.xyz(f.u0 - oh, f.v1 + oh, high_h),
         ]
     )
-    soup.add_prism(plane, thick)
+    soup.add_prism(plane, thick, _ROOF)
     # Triangular side-wall infill at each footprint u edge (rises v0→v1).
     for u, sign in ((f.u0, -1.0), (f.u1, 1.0)):
         tri = np.array(
@@ -142,8 +144,8 @@ def _gable(soup: Soup, f: _Frame, top_z: float, tan_p: float, oh: float, thick: 
             f.xyz(uo1, vmid, ridge_h),
         ]
     )
-    soup.add_prism(low, thick)
-    soup.add_prism(high, thick)
+    soup.add_prism(low, thick, _ROOF)
+    soup.add_prism(high, thick, _ROOF)
     # Gable infill triangles at the footprint u edges (eave top_z → ridge).
     for u, sign in ((f.u0, -1.0), (f.u1, 1.0)):
         tri = np.array([[f.xyz(u, f.v0, top_z), f.xyz(u, f.v1, top_z), f.xyz(u, vmid, ridge_h)]])
@@ -182,4 +184,4 @@ def _hip(soup: Soup, f: _Frame, top_z: float, tan_p: float, oh: float, thick: fl
     end_a = np.array([f.xyz(ur0, vmid, ridge_h), f.xyz(uo0, vo0, eave_h), f.xyz(uo0, vo1, eave_h)])
     end_b = np.array([f.xyz(ur1, vmid, ridge_h), f.xyz(uo1, vo1, eave_h), f.xyz(uo1, vo0, eave_h)])
     for poly in (low, high, end_a, end_b):
-        soup.add_prism(poly, thick)
+        soup.add_prism(poly, thick, _ROOF)

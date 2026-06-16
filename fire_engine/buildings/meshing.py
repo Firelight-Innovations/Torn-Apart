@@ -46,6 +46,7 @@ import numpy as np
 from fire_engine.buildings._impl.roofs import add_roof
 from fire_engine.buildings._impl.seams import corner_filler_polys
 from fire_engine.buildings._impl.soup import Soup, _normalize
+from fire_engine.buildings.enums import SurfaceMaterial
 from fire_engine.buildings.model import (
     Building,
     Storey,
@@ -339,13 +340,20 @@ def mesh_building(building: Building, cfg: Config) -> MeshArrays:
         base = building.storey_base_z(storey.index)
         z_floor0 = base
         z_floor1 = base + storey.slab_m
-        soup.add_slab(_storey_footprint(building, storey), z_floor0, z_floor1)
+        soup.add_slab(
+            _storey_footprint(building, storey), z_floor0, z_floor1, SurfaceMaterial.FLOOR
+        )
         for wall in storey.walls:
             band = wall.height_m if wall.height_m is not None else storey.height_m - storey.slab_m
             _add_wall(soup, wall, z_floor1, z_floor1 + band, qpq)
         _add_corner_fillers(soup, storey, z_floor1, qpq, float(cfg.building_snap_eps_m))
     if building.foundation is not None:
-        soup.add_slab(building.foundation.polygon, -building.foundation.depth_m, 0.0)
+        soup.add_slab(
+            building.foundation.polygon,
+            -building.foundation.depth_m,
+            0.0,
+            SurfaceMaterial.FOUNDATION,
+        )
     if building.roof is not None:
         add_roof(soup, building.roof, building.total_height_m, qpq)
     return soup.build()

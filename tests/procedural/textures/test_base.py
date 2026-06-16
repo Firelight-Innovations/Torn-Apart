@@ -11,6 +11,34 @@ from __future__ import annotations
 import numpy as np
 
 # ---------------------------------------------------------------------------
+# posterise helper
+# ---------------------------------------------------------------------------
+
+
+class TestPosterise:
+    def _palette(self):
+        return np.array([[0, 0, 0], [128, 128, 128], [255, 255, 255]], dtype=np.uint8)
+
+    def test_buckets_by_threshold(self):
+        from fire_engine.procedural.textures.base import posterise
+
+        field = np.array([[0.0, 0.5, 0.99]], dtype=np.float32)
+        out = posterise(field, self._palette(), np.array([0.33, 0.66], dtype=np.float32))
+        assert out.shape == (1, 3, 3)
+        assert np.array_equal(out[0, 0], [0, 0, 0])  # below first threshold
+        assert np.array_equal(out[0, 1], [128, 128, 128])  # middle bucket
+        assert np.array_equal(out[0, 2], [255, 255, 255])  # top bucket
+
+    def test_output_is_uint8_rgb(self):
+        from fire_engine.procedural.textures.base import posterise
+
+        field = np.random.default_rng(0).random((8, 8)).astype(np.float32)
+        out = posterise(field, self._palette(), np.array([0.33, 0.66], dtype=np.float32))
+        assert out.dtype == np.uint8
+        assert out.shape == (8, 8, 3)
+
+
+# ---------------------------------------------------------------------------
 # value_noise helper
 # ---------------------------------------------------------------------------
 

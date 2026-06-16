@@ -66,7 +66,7 @@ from typing import Any
 import numpy as np
 
 from fire_engine.buildings._impl.storey import Storey
-from fire_engine.buildings.enums import OpeningKind, RoofKind, WallKind
+from fire_engine.buildings.enums import OpeningKind, RoofKind, SurfaceMaterial, WallKind
 from fire_engine.buildings.types import (
     BuildingDefaults,
     Foundation,
@@ -92,6 +92,7 @@ __all__ = [
     "Room",
     "StairsStub",
     "Storey",
+    "SurfaceMaterial",
     "Wall",
     "WallKind",
 ]

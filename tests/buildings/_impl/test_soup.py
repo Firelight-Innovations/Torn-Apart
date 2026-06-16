@@ -38,6 +38,23 @@ def test_slab_counts_and_contract():
     assert mesh.tri_count == 12
 
 
+def test_single_material_leaves_face_materials_none():
+    soup = Soup()
+    soup.add_slab(_SQUARE, 0.0, 0.2)  # default material 0
+    assert soup.build().face_materials is None
+
+
+def test_mixed_materials_emit_per_face_uint8_ids():
+    soup = Soup()
+    soup.add_slab(_SQUARE, 0.0, 0.2, material=0)  # 12 faces
+    soup.add_slab(_SQUARE, 0.2, 0.4, material=2)  # 12 faces
+    mesh = soup.build()
+    assert mesh.face_materials is not None
+    assert mesh.face_materials.dtype == np.uint8
+    assert mesh.face_materials.shape[0] == mesh.tri_count
+    assert set(mesh.face_materials.tolist()) == {0, 2}
+
+
 def test_prism_top_bottom_and_sides():
     # A flat square "panel" given 0.5 m drop: 2 top + 2 bottom + 4 side quads.
     top = np.array([[0, 0, 5.0], [4, 0, 5.0], [4, 4, 5.0], [0, 4, 5.0]], dtype=float)

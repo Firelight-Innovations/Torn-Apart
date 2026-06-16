@@ -8,11 +8,12 @@ Docs: docs/systems/buildings.md
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import Enum, IntEnum
 
 __all__ = [
     "OpeningKind",
     "RoofKind",
+    "SurfaceMaterial",
     "WallKind",
 ]
 
@@ -59,3 +60,24 @@ class RoofKind(Enum):
     SHED = "shed"
     GABLE = "gable"
     HIP = "hip"
+
+
+class SurfaceMaterial(IntEnum):
+    """
+    Which material/texture a building surface is drawn with.
+
+    The mesher tags every face with one of these ids (stored in
+    ``MeshArrays.face_materials``); the renderer splits the building geom by id
+    and binds a distinct procedural albedo per material (``WALL`` →
+    ``plaster_wall``, ``FLOOR`` → ``wood_floor``, ``ROOF`` → ``roof_shingle``,
+    ``FOUNDATION`` → ``stone_foundation``).  ``WALL`` is ``0`` so an untagged
+    face defaults to the wall material.  ``IntEnum`` so the value drops straight
+    into the ``uint8`` ``face_materials`` array.
+
+    Docs: docs/systems/buildings.md
+    """
+
+    WALL = 0
+    FLOOR = 1
+    ROOF = 2
+    FOUNDATION = 3

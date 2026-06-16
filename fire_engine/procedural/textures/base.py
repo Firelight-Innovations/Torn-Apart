@@ -47,7 +47,38 @@ import numpy as np
 
 from fire_engine.procedural.defs import ProceduralDef
 
-__all__ = ["ProceduralTextureDef", "pixel_noise", "value_noise"]
+__all__ = ["ProceduralTextureDef", "pixel_noise", "posterise", "value_noise"]
+
+
+def posterise(field: np.ndarray, palette: np.ndarray, thresholds: np.ndarray) -> np.ndarray:
+    """
+    Map a float ``(H, W)`` field in ``[0, 1]`` to a fixed RGB ``palette``.
+
+    Hard-thresholded (no interpolation) for the engine-wide pixel-art look:
+    ``thresholds`` (ascending, ``len(palette) - 1`` entries) split ``[0, 1]``
+    into ``len(palette)`` buckets and each pixel takes its bucket's colour.
+
+    Parameters
+    ----------
+    field : numpy.ndarray
+        ``(H, W)`` float field in ``[0, 1]``.
+    palette : numpy.ndarray
+        ``(K, 3)`` uint8 RGB colours.
+    thresholds : numpy.ndarray
+        ``(K - 1,)`` ascending split points.
+
+    Returns
+    -------
+    numpy.ndarray
+        ``(H, W, 3)`` uint8 RGB.
+
+    Docs: docs/systems/procedural.textures.md
+    """
+    h, w = field.shape
+    idx = np.searchsorted(thresholds, field.ravel(), side="right").astype(np.int32)
+    np.clip(idx, 0, len(palette) - 1, out=idx)
+    result: np.ndarray = palette[idx].reshape(h, w, 3)
+    return result
 
 
 # ---------------------------------------------------------------------------

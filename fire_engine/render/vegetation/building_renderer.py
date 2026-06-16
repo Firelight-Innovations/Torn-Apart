@@ -89,7 +89,8 @@ class BuildingRendererComponent(Component):
 
         self._root: NodePath | None = None
         self._shader: Shader | None = None
-        self._albedo: Texture | None = None
+        self._materials: dict[int, Texture] = {}  # surface-material id → albedo
+        self._fallback: Texture | None = None  # node-level fallback (wall albedo)
         self._nodes: dict[int, NodePath] = {}  # building id → its node
         self._dirty: set[int] = set()  # ids to (re)build
         self._removed: set[int] = set()  # ids to detach
@@ -121,7 +122,10 @@ class BuildingRendererComponent(Component):
             vertex=building_shaders.BUILDING_VERTEX,
             fragment=building_shaders.BUILDING_FRAGMENT,
         )
-        self._albedo = self._load_albedo()
+        self._materials = self._load_material_textures()
+        from fire_engine.buildings import SurfaceMaterial
+
+        self._fallback = self._materials.get(int(SurfaceMaterial.WALL))
 
         # Parent under terrain_root so the lit-surface cascade/fog uniforms are
         # inherited; bind the shadow-refinement gate ON (terrain-grade — walls
@@ -211,12 +215,16 @@ class BuildingRendererComponent(Component):
         mesh = mesh_building(building, self.base._config)
         if mesh.positions.shape[0] == 0:
             return
-        geom_node = to_geom_node(mesh, name=f"building_{building_id}")
+        # Split the geom per surface material (wall/floor/roof/foundation) so
+        # each samples its own albedo; the node texture is the wall fallback.
+        geom_node = to_geom_node(
+            mesh, name=f"building_{building_id}", material_textures=self._materials or None
+        )
         assert self._root is not None
         node = self._root.attach_new_node(geom_node)
         node.set_shader(self._shader)
-        if self._albedo is not None:
-            node.set_texture(self._albedo)
+        if self._fallback is not None:
+            node.set_texture(self._fallback)
         # Building-local mesh + node transform (D6): position + rotation.
         p = building.position
         node.set_pos(float(p.x), float(p.y), float(p.z))
@@ -229,13 +237,31 @@ class BuildingRendererComponent(Component):
         if node is not None:
             node.remove_node()
 
-    def _load_albedo(self) -> Texture | None:
-        """The plaster-wall albedo texture (procedural; flat fallback if absent)."""
-        try:
-            from fire_engine.procedural import get as get_procedural
-            from fire_engine.render.bridges.texture_bridge import to_panda_texture
+    def _load_material_textures(self) -> dict[int, Texture]:
+        """
+        Procedural albedo per :class:`SurfaceMaterial` for the per-material geom
+        split (wall→plaster, floor→wood, roof→shingle, foundation→stone).
 
-            return to_panda_texture(get_procedural("plaster_wall"))
-        except Exception as exc:  # pragma: no cover - content optional
-            _log.warning("plaster_wall texture unavailable (%s) — flat albedo", exc)
-            return None
+        Each entry is a single ``Texture`` (bound to ``p3d_Texture0`` by
+        ``geometry_bridge.make_material_state``).  Any texture that fails to
+        load is skipped — its faces fall back to the node-level wall albedo (or
+        a flat shade if even that is missing), so a missing content def never
+        breaks rendering.
+        """
+        from fire_engine.buildings import SurfaceMaterial
+        from fire_engine.procedural import get as get_procedural
+        from fire_engine.render.bridges.texture_bridge import to_panda_texture
+
+        wanted = {
+            SurfaceMaterial.WALL: "plaster_wall",
+            SurfaceMaterial.FLOOR: "wood_floor",
+            SurfaceMaterial.ROOF: "roof_shingle",
+            SurfaceMaterial.FOUNDATION: "stone_foundation",
+        }
+        textures: dict[int, Texture] = {}
+        for material, def_name in wanted.items():
+            try:
+                textures[int(material)] = to_panda_texture(get_procedural(def_name))
+            except Exception as exc:  # pragma: no cover - content optional
+                _log.warning("building texture %r unavailable (%s) — skipped", def_name, exc)
+        return textures

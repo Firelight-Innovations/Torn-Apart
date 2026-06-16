@@ -46,6 +46,7 @@ from fire_engine.buildings.model import (
     Room,
     StairsStub,
     Storey,
+    SurfaceMaterial,
     Wall,
     WallKind,
 )
@@ -64,6 +65,7 @@ __all__ = [
     "Room",
     "StairsStub",
     "Storey",
+    "SurfaceMaterial",
     "Wall",
     "WallKind",
 ]

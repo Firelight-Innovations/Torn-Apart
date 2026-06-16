@@ -58,10 +58,14 @@ class Soup:
         self._pos: list[np.ndarray] = []
         self._nrm: list[np.ndarray] = []
         self._uv: list[np.ndarray] = []
+        self._mat: list[np.ndarray] = []  # per-face (per-triangle) material id
 
     # -- quads: (Q,4,3) corners + (Q,3) outward normals --------------------
-    def add_quads(self, corners: np.ndarray, normals: np.ndarray) -> None:
+    def add_quads(self, corners: np.ndarray, normals: np.ndarray, material: int = 0) -> None:
         """Add ``(Q, 4, 3)`` quad corners with ``(Q, 3)`` outward normals.
+
+        ``material`` tags both emitted triangles with a surface-material id
+        (see :class:`~fire_engine.buildings.enums.SurfaceMaterial`).
 
         Docs: docs/systems/buildings._impl.md
         """
@@ -88,10 +92,13 @@ class Soup:
         self._pos.append(tri)
         self._uv.append(tuv)
         self._nrm.append(np.repeat(n, 6, axis=0))
+        self._mat.append(np.full(q * 2, int(material), dtype=np.uint8))
 
     # -- triangles: (T,3,3) verts + (T,3) outward normals ------------------
-    def add_tris(self, verts: np.ndarray, normals: np.ndarray) -> None:
+    def add_tris(self, verts: np.ndarray, normals: np.ndarray, material: int = 0) -> None:
         """Add ``(T, 3, 3)`` triangle verts with ``(T, 3)`` outward normals.
+
+        ``material`` tags each triangle with a surface-material id.
 
         Docs: docs/systems/buildings._impl.md
         """
@@ -106,10 +113,13 @@ class Soup:
         self._pos.append(verts.reshape(-1, 3))
         self._uv.append(verts[:, :, :2].reshape(-1, 2))  # planar (x,y) UVs
         self._nrm.append(np.repeat(n, 3, axis=0))
+        self._mat.append(np.full(t, int(material), dtype=np.uint8))
 
     # -- solids ------------------------------------------------------------
-    def add_slab(self, polygon: np.ndarray, z0: float, z1: float) -> None:
+    def add_slab(self, polygon: np.ndarray, z0: float, z1: float, material: int = 0) -> None:
         """Flat slab: top + bottom faces (ear-clipped) and perimeter side quads.
+
+        Every face is tagged ``material``.
 
         Docs: docs/systems/buildings._impl.md
         """
@@ -120,9 +130,9 @@ class Soup:
         if tris.shape[0]:
             flat = poly[tris]  # (T,3,2)
             top = np.dstack([flat, np.full(flat.shape[:2], z1)])
-            self.add_tris(top, np.tile([0.0, 0.0, 1.0], (tris.shape[0], 1)))
+            self.add_tris(top, np.tile([0.0, 0.0, 1.0], (tris.shape[0], 1)), material)
             bot = np.dstack([flat, np.full(flat.shape[:2], z0)])
-            self.add_tris(bot, np.tile([0.0, 0.0, -1.0], (tris.shape[0], 1)))
+            self.add_tris(bot, np.tile([0.0, 0.0, -1.0], (tris.shape[0], 1)), material)
         # Side quads (one per polygon edge); outward normal = right of CCW edge.
         p0 = poly
         p1 = np.roll(poly, -1, axis=0)
@@ -139,9 +149,9 @@ class Soup:
         corners[:, 3, :2] = p0
         corners[:, 3, 2] = z1
         normals = np.concatenate([out, np.zeros((n, 1))], axis=1)
-        self.add_quads(corners, normals)
+        self.add_quads(corners, normals, material)
 
-    def add_prism(self, top: np.ndarray, drop: float) -> None:
+    def add_prism(self, top: np.ndarray, drop: float, material: int = 0) -> None:
         """
         Sloped solid: a planar ``top`` polygon ``(N, 3)`` and a copy dropped
         ``drop`` meters in z, closed with perimeter side quads.
@@ -150,7 +160,7 @@ class Soup:
         below vertical); it is triangulated by its XY projection and the real
         3-D plane normal (oriented +z up) is used for the top/bottom faces so
         the slope lights correctly.  ``drop <= 0`` emits just the single top
-        sheet (a zero-thickness panel).
+        sheet (a zero-thickness panel).  Every face is tagged ``material``.
 
         Docs: docs/systems/buildings._impl.md
         """
@@ -164,11 +174,11 @@ class Soup:
             nrm = np.cross(t0[1] - t0[0], t0[2] - t0[0])
             if nrm[2] < 0.0:
                 nrm = -nrm
-            self.add_tris(top[tris], np.tile(nrm, (tris.shape[0], 1)))
+            self.add_tris(top[tris], np.tile(nrm, (tris.shape[0], 1)), material)
             if drop > _EPS:
                 bottom = top.copy()
                 bottom[:, 2] -= drop
-                self.add_tris(bottom[tris], np.tile(-nrm, (tris.shape[0], 1)))
+                self.add_tris(bottom[tris], np.tile(-nrm, (tris.shape[0], 1)), material)
         if drop <= _EPS:
             return
         # Perimeter side quads connecting the top edge to the dropped edge.
@@ -181,10 +191,14 @@ class Soup:
         out = _normalize(np.stack([e[:, 1], -e[:, 0]], axis=1))
         corners = np.stack([b_bot, p1_bot, p1_top, b_top], axis=1)  # (n,4,3)
         normals = np.concatenate([out, np.zeros((n, 1))], axis=1)
-        self.add_quads(corners, normals)
+        self.add_quads(corners, normals, material)
 
     def build(self) -> MeshArrays:
         """Bake the accumulated faces into a ``MeshArrays`` (flat-white colours).
+
+        ``face_materials`` is a ``uint8`` per-face array when more than one
+        material id was used (so the renderer can split the geom per material),
+        else ``None`` (single-texture fast path).
 
         Docs: docs/systems/buildings._impl.md
         """
@@ -204,4 +218,6 @@ class Soup:
         uv = np.concatenate(self._uv, axis=0).astype(np.float32)
         col = np.ones((pos.shape[0], 4), dtype=np.float32)
         idx = np.arange(pos.shape[0], dtype=np.uint32)
-        return MeshArrays(pos, nrm, uv, col, idx, None, 3)
+        mats = np.concatenate(self._mat, axis=0)
+        face_materials = mats if np.any(mats != 0) else None
+        return MeshArrays(pos, nrm, uv, col, idx, face_materials, 3)

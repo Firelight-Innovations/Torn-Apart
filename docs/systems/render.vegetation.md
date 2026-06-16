@@ -1,5 +1,5 @@
 ﻿# render.vegetation — System Doc
-keywords: render vegetation, grass renderer, GrassRendererComponent, flora renderer, FloraRendererComponent, tree renderer, TreeRendererComponent, mote renderer, DustMoteComponent, building renderer, BuildingRendererComponent, grass_renderer, flora_renderer, tree_renderer, mote_renderer, building_renderer, grass_shaders, flora_shaders, tree_shaders, mote_shaders, building_shaders, GPU instanced grass, GPU instanced flora, GPU instanced trees, impostor, billboard LOD, tree mesh, tree impostor, grass height field, height field, instance count, gl_InstanceID, lowbias32 hash, sway, wind sway, canopy sway, sway_base, sway_gust, gust_freq, lit_surface, lit surface contract, ZoneVolume, zone_store, bake_grass_height_field, instances_data_block, species_mix, BoundingBox set_final, terrain_light_scale, dust mote, leaf litter, tree occluder, canopy extinction, BuildingManager, building mesh, plaster_wall, BuildingChangedEvent, fog inheritance, radiance cascades, froxel fog, gfx_foliage_shadow_refine, u_refine, GPU lighting backend
+keywords: render vegetation, grass renderer, GrassRendererComponent, flora renderer, FloraRendererComponent, tree renderer, TreeRendererComponent, mote renderer, DustMoteComponent, building renderer, BuildingRendererComponent, grass_renderer, flora_renderer, tree_renderer, mote_renderer, building_renderer, grass_shaders, flora_shaders, tree_shaders, mote_shaders, building_shaders, GPU instanced grass, GPU instanced flora, GPU instanced trees, impostor, billboard LOD, tree mesh, tree impostor, grass height field, height field, instance count, gl_InstanceID, lowbias32 hash, sway, wind sway, canopy sway, sway_base, sway_gust, gust_freq, lit_surface, lit surface contract, ZoneVolume, zone_store, bake_grass_height_field, instances_data_block, species_mix, BoundingBox set_final, terrain_light_scale, dust mote, leaf litter, tree occluder, canopy extinction, BuildingManager, building mesh, plaster_wall, wood_floor, roof_shingle, stone_foundation, SurfaceMaterial, per-surface material, material_textures, face_materials, _load_material_textures, BuildingChangedEvent, fog inheritance, radiance cascades, froxel fog, gfx_foliage_shadow_refine, u_refine, GPU lighting backend
 
 > One doc per code package; filename matches the package exactly (`docs/systems/render.vegetation.md` <-> `fire_engine/render/vegetation/`).
 
@@ -79,6 +79,13 @@ pushes a `TreeOccluderSet` via `GpuLightingPipeline.set_static_occluders`.
 
 Building meshes are emitted in building-local space; `building.vert` derives world position as
 `(p3d_ModelMatrix * p3d_Vertex).xyz`. Uses the full `lit_surface.glsl` contract with `u_refine = 1.0`.
+
+Per-surface materials: the mesh carries a `SurfaceMaterial` id per face (`MeshArrays.face_materials`),
+so `to_geom_node(mesh, material_textures=...)` splits the building geom into one Geom per material,
+each bound to its own procedural albedo — `WALL`→`plaster_wall`, `FLOOR`→`wood_floor`,
+`ROOF`→`roof_shingle`, `FOUNDATION`→`stone_foundation` (loaded by `_load_material_textures`). The
+node-level texture is the wall albedo fallback, so a missing content def degrades gracefully rather
+than failing. No shader change — each sub-Geom's RenderState binds its albedo to `p3d_Texture0`.
 
 ## Imports Allowed
 

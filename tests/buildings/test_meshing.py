@@ -32,7 +32,11 @@ def _assert_contract(mesh):
     assert mesh.positions.shape[0] == mesh.uvs.shape[0]
     assert mesh.positions.shape[0] == mesh.indices.shape[0]
     assert np.all(mesh.colors == 1.0)  # flat white
-    assert mesh.face_materials is None
+    # Single-element meshes stay single-texture (None); whole buildings carry a
+    # per-face uint8 material id (wall/floor/roof/foundation split).
+    if mesh.face_materials is not None:
+        assert mesh.face_materials.dtype == np.uint8
+        assert mesh.face_materials.shape[0] == mesh.positions.shape[0] // 3
     # flat unit normals
     nl = np.linalg.norm(mesh.normals, axis=1)
     assert np.allclose(nl, 1.0, atol=1e-5)
@@ -244,6 +248,18 @@ class TestWholeBuilding:
         b = _demo_building()
         mesh = mesh_building(b, _CFG)
         assert mesh.positions[:, 2].min() < 1.0  # local, not offset by +8
+
+    def test_building_faces_are_tagged_per_surface(self):
+        from fire_engine.buildings.enums import SurfaceMaterial
+
+        mesh = mesh_building(_demo_building(), _CFG)
+        assert mesh.face_materials is not None
+        present = set(mesh.face_materials.tolist())
+        # Walls, the floor slab, the foundation, and the flat roof are all here.
+        assert SurfaceMaterial.WALL in present
+        assert SurfaceMaterial.FLOOR in present
+        assert SurfaceMaterial.ROOF in present
+        assert SurfaceMaterial.FOUNDATION in present
 
 
 class TestDemoHouseDef:

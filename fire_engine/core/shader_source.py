@@ -113,6 +113,25 @@ def load_glsl(anchor: str, name: str) -> str:
     ValueError
         If an included file itself contains an include directive.
     """
-    shader_dir = Path(anchor).parent / "shaders"
+    shader_dir = _resolve_shader_dir(anchor, name)
     text = (shader_dir / name).read_text(encoding="utf-8")
     return _expand_includes(text, shader_dir, name)
+
+
+def _resolve_shader_dir(anchor: str, name: str) -> Path:
+    """Nearest ancestor ``shaders/`` directory that actually contains ``name``.
+
+    The immediate ``<dir of anchor>/shaders/`` is checked first (the common
+    case — unchanged behaviour), then each parent in turn.  This lets a shader
+    module that lives in a sub-package (e.g. ``render/sky/sky_shaders.py``)
+    still resolve the package's shared ``shaders/`` dir (``render/shaders/``)
+    without duplicating GLSL per sub-package.  If nothing matches, the immediate
+    directory is returned so the subsequent read raises a clear
+    ``FileNotFoundError`` at the expected path.
+    """
+    start = Path(anchor).parent
+    for directory in [start, *start.parents]:
+        candidate = directory / "shaders"
+        if (candidate / name).is_file():
+            return candidate
+    return start / "shaders"

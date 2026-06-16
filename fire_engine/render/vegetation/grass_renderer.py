@@ -76,8 +76,8 @@ from fire_engine.core import (
     TerrainEditedEvent,
     get_logger,
 )
-from fire_engine.render import grass_shaders
 from fire_engine.render.component import Component
+from fire_engine.render.vegetation import grass_shaders
 from fire_engine.zones import (
     bake_grass_height_field,
     grass_hash_seed,
@@ -345,7 +345,7 @@ class GrassRendererComponent(Component):
 
     def _upload_field(self, node: NodePath, vol: Any) -> None:
         """Bake the volume's height field and bind it as u_height_field."""
-        from fire_engine.render.texture_bridge import to_field_texture
+        from fire_engine.render.bridges.texture_bridge import to_field_texture
 
         field = bake_grass_height_field(vol, self.chunk_provider.chunks, self.base._config)
         node.set_shader_input("u_height_field", to_field_texture(field))
@@ -353,7 +353,7 @@ class GrassRendererComponent(Component):
     def _tuft_texture(self) -> Any:
         """The pixel-art ``grass_tuft`` silhouette as a Panda3D texture."""
         from fire_engine.procedural import get as get_procedural
-        from fire_engine.render.texture_bridge import to_panda_texture
+        from fire_engine.render.bridges.texture_bridge import to_panda_texture
 
         return to_panda_texture(get_procedural("grass_tuft"))
 

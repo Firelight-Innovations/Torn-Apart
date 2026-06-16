@@ -58,38 +58,38 @@ except ImportError:
 
 # --- bridges (panda3d-backed; guarded so the package imports headless) ---
 try:
-    from fire_engine.render.texture_bridge import to_panda_texture
+    from fire_engine.render.bridges.texture_bridge import to_panda_texture
 except ImportError:
     to_panda_texture = None  # type: ignore[assignment]
 
 try:
-    from fire_engine.render.resource_adapter import register_panda_loaders
+    from fire_engine.render.bridges.resource_adapter import register_panda_loaders
 except ImportError:
     register_panda_loaders = None  # type: ignore[assignment]
 
 try:
-    from fire_engine.render.geometry_bridge import to_geom, to_geom_node
+    from fire_engine.render.bridges.geometry_bridge import to_geom, to_geom_node
 except ImportError:
     to_geom = None  # type: ignore[assignment]
     to_geom_node = None  # type: ignore[assignment]
 
 try:
-    from fire_engine.render.devtools_overlay import DevOverlay
+    from fire_engine.render.overlay.devtools_overlay import DevOverlay
 except ImportError:
     DevOverlay = None  # type: ignore[assignment,misc]
 
 try:
-    from fire_engine.render.sky_renderer import SkyRendererComponent
+    from fire_engine.render.sky.sky_renderer import SkyRendererComponent
 except ImportError:
     SkyRendererComponent = None  # type: ignore[assignment,misc]
 
 try:
-    from fire_engine.render.weather_renderer import WeatherMapComponent
+    from fire_engine.render.sky.weather_renderer import WeatherMapComponent
 except ImportError:
     WeatherMapComponent = None  # type: ignore[assignment,misc]
 
 try:
-    from fire_engine.render.rain_renderer import RainRendererComponent
+    from fire_engine.render.sky.rain_renderer import RainRendererComponent
 except ImportError:
     RainRendererComponent = None  # type: ignore[assignment,misc]
 

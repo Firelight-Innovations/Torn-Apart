@@ -25,7 +25,7 @@ Textures (Pillow / p3d):    ``.png``, ``.jpg``
 Usage
 -----
     from fire_engine.resources import default_manager
-    from fire_engine.render.resource_adapter import register_panda_loaders
+    from fire_engine.render.bridges.resource_adapter import register_panda_loaders
 
     register_panda_loaders(default_manager)
 
@@ -224,7 +224,7 @@ def register_panda_loaders(resource_manager: ResourceManager) -> None:
     -------
         # world/app.py boot sequence:
         from fire_engine.resources import default_manager
-        from fire_engine.render.resource_adapter import register_panda_loaders
+        from fire_engine.render.bridges.resource_adapter import register_panda_loaders
 
         register_panda_loaders(default_manager)
 

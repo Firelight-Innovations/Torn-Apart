@@ -18,7 +18,7 @@ Quick start
 -----------
     # Boot (world/app.py):
     from fire_engine.resources import default_manager
-    from fire_engine.render.resource_adapter import register_panda_loaders
+    from fire_engine.render.bridges.resource_adapter import register_panda_loaders
     register_panda_loaders(default_manager)
 
     # Usage anywhere in the engine:

@@ -53,7 +53,7 @@ common per-frame case is a single cheap ``texture()`` bind with no work.
 
 Driver coordination
 --------------------
-The :class:`~fire_engine.render.sky_renderer.SkyRendererComponent` is the single
+The :class:`~fire_engine.render.sky.sky_renderer.SkyRendererComponent` is the single
 driver of ``sky_system.update(player_pos)`` (threading the camera XY through so
 distant storms sample at the camera).  This component therefore NEVER calls
 ``update`` — it only reads the already-advanced weather system through

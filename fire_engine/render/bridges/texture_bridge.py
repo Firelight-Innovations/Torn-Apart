@@ -20,7 +20,7 @@ Usage
 
     from fire_engine.core.rng import set_world_seed
     from fire_engine.procedural import get
-    from fire_engine.render.texture_bridge import to_panda_texture
+    from fire_engine.render.bridges.texture_bridge import to_panda_texture
 
     set_world_seed(42)
     arr = get("wasteland_ground")               # (256, 256, 4) uint8
@@ -84,7 +84,7 @@ def to_panda_texture(rgba: np.ndarray) -> Texture:
     ::
 
         import numpy as np
-        from fire_engine.render.texture_bridge import to_panda_texture
+        from fire_engine.render.bridges.texture_bridge import to_panda_texture
 
         # Solid red 4×4 texture
         arr = np.zeros((4, 4, 4), dtype=np.uint8)

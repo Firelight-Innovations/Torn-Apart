@@ -85,8 +85,8 @@ from fire_engine.core import (
     get_logger,
 )
 from fire_engine.core.rng import for_domain
-from fire_engine.render import rain_shaders
 from fire_engine.render.component import Component
+from fire_engine.render.sky import rain_shaders
 from fire_engine.world.terrain import RainCoverField
 
 __all__ = ["RainRendererComponent"]
@@ -186,7 +186,7 @@ def _build_cylinder(radius_m: float, height_m: float, segments: int) -> GeomNode
 def _rain_streak_texture() -> Texture:
     """The ``rain_streak`` procedural texture, repeat-wrapped + linear-filtered."""
     from fire_engine.procedural import get as get_procedural
-    from fire_engine.render.texture_bridge import to_panda_texture
+    from fire_engine.render.bridges.texture_bridge import to_panda_texture
 
     rgba = get_procedural("rain_streak")
     tex = to_panda_texture(rgba)

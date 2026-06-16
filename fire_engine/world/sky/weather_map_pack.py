@@ -7,7 +7,7 @@ twin of :func:`fire_engine.world.wind.pack_wind_field`: it turns the
 :meth:`fire_engine.world.weather.WeatherMap.rasterize` produces into a **float16**
 buffer in Panda3D's 2-D RAM layout, ready for a single
 ``Texture(F_rgba16).set_ram_image`` on the render thread
-(:class:`fire_engine.render.weather_renderer.WeatherMapComponent`).
+(:class:`fire_engine.render.sky.weather_renderer.WeatherMapComponent`).
 
 Stays in ``sky/`` (headless) rather than ``world/`` per Hard Rule 1: the
 panda3d-free packer returns plain ``bytes``; only ``world/`` constructs the

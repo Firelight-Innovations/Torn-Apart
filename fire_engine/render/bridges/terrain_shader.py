@@ -26,7 +26,7 @@ All lighting inputs (samplers + uniforms) are bound by
 
 Example
 -------
-    from fire_engine.render.terrain_shader import apply_terrain_shader
+    from fire_engine.render.bridges.terrain_shader import apply_terrain_shader
     apply_terrain_shader(app.terrain_root, pipeline)   # once at boot
 
 The GLSL source now lives in ``world/shaders/terrain.vert`` and
@@ -44,7 +44,7 @@ from fire_engine.core.shader_source import load_glsl
 from fire_engine.procedural.textures.ground.dirt_ground import DIRT_PALETTE, DIRT_THRESHOLDS
 from fire_engine.procedural.textures.ground.grass_ground import GRASS_PALETTE, GRASS_THRESHOLDS
 from fire_engine.procedural.textures.ground_lut import build_ground_lut
-from fire_engine.render.texture_bridge import to_field_texture
+from fire_engine.render.bridges.texture_bridge import to_field_texture
 from fire_engine.world.terrain.generation import MATERIAL_DIRT, MATERIAL_GRASS
 
 __all__ = ["TERRAIN_FRAGMENT", "TERRAIN_VERTEX", "apply_terrain_shader"]

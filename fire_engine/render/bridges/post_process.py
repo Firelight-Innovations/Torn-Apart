@@ -51,7 +51,7 @@ from panda3d.core import (
 )
 
 from fire_engine.core.log import get_logger
-from fire_engine.render import post_shaders
+from fire_engine.render.bridges import post_shaders
 
 if TYPE_CHECKING:
     from fire_engine.core.config import Config

@@ -31,7 +31,7 @@ How the human reads it
 Example
 -------
     from fire_engine.core.profiler import get_profiler
-    from fire_engine.render.profiler_bridge import PStatsBridge
+    from fire_engine.render.bridges.profiler_bridge import PStatsBridge
 
     bridge = PStatsBridge(get_profiler(), connect=True)
     # ... run frames; the pstats GUI now shows Update:Weather etc.

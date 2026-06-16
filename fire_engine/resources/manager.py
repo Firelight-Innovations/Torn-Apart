@@ -102,7 +102,7 @@ class ResourceManager:
     -------
         # Boot sequence (world/app.py):
         from fire_engine.resources import manager as resource_manager_module
-        from fire_engine.render.resource_adapter import register_panda_loaders
+        from fire_engine.render.bridges.resource_adapter import register_panda_loaders
 
         # 1. Register real panda3d loaders into the default loaders module
         register_panda_loaders(resource_manager_module.default_manager)

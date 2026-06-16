@@ -42,8 +42,8 @@ from panda3d.core import (
 
 from fire_engine.core import get_logger
 from fire_engine.core.event_bus import BuildingChangedEvent
-from fire_engine.render import building_shaders
 from fire_engine.render.component import Component
+from fire_engine.render.vegetation import building_shaders
 
 __all__ = ["BuildingRendererComponent"]
 
@@ -193,7 +193,7 @@ class BuildingRendererComponent(Component):
         if building is None:
             return
         from fire_engine.buildings.meshing import mesh_building
-        from fire_engine.render.geometry_bridge import to_geom_node
+        from fire_engine.render.bridges.geometry_bridge import to_geom_node
 
         mesh = mesh_building(building, self.base._config)
         if mesh.positions.shape[0] == 0:
@@ -220,7 +220,7 @@ class BuildingRendererComponent(Component):
         """The plaster-wall albedo texture (procedural; flat fallback if absent)."""
         try:
             from fire_engine.procedural import get as get_procedural
-            from fire_engine.render.texture_bridge import to_panda_texture
+            from fire_engine.render.bridges.texture_bridge import to_panda_texture
 
             return to_panda_texture(get_procedural("plaster_wall"))
         except Exception as exc:  # pragma: no cover - content optional

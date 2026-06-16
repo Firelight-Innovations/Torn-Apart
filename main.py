@@ -517,7 +517,7 @@ def _build_gpu_pipeline(cfg, app, chunk_manager, bus):
     from fire_engine.core.rng import for_domain
     from fire_engine.lighting.gpu import GpuLightingPipeline
     from fire_engine.lighting.palette import build_default_palette
-    from fire_engine.render.terrain_shader import apply_terrain_shader
+    from fire_engine.render.bridges.terrain_shader import apply_terrain_shader
 
     palette = build_default_palette()
     for mid, rgb in _GI_TEST_ALBEDO.items():
@@ -618,7 +618,7 @@ def build_demo(load_path: str | None = None):
     _log_renderer_info(app)
 
     # 4. Resource manager loaders — register AFTER the window/loader exists.
-    from fire_engine.render.resource_adapter import register_panda_loaders
+    from fire_engine.render.bridges.resource_adapter import register_panda_loaders
     from fire_engine.resources import default_manager
 
     register_panda_loaders(default_manager)
@@ -745,7 +745,7 @@ def build_demo(load_path: str | None = None):
     #      SkyRendererComponent.update() calls sky_system.update() (registry
     #      runs update before late_update), so no App changes are needed.
     from fire_engine.render import instantiate
-    from fire_engine.render.sky_renderer import SkyRendererComponent
+    from fire_engine.render.sky.sky_renderer import SkyRendererComponent
 
     sky_go = instantiate()
     sky_go.name = "Sky"
@@ -769,7 +769,7 @@ def build_demo(load_path: str | None = None):
     #      SkyRendererComponent is the sole driver of sky_system.update(), so
     #      this component only READS the advanced weather (no double-update).
     #      Gated by gfx_weather_map (kill switch); virga by gfx_cloud_virga.
-    from fire_engine.render.weather_renderer import WeatherMapComponent
+    from fire_engine.render.sky.weather_renderer import WeatherMapComponent
 
     weather_go = instantiate()
     weather_go.name = "WeatherMap"
@@ -813,7 +813,7 @@ def build_demo(load_path: str | None = None):
     #      placed entirely on the GPU (gl_InstanceID hash), lit by the same
     #      radiance cascades as the terrain, swaying with the weather.
     #      GPU lighting backend only (the component disables itself on cpu).
-    from fire_engine.render.grass_renderer import GrassRendererComponent
+    from fire_engine.render.vegetation.grass_renderer import GrassRendererComponent
 
     grass_go = instantiate()
     grass_go.name = "Grass"
@@ -833,7 +833,7 @@ def build_demo(load_path: str | None = None):
     #      baked height fields, cascade lighting, wind-texture sway,
     #      sprite-atlas variants).  GPU lighting backend only (disables
     #      itself on cpu).
-    from fire_engine.render.flora_renderer import FloraRendererComponent
+    from fire_engine.render.vegetation.flora_renderer import FloraRendererComponent
 
     flora_go = instantiate()
     flora_go.name = "Flora"
@@ -854,7 +854,7 @@ def build_demo(load_path: str | None = None):
     #      billboarding trees get).  Species are authored as Python scripts —
     #      see docs/content/tree_species_authoring.md.  GPU lighting backend
     #      only (disables itself on cpu).
-    from fire_engine.render.tree_renderer import TreeRendererComponent
+    from fire_engine.render.vegetation.tree_renderer import TreeRendererComponent
 
     tree_go = instantiate()
     tree_go.name = "Trees"
@@ -879,7 +879,7 @@ def build_demo(load_path: str | None = None):
         from fire_engine.buildings.occlusion import BuildingOccupancyRasterizer
 
         lighting_pipeline.register_geometry_provider(BuildingOccupancyRasterizer(building_manager))
-    from fire_engine.render.building_renderer import BuildingRendererComponent
+    from fire_engine.render.vegetation.building_renderer import BuildingRendererComponent
 
     building_go = instantiate()
     building_go.name = "Buildings"
@@ -897,7 +897,7 @@ def build_demo(load_path: str | None = None):
     #      after the first upload, so grass samples the travelling gust field.
     #      GPU lighting backend only (disables itself + leaves the scalar
     #      fallback on cpu); it OWNS the venturi worker and stops it on destroy.
-    from fire_engine.render.wind_renderer import WindSystemComponent
+    from fire_engine.render.sky.wind_renderer import WindSystemComponent
 
     wind_go = instantiate()
     wind_go.name = "Wind"
@@ -920,7 +920,7 @@ def build_demo(load_path: str | None = None):
     #      renders on every "trees" zone volume (settles in calm air, streams in
     #      gusts/storms).  GPU lighting backend only (they disable themselves on
     #      cpu / when no wind field — same gate as grass + the wind component).
-    from fire_engine.render.mote_renderer import (
+    from fire_engine.render.vegetation.mote_renderer import (
         DustMoteComponent,
         LeafLitterComponent,
     )
@@ -955,7 +955,7 @@ def build_demo(load_path: str | None = None):
     #      wind / fog / camera + weather-map contracts arrive automatically.
     #      Gated by gfx_rain_mode ("off"/"cylinders"/"particles") +
     #      gfx_rain_occlusion; GPU lighting backend only (disables itself on cpu).
-    from fire_engine.render.rain_renderer import RainRendererComponent
+    from fire_engine.render.sky.rain_renderer import RainRendererComponent
 
     rain_go = instantiate()
     rain_go.name = "Rain"
@@ -976,7 +976,7 @@ def build_demo(load_path: str | None = None):
     #      re-publishes ThunderEvents (distance/343 delay).  Gated by
     #      gfx_lightning_bolts; GPU lighting backend only (disables itself on
     #      cpu — the headless strike schedule + thunder still run).
-    from fire_engine.render.lightning_renderer import LightningRendererComponent
+    from fire_engine.render.sky.lightning_renderer import LightningRendererComponent
 
     lightning_go = instantiate()
     lightning_go.name = "Lightning"
@@ -999,7 +999,7 @@ def build_demo(load_path: str | None = None):
     #      component disables itself, so the ball drives update() itself (pass
     #      sky_system) so it still has a field to sample.
     if cfg.debug_wind_ball and wind_field is not None:
-        from fire_engine.render.wind_debug import WindBallDebugComponent
+        from fire_engine.render.sky.wind_debug import WindBallDebugComponent
 
         wind_component_active = use_gpu_lighting and lighting_pipeline is not None
         ball_go = instantiate()
@@ -1019,7 +1019,7 @@ def build_demo(load_path: str | None = None):
     #      since FilterManager redirects the whole scene.  Gated by the
     #      [graphics] preset (gfx_post_process); on failure it disables itself
     #      and the surface shaders keep tonemapping internally (no crash).
-    from fire_engine.render.post_process import PostProcessPipeline
+    from fire_engine.render.bridges.post_process import PostProcessPipeline
 
     app.post_process = PostProcessPipeline(app, cfg)
 
@@ -1295,7 +1295,7 @@ def _to_ground_texture():
     panda3d.core.Texture | None
     """
     try:
-        from fire_engine.render.texture_bridge import to_panda_texture
+        from fire_engine.render.bridges.texture_bridge import to_panda_texture
 
         rgba = get_procedural("wasteland_ground")  # (256,256,4) uint8
         return to_panda_texture(rgba)
@@ -1328,7 +1328,7 @@ def _to_material_textures(triples: bool = False):
     dict[int, panda3d.core.Texture | tuple] | None
     """
     try:
-        from fire_engine.render.texture_bridge import to_panda_texture
+        from fire_engine.render.bridges.texture_bridge import to_panda_texture
         from fire_engine.world.terrain import MATERIAL_DIRT, MATERIAL_GRASS
 
         if not triples:

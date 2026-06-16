@@ -618,7 +618,7 @@ class DevOverlay:
         if rain_go is None:
             return None
         try:
-            from fire_engine.render.rain_renderer import RainRendererComponent
+            from fire_engine.render.sky.rain_renderer import RainRendererComponent
 
             comp = rain_go.get_component(RainRendererComponent)
             return getattr(comp, "_cover", None) if comp is not None else None

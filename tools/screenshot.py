@@ -257,7 +257,7 @@ def capture(
 
     if stub_sky:
         # Renderer-only path: swap the stub into the live SkyRendererComponent.
-        from fire_engine.render.sky_renderer import SkyRendererComponent
+        from fire_engine.render.sky.sky_renderer import SkyRendererComponent
 
         if time_of_day is not None:
             app._clock.game_time_of_day = (float(time_of_day) * 3600.0) % _GAME_DAY_S
@@ -402,7 +402,7 @@ def capture(
         # so hide it now and render one more frame before capturing.
         grass_go = getattr(app, "grass_go", None)
         if grass_go is not None:
-            from fire_engine.render.grass_renderer import GrassRendererComponent
+            from fire_engine.render.vegetation.grass_renderer import GrassRendererComponent
 
             gc = grass_go.get_component(GrassRendererComponent)
             if gc is not None and getattr(gc, "_root", None) is not None:

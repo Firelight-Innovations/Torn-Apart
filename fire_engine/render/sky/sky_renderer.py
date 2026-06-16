@@ -36,7 +36,7 @@ Example
 
     from fire_engine.world.sky import SkySystem
     from fire_engine.render import instantiate
-    from fire_engine.render.sky_renderer import SkyRendererComponent
+    from fire_engine.render.sky.sky_renderer import SkyRendererComponent
 
     sky_system = SkySystem(cfg, clock, bus)
     sky_go = instantiate()
@@ -79,8 +79,8 @@ from panda3d.core import (
 
 from fire_engine.core import get_logger
 from fire_engine.core.rng import for_domain
-from fire_engine.render import sky_shaders
 from fire_engine.render.component import Component
+from fire_engine.render.sky import sky_shaders
 
 __all__ = ["SkyRendererComponent"]
 
@@ -331,7 +331,7 @@ def _sky_texture(name: str, fallback: np.ndarray | None = None) -> Texture:
         if fallback is None:
             raise RuntimeError(f"no texture and no fallback for {name!r}")
         rgba = fallback
-    from fire_engine.render.texture_bridge import to_panda_texture
+    from fire_engine.render.bridges.texture_bridge import to_panda_texture
 
     return to_panda_texture(rgba)
 
@@ -538,7 +538,7 @@ class SkyRendererComponent(Component):
             _log.warning("night_sky_cube unavailable (%s) — using fallback", exc)
         if star_cube is None:
             star_cube = _fallback_star_cube(star_count)
-        from fire_engine.render.texture_bridge import to_panda_cubemap
+        from fire_engine.render.bridges.texture_bridge import to_panda_cubemap
 
         dome.set_shader_input("u_star_cube", to_panda_cubemap(star_cube))
         lat_rad = math.radians(
@@ -617,7 +617,7 @@ class SkyRendererComponent(Component):
             _log.info("Volumetric clouds disabled (gfx_clouds=false)")
             return
 
-        from fire_engine.render.texture_bridge import to_panda_texture_3d
+        from fire_engine.render.bridges.texture_bridge import to_panda_texture_3d
 
         node = _build_dome_node(_DOME_RADIUS_M, _DOME_STACKS, _DOME_SLICES)
         clouds = self.base.render.attach_new_node(node)

@@ -71,8 +71,8 @@ from fire_engine.core import (
     ThunderEvent,
     get_logger,
 )
-from fire_engine.render import lightning_shaders
 from fire_engine.render.component import Component
+from fire_engine.render.sky import lightning_shaders
 from fire_engine.world.terrain import RainCoverField
 from fire_engine.world.weather import generate_bolt
 

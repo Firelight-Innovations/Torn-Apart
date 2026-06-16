@@ -161,7 +161,7 @@ def probe(args) -> float:
     # only exists after the first frame, hence after the warmup).
     grass_go = getattr(app, "grass_go", None)
     if grass_go is not None:
-        from fire_engine.render.grass_renderer import GrassRendererComponent
+        from fire_engine.render.vegetation.grass_renderer import GrassRendererComponent
 
         gc = grass_go.get_component(GrassRendererComponent)
         if gc is not None and getattr(gc, "_root", None) is not None:

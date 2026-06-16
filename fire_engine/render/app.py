@@ -79,8 +79,8 @@ if TYPE_CHECKING:
     from fire_engine.core.clock import Clock
     from fire_engine.core.config import Config
     from fire_engine.core.event_bus import EventBus
-    from fire_engine.render.profiler_bridge import PStatsBridge
-    from fire_engine.render.profiler_overlay import ProfilerOverlay
+    from fire_engine.render.bridges.profiler_bridge import PStatsBridge
+    from fire_engine.render.bridges.profiler_overlay import ProfilerOverlay
 
 
 # ---------------------------------------------------------------------------
@@ -349,7 +349,7 @@ class App(ShowBase):  # type: ignore[misc]  # panda3d ShowBase has no stubs; Any
         # alongside our custom collectors.
         if getattr(cfg, "profiler_pstats", False):
             try:
-                from fire_engine.render.profiler_bridge import PStatsBridge
+                from fire_engine.render.bridges.profiler_bridge import PStatsBridge
 
                 self._profiler_bridge = PStatsBridge(self._profiler, connect=True)
             except Exception as exc:
@@ -360,7 +360,7 @@ class App(ShowBase):  # type: ignore[misc]  # panda3d ShowBase has no stubs; Any
         # In-game overlay (F3).
         if getattr(cfg, "profiler_overlay_enabled", True):
             try:
-                from fire_engine.render.profiler_overlay import ProfilerOverlay
+                from fire_engine.render.bridges.profiler_overlay import ProfilerOverlay
 
                 self._profiler_overlay = ProfilerOverlay(self, self._profiler, cfg)
                 self.accept("f3", self._profiler_overlay.toggle)
@@ -683,7 +683,7 @@ class App(ShowBase):  # type: ignore[misc]  # panda3d ShowBase has no stubs; Any
         # Lazy import: terrain → world is an allowed downward dependency, but we
         # import here to keep the module importable when panda3d-only tooling
         # constructs a bare App.
-        from fire_engine.render.geometry_bridge import to_geom_node
+        from fire_engine.render.bridges.geometry_bridge import to_geom_node
 
         # 1. Stream around the camera (light_sampler may be None → full-bright).
         cm.stream_frame(self.camera_go.transform.position, self.light_sampler)

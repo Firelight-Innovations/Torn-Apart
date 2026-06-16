@@ -74,8 +74,8 @@ from panda3d.core import (
 
 from fire_engine.core import get_logger
 from fire_engine.core.rng import for_domain
-from fire_engine.render import mote_shaders
 from fire_engine.render.component import Component
+from fire_engine.render.vegetation import mote_shaders
 from fire_engine.zones import leaf_hash_seed, leaf_instance_count
 
 __all__ = ["DustMoteComponent", "LeafLitterComponent"]
@@ -130,7 +130,7 @@ def _mote_texture(name: str) -> Any:
     from panda3d.core import SamplerState
 
     from fire_engine.procedural import get as get_procedural
-    from fire_engine.render.texture_bridge import to_panda_texture
+    from fire_engine.render.bridges.texture_bridge import to_panda_texture
 
     tex = to_panda_texture(get_procedural(name))
     tex.set_minfilter(SamplerState.FT_linear)

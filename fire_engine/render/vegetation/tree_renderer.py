@@ -76,13 +76,13 @@ from fire_engine.core import (
     get_logger,
 )
 from fire_engine.lighting import TreeOccluderSet
-from fire_engine.render import flora_shaders, tree_shaders
 from fire_engine.render.component import Component
-from fire_engine.render.flora_renderer import _build_cross_geom
+from fire_engine.render.vegetation import flora_shaders, tree_shaders
+from fire_engine.render.vegetation.flora_renderer import _build_cross_geom
 
 # Weather → sway mapping shared with grass/flora so the scalar fallback
 # moves all vegetation in lockstep (scaled per kind via u_sway_gain).
-from fire_engine.render.grass_renderer import (
+from fire_engine.render.vegetation.grass_renderer import (
     _GUST_FREQ_MIN,
     _GUST_FREQ_PER_WIND,
     _GUST_FREQ_RAIN,
@@ -386,7 +386,7 @@ class TreeRendererComponent(Component):
     def _build_volume(self, kind: _TreeKind, vol: Any) -> None:
         """Bake one volume's placements and create its mesh+impostor draws."""
         from fire_engine.procedural import get as get_procedural
-        from fire_engine.render.texture_bridge import to_data_texture_f32
+        from fire_engine.render.bridges.texture_bridge import to_data_texture_f32
 
         cfg = self.base._config
         mix = species_mix_from_params(
@@ -582,7 +582,7 @@ class TreeRendererComponent(Component):
         key = (name, variant)
         geom = self._mesh_geoms.get(key)
         if geom is None:
-            from fire_engine.render.geometry_bridge import to_geom
+            from fire_engine.render.bridges.geometry_bridge import to_geom
 
             geom = to_geom(vs.meshes[variant])
             self._mesh_geoms[key] = geom
@@ -600,7 +600,7 @@ class TreeRendererComponent(Component):
         """The species' bark/leaf atlas as a nearest-filtered texture."""
         tex = self._atlas_tex.get(name)
         if tex is None:
-            from fire_engine.render.texture_bridge import to_panda_texture
+            from fire_engine.render.bridges.texture_bridge import to_panda_texture
 
             tex = to_panda_texture(vs.atlas)
             self._atlas_tex[name] = tex
@@ -610,7 +610,7 @@ class TreeRendererComponent(Component):
         """The species' impostor sprite strip as a texture."""
         tex = self._impostor_tex.get(name)
         if tex is None:
-            from fire_engine.render.texture_bridge import to_panda_texture
+            from fire_engine.render.bridges.texture_bridge import to_panda_texture
 
             tex = to_panda_texture(vs.impostors)
             self._impostor_tex[name] = tex

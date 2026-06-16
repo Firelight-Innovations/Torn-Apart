@@ -1,5 +1,5 @@
 ﻿# render.sky._impl — System Doc
-keywords: sky impl, sky build, sky geom, sky update, sky geometry, dome builder, cloud builder, build_dome, build_clouds, update_dome, update_clouds, update_fog_and_light, update_shooting_star, rain build, build_particles, build_cylinders, update_cylinders, lightning bolt, upload_bolt, advance_bolt, bolt_envelope, bolt_sky_flash, add_flash_light, refresh_cover, cover_z, sky_build, sky_geom, sky_update, rain_build, lightning_bolt, private implementation, 500 line split, C0302
+keywords: sky impl, sky build, sky geom, sky update, sky geometry, dome builder, cloud builder, build_dome, build_clouds, update_dome, update_clouds, update_fog_and_light, update_shooting_star, rain build, build_particles, build_cylinders, update_cylinders, lightning bolt, upload_bolt, advance_bolt, bolt_envelope, bolt_sky_flash, add_flash_light, refresh_cover, cover_z, sky_build, sky_geom, sky_update, rain_build, lightning_bolt, cover_events, edited_chunk_columns, dirty columns, rain cover budget, private implementation, 500 line split, C0302
 
 > One doc per code package; filename matches the package exactly (`docs/systems/render.sky._impl.md` <-> `fire_engine/render/sky/_impl/`).
 
@@ -14,6 +14,7 @@ Five modules live here:
 - **`sky_update.py`** — `update_dome`, `update_shooting_star`, `update_clouds`, `update_fog_and_light`: the per-frame uniform writers called from `SkyRendererComponent.late_update`.
 - **`rain_build.py`** — `build_particles`, `build_cylinders`, `update_cylinders`: geometry builders and the per-frame cylinder scroll update for `RainRendererComponent`.
 - **`lightning_bolt.py`** — `upload_bolt`, `advance_bolt`, `bolt_envelope`, `bolt_sky_flash`, `add_flash_light`, `refresh_cover`, `cover_z`: bolt geometry upload, envelope animation, and roof-aware strike Z helpers for `LightningRendererComponent`.
+- **`cover_events.py`** — `edited_chunk_columns`: parse a `TerrainEditedEvent` payload into `(cx, cy)` chunk columns; shared (panda3d-free) by both `RainRendererComponent` and `LightningRendererComponent` to mark their rain-cover dirty columns.
 
 **Dependency rule**: these modules import FROM their parent component modules only under `TYPE_CHECKING` (for type annotations). They do NOT import at runtime from the component that calls them — only the reverse is allowed (component -> _impl). This prevents circular imports.
 
@@ -39,8 +40,9 @@ For reference, the callable entry points used by the parent modules:
 | `bolt_envelope(bolt)` | `lightning_bolt` | Compute the current `(reveal, flash)` pair from the bolt's age and phase. |
 | `bolt_sky_flash(bolt)` | `lightning_bolt` | Return the scalar sky/cloud flash contribution for this bolt (0..1). |
 | `add_flash_light(component, pos, intensity)` | `lightning_bolt` | Add a transient point-light at the strike position via the lighting pipeline. |
-| `refresh_cover(component)` | `lightning_bolt` | Recenter the rain-cover heightmap if the player has moved past the threshold. |
+| `refresh_cover(component)` | `lightning_bolt` | Full `rebuild_all` only on a recenter/first-commit; otherwise refold a per-frame budget (`rain_cover_budget_columns`) of dirty chunk columns. Mirrors `RainRendererComponent`'s budgeted discipline (avoids the per-frame full rebuild stall). |
 | `cover_z(component, gx, gy)` | `lightning_bolt` | Look up the roof-aware Z at world XY (gx, gy) from the cover heightmap. |
+| `edited_chunk_columns(event)` | `cover_events` | Parse a `TerrainEditedEvent` into `(cx, cy)` chunk columns (shared by rain + lightning cover dirty-marking). |
 
 ## Imports Allowed
 

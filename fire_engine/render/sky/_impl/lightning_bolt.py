@@ -246,7 +246,14 @@ def add_flash_light(
 
 
 def refresh_cover(self_obj: LightningRendererComponent) -> None:
-    """Recenter + rebuild the cover heightmap when the player roams far.
+    """Recenter (full rebuild) on a roam threshold, else refold a budget of columns.
+
+    Mirrors ``RainRendererComponent._refresh_cover``'s budgeted discipline: a full
+    ``rebuild_all`` runs only when the window recenters (or the very first commit);
+    otherwise at most ``rain_cover_budget_columns`` dirty columns are refolded per
+    frame.  This replaces the previous "rebuild the whole window every time any
+    chunk loads" path, which folded all ~hundreds of in-window chunks every frame
+    during streaming (the ~23 ms ``LateUpdate:LightningRendererComponent`` stall).
 
     Extracted from ``LightningRendererComponent._refresh_cover``
     (lightning_renderer.py).
@@ -257,6 +264,11 @@ def refresh_cover(self_obj: LightningRendererComponent) -> None:
     if cover is None:
         return
     cam = _camera_pos(self_obj)
+    chunks = (
+        getattr(self_obj.chunk_provider, "chunks", {})
+        if self_obj.chunk_provider is not None
+        else {}
+    )
     ox, oy = cover.origin_m
     cx_center = ox + 0.5 * cover.span_m
     cy_center = oy + 0.5 * cover.span_m
@@ -265,14 +277,16 @@ def refresh_cover(self_obj: LightningRendererComponent) -> None:
         or abs(cam[0] - cx_center) > self_obj._recenter_threshold_m
         or abs(cam[1] - cy_center) > self_obj._recenter_threshold_m
     ):
-        chunks = (
-            getattr(self_obj.chunk_provider, "chunks", {})
-            if self_obj.chunk_provider is not None
-            else {}
-        )
         cover.recenter((cam[0], cam[1]))
         cover.rebuild_all(chunks)
+        self_obj._dirty_columns.clear()
         self_obj._cover_committed = True
+    elif self_obj._dirty_columns:
+        budget = int(getattr(self_obj.base._config, "rain_cover_budget_columns", 4))
+        take = [
+            self_obj._dirty_columns.pop() for _ in range(min(budget, len(self_obj._dirty_columns)))
+        ]
+        cover.rebuild_columns(chunks, take)
 
 
 def cover_z(

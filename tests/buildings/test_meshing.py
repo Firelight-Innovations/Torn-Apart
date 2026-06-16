@@ -32,7 +32,11 @@ def _assert_contract(mesh):
     assert mesh.positions.shape[0] == mesh.uvs.shape[0]
     assert mesh.positions.shape[0] == mesh.indices.shape[0]
     assert np.all(mesh.colors == 1.0)  # flat white
-    assert mesh.face_materials is None
+    # Single-element meshes stay single-texture (None); whole buildings carry a
+    # per-face uint8 material id (wall/floor/roof/foundation split).
+    if mesh.face_materials is not None:
+        assert mesh.face_materials.dtype == np.uint8
+        assert mesh.face_materials.shape[0] == mesh.positions.shape[0] // 3
     # flat unit normals
     nl = np.linalg.norm(mesh.normals, axis=1)
     assert np.allclose(nl, 1.0, atol=1e-5)
@@ -152,6 +156,76 @@ def _demo_building() -> Building:
     return b
 
 
+class TestSeams:
+    """Iteration-2 gap/seam fixing: floor reaches walls; corners are filled."""
+
+    def test_floor_footprint_padded_to_outer_wall_faces(self):
+        from fire_engine.buildings.meshing import _storey_footprint
+
+        d = BuildingDefaults.from_config(_CFG)
+        b = Building(name="seam", position=Vec3(0, 0, 0), rotation=Quat.identity(), defaults=d)
+        s0 = b.add_storey()
+        t = 0.4
+        for a, c in [((0, 0), (8, 0)), ((8, 0), (8, 6)), ((8, 6), (0, 6)), ((0, 6), (0, 0))]:
+            s0.add_wall(a, c, thickness_m=t)
+        fp = _storey_footprint(b, s0)
+        # Centerlines span [0,8]x[0,6]; the floor must reach the OUTER faces,
+        # i.e. extend ~t/2 beyond the centerline box on every side.
+        assert fp[:, 0].min() <= -t / 2 + 1e-6
+        assert fp[:, 0].max() >= 8 + t / 2 - 1e-6
+        assert fp[:, 1].min() <= -t / 2 + 1e-6
+        assert fp[:, 1].max() >= 6 + t / 2 - 1e-6
+
+    def test_corner_fillers_emitted_at_shared_nodes(self):
+        from fire_engine.buildings.meshing import _add_corner_fillers
+
+        d = BuildingDefaults.from_config(_CFG)
+        b = Building(name="seam", position=Vec3(0, 0, 0), rotation=Quat.identity(), defaults=d)
+        s0 = b.add_storey()
+        for a, c in [((0, 0), (8, 0)), ((8, 0), (8, 6)), ((8, 6), (0, 6)), ((0, 6), (0, 0))]:
+            s0.add_wall(a, c, thickness_m=0.4)
+        soup = _Soup_factory()
+        _add_corner_fillers(soup, s0, 0.0, _QPQ, _CFG.building_snap_eps_m)
+        mesh = soup.build()
+        _assert_contract(mesh)
+        assert _tris(mesh) > 0  # four shared corners each get a filler post
+
+    def test_free_wall_end_gets_no_filler(self):
+        from fire_engine.buildings.meshing import _add_corner_fillers
+
+        d = BuildingDefaults.from_config(_CFG)
+        b = Building(name="seam", position=Vec3(0, 0, 0), rotation=Quat.identity(), defaults=d)
+        s0 = b.add_storey()
+        s0.add_wall((0, 0), (8, 0), thickness_m=0.4)  # lone wall, two free ends
+        soup = _Soup_factory()
+        _add_corner_fillers(soup, s0, 0.0, _QPQ, _CFG.building_snap_eps_m)
+        assert soup.build().is_empty  # no junction → no filler
+
+    def test_corner_fillers_deterministic(self):
+        from fire_engine.buildings.meshing import _add_corner_fillers
+
+        d = BuildingDefaults.from_config(_CFG)
+
+        def _mesh():
+            b = Building(name="s", position=Vec3(0, 0, 0), rotation=Quat.identity(), defaults=d)
+            s0 = b.add_storey()
+            for a, c in [((0, 0), (8, 0)), ((8, 0), (8, 6)), ((8, 6), (0, 6)), ((0, 6), (0, 0))]:
+                s0.add_wall(a, c, thickness_m=0.4)
+            soup = _Soup_factory()
+            _add_corner_fillers(soup, s0, 0.0, _QPQ, _CFG.building_snap_eps_m)
+            return soup.build()
+
+        m1, m2 = _mesh(), _mesh()
+        assert np.array_equal(m1.positions, m2.positions)
+        assert np.array_equal(m1.normals, m2.normals)
+
+
+def _Soup_factory():
+    from fire_engine.buildings.meshing import _Soup
+
+    return _Soup()
+
+
 class TestWholeBuilding:
     def test_building_meshes_nonempty_and_valid(self):
         mesh = mesh_building(_demo_building(), _CFG)
@@ -174,6 +248,18 @@ class TestWholeBuilding:
         b = _demo_building()
         mesh = mesh_building(b, _CFG)
         assert mesh.positions[:, 2].min() < 1.0  # local, not offset by +8
+
+    def test_building_faces_are_tagged_per_surface(self):
+        from fire_engine.buildings.enums import SurfaceMaterial
+
+        mesh = mesh_building(_demo_building(), _CFG)
+        assert mesh.face_materials is not None
+        present = set(mesh.face_materials.tolist())
+        # Walls, the floor slab, the foundation, and the flat roof are all here.
+        assert SurfaceMaterial.WALL in present
+        assert SurfaceMaterial.FLOOR in present
+        assert SurfaceMaterial.ROOF in present
+        assert SurfaceMaterial.FOUNDATION in present
 
 
 class TestDemoHouseDef:

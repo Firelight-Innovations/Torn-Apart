@@ -66,7 +66,7 @@ from typing import Any
 import numpy as np
 
 from fire_engine.buildings._impl.storey import Storey
-from fire_engine.buildings.enums import OpeningKind, WallKind
+from fire_engine.buildings.enums import OpeningKind, RoofKind, SurfaceMaterial, WallKind
 from fire_engine.buildings.types import (
     BuildingDefaults,
     Foundation,
@@ -87,10 +87,12 @@ __all__ = [
     "Opening",
     "OpeningKind",
     "PlanPoint",
+    "RoofKind",
     "RoofSlab",
     "Room",
     "StairsStub",
     "Storey",
+    "SurfaceMaterial",
     "Wall",
     "WallKind",
 ]
@@ -213,17 +215,35 @@ class Building:
         )
         return self.foundation
 
-    def set_roof(self, polygon: Any | None = None, thickness_m: float | None = None) -> RoofSlab:
+    def set_roof(
+        self,
+        polygon: Any | None = None,
+        thickness_m: float | None = None,
+        kind: RoofKind = RoofKind.FLAT,
+        pitch_deg: float = 30.0,
+        ridge_dir_rad: float = 0.0,
+        overhang_m: float = 0.0,
+    ) -> RoofSlab:
         """
-        Define the flat roof slab capping the top storey.
+        Define the roof capping the top storey (flat slab or a pitched shape).
 
         Parameters
         ----------
         polygon : array-like (N, 2) | None
             Simple CCW roof outline; ``None`` → same automatic footprint as
-            :meth:`set_foundation`.
+            :meth:`set_foundation`.  Pitched roofs are generated over this
+            outline's ridge-aligned bounding rectangle.
         thickness_m : float | None
-            Slab thickness; ``None`` → ``defaults.slab_thickness_m``.
+            Slab thickness / roof-plane depth; ``None`` → ``defaults.slab_thickness_m``.
+        kind : RoofKind
+            Roof shape (``FLAT`` default keeps the Iteration-1 flat slab;
+            ``SHED`` / ``GABLE`` / ``HIP`` are pitched).
+        pitch_deg : float
+            Slope of the roof planes from horizontal in degrees (pitched only).
+        ridge_dir_rad : float
+            Plan-space heading of the ridge line in radians, 0 = +x (pitched only).
+        overhang_m : float
+            Eave overhang beyond the outline in meters (pitched only).
 
         Docs: docs/systems/buildings.md
         """
@@ -233,6 +253,10 @@ class Building:
             thickness_m=(
                 self.defaults.slab_thickness_m if thickness_m is None else float(thickness_m)
             ),
+            kind=kind,
+            pitch_deg=float(pitch_deg),
+            ridge_dir_rad=float(ridge_dir_rad),
+            overhang_m=float(overhang_m),
         )
         return self.roof
 
@@ -382,26 +406,42 @@ class Building:
         walls = self.storeys[0].walls
         xy = np.concatenate([w.tessellate(arc_segments_per_quarter=8) for w in walls], axis=0)
         pad = max(w.thickness_m for w in walls) / 2.0
-        hull = _convex_hull(xy)
-        # Pad outward along each hull vertex's angle bisector (vectorized).
-        prev = np.roll(hull, 1, axis=0)
-        nxt = np.roll(hull, -1, axis=0)
-        e_in = hull - prev
-        e_out = nxt - hull
-        # Outward normals of the two adjacent edges (hull is CCW → right
-        # normal points outward).
-        n_in = np.stack([e_in[:, 1], -e_in[:, 0]], axis=1)
-        n_out = np.stack([e_out[:, 1], -e_out[:, 0]], axis=1)
-        n_in /= np.linalg.norm(n_in, axis=1, keepdims=True)
-        n_out /= np.linalg.norm(n_out, axis=1, keepdims=True)
-        bis = n_in + n_out
-        norm = np.linalg.norm(bis, axis=1, keepdims=True)
-        norm[norm < 1e-12] = 1.0
-        bis /= norm
-        # Scale so the *edge* offset is pad (1/cos(half-angle) factor).
-        cos_half = np.clip(np.sum(bis * n_out, axis=1, keepdims=True), 0.2, 1.0)
-        result: np.ndarray = hull + bis * (pad / cos_half)
-        return result
+        return _pad_hull_outward(_convex_hull(xy), pad)
+
+
+def _pad_hull_outward(hull: np.ndarray, pad: float) -> np.ndarray:
+    """
+    Offset a CCW convex hull outward by ``pad`` meters along each vertex's
+    angle bisector (vectorized; ``float64 (H, 2)``).
+
+    Shared by :meth:`Building._auto_footprint` (auto foundation/roof outlines)
+    and the mesher's per-storey floor slab, which pads the wall-centerline hull
+    out to the **outer wall faces** so the floor edge meets the wall instead of
+    stopping ``thickness/2`` short (no floor↔wall seam). ``pad <= 0`` or a
+    degenerate hull (<3 vertices) returns the hull unchanged.
+
+    Docs: docs/systems/buildings.md
+    """
+    if hull.shape[0] < 3 or pad <= 0.0:
+        return hull
+    prev = np.roll(hull, 1, axis=0)
+    nxt = np.roll(hull, -1, axis=0)
+    e_in = hull - prev
+    e_out = nxt - hull
+    # Outward normals of the two adjacent edges (hull is CCW → right normal
+    # points outward).
+    n_in = np.stack([e_in[:, 1], -e_in[:, 0]], axis=1)
+    n_out = np.stack([e_out[:, 1], -e_out[:, 0]], axis=1)
+    n_in /= np.linalg.norm(n_in, axis=1, keepdims=True)
+    n_out /= np.linalg.norm(n_out, axis=1, keepdims=True)
+    bis = n_in + n_out
+    norm = np.linalg.norm(bis, axis=1, keepdims=True)
+    norm[norm < 1e-12] = 1.0
+    bis /= norm
+    # Scale so the *edge* offset is pad (1/cos(half-angle) factor).
+    cos_half = np.clip(np.sum(bis * n_out, axis=1, keepdims=True), 0.2, 1.0)
+    result: np.ndarray = hull + bis * (pad / cos_half)
+    return result
 
 
 def _convex_hull(points: np.ndarray) -> np.ndarray:

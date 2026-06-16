@@ -1,16 +1,19 @@
 # procedural.textures.ground — System Doc
-keywords: ground texture, ground, dirt, grass, wasteland, plaster, wall, dirt_ground, grass_ground, wasteland_ground, plaster_wall, DirtGroundDef, GrassGroundDef, WastelandGroundDef, PlasterWallDef, DIRT_PALETTE, DIRT_THRESHOLDS, GRASS_PALETTE, GRASS_THRESHOLDS, PLASTER_PALETTE, PLASTER_THRESHOLDS, pixel_noise, value_noise, posterise, posterize, palette, ground LUT, ground_lut, cracked earth, dead earth, post-apocalyptic, pixel art, register_def
+keywords: ground texture, ground, dirt, grass, wasteland, plaster, wall, dirt_ground, grass_ground, wasteland_ground, plaster_wall, roof_shingle, wood_floor, stone_foundation, RoofShingleDef, WoodFloorDef, StoneFoundationDef, building material, surface material, roof texture, floor texture, foundation texture, shingle, slate, floorboard, plank, rubble, masonry, DirtGroundDef, GrassGroundDef, WastelandGroundDef, PlasterWallDef, DIRT_PALETTE, DIRT_THRESHOLDS, GRASS_PALETTE, GRASS_THRESHOLDS, PLASTER_PALETTE, PLASTER_THRESHOLDS, ROOF_SHINGLE_PALETTE, WOOD_FLOOR_PALETTE, STONE_FOUNDATION_PALETTE, pixel_noise, value_noise, posterise, posterize, palette, ground LUT, ground_lut, cracked earth, dead earth, post-apocalyptic, pixel art, register_def
 
 > One doc per code package; filename matches the package exactly (`docs/systems/procedural.textures.ground.md` ↔ `fire_engine/procedural/textures/ground/`).
 
 ## Role
 
-`procedural/textures/ground/` is the **ground-surface texture definitions** sub-package of `procedural/textures/`. It collects the four built-in ground and wall texture defs:
+`procedural/textures/ground/` is the **ground-surface texture definitions** sub-package of `procedural/textures/`. It collects the built-in ground texture defs plus the building **surface-material** albedos (the four `SurfaceMaterial` classes the building renderer binds per face):
 
 - `"dirt_ground"` — 64×64 dry post-apocalyptic dirt with dark clod clusters.
 - `"grass_ground"` — 64×64 weathered living grass, crisp pixel-art palette.
 - `"wasteland_ground"` — 256×256 cracked dead earth (smooth `value_noise`, bilinear).
-- `"plaster_wall"` — 64×64 weathered lime-plaster wall albedo for buildings.
+- `"plaster_wall"` — 64×64 weathered lime-plaster wall albedo for buildings (`SurfaceMaterial.WALL`).
+- `"roof_shingle"` — 64×64 weathered slate roof shingles in horizontal courses (`SurfaceMaterial.ROOF`).
+- `"wood_floor"` — 64×64 warm worn-timber floorboards (`SurfaceMaterial.FLOOR`).
+- `"stone_foundation"` — 64×64 coursed grey rubble masonry (`SurfaceMaterial.FOUNDATION`).
 
 `grass_ground` and `dirt_ground` export their palette constants (`GRASS_PALETTE`, `GRASS_THRESHOLDS`, `DIRT_PALETTE`, `DIRT_THRESHOLDS`). The GPU terrain shader bakes them into the world-space palette LUT via `procedural.textures.ground_lut.build_ground_lut` so the in-engine non-repeating ground matches the baked textures exactly.
 

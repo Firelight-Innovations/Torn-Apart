@@ -16,7 +16,7 @@ from typing import Any
 import numpy as np
 
 from fire_engine.buildings.defs import BuildingDef
-from fire_engine.buildings.enums import OpeningKind
+from fire_engine.buildings.enums import OpeningKind, RoofKind
 from fire_engine.buildings.model import Building, BuildingDefaults
 from fire_engine.core.config import Config
 from fire_engine.core.math3d import Quat, Vec3
@@ -205,5 +205,7 @@ class DemoHouseDef(BuildingDef):
         )
 
         b.set_foundation()  # auto hull, 0.5 m deep
-        b.set_roof()  # flat roof slab caps top
+        # Showcase the Iteration-2 pitched roof: a gable along the long (x) axis
+        # with a modest eave overhang.
+        b.set_roof(kind=RoofKind.GABLE, pitch_deg=32.0, ridge_dir_rad=0.0, overhang_m=0.4)
         return b

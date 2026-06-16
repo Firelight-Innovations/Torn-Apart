@@ -67,9 +67,9 @@ class ChunkService:
             else:
                 session = EditorSession.from_seed(int(seed))
         except SaveIncompatibleError as e:
-            raise RpcError(ErrorCode.APP_ERROR, f"incompatible save: {e}")
-        except FileNotFoundError:
-            raise RpcError(ErrorCode.APP_ERROR, f"save not found: {save_path}")
+            raise RpcError(ErrorCode.APP_ERROR, f"incompatible save: {e}") from e
+        except FileNotFoundError as e:
+            raise RpcError(ErrorCode.APP_ERROR, f"save not found: {save_path}") from e
 
         self.daemon.session = session
         self._client_chunks.clear()
@@ -98,7 +98,7 @@ class ChunkService:
         try:
             session.save(path)
         except OSError as e:
-            raise RpcError(ErrorCode.APP_ERROR, f"save failed: {e}")
+            raise RpcError(ErrorCode.APP_ERROR, f"save failed: {e}") from e
         return {"ok": True, "path": path, "edited_chunks": session.edited_chunk_count()}
 
     async def ground_lut(self, params: dict) -> dict:
@@ -227,7 +227,7 @@ class ChunkService:
                 height=float(params.get("height") or 2.0),
             )
         except ValueError as e:
-            raise RpcError(ErrorCode.INVALID_PARAMS, str(e))
+            raise RpcError(ErrorCode.INVALID_PARAMS, str(e)) from e
 
         coords, touched, before, after = session.apply_brush_edit(
             brush, center, mode, int(material)

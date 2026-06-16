@@ -256,7 +256,7 @@ def test_system_no_events_without_bus(cfg):
     from fire_engine.world.weather import WeatherSystem
 
     ws = WeatherSystem(cfg, bus=None)
-    lw = ws.update(0, 3600.0, player_pos=(0.0, 0.0))
+    ws.update(0, 3600.0, player_pos=(0.0, 0.0))
     lw2 = ws.update(0, 3660.0, player_pos=(0.0, 0.0))
     assert lw2 is not None
 

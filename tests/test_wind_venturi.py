@@ -60,7 +60,7 @@ def _chunks_from_region_solid(
     The region's voxel-(0,0) corner sits at world voxel
     ``(origin_cell * vpc)`` on each axis (matching ``column_solid_fraction``).
     """
-    region_vx, region_vy = solid_vox.shape
+    _region_vx, _region_vy = solid_vox.shape
     vx0 = origin_cell[0] * vpc
     vy0 = origin_cell[1] * vpc
     chunks: dict = {}
@@ -73,7 +73,7 @@ def _chunks_from_region_solid(
         return ch
 
     xs, ys = np.nonzero(solid_vox)
-    for lx, ly in zip(xs.tolist(), ys.tolist()):
+    for lx, ly in zip(xs.tolist(), ys.tolist(), strict=True):
         gx = vx0 + lx  # global voxel x
         gy = vy0 + ly
         ccx, ccy = gx // CHUNK, gy // CHUNK
@@ -102,7 +102,7 @@ def _wall_with_gap_job(cfg: Config, seq: int = 1) -> tuple[VenturiJob, int, int]
     """
     cells = 16
     cell_m = float(cfg.wind_cell_m)  # 4.0
-    vpc = int(round(cell_m / VOXEL))  # 8
+    vpc = round(cell_m / VOXEL)  # 8
     region_v = cells * vpc  # 128 voxels per axis
     ground = float(cfg.ground_height_m)
     vz_lo = int(np.floor(ground / VOXEL))
@@ -348,7 +348,7 @@ class TestWindFieldIntegration:
             # Build a full-region wall-with-gap matched to the field's region.
             field.update(0.016, 5.0, sky, player)  # places the region
             origin = field._region.origin_cell
-            vpc = int(round(cell_m / VOXEL))
+            vpc = round(cell_m / VOXEL)
             region_v = cells * vpc
             ground = float(cfg.ground_height_m)
             vz_lo = int(np.floor(ground / VOXEL))
@@ -372,7 +372,6 @@ class TestWindFieldIntegration:
             assert field._venturi_speedup.max() > 1.3
 
             # World XY of the wall cell's gap centre vs an open cell at same y.
-            ox, oy = field._region.origin_m
             wall_world_x = (origin[0] + wall_x + 0.5) * cell_m
             gap_world_y = (origin[1] + gap_y + 0.5) * cell_m
             z = ground + 1.0

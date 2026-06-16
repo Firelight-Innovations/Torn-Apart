@@ -161,7 +161,7 @@ class TestClosestOnAxis:
         d = np.array([0.0, 0.0, -1.0])
         p = np.array([0.0, 0.0, 0.0])
         a = np.array([1.0, 0.0, 0.0])
-        axis_t, ray_s, dist = closest_on_axis(o, d, p, a)
+        axis_t, _ray_s, dist = closest_on_axis(o, d, p, a)
         assert abs(axis_t - 3.0) < 1e-9
         assert dist < 1e-9
 
@@ -174,7 +174,7 @@ class TestClosestOnAxis:
         d = np.array([0.0, 0.0, -1.0])
         p = np.array([0.0, 0.0, 0.0])
         a = np.array([0.0, 1.0, 0.0])
-        axis_t, ray_s, dist = closest_on_axis(o, d, p, a)
+        axis_t, _ray_s, dist = closest_on_axis(o, d, p, a)
         assert abs(axis_t - 5.0) < 1e-9
         # The closest point on the ray to the Y-axis is at (2,5,0); dist from Y-axis = 2.
         assert abs(dist - 2.0) < 1e-9
@@ -366,7 +366,7 @@ class TestUpdateDragTranslateAxis:
             Quat.identity(),
             Vec3(1, 1, 1),
         )
-        pos, rot, scl = update_drag(drag, Vec3(0.5, 0.0, 5.0), Vec3(0.0, 0.0, -1.0))
+        pos, _rot, _scl = update_drag(drag, Vec3(0.5, 0.0, 5.0), Vec3(0.0, 0.0, -1.0))
         assert pos.approx_eq(Vec3(-1.5, 0.0, 0.0), eps=1e-4)
 
     def test_translate_y_axis_drag(self):
@@ -380,7 +380,7 @@ class TestUpdateDragTranslateAxis:
             Quat.identity(),
             Vec3(1, 1, 1),
         )
-        pos, rot, scl = update_drag(drag, Vec3(0.0, 3.5, 5.0), Vec3(0.0, 0.0, -1.0))
+        pos, _rot, _scl = update_drag(drag, Vec3(0.0, 3.5, 5.0), Vec3(0.0, 0.0, -1.0))
         assert pos.approx_eq(Vec3(0.0, 3.0, 0.0), eps=1e-4)
 
     def test_translate_axis_drag_at_rest_returns_start_pos(self):
@@ -425,7 +425,7 @@ class TestUpdateDragTranslatePlane:
             Quat.identity(),
             Vec3(1, 1, 1),
         )
-        pos, rot, scl = update_drag(drag, Vec3(1.3, 0.8, 5.0), Vec3(0.0, 0.0, -1.0))
+        pos, _rot, _scl = update_drag(drag, Vec3(1.3, 0.8, 5.0), Vec3(0.0, 0.0, -1.0))
         # ref_point was (0.3, 0.3, 0.0) on z=0 plane; new hit is (1.3, 0.8, 0.0)
         assert pos.approx_eq(Vec3(1.0, 0.5, 0.0), eps=1e-4)
 
@@ -515,7 +515,7 @@ class TestUpdateDragScaleUniform:
         """
         If ref_dist < 1e-6 (grab exactly at pivot), update_drag returns start_scale.
         """
-        giz = Gizmo(Vec3(0, 0, 0), 1.0, GizmoMode.SCALE)
+        Gizmo(Vec3(0, 0, 0), 1.0, GizmoMode.SCALE)
         handle = Handle(HandleType.UNIFORM, 0)
         # Build a DragState with ref_dist = 0 manually
         state = DragState(
@@ -612,7 +612,7 @@ class TestEdgeCases:
             Quat.identity(),
             Vec3(0, 0, 0),
         )
-        pos, rot, scl = update_drag(drag, Vec3(1.5, 0.0, 5.0), Vec3(0.0, 0.0, -1.0))
+        pos, _rot, scl = update_drag(drag, Vec3(1.5, 0.0, 5.0), Vec3(0.0, 0.0, -1.0))
         assert pos.approx_eq(Vec3(1.0, 0.0, 0.0), eps=1e-4)
         assert scl.approx_eq(Vec3(0, 0, 0))
 

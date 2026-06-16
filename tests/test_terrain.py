@@ -271,7 +271,7 @@ class TestChunkManagerStreaming:
         set_world_seed(1337)
         cfg = load_config()
         cm = ChunkManager(cfg, EventBus())
-        c0 = cm.get_or_create((0, 0, 0))
+        cm.get_or_create((0, 0, 0))
         c1 = cm.get_or_create((1, 0, 0))
         c1.materials[0, 0, 0] ^= 1  # mutate
         c1.edited = True

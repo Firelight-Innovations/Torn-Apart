@@ -242,7 +242,7 @@ class TestPxPerMScaling:
         to stay within cell bounds.
         """
         rng_ref = _make_rng("scale_ref")
-        sk, leaves = _grow_oak(rng_ref)
+        _sk, _leaves = _grow_oak(rng_ref)
         # A small but non-trivial explicit scale that keeps the trunk in view.
         small_scale = 4.0
         large_scale = 10.0

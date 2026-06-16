@@ -253,14 +253,14 @@ class TestMarkDirtyParity:
         field_incr.recenter((CHUNK_M, CHUNK_M * 0.5))
         # Start from a full rebuild so outside cells are populated, then re-run column (0,0).
         field_incr.rebuild_all(chunks)
-        snapshot_outside = field_incr.height.copy()
         field_incr.rebuild_columns(chunks, [(0, 0)])
 
         region_incr = field_incr.height[r0:r1, c0:c1]
         # The affected region must match rebuild_all exactly.
+        diff = np.abs(region_full.astype(np.float64) - region_incr.astype(np.float64))
         assert np.array_equal(region_full, region_incr), (
             "rebuild_columns result differs from rebuild_all in the dirty column region "
-            f"(max delta = {np.max(np.abs(region_full.astype(np.float64) - region_incr.astype(np.float64)))})"
+            f"(max delta = {np.max(diff)})"
         )
 
     def test_rebuild_columns_does_not_touch_outside_cells(self, cfg):

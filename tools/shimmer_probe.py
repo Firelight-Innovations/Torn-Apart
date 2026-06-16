@@ -58,6 +58,7 @@ The final line on stdout is ``SHIMMER_RESULT <flip fraction>`` for scripting.
 from __future__ import annotations
 
 import argparse
+import itertools
 import math
 import os
 import sys
@@ -232,7 +233,7 @@ def probe(args) -> float:
 
     fulls, b0s, b1s, b2s, means = [], [], [], [], []
     heat = np.zeros((h, w), dtype=np.float32)
-    for a, b in zip(frames, frames[1:]):
+    for a, b in itertools.pairwise(frames):
         full, bot, mid, top = _flip_fraction(a, b, args.threshold)
         fulls.append(full)
         b0s.append(bot)

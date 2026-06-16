@@ -306,18 +306,18 @@ class TestEarlyExitConditions:
         assert result.n_leaves == 0
 
     def test_empty_ids_returns_empty(self):
-        sk, limbs, twigs, rng = _fresh_oak(23)
+        sk, _limbs, _twigs, rng = _fresh_oak(23)
         result = leaves_at_tips(sk, np.empty(0, dtype=np.int32), rng, rounds=3, density=0.7)
         assert result.n_leaves == 0
 
     def test_empty_ids_center_shape(self):
-        sk, limbs, twigs, rng = _fresh_oak(23)
+        sk, _limbs, _twigs, rng = _fresh_oak(23)
         result = leaves_at_tips(sk, np.empty(0, dtype=np.int32), rng)
         assert result.center.shape == (0, 3)
 
     def test_ids_with_no_tips_returns_empty(self):
         """Passing only the trunk (which has children) → no tips → empty."""
-        sk, limbs, twigs, rng = _fresh_oak(23)
+        sk, _limbs, _twigs, rng = _fresh_oak(23)
         # Trunk ids all have children (limbs grow from them), so tip_ids is empty.
         trunk_ids = np.array([0], dtype=np.int32)
         # tip_ids of trunk[0] (parent of limbs) should be empty unless it
@@ -337,9 +337,6 @@ class TestMonotonicity:
     def test_higher_density_more_or_equal_leaves(self):
         """Double density should not produce fewer leaves (statistical — large cap)."""
         # We use max_leaves high enough that the cap doesn't interfere.
-        sk, limbs, twigs, rng = _fresh_oak(29)
-        ids = np.concatenate([limbs, twigs])
-
         set_world_seed(29)
         rng_lo = for_domain("test", "mono_lo")
         sk_lo, _, limbs_lo, twigs_lo = _build_oak(rng_lo)
@@ -388,8 +385,6 @@ class TestMaxLeavesCap:
         assert leaves.n_leaves == 50
 
     def test_cap_not_exceeded(self):
-        sk, limbs, twigs, rng = _fresh_oak(37)
-        ids = np.concatenate([limbs, twigs])
         for cap in (10, 25, 100):
             set_world_seed(37)
             rng2 = for_domain("test", "cap_test")

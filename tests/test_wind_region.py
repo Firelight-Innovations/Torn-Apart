@@ -128,7 +128,7 @@ class TestMaybeRecenterReturnValue:
         # Threshold is STRICTLY GREATER THAN margin_cells * cell_m.
         # Pin: player at exactly margin_cells * cell_m from centre → False.
         r = _placed(player_xy=(0.0, 0.0))
-        cx, cy = r.origin_cell
+        cx, _cy = r.origin_cell
         cell_m = r.cell_m
         half = r.cells * 0.5
         centre_x = (cx + half) * cell_m
@@ -139,7 +139,7 @@ class TestMaybeRecenterReturnValue:
 
     def test_just_past_margin_triggers(self):
         r = _placed(player_xy=(0.0, 0.0))
-        cx, cy = r.origin_cell
+        cx, _cy = r.origin_cell
         cell_m = r.cell_m
         half = r.cells * 0.5
         centre_x = (cx + half) * cell_m
@@ -172,8 +172,8 @@ class TestSnapGranularity:
             assert r.origin_cell[1] % r.snap_cells == 0
 
     def test_snap_formula_positive_player(self):
-        # Pin the exact arithmetic: cell = floor(px/cell_m) - cells//2
-        # snapped = floor(cell/snap_cells)*snap_cells
+        # Pin the exact arithmetic:
+        #   cell index = floor(px/cell_m) - cells//2, then rounded down to snap_cells multiple.
         cells, cell_m, snap_cells = 64, 4.0, 8
         px = 100.0
         cell = int(np.floor(px / cell_m)) - cells // 2  # 25 - 32 = -7

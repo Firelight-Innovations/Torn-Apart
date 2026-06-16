@@ -221,7 +221,7 @@ class TestMeshLeavesDeterminism:
 
     def _make_leaves_and_rng(self, seed: int = 77):
         """Return a (Leaves, fresh_rng) pair built from a fixed state."""
-        sk, leaves, _ = _build_sk_and_leaves(seed)
+        _sk, leaves, _ = _build_sk_and_leaves(seed)
         # The rng was advanced by build; return the leaves as-is.
         # For the mesh_leaves call we need a FRESH, separately-seeded rng
         # so we can replay the exact same state twice.
@@ -427,9 +427,6 @@ class TestMeshLeafAreaM2:
     def test_scales_monotonically_with_leaf_count(self):
         # More leaves → larger total area (pin the monotonic direction).
         sk, _, _ = _build_sk_and_leaves(seed=55)
-        set_world_seed(55)
-        rng = for_domain("test", "area_mono")
-
         set_world_seed(55)
         rng_a = for_domain("test", "area_a")
         small_leaves = leaves_at_tips(

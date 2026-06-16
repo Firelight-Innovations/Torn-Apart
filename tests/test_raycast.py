@@ -562,7 +562,7 @@ class TestDeterminism:
     def test_same_inputs_same_hit(self, cfg):
         """Two identical calls must return byte-identical Hit fields."""
         set_world_seed(1337)
-        provider, store = flat_provider(cfg)
+        provider, _store = flat_provider(cfg)
         origin = Vec3(8.0, -4.0, 30.0)
         direction = Vec3(0.0, 0.0, -1.0)
         h1 = raycast_voxel(origin, direction, provider)

@@ -78,7 +78,7 @@ class SceneService:
                 position=pos,
             )
         except SceneError as e:
-            raise RpcError(ErrorCode.INVALID_PARAMS, str(e))
+            raise RpcError(ErrorCode.INVALID_PARAMS, str(e)) from e
         self._push_history(f"create {obj['kind']}", before, store.get_delta())
         await self._broadcast_changed(store)
         return {"ok": True, "object": obj}
@@ -89,7 +89,7 @@ class SceneService:
         try:
             obj = store.rename(int(params["id"]), str(params["name"]))
         except SceneError as e:
-            raise RpcError(ErrorCode.INVALID_PARAMS, str(e))
+            raise RpcError(ErrorCode.INVALID_PARAMS, str(e)) from e
         self._push_history(f"rename {obj['id']}", before, store.get_delta())
         await self._broadcast_changed(store)
         return {"ok": True, "object": obj}
@@ -101,7 +101,7 @@ class SceneService:
         try:
             obj = store.reparent(int(params["id"]), None if parent is None else int(parent))
         except SceneError as e:
-            raise RpcError(ErrorCode.INVALID_PARAMS, str(e))
+            raise RpcError(ErrorCode.INVALID_PARAMS, str(e)) from e
         self._push_history(f"reparent {obj['id']}", before, store.get_delta())
         await self._broadcast_changed(store)
         return {"ok": True, "object": obj}
@@ -117,7 +117,7 @@ class SceneService:
                 int(params["id"]), position=position, rotation=rotation, scale=scale
             )
         except SceneError as e:
-            raise RpcError(ErrorCode.INVALID_PARAMS, str(e))
+            raise RpcError(ErrorCode.INVALID_PARAMS, str(e)) from e
         self._push_history(f"transform {obj['id']}", before, store.get_delta(), coalesce=True)
         await self._broadcast_changed(store)
         return {"ok": True, "object": obj}
@@ -128,7 +128,7 @@ class SceneService:
         try:
             removed = store.delete(int(params["id"]))
         except SceneError as e:
-            raise RpcError(ErrorCode.INVALID_PARAMS, str(e))
+            raise RpcError(ErrorCode.INVALID_PARAMS, str(e)) from e
         self._push_history(f"delete {params['id']}", before, store.get_delta())
         await self._broadcast_changed(store)
         return {"ok": True, "removed": removed}
@@ -146,7 +146,7 @@ class SceneService:
         try:
             obj = store.add_component(int(params["id"]), str(params["type"]))
         except SceneError as e:
-            raise RpcError(ErrorCode.INVALID_PARAMS, str(e))
+            raise RpcError(ErrorCode.INVALID_PARAMS, str(e)) from e
         self._push_history(f"add component {obj['id']}", before, store.get_delta())
         await self._broadcast_changed(store)
         return {"ok": True, "object": obj}
@@ -157,7 +157,7 @@ class SceneService:
         try:
             obj = store.remove_component(int(params["id"]), int(params["index"]))
         except SceneError as e:
-            raise RpcError(ErrorCode.INVALID_PARAMS, str(e))
+            raise RpcError(ErrorCode.INVALID_PARAMS, str(e)) from e
         self._push_history(f"remove component {obj['id']}", before, store.get_delta())
         await self._broadcast_changed(store)
         return {"ok": True, "object": obj}
@@ -175,7 +175,7 @@ class SceneService:
                 enabled=None if enabled is None else bool(enabled),
             )
         except SceneError as e:
-            raise RpcError(ErrorCode.INVALID_PARAMS, str(e))
+            raise RpcError(ErrorCode.INVALID_PARAMS, str(e)) from e
         # Per-(object,index) label so a slider drag coalesces but editing a
         # different component starts a new undo step.
         self._push_history(

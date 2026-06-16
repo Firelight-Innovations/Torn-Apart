@@ -65,7 +65,7 @@ def _solid_job(cfg: Config, *, seq: int = 1, cells: int = 8) -> VenturiJob:
     """
     ground = float(cfg.ground_height_m)
     cell_m = float(cfg.wind_cell_m)
-    vpc = int(round(cell_m / VOXEL))
+    vpc = round(cell_m / VOXEL)
     region_v = cells * vpc
     vz_lo = int(np.floor(ground / VOXEL))
     vz_hi = int(np.ceil((ground + float(cfg.wind_layer_m)) / VOXEL))

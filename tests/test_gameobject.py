@@ -276,7 +276,6 @@ class TestSetActive:
         ComponentRegistry.run_frame(clock)
 
         go.set_active(False)
-        disable_count = rec.log.count("on_disable")
 
         go.set_active(True)
         assert rec.log.count("on_enable") >= 2  # initial + re-enable

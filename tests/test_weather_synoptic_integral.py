@@ -17,6 +17,7 @@ Coverage:
 from __future__ import annotations
 
 import math
+from typing import ClassVar
 
 import numpy as np
 
@@ -152,7 +153,7 @@ class TestScalarVectorEquivalence:
     displacement(t) / displacement([t]) row must all agree.
     """
 
-    _PROBE_TIMES = [0.0, 1.0, 3600.0, DAY, 2.5 * DAY + 1234.5, 7.0 * DAY]
+    _PROBE_TIMES: ClassVar[list] = [0.0, 1.0, 3600.0, DAY, 2.5 * DAY + 1234.5, 7.0 * DAY]
 
     def test_wind_scalar_matches_wind_vec_scalar(self):
         """wind(t)[1] (speed) must equal |wind_vec(t)| and direction must match."""

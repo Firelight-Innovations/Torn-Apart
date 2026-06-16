@@ -68,7 +68,7 @@ class TestAtlasLayout:
 
     def test_half_px_default(self):
         layout = AtlasLayout()
-        # half_px = (width // 2, height)
+        # half_px = (width // 2, height)  # noqa: ERA001
         assert layout.half_px == (32, 64)
 
     def test_half_px_custom(self):

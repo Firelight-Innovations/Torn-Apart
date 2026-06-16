@@ -133,11 +133,12 @@ class EditorSession:
         the viewport fills in from the camera outward.
         """
         ccx, ccy, ccz = self.cm.camera_chunk(center)
-        coords: list[tuple[int, int, int]] = []
-        for dx in range(-radius, radius + 1):
-            for dy in range(-radius, radius + 1):
-                for dz in range(_Z_MIN, _Z_MAX + 1):
-                    coords.append((ccx + dx, ccy + dy, ccz + dz))
+        coords: list[tuple[int, int, int]] = [
+            (ccx + dx, ccy + dy, ccz + dz)
+            for dx in range(-radius, radius + 1)
+            for dy in range(-radius, radius + 1)
+            for dz in range(_Z_MIN, _Z_MAX + 1)
+        ]
         coords.sort(key=lambda c: (c[0] - ccx) ** 2 + (c[1] - ccy) ** 2 + (c[2] - ccz) ** 2)
         return coords
 

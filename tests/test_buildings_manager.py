@@ -103,7 +103,7 @@ class TestEvents:
         # bounds match the building's world AABB
         mn, mx = managed.world_aabb()
         assert e.bounds_min == mn and e.bounds_max == mx
-        assert all(a <= b for a, b in zip(e.bounds_min, e.bounds_max))
+        assert all(a <= b for a, b in zip(e.bounds_min, e.bounds_max, strict=True))
 
     def test_modify_and_remove_publish(self):
         bus = EventBus()

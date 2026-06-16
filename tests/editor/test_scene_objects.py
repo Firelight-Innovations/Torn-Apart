@@ -43,7 +43,7 @@ def test_tree_is_depth_first_roots_first():
 
 
 def test_reparent_rejects_self_and_cycles():
-    s, root, cube, child = _build()
+    s, root, _cube, child = _build()
     with pytest.raises(SceneError):
         s.reparent(root["id"], root["id"])  # self-parent
     with pytest.raises(SceneError):

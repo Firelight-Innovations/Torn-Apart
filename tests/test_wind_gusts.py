@@ -156,7 +156,7 @@ class TestEvalGustsShape:
     def test_scalar_positions(self):
         """Single position (0-d-broadcastable) must not crash and return scalar."""
         modes = _modes()
-        gx, gy = eval_gusts(modes, np.float32(0.0), np.float32(0.0), t_eff=0.0, mean=(0.0, 0.0))
+        gx, _gy = eval_gusts(modes, np.float32(0.0), np.float32(0.0), t_eff=0.0, mean=(0.0, 0.0))
         assert np.ndim(gx) == 0 or gx.shape == ()
 
 
@@ -235,8 +235,8 @@ class TestEvalGustsTimeEvolution:
     def test_different_times_produce_different_fields(self):
         modes = _modes()
         X, Y = _grid(16, 4.0)
-        gx0, gy0 = eval_gusts(modes, X, Y, t_eff=0.0, mean=(3.0, 0.0))
-        gx1, gy1 = eval_gusts(modes, X, Y, t_eff=5.0, mean=(3.0, 0.0))
+        gx0, _gy0 = eval_gusts(modes, X, Y, t_eff=0.0, mean=(3.0, 0.0))
+        gx1, _gy1 = eval_gusts(modes, X, Y, t_eff=5.0, mean=(3.0, 0.0))
         assert not np.array_equal(gx0, gx1), "gust field is static across time"
 
     def test_small_dt_small_change(self):
@@ -247,8 +247,8 @@ class TestEvalGustsTimeEvolution:
         t0 = 100.0
         dt = 0.016
         mean = (5.0, 2.0)
-        gx0, gy0 = eval_gusts(modes, X, Y, t_eff=t0, mean=mean)
-        gx1, gy1 = eval_gusts(modes, X, Y, t_eff=t0 + dt, mean=mean)
+        gx0, _gy0 = eval_gusts(modes, X, Y, t_eff=t0, mean=mean)
+        gx1, _gy1 = eval_gusts(modes, X, Y, t_eff=t0 + dt, mean=mean)
         max_delta = float(np.abs(gx1 - gx0).max())
         # Pin current behaviour: frame-to-frame delta stays well below 0.2
         # (dimensionless gust shape).  Fails if omega or amp becomes absurd.

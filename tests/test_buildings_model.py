@@ -229,7 +229,7 @@ class TestOpenings:
 
 
 # ---------------------------------------------------------------------------
-# Rooms (explicit) / stairs / foundation / roof
+# Rooms (explicit) / stairs / foundation / roof  # noqa: ERA001
 # ---------------------------------------------------------------------------
 
 

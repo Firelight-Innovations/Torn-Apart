@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import math
 import sys
+from functools import partial
 from pathlib import Path
 
 # --- Procedural content: importing the package auto-registers the
@@ -148,6 +149,238 @@ _FLASHLIGHT_RADIUS_M = 36.0
 _FLASHLIGHT_CONE_DEG = 38.0
 
 
+# ---------------------------------------------------------------------------
+# Module-level demo callbacks — bound into build_demo via functools.partial so
+# that the inner-function defs (each +1 McCabe) live here, not inside the
+# already-complex build_demo body.  All mutable shared state is passed as an
+# explicit container (dict/list) so mutations are visible to all bound copies.
+# ---------------------------------------------------------------------------
+
+
+def _cb_fire_explosion(app, chunk_manager, bus, lighting_pipeline_ref: list, light_sampler) -> None:
+    """Carve a SphereBrush(REMOVE) crater at the terrain under the camera ray.
+
+    Builds the camera ray (origin = camera position, direction = camera
+    forward), raycasts the voxel field, and on a hit carves a crater at the
+    hit point.  apply_brush flags touched chunks dirty + edited and publishes
+    TerrainEditedEvent; remesh_edited then rebuilds the crater chunks (and
+    their border neighbours) immediately — bypassing the 2-chunk streaming
+    budget — so the crater geometry and its relight (the lighting pipeline's
+    own same-frame edit path) appear together on the very next rendered
+    frame, with no see-through hole while neighbours wait their turn.
+    Bound to left-click (while flying) and to the dev overlay's
+    "Fire Explosion" action button.
+    """
+    origin = app.camera_go.transform.position
+    direction = app.camera_go.transform.forward
+    hit = raycast_voxel(
+        origin,
+        direction,
+        chunk_manager.get_or_create,
+        max_distance_m=_RAY_MAX_DISTANCE_M,
+    )
+    if hit is None:
+        _log.debug("Click: no terrain hit within %.0f m", _RAY_MAX_DISTANCE_M)
+        return
+    # hit.point is the world-space entry point of the solid voxel — the
+    # natural explosion centre.
+    touched = apply_brush(
+        SphereBrush(_EXPLOSION_RADIUS_M),
+        hit.point,
+        BrushMode.REMOVE,
+        material=1,
+        chunk_provider=chunk_manager.get_or_create,
+        bus=bus,
+    )
+    # Same-frame remesh: the crater (and the faces it exposed in border
+    # neighbours) must exist before this frame renders, or the player sees
+    # a black hole through the world until the stream budget catches up.
+    chunk_manager.remesh_edited(touched, light_sampler)
+    # Volumetric flash: a brief, bright point light in the radiance
+    # volume — the GI gather carries it into the crater and the
+    # froxel fog catches it as a glow.
+    lighting_pipeline = lighting_pipeline_ref[0]
+    if lighting_pipeline is not None:
+        from fire_engine.lighting.lights import PointLight
+
+        lighting_pipeline.lights.add(
+            PointLight(
+                position=(hit.point.x, hit.point.y, hit.point.z),
+                color=(1.0, 0.55, 0.2),
+                intensity=40.0,
+                radius=18.0,
+                ttl_s=0.5,
+            )
+        )
+    _log.info("Explosion at %s — %d chunk(s) cratered", hit.point, len(touched))
+
+
+def _cb_on_click(app, overlay_ref: list, fire_explosion_fn) -> None:
+    """Left-click dispatch.
+
+    Priority:
+      1. Dev *selection* — when the overlay is open with a free cursor the
+         click picks/outlines the object or chunk under the cursor.
+      2. Re-capture — when the cursor is free but the overlay is closed
+         (the player pressed ESC, or alt-tabbed back in), a click re-grabs
+         the mouse for free-look, mirroring how FPS games reacquire focus.
+      3. Otherwise (flying, cursor captured) it fires the demo explosion.
+    """
+    overlay = overlay_ref[0]
+    if overlay is not None and overlay.handle_world_click():
+        return
+    if not app.input_state.mouse_captured:
+        app.input_state.mouse_captured = True
+        app._set_mouse_capture(True)
+        return
+    fire_explosion_fn()
+
+
+def _cb_on_save(save_manager, save_path: str) -> None:
+    """F5 → save the world (edited chunks only) to the active save path."""
+    try:
+        save_manager.save(save_path)
+        _log.info("Saved to %s", save_path)
+    except OSError as exc:
+        _log.error("Save failed: %s", exc)
+
+
+def _cb_on_load(chunk_manager, save_manager, save_path: str, app) -> None:
+    """F9 → revert to the saved state.
+
+    reset_to_baseline() first wipes ALL current edits back to the procedural
+    baseline (undoing craters dug after the save), then load() re-applies the
+    saved craters via apply_delta.  Both mark chunks dirty; the streaming loop
+    remeshes them and the App re-uploads their Geoms over the next frames.
+    Missing save / incompatible save is logged, never fatal.
+    """
+    chunk_manager.reset_to_baseline()
+    try:
+        save_manager.load(save_path)
+        _log.info("Loaded %s", save_path)
+    except FileNotFoundError:
+        _log.warning("No save at %s yet (press F5 first)", save_path)
+    except SaveIncompatibleError as exc:
+        _log.error("Save incompatible: %s", exc)
+        return
+    # An editor-authored spawn point moves the player there on every load.
+    scene_runtime = getattr(app, "scene_runtime", None)
+    if scene_runtime is not None and scene_runtime.spawn_position is not None:
+        app.camera_go.transform.position = scene_runtime.spawn_position
+
+
+def _cb_on_cycle_weather(weather_cycle: list, weather_index: list, sky_system) -> None:
+    """F6 → force the next weather type in the cycle (None = natural)."""
+    weather_index[0] = (weather_index[0] + 1) % len(weather_cycle)
+    forced = weather_cycle[weather_index[0]]
+    sky_system.weather.force_weather(forced)
+    st = sky_system.state
+    _log.info(
+        "Weather forced to %s (current=%s, coverage=%.2f, fog=%.4f /m, rain=%.2f)",
+        forced.name if forced is not None else "None (natural schedule)",
+        sky_system.weather.current.name,
+        st.cloud_coverage,
+        st.fog_density,
+        st.rain_intensity,
+    )
+
+
+def _cb_on_toggle_time_scale(clock) -> None:
+    """F7 → toggle clock.game_time_scale between 60 (normal) and 1800 (fast)."""
+    clock.game_time_scale = 1800.0 if clock.game_time_scale <= 60.0 else 60.0
+    _log.info(
+        "game_time_scale = %.0f (1 real s = %.0f game s)",
+        clock.game_time_scale,
+        clock.game_time_scale,
+    )
+
+
+def _cb_on_jump_time(clock) -> None:
+    """F8 → jump the game clock forward 6 game-hours (wraps the day)."""
+    new_tod = clock.game_time_of_day + 6.0 * 3600.0
+    if new_tod >= 24.0 * 3600.0:
+        new_tod -= 24.0 * 3600.0
+        clock.game_day += 1
+    clock.game_time_of_day = new_tod
+    _log.info(
+        "Game time jumped to day %d, %02d:%02d",
+        clock.game_day,
+        int(new_tod // 3600),
+        int(new_tod % 3600 // 60),
+    )
+
+
+def _cb_on_drop_torch(app, lighting_pipeline_ref: list) -> None:
+    """L → drop a permanent torch light at the camera position."""
+    lighting_pipeline = lighting_pipeline_ref[0]
+    if lighting_pipeline is None:
+        return
+    from fire_engine.lighting.lights import PointLight
+
+    pos = app.camera_go.transform.position
+    lighting_pipeline.lights.add(
+        PointLight(
+            position=(pos.x, pos.y, pos.z), color=(1.0, 0.62, 0.28), intensity=8.0, radius=16.0
+        )
+    )
+    _log.info("Torch dropped at %s (%d light(s) active)", pos, lighting_pipeline.lights.count)
+
+
+def _cb_on_clear_lights(lighting_pipeline_ref: list) -> None:
+    """K → remove all dynamic lights."""
+    lighting_pipeline = lighting_pipeline_ref[0]
+    if lighting_pipeline is None:
+        return
+    lighting_pipeline.lights.clear()
+    _log.info("Dynamic lights cleared")
+
+
+def _cb_on_toggle_flashlight(app, lighting_pipeline_ref: list, flashlight: dict) -> None:
+    """F → toggle a camera-mounted flashlight (GPU backend only)."""
+    lighting_pipeline = lighting_pipeline_ref[0]
+    if lighting_pipeline is None:
+        return
+    from fire_engine.lighting.lights import SpotLight
+
+    if flashlight["id"] is not None:
+        lighting_pipeline.lights.remove(flashlight["id"])
+        flashlight["id"] = flashlight["light"] = None
+        _log.info("Flashlight OFF")
+        return
+    pos = app.camera_go.transform.position
+    fwd = app.camera_go.transform.forward
+    light = SpotLight(
+        position=(pos.x, pos.y, pos.z),
+        direction=(fwd.x, fwd.y, fwd.z),
+        color=_FLASHLIGHT_COLOR,
+        intensity=_FLASHLIGHT_INTENSITY,
+        radius=_FLASHLIGHT_RADIUS_M,
+        cone_deg=_FLASHLIGHT_CONE_DEG,
+    )
+    flashlight["id"] = lighting_pipeline.lights.add(light)
+    flashlight["light"] = light
+    _log.info("Flashlight ON")
+
+
+def _cb_follow_flashlight(task, app, lighting_pipeline_ref: list, flashlight: dict):
+    """Per-frame: keep the flashlight on the camera (move/turn eps)."""
+    light = flashlight["light"]
+    if light is not None:
+        pos = app.camera_go.transform.position
+        fwd = app.camera_go.transform.forward
+        new_pos = (pos.x, pos.y, pos.z)
+        new_dir = (fwd.x, fwd.y, fwd.z)
+        moved = sum((a - b) ** 2 for a, b in zip(new_pos, light.position, strict=True)) > 0.15**2
+        turned = sum(a * b for a, b in zip(new_dir, light.direction, strict=True)) < math.cos(
+            math.radians(1.5)
+        )
+        if moved or turned:
+            light.position = new_pos
+            light.direction = new_dir
+            lighting_pipeline_ref[0].lights.notify_changed()
+    return task.cont
+
+
 def _ensure_dedicated_gpu() -> None:
     """
     Register this python.exe for the high-performance GPU (Windows).
@@ -251,6 +484,86 @@ def _load_proof_model(app) -> None:
         _log.warning("Proof model load skipped: %s", exc)
 
 
+def _log_renderer_info(app) -> None:
+    """Log the active GPU renderer and warn if the integrated GPU is in use.
+
+    Wrapped in try/except so a failed GSG query never crashes the boot.
+    """
+    try:
+        gsg = app.win.get_gsg()
+        renderer = gsg.get_driver_renderer()
+        _log.info("Rendering on: %s (%s)", renderer, gsg.get_driver_vendor())
+        if "intel" in renderer.lower():
+            _log.warning(
+                "Integrated GPU in use — restart the game to pick up the "
+                "high-performance GPU preference written this boot."
+            )
+    except Exception as exc:
+        _log.debug("Renderer query failed: %s", exc)
+
+
+def _build_gpu_pipeline(cfg, app, chunk_manager, bus):
+    """Construct the GpuLightingPipeline and apply the terrain surface shader.
+
+    Called only when ``cfg.lighting_backend == "gpu"``.  Patches the GI
+    test-room materials into the default palette, creates the pipeline, applies
+    the terrain shader with the procedural ground seed, and binds the
+    lit-surface uniform contract on ``app.render``.
+
+    Returns
+    -------
+    GpuLightingPipeline
+    """
+    from fire_engine.core.rng import for_domain
+    from fire_engine.lighting.gpu import GpuLightingPipeline
+    from fire_engine.lighting.palette import build_default_palette
+    from fire_engine.render.terrain_shader import apply_terrain_shader
+
+    palette = build_default_palette()
+    for mid, rgb in _GI_TEST_ALBEDO.items():
+        palette.albedo[mid] = rgb
+    palette = palette.with_emission(_MAT_GI_GLOW, _GI_GLOW_RADIANCE)
+    lighting_pipeline = GpuLightingPipeline(cfg, app, chunk_manager, bus, palette=palette)
+    app.lighting_pipeline = lighting_pipeline
+    ground_seed = float(for_domain("terrain", "ground").integers(0, 65536))
+    apply_terrain_shader(
+        app.terrain_root,
+        lighting_pipeline,
+        seed=ground_seed,
+        texels_per_m=cfg.ground_texels_per_m,
+        extra_materials=_gi_ground_lut_entries(),
+    )
+    # Bind the lit-surface uniform contract on ``render`` so EVERY shader
+    # that includes lit_surface.glsl — terrain, foliage, future
+    # buildings/NPCs anywhere in the graph — inherits it.
+    lighting_pipeline.bind_surface_inputs(app.render)
+    return lighting_pipeline
+
+
+def _do_boot_load(app, save_manager, scene_runtime, load_path: str) -> None:
+    """Apply the ``--load`` save file after all systems are registered.
+
+    Runs LAST so the visual factory has the overlay + lighting pipeline.
+    Terrain deltas mark chunks dirty; one extra stream/upload pass shows the
+    edits on the first rendered frame.  All errors are logged, never fatal.
+    """
+    try:
+        save_manager.load(load_path)
+        _log.info("Loaded %s", load_path)
+    except FileNotFoundError:
+        _log.error("--load: no such save: %s", load_path)
+    except SaveIncompatibleError as exc:
+        _log.error(
+            "--load: incompatible save (its world seed must match config.toml's world_seed): %s",
+            exc,
+        )
+    else:
+        app._stream_and_upload_terrain()
+        if scene_runtime.spawn_position is not None:
+            app.camera_go.transform.position = scene_runtime.spawn_position
+            _log.info("Player start set by authored spawn point: %s", scene_runtime.spawn_position)
+
+
 def build_demo(load_path: str | None = None):
     """
     Boot the engine and wire the demo, returning the constructed ``App``.
@@ -302,17 +615,7 @@ def build_demo(load_path: str | None = None):
     # Which GPU did Windows actually give us?  On hybrid laptops an "Intel"
     # renderer here means the integrated GPU — _ensure_dedicated_gpu() has
     # registered the fix; it applies on the next launch.
-    try:
-        gsg = app.win.get_gsg()
-        renderer = gsg.get_driver_renderer()
-        _log.info("Rendering on: %s (%s)", renderer, gsg.get_driver_vendor())
-        if "intel" in renderer.lower():
-            _log.warning(
-                "Integrated GPU in use — restart the game to pick up the "
-                "high-performance GPU preference written this boot."
-            )
-    except Exception as exc:
-        _log.debug("Renderer query failed: %s", exc)
+    _log_renderer_info(app)
 
     # 4. Resource manager loaders — register AFTER the window/loader exists.
     from fire_engine.render.resource_adapter import register_panda_loaders
@@ -431,34 +734,9 @@ def build_demo(load_path: str | None = None):
     #     palette is the default (texture-derived) one plus the GI test-room
     #     debug materials: bright white/red/green bounce surfaces and an
     #     emissive ceiling-panel material (tests the emission-map path).
-    lighting_pipeline = None
-    if use_gpu_lighting:
-        from fire_engine.lighting.gpu import GpuLightingPipeline
-        from fire_engine.lighting.palette import build_default_palette
-        from fire_engine.render.terrain_shader import apply_terrain_shader
-
-        palette = build_default_palette()
-        for mid, rgb in _GI_TEST_ALBEDO.items():
-            palette.albedo[mid] = rgb
-        palette = palette.with_emission(_MAT_GI_GLOW, _GI_GLOW_RADIANCE)
-        lighting_pipeline = GpuLightingPipeline(cfg, app, chunk_manager, bus, palette=palette)
-        app.lighting_pipeline = lighting_pipeline
-        # Deterministic per-world hash offset for the procedural ground pattern.
-        from fire_engine.core.rng import for_domain
-
-        ground_seed = float(for_domain("terrain", "ground").integers(0, 65536))
-        apply_terrain_shader(
-            app.terrain_root,
-            lighting_pipeline,
-            seed=ground_seed,
-            texels_per_m=cfg.ground_texels_per_m,
-            extra_materials=_gi_ground_lut_entries(),
-        )
-        # Bind the lit-surface uniform contract on ``render`` so EVERY shader
-        # that includes lit_surface.glsl — terrain, foliage, future
-        # buildings/NPCs anywhere in the graph — inherits it.  The frame loop
-        # refreshes it there (app.py step 6).
-        lighting_pipeline.bind_surface_inputs(app.render)
+    lighting_pipeline = (
+        _build_gpu_pipeline(cfg, app, chunk_manager, bus) if use_gpu_lighting else None
+    )
 
     # 10. Pre-stream spawn area + seed sunlight + upload initial meshes.
     _prewarm_terrain(app, chunk_manager, sunlight, light_sampler)
@@ -749,121 +1027,12 @@ def build_demo(load_path: str | None = None):
     _load_proof_model(app)
 
     # --- Demo key bindings (DEV tooling per §5.5) -------------------------
+    # Mutable containers so module-level callbacks can share state across calls.
     Path("saves").mkdir(parents=True, exist_ok=True)
-
-    def fire_explosion() -> None:
-        """
-        Carve a SphereBrush(REMOVE) crater at the terrain under the camera ray.
-
-        Builds the camera ray (origin = camera position, direction = camera
-        forward), raycasts the voxel field, and on a hit carves a crater at the
-        hit point.  apply_brush flags touched chunks dirty + edited and publishes
-        TerrainEditedEvent; remesh_edited then rebuilds the crater chunks (and
-        their border neighbours) immediately — bypassing the 2-chunk streaming
-        budget — so the crater geometry and its relight (the lighting pipeline's
-        own same-frame edit path) appear together on the very next rendered
-        frame, with no see-through hole while neighbours wait their turn.
-        Bound to left-click (while flying) and to the dev overlay's
-        "Fire Explosion" action button.
-        """
-        origin = app.camera_go.transform.position
-        direction = app.camera_go.transform.forward
-        hit = raycast_voxel(
-            origin,
-            direction,
-            chunk_manager.get_or_create,
-            max_distance_m=_RAY_MAX_DISTANCE_M,
-        )
-        if hit is None:
-            _log.debug("Click: no terrain hit within %.0f m", _RAY_MAX_DISTANCE_M)
-            return
-        # hit.point is the world-space entry point of the solid voxel — the
-        # natural explosion centre.
-        touched = apply_brush(
-            SphereBrush(_EXPLOSION_RADIUS_M),
-            hit.point,
-            BrushMode.REMOVE,
-            material=1,
-            chunk_provider=chunk_manager.get_or_create,
-            bus=bus,
-        )
-        # Same-frame remesh: the crater (and the faces it exposed in border
-        # neighbours) must exist before this frame renders, or the player sees
-        # a black hole through the world until the stream budget catches up.
-        chunk_manager.remesh_edited(touched, light_sampler)
-        # Volumetric flash: a brief, bright point light in the radiance
-        # volume — the GI gather carries it into the crater and the
-        # froxel fog catches it as a glow.
-        if lighting_pipeline is not None:
-            from fire_engine.lighting.lights import PointLight
-
-            lighting_pipeline.lights.add(
-                PointLight(
-                    position=(hit.point.x, hit.point.y, hit.point.z),
-                    color=(1.0, 0.55, 0.2),
-                    intensity=40.0,
-                    radius=18.0,
-                    ttl_s=0.5,
-                )
-            )
-        _log.info("Explosion at %s — %d chunk(s) cratered", hit.point, len(touched))
-
-    def on_click() -> None:
-        """
-        Left-click dispatch.
-
-        Priority:
-          1. Dev *selection* — when the overlay is open with a free cursor the
-             click picks/outlines the object or chunk under the cursor.
-          2. Re-capture — when the cursor is free but the overlay is closed
-             (the player pressed ESC, or alt-tabbed back in), a click re-grabs
-             the mouse for free-look, mirroring how FPS games reacquire focus.
-          3. Otherwise (flying, cursor captured) it fires the demo explosion.
-        """
-        if overlay is not None and overlay.handle_world_click():
-            return
-        if not app.input_state.mouse_captured:
-            app.input_state.mouse_captured = True
-            app._set_mouse_capture(True)
-            return
-        fire_explosion()
 
     # --load retargets the quick-save slot so F5/F9 round-trip the opened scene.
     save_path = load_path or _SAVE_PATH
 
-    def on_save() -> None:
-        """F5 → save the world (edited chunks only) to the active save path."""
-        try:
-            save_manager.save(save_path)
-            _log.info("Saved to %s", save_path)
-        except OSError as exc:
-            _log.error("Save failed: %s", exc)
-
-    def on_load() -> None:
-        """
-        F9 → revert to the saved state.
-
-        reset_to_baseline() first wipes ALL current edits back to the procedural
-        baseline (undoing craters dug after the save), then load() re-applies the
-        saved craters via apply_delta.  Both mark chunks dirty; the streaming loop
-        remeshes them and the App re-uploads their Geoms over the next frames.
-        Missing save / incompatible save is logged, never fatal.
-        """
-        chunk_manager.reset_to_baseline()
-        try:
-            save_manager.load(save_path)
-            _log.info("Loaded %s", save_path)
-        except FileNotFoundError:
-            _log.warning("No save at %s yet (press F5 first)", save_path)
-        except SaveIncompatibleError as exc:
-            _log.error("Save incompatible: %s", exc)
-            return
-        # An editor-authored spawn point moves the player there on every load.
-        scene_runtime = getattr(app, "scene_runtime", None)
-        if scene_runtime is not None and scene_runtime.spawn_position is not None:
-            app.camera_go.transform.position = scene_runtime.spawn_position
-
-    # --- Sky/weather dev bindings (F6/F7/F8) — dev tooling per §5.5 ---------
     # F6 cycles a forced weather type (None = back to the natural schedule),
     # F7 toggles the game-time scale for day-cycle fast-forward, F8 jumps the
     # game clock forward 6 game-hours to snap to interesting skies.
@@ -878,128 +1047,16 @@ def build_demo(load_path: str | None = None):
     ]
     weather_index = [len(weather_cycle) - 1]  # starts at None (natural)
 
-    def on_cycle_weather() -> None:
-        """F6 → force the next weather type in the cycle (None = natural)."""
-        weather_index[0] = (weather_index[0] + 1) % len(weather_cycle)
-        forced = weather_cycle[weather_index[0]]
-        sky_system.weather.force_weather(forced)
-        st = sky_system.state
-        _log.info(
-            "Weather forced to %s (current=%s, coverage=%.2f, fog=%.4f /m, rain=%.2f)",
-            forced.name if forced is not None else "None (natural schedule)",
-            sky_system.weather.current.name,
-            st.cloud_coverage,
-            st.fog_density,
-            st.rain_intensity,
-        )
-
-    def on_toggle_time_scale() -> None:
-        """F7 → toggle clock.game_time_scale between 60 (normal) and 1800 (fast)."""
-        clock.game_time_scale = 1800.0 if clock.game_time_scale <= 60.0 else 60.0
-        _log.info(
-            "game_time_scale = %.0f (1 real s = %.0f game s)",
-            clock.game_time_scale,
-            clock.game_time_scale,
-        )
-
-    def on_jump_time() -> None:
-        """F8 → jump the game clock forward 6 game-hours (wraps the day)."""
-        new_tod = clock.game_time_of_day + 6.0 * 3600.0
-        if new_tod >= 24.0 * 3600.0:
-            new_tod -= 24.0 * 3600.0
-            clock.game_day += 1
-        clock.game_time_of_day = new_tod
-        _log.info(
-            "Game time jumped to day %d, %02d:%02d",
-            clock.game_day,
-            int(new_tod // 3600),
-            int(new_tod % 3600 // 60),
-        )
-
-    # --- Dynamic-light dev bindings (L / K) — GPU lighting backend only -----
-    # L drops a warm torch point-light at the camera (watch the gathered GI
-    # carry it around corners); K clears all dropped lights.
-    def on_drop_torch() -> None:
-        """L → drop a permanent torch light at the camera position."""
-        if lighting_pipeline is None:
-            return
-        from fire_engine.lighting.lights import PointLight
-
-        pos = app.camera_go.transform.position
-        lighting_pipeline.lights.add(
-            PointLight(
-                position=(pos.x, pos.y, pos.z), color=(1.0, 0.62, 0.28), intensity=8.0, radius=16.0
-            )
-        )
-        _log.info("Torch dropped at %s (%d light(s) active)", pos, lighting_pipeline.lights.count)
-
-    def on_clear_lights() -> None:
-        """K → remove all dynamic lights."""
-        if lighting_pipeline is None:
-            return
-        lighting_pipeline.lights.clear()
-        _log.info("Dynamic lights cleared")
-
-    # --- Flashlight (F) — a SpotLight glued to the camera ------------------
-    # The follow task only touches the light set when the camera actually
-    # moved/turned (re-injection is the expensive part), and the beam shows
-    # up in the froxel fog automatically (GI radiance feeds the fog scatter).
+    # The flashlight dict is a mutable container shared by the two callbacks so
+    # one can read/write "id" and "light" that the other set.
     flashlight: dict = {"id": None, "light": None}
+    # lighting_pipeline_ref wraps lighting_pipeline so module-level callbacks
+    # can read it without a closure (lighting_pipeline is not None only on GPU).
+    lighting_pipeline_ref: list = [lighting_pipeline]
 
-    def on_toggle_flashlight() -> None:
-        """F → toggle a camera-mounted flashlight (GPU backend only)."""
-        if lighting_pipeline is None:
-            return
-        from fire_engine.lighting.lights import SpotLight
-
-        if flashlight["id"] is not None:
-            lighting_pipeline.lights.remove(flashlight["id"])
-            flashlight["id"] = flashlight["light"] = None
-            _log.info("Flashlight OFF")
-            return
-        pos = app.camera_go.transform.position
-        fwd = app.camera_go.transform.forward
-        light = SpotLight(
-            position=(pos.x, pos.y, pos.z),
-            direction=(fwd.x, fwd.y, fwd.z),
-            color=_FLASHLIGHT_COLOR,
-            intensity=_FLASHLIGHT_INTENSITY,
-            radius=_FLASHLIGHT_RADIUS_M,
-            cone_deg=_FLASHLIGHT_CONE_DEG,
-        )
-        flashlight["id"] = lighting_pipeline.lights.add(light)
-        flashlight["light"] = light
-        _log.info("Flashlight ON")
-
-    def _follow_flashlight(task):
-        """Per-frame: keep the flashlight on the camera (move/turn eps)."""
-        light = flashlight["light"]
-        if light is not None:
-            pos = app.camera_go.transform.position
-            fwd = app.camera_go.transform.forward
-            new_pos = (pos.x, pos.y, pos.z)
-            new_dir = (fwd.x, fwd.y, fwd.z)
-            moved = sum((a - b) ** 2 for a, b in zip(new_pos, light.position)) > 0.15**2
-            turned = sum(a * b for a, b in zip(new_dir, light.direction)) < math.cos(
-                math.radians(1.5)
-            )
-            if moved or turned:
-                light.position = new_pos
-                light.direction = new_dir
-                lighting_pipeline.lights.notify_changed()
-        return task.cont
-
-    if lighting_pipeline is not None:
-        app.taskMgr.add(_follow_flashlight, "FlashlightFollow")
-
-    app.accept("l", on_drop_torch)
-    app.accept("k", on_clear_lights)
-    app.accept("f", on_toggle_flashlight)
-    app.accept("g", lambda: build_gi_test_room(app))
-
-    app.accept("f6", on_cycle_weather)
-    app.accept("f7", on_toggle_time_scale)
-    app.accept("f8", on_jump_time)
+    fire_explosion = partial(
+        _cb_fire_explosion, app, chunk_manager, bus, lighting_pipeline_ref, light_sampler
+    )
 
     # --- Developer overlay (F1) — in-game debug menu / inspector / spawn -----
     # DirectGUI overlay rendered in world/ (the only place panda3d is allowed).
@@ -1009,6 +1066,23 @@ def build_demo(load_path: str | None = None):
     from fire_engine.render import DevOverlay
 
     overlay = DevOverlay(app) if DevOverlay is not None else None
+    overlay_ref: list = [overlay]
+    on_click = partial(_cb_on_click, app, overlay_ref, fire_explosion)
+    on_save = partial(_cb_on_save, save_manager, save_path)
+    on_load = partial(_cb_on_load, chunk_manager, save_manager, save_path, app)
+    on_cycle_weather = partial(_cb_on_cycle_weather, weather_cycle, weather_index, sky_system)
+    on_toggle_time_scale = partial(_cb_on_toggle_time_scale, clock)
+    on_jump_time = partial(_cb_on_jump_time, clock)
+    on_drop_torch = partial(_cb_on_drop_torch, app, lighting_pipeline_ref)
+    on_clear_lights = partial(_cb_on_clear_lights, lighting_pipeline_ref)
+    on_toggle_flashlight = partial(_cb_on_toggle_flashlight, app, lighting_pipeline_ref, flashlight)
+    follow_flashlight = partial(
+        _cb_follow_flashlight,
+        app=app,
+        lighting_pipeline_ref=lighting_pipeline_ref,
+        flashlight=flashlight,
+    )
+
     if overlay is not None:
         overlay.actions.add_action("Fire Explosion", fire_explosion)
         app.accept("f1", overlay.toggle)
@@ -1031,6 +1105,18 @@ def build_demo(load_path: str | None = None):
     save_manager.register(scene_runtime)
     app.scene_runtime = scene_runtime  # exposed for tooling/tests
 
+    if lighting_pipeline is not None:
+        app.taskMgr.add(follow_flashlight, "FlashlightFollow")
+
+    app.accept("l", on_drop_torch)
+    app.accept("k", on_clear_lights)
+    app.accept("f", on_toggle_flashlight)
+    app.accept("g", partial(build_gi_test_room, app))
+
+    app.accept("f6", on_cycle_weather)
+    app.accept("f7", on_toggle_time_scale)
+    app.accept("f8", on_jump_time)
+
     app.accept("mouse1", on_click)
     app.accept("f5", on_save)
     app.accept("f9", on_load)
@@ -1040,24 +1126,7 @@ def build_demo(load_path: str | None = None):
     # overlay + lighting pipeline. Terrain deltas mark chunks dirty; one extra
     # stream/upload pass shows the edits on the first rendered frame.
     if load_path is not None:
-        try:
-            save_manager.load(load_path)
-            _log.info("Loaded %s", load_path)
-        except FileNotFoundError:
-            _log.error("--load: no such save: %s", load_path)
-        except SaveIncompatibleError as exc:
-            _log.error(
-                "--load: incompatible save (its world seed must match "
-                "config.toml's world_seed): %s",
-                exc,
-            )
-        else:
-            app._stream_and_upload_terrain()
-            if scene_runtime.spawn_position is not None:
-                app.camera_go.transform.position = scene_runtime.spawn_position
-                _log.info(
-                    "Player start set by authored spawn point: %s", scene_runtime.spawn_position
-                )
+        _do_boot_load(app, save_manager, scene_runtime, load_path)
 
     _log.info(
         "Demo ready — WASD+mouse to fly, ESC to capture mouse, "

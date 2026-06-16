@@ -86,7 +86,7 @@ class TestRoundTrip:
         save_file = tmp_path / "test.ta"
 
         # --- Build world and blast craters ---
-        cfg, clock, bus, cm, sm = _make_world(seed=1337)
+        _cfg, clock, _bus, cm, sm = _make_world(seed=1337)
         edited_coords = _blast_craters(cm)
         assert edited_coords, "Expected at least one edited chunk"
 
@@ -102,7 +102,7 @@ class TestRoundTrip:
         assert save_file.exists()
 
         # --- Fresh world, same seed ---
-        cfg2, clock2, bus2, cm2, sm2 = _make_world(seed=1337)
+        _cfg2, clock2, _bus2, cm2, sm2 = _make_world(seed=1337)
         sm2.load(save_file)
 
         # Clock must be restored
@@ -147,7 +147,7 @@ class TestWrongSeedRaisesIncompatible:
         sm1.save(save_file)
 
         # Prepare a fresh world with seed 9999
-        _, clock2, _, cm2, sm2 = _make_world(seed=9999)
+        _, clock2, _, _cm2, sm2 = _make_world(seed=9999)
         original_clock_state = clock2.get_state()
 
         with pytest.raises(SaveIncompatibleError, match="world_seed"):
@@ -174,7 +174,7 @@ class TestUneditedWorldIsTiny:
         import msgpack as _msgpack
 
         save_file = tmp_path / "tiny.ta"
-        _, _, _, cm, sm = _make_world(seed=1)
+        _, _, _, _cm, sm = _make_world(seed=1)
         sm.save(save_file)
 
         # Verify the terrain delta blob is < 1 KB
@@ -200,12 +200,8 @@ class TestUneditedWorldIsTiny:
 class TestNoPickle:
     """Walk fire_engine/ and tools/ .py files; fail if any contain pickle imports."""
 
-    # Match any form of pickle import:
-    #   import pickle
-    #   import cPickle
-    #   from pickle import ...
-    #   from cPickle import ...
-    #   pickle.loads(...)  (usage without explicit import — also banned)
+    # Match any form of pickle import (import pickle / import cPickle /
+    # from pickle import ... / from cPickle import ... / pickle.loads(...)).
     _PICKLE_PATTERN = re.compile(
         r"(import\s+(c?pickle)"
         r"|from\s+(c?pickle)\s+import"

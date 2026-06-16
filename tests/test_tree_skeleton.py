@@ -162,7 +162,7 @@ class TestLeaves:
     def test_leaves_grow_around_tips(self):
         set_world_seed(9)
         rng = for_domain("test", "leaves")
-        sk, trunk, limbs, twigs = _grow_oak(rng)
+        sk, _, limbs, twigs = _grow_oak(rng)
         ids = np.concatenate([limbs, twigs])
         leaves = leaves_at_tips(sk, ids, rng, cell_m=self.CELL, rounds=self.ROUNDS, density=0.8)
         assert leaves.n_leaves > 0
@@ -180,7 +180,7 @@ class TestLeaves:
         # leaves than a single-limb skeleton under identical CA params.
         set_world_seed(9)
         rng = for_domain("test", "leaves")
-        sk, trunk, limbs, twigs = _grow_oak(rng)
+        sk, _, limbs, twigs = _grow_oak(rng)
         full = leaves_at_tips(
             sk,
             np.concatenate([limbs, twigs]),

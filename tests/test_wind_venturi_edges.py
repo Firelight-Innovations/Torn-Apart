@@ -52,7 +52,7 @@ def _chunks_from_region_solid(
     Build a ``coord -> _Chunk`` dict realising a per-(x,y) solid column.
     Identical logic to test_wind_venturi.py helper.
     """
-    region_vx, region_vy = solid_vox.shape
+    _region_vx, _region_vy = solid_vox.shape
     vx0 = origin_cell[0] * vpc
     vy0 = origin_cell[1] * vpc
     chunks: dict = {}
@@ -65,7 +65,7 @@ def _chunks_from_region_solid(
         return ch
 
     xs, ys = np.nonzero(solid_vox)
-    for lx, ly in zip(xs.tolist(), ys.tolist()):
+    for lx, ly in zip(xs.tolist(), ys.tolist(), strict=True):
         gx = vx0 + lx
         gy = vy0 + ly
         ccx, ccy = gx // CHUNK, gy // CHUNK
@@ -93,7 +93,7 @@ def _make_job(
     ``solid_vox`` is ``(cells*vpc, cells*vpc)`` booleans or None (empty dict).
     """
     cell_m = float(cfg.wind_cell_m)
-    vpc = int(round(cell_m / VOXEL))
+    vpc = round(cell_m / VOXEL)
     ground = float(cfg.ground_height_m)
     vz_lo = int(np.floor(ground / VOXEL))
     vz_hi = int(np.ceil((ground + float(cfg.wind_layer_m)) / VOXEL))
@@ -195,7 +195,7 @@ class TestFullySolidRegion:
     def test_fully_solid_finite(self):
         cfg = Config()
         cells = 8
-        vpc = int(round(float(cfg.wind_cell_m) / VOXEL))
+        vpc = round(float(cfg.wind_cell_m) / VOXEL)
         solid_vox = np.ones((cells * vpc, cells * vpc), dtype=bool)
         job = _make_job(cfg, solid_vox=solid_vox, cells=cells)
         res = solve_venturi(job)
@@ -205,7 +205,7 @@ class TestFullySolidRegion:
     def test_fully_solid_no_nan(self):
         cfg = Config()
         cells = 8
-        vpc = int(round(float(cfg.wind_cell_m) / VOXEL))
+        vpc = round(float(cfg.wind_cell_m) / VOXEL)
         solid_vox = np.ones((cells * vpc, cells * vpc), dtype=bool)
         job = _make_job(cfg, solid_vox=solid_vox, cells=cells)
         res = solve_venturi(job)
@@ -219,7 +219,7 @@ class TestFullySolidRegion:
         """
         cfg = Config()
         cells = 8
-        vpc = int(round(float(cfg.wind_cell_m) / VOXEL))
+        vpc = round(float(cfg.wind_cell_m) / VOXEL)
         solid_vox = np.ones((cells * vpc, cells * vpc), dtype=bool)
         job = _make_job(cfg, solid_vox=solid_vox, cells=cells)
         res = solve_venturi(job)
@@ -230,7 +230,7 @@ class TestFullySolidRegion:
     def test_fully_solid_speedup_bounded_by_max(self):
         cfg = Config()
         cells = 8
-        vpc = int(round(float(cfg.wind_cell_m) / VOXEL))
+        vpc = round(float(cfg.wind_cell_m) / VOXEL)
         solid_vox = np.ones((cells * vpc, cells * vpc), dtype=bool)
         job = _make_job(cfg, solid_vox=solid_vox, cells=cells)
         res = solve_venturi(job)
@@ -245,7 +245,7 @@ class TestFullySolidRegion:
         """
         cfg = Config()
         cells = 8
-        vpc = int(round(float(cfg.wind_cell_m) / VOXEL))
+        vpc = round(float(cfg.wind_cell_m) / VOXEL)
         solid_vox = np.ones((cells * vpc, cells * vpc), dtype=bool)
         job = _make_job(cfg, solid_vox=solid_vox, cells=cells)
         res = solve_venturi(job)
@@ -298,7 +298,7 @@ class TestVenturiMaxClamp:
         Designed to produce crowd ≈ 1 at the open cell.
         """
         cells = 16
-        vpc = int(round(float(cfg.wind_cell_m) / VOXEL))
+        vpc = round(float(cfg.wind_cell_m) / VOXEL)
         solid_vox = np.ones((cells * vpc, cells * vpc), dtype=bool)
         # Open a single 1-voxel column in the centre
         cx = (cells * vpc) // 2
@@ -386,7 +386,7 @@ class TestDeflectionSignAndDirection:
         """
         cells = 16
         cell_m = float(cfg.wind_cell_m)
-        vpc = int(round(cell_m / VOXEL))
+        vpc = round(cell_m / VOXEL)
         ground = float(cfg.ground_height_m)
         vz_lo = int(np.floor(ground / VOXEL))
         vz_hi = int(np.ceil((ground + float(cfg.wind_layer_m)) / VOXEL))
@@ -429,7 +429,7 @@ class TestDeflectionSignAndDirection:
         a non-zero openness gradient in Y near the gap boundary.)
         """
         cfg = Config()
-        job, wall_x, gap_y = self._wall_gap_job(cfg)
+        job, wall_x, _ = self._wall_gap_job(cfg)
         res = solve_venturi(job)
         # Row just before the wall has a gradient in X (open → solid transition)
         deflect_x_col = res.deflect[wall_x - 1, :, 0]
@@ -488,21 +488,10 @@ class TestIdempotencyAndDeterminism:
 
     def _wall_job(self, cfg: Config) -> VenturiJob:
         cells = 16
-        vpc = int(round(float(cfg.wind_cell_m) / VOXEL))
-        ground = float(cfg.ground_height_m)
-        vz_lo = int(np.floor(ground / VOXEL))
-        vz_hi = int(np.ceil((ground + float(cfg.wind_layer_m)) / VOXEL))
+        vpc = round(float(cfg.wind_cell_m) / VOXEL)
         solid_vox = np.zeros((cells * vpc, cells * vpc), dtype=bool)
         solid_vox[8 * vpc : (8 + 1) * vpc, :] = True
         solid_vox[8 * vpc : (8 + 1) * vpc, 4 * vpc : 6 * vpc] = False
-        chunks_obj = _chunks_from_region_solid(
-            solid_vox,
-            vz_lo=vz_lo,
-            vz_hi=vz_hi,
-            origin_cell=(0, 0),
-            cells=cells,
-            vpc=vpc,
-        )
         return _make_job(cfg, solid_vox=solid_vox, cells=cells)
 
     def test_identical_speedup_on_two_calls(self):
@@ -583,7 +572,7 @@ class TestColumnSolidFraction:
     def test_full_solid_is_one(self):
         cfg = Config()
         cells = 8
-        vpc = int(round(float(cfg.wind_cell_m) / VOXEL))
+        vpc = round(float(cfg.wind_cell_m) / VOXEL)
         solid_vox = np.ones((cells * vpc, cells * vpc), dtype=bool)
         job = _make_job(cfg, solid_vox=solid_vox, cells=cells)
         frac = column_solid_fraction(job)
@@ -603,7 +592,7 @@ class TestColumnSolidFraction:
         """
         cfg = Config()
         cells = 8
-        vpc = int(round(float(cfg.wind_cell_m) / VOXEL))
+        vpc = round(float(cfg.wind_cell_m) / VOXEL)
         solid_vox = np.zeros((cells * vpc, cells * vpc), dtype=bool)
         half_x = (cells * vpc) // 2
         solid_vox[:half_x, :] = True  # first half in X is solid
@@ -618,7 +607,7 @@ class TestColumnSolidFraction:
     def test_no_nan_in_solid_fraction(self):
         cfg = Config()
         cells = 8
-        vpc = int(round(float(cfg.wind_cell_m) / VOXEL))
+        vpc = round(float(cfg.wind_cell_m) / VOXEL)
         solid_vox = np.ones((cells * vpc, cells * vpc), dtype=bool)
         job = _make_job(cfg, solid_vox=solid_vox, cells=cells)
         frac = column_solid_fraction(job)
@@ -627,7 +616,7 @@ class TestColumnSolidFraction:
     def test_solid_fraction_range(self):
         cfg = Config()
         cells = 16
-        vpc = int(round(float(cfg.wind_cell_m) / VOXEL))
+        vpc = round(float(cfg.wind_cell_m) / VOXEL)
         solid_vox = np.zeros((cells * vpc, cells * vpc), dtype=bool)
         # Checkerboard at cell-level
         for i in range(cells):
@@ -663,7 +652,7 @@ class TestIterationCount:
         """
         cfg = Config()
         cells = 16
-        vpc = int(round(float(cfg.wind_cell_m) / VOXEL))
+        vpc = round(float(cfg.wind_cell_m) / VOXEL)
         solid_vox = np.zeros((cells * vpc, cells * vpc), dtype=bool)
         solid_vox[8 * vpc : (8 + 1) * vpc, :] = True
         solid_vox[8 * vpc : (8 + 1) * vpc, 6 * vpc : 8 * vpc] = False
@@ -687,7 +676,7 @@ class TestIterationCount:
         """
         cfg = Config()
         cells = 16
-        vpc = int(round(float(cfg.wind_cell_m) / VOXEL))
+        vpc = round(float(cfg.wind_cell_m) / VOXEL)
         solid_vox = np.zeros((cells * vpc, cells * vpc), dtype=bool)
         solid_vox[8 * vpc : (8 + 1) * vpc, :] = True
         solid_vox[8 * vpc : (8 + 1) * vpc, 7 * vpc : 9 * vpc] = False

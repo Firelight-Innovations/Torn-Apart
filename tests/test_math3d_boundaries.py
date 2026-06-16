@@ -31,7 +31,7 @@ class TestVec3NormalizedBoundary:
 
     def test_near_zero_below_eps_raises(self):
         """Vector whose length is just under 1e-12 should raise, not silently return garbage."""
-        # length = 5e-13 < 1e-12
+        # length is 5e-13, which is less than the 1e-12 epsilon threshold
         v = Vec3(5e-13, 0.0, 0.0)
         with pytest.raises(ValueError):
             v.normalized()
@@ -105,7 +105,7 @@ class TestVec3LerpBoundary:
         a = Vec3(0.0, 0.0, 0.0)
         b = Vec3(1.0, 0.0, 0.0)
         result = a.lerp(b, -1.0)
-        # expected: 0 + (-1)*(1-0) = -1
+        # expected result: 0 plus (-1) times (1 minus 0) equals -1
         assert result.approx_eq(Vec3(-1.0, 0.0, 0.0), eps=1e-5)
 
     def test_lerp_t_greater_than_one_extrapolates(self):
@@ -334,7 +334,7 @@ class TestQuatEulerGimbalBoundary:
         """At pitch = +π/2 exactly, as_euler should zero the roll (assign all to H).
         Pin: r_angle = 0.0."""
         q = Quat.from_euler(0.4, math.pi / 2, 0.7)
-        h, p, r = q.as_euler()
+        _h, _p, r = q.as_euler()
         assert abs(r) < 1e-4, f"Expected roll≈0 at gimbal lock, got r={r}"
 
 

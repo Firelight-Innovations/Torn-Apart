@@ -230,7 +230,7 @@ class TestTerrainLightScale:
 
 class TestSkyStateInvariants:
     def test_sun_intensity_zero_below_horizon(self):
-        sky, clock = _make_sky(seed=5, day=0, tod=0.0)
+        sky, _ = _make_sky(seed=5, day=0, tod=0.0)
         st = sky.update()
         assert st.sun_intensity == 0.0
 

@@ -160,7 +160,7 @@ class TestRefcount:
 
 
 # ---------------------------------------------------------------------------
-# Headless: unload_unreferenced
+# Headless tests for unload_unreferenced
 # ---------------------------------------------------------------------------
 
 
@@ -169,7 +169,7 @@ class TestUnloadUnreferenced:
 
     def test_evicts_zero_ref(self):
         manager, _ = _fresh_manager()
-        h = manager.load("evict_me.fake")
+        manager.load("evict_me.fake")
         # refcount is 0 — should be evicted
         count = manager.unload_unreferenced()
         assert count == 1
@@ -194,8 +194,8 @@ class TestUnloadUnreferenced:
         manager = ResourceManager(loaders_module=fake)
 
         h_keep = manager.load("keep.fake")
-        h_ev1 = manager.load("evict1.fake")
-        h_ev2 = manager.load("evict2.fake")
+        manager.load("evict1.fake")
+        manager.load("evict2.fake")
 
         manager.acquire(h_keep)  # refcount → 1
 
@@ -307,7 +307,7 @@ class TestUnknownSuffix:
 
 
 # ---------------------------------------------------------------------------
-# Headless: stats()
+# Headless tests for stats
 # ---------------------------------------------------------------------------
 
 

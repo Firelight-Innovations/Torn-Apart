@@ -130,7 +130,7 @@ class TestAssembleCascade0:
         )
         assert vol.albedo_occ[5, 6, 7, 3] == 255  # occupied
         assert vol.albedo_occ[5, 6, 6, 3] == 0  # neighbour air
-        # Albedo = palette[1] * 255.
+        # Albedo channel should equal palette entry 1 scaled to uint8 range.
         np.testing.assert_allclose(
             vol.albedo_occ[5, 6, 7, :3],
             np.clip(np.array([0.4, 0.3, 0.2]) * 255, 0, 255).astype(np.uint8),
@@ -385,7 +385,7 @@ class TestLightSet:
         ls = LightSet()
         for i in range(6):
             ls.add(PointLight((float(i), 0, 0), (1, 1, 1), 1.0, 5.0))
-        arr, count = ls.pack(4)
+        _arr, count = ls.pack(4)
         assert count == 4
 
 

@@ -291,7 +291,6 @@ class TestDeriveNormalMapGradient:
         rgba[..., 3] = 255
         out = derive_normal_map(rgba)
         # Normals in the interior far from the step should remain near 128.
-        flat_zone = out[:, 2 : w // 2 - 1, 0]
         # Near the step edge, R deviates.
         edge_col = w // 2
         edge_zone = out[:, edge_col - 1 : edge_col + 2, 0].astype(np.int16)
@@ -364,7 +363,6 @@ class TestDeriveNormalMapWrapTiling:
         out = derive_normal_map(rgba)
         left_col_r = out[:, 0, 0].astype(np.int16)
         right_col_r = out[:, -1, 0].astype(np.int16)
-        interior_r = out[:, 1:-1, 0].astype(np.int16)
         # All should be ~128 with no deviation > 1 for a uniform texture.
         assert np.abs(left_col_r - 128).max() <= 1, "Left edge R should be ~128"
         assert np.abs(right_col_r - 128).max() <= 1, "Right edge R should be ~128"
@@ -396,7 +394,6 @@ class TestDeriveNormalMapWrapTiling:
         rgba[..., 3] = 255
         out = derive_normal_map(rgba)
         # Interior has consistent gradient; right edge should too (wrap active).
-        interior_dev = np.abs(out[:, 2:5, 0].astype(np.int16) - 128).mean()
         right_edge_dev = np.abs(out[:, -1, 0].astype(np.int16) - 128).mean()
         # Both should be non-zero (wrap makes the right edge "feel" the step).
         assert right_edge_dev > 0, (

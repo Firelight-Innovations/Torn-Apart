@@ -160,7 +160,7 @@ class TestGenerateRaisesNotImplementedError:
     # -- NPCArchetype --
 
     def test_npcarchetype_raises_with_fake_rng(self):
-        with pytest.raises(NotImplementedError, match="NPCArchetype.generate is future scope"):
+        with pytest.raises(NotImplementedError, match=r"NPCArchetype\.generate is future scope"):
             NPCArchetype().generate(_RNG_A)
 
     def test_npcarchetype_message_verbatim(self):
@@ -184,7 +184,7 @@ class TestGenerateRaisesNotImplementedError:
     # -- GoodDef --
 
     def test_gooddef_raises_with_fake_rng(self):
-        with pytest.raises(NotImplementedError, match="GoodDef.generate is future scope"):
+        with pytest.raises(NotImplementedError, match=r"GoodDef\.generate is future scope"):
             GoodDef().generate(_RNG_A)
 
     def test_gooddef_message_verbatim(self):
@@ -208,7 +208,7 @@ class TestGenerateRaisesNotImplementedError:
     # -- FactionDef --
 
     def test_factiondef_raises_with_fake_rng(self):
-        with pytest.raises(NotImplementedError, match="FactionDef.generate is future scope"):
+        with pytest.raises(NotImplementedError, match=r"FactionDef\.generate is future scope"):
             FactionDef().generate(_RNG_A)
 
     def test_factiondef_message_verbatim(self):

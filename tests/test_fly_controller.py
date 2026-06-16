@@ -311,14 +311,14 @@ class TestMouseLook:
         assert ctrl.pitch == pytest.approx(0.0, abs=1e-9)
 
     def test_rotation_has_no_roll(self, go_with_ctrl):
-        """After mouse-look, the resulting quaternion has no roll component (anti-drift property)."""
+        """After mouse-look the quaternion has no roll component (anti-drift property)."""
         _, ctrl = go_with_ctrl
         # Apply a diagonal mouse delta (both yaw and pitch change)
         ctrl.set_input_state(_inp(mouse_captured=True, mouse_dx=30.0, mouse_dy=-20.0))
         ctrl.update(0.016)
 
         # Decompose rotation: roll (third component of as_euler) must be ~0
-        h, p, r = ctrl.game_object.transform.local_rotation.as_euler()
+        _h, _p, r = ctrl.game_object.transform.local_rotation.as_euler()
         assert abs(r) < 1e-5, f"Roll drift detected: roll={r}"
 
     def test_rotation_right_stays_level(self, go_with_ctrl):

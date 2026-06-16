@@ -113,7 +113,7 @@ class TestZoneStore:
         assert store.get_delta() != {}
 
     def test_save_manager_round_trip(self, tmp_path):
-        cfg, clock, bus, sm = _make_save_env()
+        _, _, _, sm = _make_save_env()
         store = ZoneStore()
         store.add("grass", (-12.0, -5.0, 6.0), (12.0, 25.0, 10.0), params={"density": 12.0})
         store.mark_baseline()
@@ -122,7 +122,7 @@ class TestZoneStore:
         path = tmp_path / "zones.ta"
         sm.save(str(path))
 
-        cfg2, clock2, bus2, sm2 = _make_save_env()
+        _, _, _, sm2 = _make_save_env()
         store2 = ZoneStore()
         store2.add(
             "grass", (-12.0, -5.0, 6.0), (12.0, 25.0, 10.0), params={"density": 12.0}
@@ -136,11 +136,11 @@ class TestZoneStore:
     def test_old_save_without_zones_key_loads(self, tmp_path):
         # A save written before zones existed has no "zones" envelope key:
         # loading must leave the store's fresh boot defaults untouched.
-        cfg, clock, bus, sm = _make_save_env()
+        _, _, _, sm = _make_save_env()
         path = tmp_path / "old.ta"
         sm.save(str(path))  # nothing registered → no key
 
-        cfg2, clock2, bus2, sm2 = _make_save_env()
+        _, _, _, sm2 = _make_save_env()
         store = ZoneStore()
         default = store.add("grass", (0.0, 0.0, 0.0), (8.0, 8.0, 4.0))
         store.mark_baseline()

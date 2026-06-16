@@ -557,7 +557,7 @@ class TestDefaultManagerConvenience:
     def test_module_unload_unreferenced_evicts(self):
         import fire_engine.resources.manager as mm
 
-        h = mm.load("unload_conv.convtest")
+        mm.load("unload_conv.convtest")
         # refcount is 0 — should be evicted
         count = mm.unload_unreferenced()
         assert count >= 1  # may include other zero-ref handles in default_manager
@@ -567,6 +567,5 @@ class TestDefaultManagerConvenience:
         import fire_engine.resources.manager as mm
 
         h = mm.load("dm.convtest")
-        key = mm.ResourceManager._normalise(h.path)  # path already normalised
         # The handle must be in default_manager's cache
         assert h in mm.default_manager._cache.values()

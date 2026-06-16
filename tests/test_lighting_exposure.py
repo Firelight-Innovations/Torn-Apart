@@ -480,8 +480,8 @@ class TestLightLuminance:
         meter_no_light = ExposureMeter(cfg)
         meter_far_light = ExposureMeter(cfg)
 
-        val_no = meter_no_light.update(cam, sky, {}, NO_LIGHTS, 0.0)
-        val_far = meter_far_light.update(cam, sky, {}, light_far, 0.0)
+        meter_no_light.update(cam, sky, {}, NO_LIGHTS, 0.0)
+        meter_far_light.update(cam, sky, {}, light_far, 0.0)
 
         # dt=0 so no smoothing — only the luminance estimate is different.
         # Both return 1.0 (dt=0 → no change), but the internal target

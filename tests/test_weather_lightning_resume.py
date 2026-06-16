@@ -124,7 +124,7 @@ class TestCellIdInt:
         ids = ["n:5:2", "n:5:3", "n:6:2", "s:0", "s:1", "n:0:0", ""]
         values = [cell_id_int(s) for s in ids]
         assert len(set(values)) == len(values), (
-            f"Collision among cell_id_int values: {list(zip(ids, values))}"
+            f"Collision among cell_id_int values: {list(zip(ids, values, strict=True))}"
         )
 
     # Golden-mirror: hard-code blake2b digests of known strings.
@@ -133,10 +133,8 @@ class TestCellIdInt:
     @pytest.mark.parametrize(
         "id_str,expected",
         [
-            # Computed once and pinned.  Derive with:
-            #   import hashlib
-            #   d = hashlib.blake2b(b"n:5:2", digest_size=8).digest()
-            #   int.from_bytes(d, "big") % (2**31)
+            # Computed once and pinned.  Derive with hashlib.blake2b(b"n:5:2",
+            # digest_size=8).digest(), then int.from_bytes(result, "big") % (2**31).
             ("n:5:2", cell_id_int("n:5:2")),  # pinned at import time
             ("s:0", cell_id_int("s:0")),
             ("n:0:0", cell_id_int("n:0:0")),
@@ -200,9 +198,10 @@ class TestLoadResumeSafety:
             assert len(concat) == len(whole), (
                 f"Split at tm={tm}: |left|+|right|={len(concat)} != |whole|={len(whole)}"
             )
-            for i, (got, want) in enumerate(zip(concat, whole)):
+            for i, (got, want) in enumerate(zip(concat, whole, strict=True)):
                 assert got.time_abs == pytest.approx(want.time_abs, abs=1e-9), (
-                    f"Split at tm={tm}, strike {i}: time_abs mismatch {got.time_abs} vs {want.time_abs}"
+                    f"Split at tm={tm}, strike {i}: "
+                    f"time_abs mismatch {got.time_abs} vs {want.time_abs}"
                 )
                 assert np.allclose(got.pos_xy, want.pos_xy, atol=1e-9), (
                     f"Split at tm={tm}, strike {i}: pos_xy mismatch {got.pos_xy} vs {want.pos_xy}"

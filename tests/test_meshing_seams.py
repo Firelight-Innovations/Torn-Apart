@@ -447,7 +447,7 @@ class TestColors:
             captured["dtype"] = fc.dtype
             return np.ones(fc.shape[0], dtype=np.float32)
 
-        mesh = build_mesh(c, neighbor_solids=None, light_sampler=sampler)
+        build_mesh(c, neighbor_solids=None, light_sampler=sampler)
         assert captured["shape"] == (6, 3)
         assert captured["dtype"] == np.float32
 

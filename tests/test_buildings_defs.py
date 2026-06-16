@@ -89,7 +89,7 @@ class TestBuildingDefAbstractBase:
 
 
 # ---------------------------------------------------------------------------
-# DemoHouseDef: registration
+# DemoHouseDef: registration  # noqa: ERA001
 # ---------------------------------------------------------------------------
 
 
@@ -116,7 +116,7 @@ class TestDemoHouseRegistration:
 
 
 # ---------------------------------------------------------------------------
-# DemoHouseDef: determinism
+# DemoHouseDef: determinism  # noqa: ERA001
 # ---------------------------------------------------------------------------
 
 
@@ -333,7 +333,7 @@ class TestDemoHouseStorey1:
 
 
 # ---------------------------------------------------------------------------
-# DemoHouseDef: stairs
+# DemoHouseDef: stairs  # noqa: ERA001
 # ---------------------------------------------------------------------------
 
 
@@ -350,7 +350,7 @@ class TestDemoHouseStairs:
 
 
 # ---------------------------------------------------------------------------
-# DemoHouseDef: foundation and roof
+# DemoHouseDef: foundation and roof  # noqa: ERA001
 # ---------------------------------------------------------------------------
 
 
@@ -395,7 +395,7 @@ class TestDemoHouseDimensionsFromConfig:
 
 
 # ---------------------------------------------------------------------------
-# DemoHouseDef: rotation
+# DemoHouseDef: rotation  # noqa: ERA001
 # ---------------------------------------------------------------------------
 
 
@@ -432,11 +432,11 @@ class TestDemoHouseRoundTrip:
     def test_to_dict_room_count_survives_round_trip(self):
         b = _make_demo()
         b2 = Building.from_dict(b.to_dict())
-        for i, (s_orig, s_rt) in enumerate(zip(b.storeys, b2.storeys)):
+        for i, (s_orig, s_rt) in enumerate(zip(b.storeys, b2.storeys, strict=True)):
             assert len(s_rt.rooms) == len(s_orig.rooms), f"Room count mismatch on storey {i}"
 
     def test_to_dict_wall_count_survives_round_trip(self):
         b = _make_demo()
         b2 = Building.from_dict(b.to_dict())
-        for i, (s_orig, s_rt) in enumerate(zip(b.storeys, b2.storeys)):
+        for i, (s_orig, s_rt) in enumerate(zip(b.storeys, b2.storeys, strict=True)):
             assert len(s_rt.walls) == len(s_orig.walls), f"Wall count mismatch on storey {i}"

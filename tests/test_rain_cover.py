@@ -217,7 +217,6 @@ class TestDeterminism:
         field = RainCoverField(cfg)
         field.recenter((CHUNK_M * 0.5, CHUNK_M * 0.5))
         field.rebuild_all(chunks)
-        mid_col = field.cells // 2
         # Find a texel firmly inside chunk (0,0)'s footprint.
         ox, oy = field.origin_m
         c = int(np.floor((4.0 - ox) / field.cell_m))

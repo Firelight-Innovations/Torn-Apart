@@ -68,6 +68,21 @@ class Config:
     lod_worker_threads: int = 4  # TerrainLodPool worker thread count
     lod_submit_per_frame: int = 16  # max chunk mesh jobs submitted per stream_frame
     lod_max_uploads_per_frame: int = 8  # max finished meshes uploaded to the scene graph per frame
+    # --- Coarse LOD ranks (P2; world/terrain/lod/desired.py + coarse_streamer.py) ---
+    # The distant horizon: ranks 1..lod_max_rank are downsampled coarse nodes
+    # meshed off-thread and drawn beyond the near (rank-0) editable radius.
+    # Scheduling + extents only — the downsample is deterministic, so mesh output
+    # never depends on these (Hard Rule 2 holds). Hard band cuts in P2 (no
+    # double-draw, pop at the boundary); crossfade is P3.
+    lod_max_rank: int = 3  # highest coarse rank generated (L3 = 8x); 0 = near-only (P1)
+    lod_near_radius_chunks: int = 6  # L0 editable/lit/saved radius (chunks; == view_distance)
+    lod_far_radius_chunks: int = 32  # outer XY radius (chunks) of the coarse window (512 m)
+    lod_band_l1_m: float = 32.0  # distance (m) at/above which a column drops to L1 (2x)
+    lod_band_l2_m: float = 96.0  # distance (m) for L1 -> L2 (4x)
+    lod_band_l3_m: float = 192.0  # distance (m) for L2 -> L3 (8x)
+    lod_downsample_mode: str = "any"  # material reduce: "any" = max-id, "majority" = mode
+    lod_coarse_submit_per_frame: int = 4  # max coarse mesh jobs submitted per frame
+    lod_coarse_uploads_per_frame: int = 4  # max coarse node Geoms uploaded per frame
     lighting_backend: str = "gpu"
     light_c0_cells: int = 96
     light_c0_cell_m: float = 0.5

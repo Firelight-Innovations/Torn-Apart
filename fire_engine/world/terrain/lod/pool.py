@@ -100,5 +100,10 @@ class TerrainLodPool(WorkerPool[LodJob, LodResult]):
 
         Docs: docs/systems/world.terrain.lod.md
         """
-        _log.exception("LOD mesh build failed (coord %r, seq %d)", job.coord, job.seq)
-        self._out.put(LodResult(job.coord, _empty_mesh(), job.seq))
+        _log.exception(
+            "LOD mesh build failed (coord %r, seq %d, rank %d)",
+            job.coord,
+            job.seq,
+            job.rank,
+        )
+        self._out.put(LodResult(job.coord, _empty_mesh(), job.seq, job.rank))

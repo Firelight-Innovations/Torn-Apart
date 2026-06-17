@@ -41,13 +41,34 @@ class LodJob:
     Baked-light callers (if any are added) must stay on the synchronous
     ``mesh_chunk`` path in this phase.
 
+    Rank-aware (P2)
+    ---------------
+    ``rank == 0`` is the native ``L0`` path (a real
+    :class:`~fire_engine.world.terrain.chunk.Chunk` is reconstructed from
+    ``materials`` and meshed — byte-identical to today's P1 behaviour).
+    ``rank > 0`` is a **coarse node**: ``materials`` is the *already
+    downsampled* ``(32, 32, 32)`` coarse block (the streamer assembled the
+    ``(2**rank)³`` chunk tile and ran
+    :func:`~fire_engine.world.terrain.lod.downsample.downsample_block`),
+    ``coord`` is the **node coord** ``(nx, ny, nz)`` (chunk ``>> rank``), and
+    ``voxel_size`` is the scaled coarse voxel edge ``base_voxel_size * 2**rank``.
+    :func:`~fire_engine.world.terrain.lod.job.build_lod_mesh` then wraps it in a
+    :class:`~fire_engine.world.terrain.lod.coarse_chunk._CoarseChunk` so the
+    unchanged mesher runs on it.  Coarse jobs carry no neighbours in P2 (open
+    coarse borders — hard band cuts; seam-stitching is P3), so ``neighbors`` is
+    typically empty for ``rank > 0``.
+
     Attributes
     ----------
     coord : tuple[int, int, int]
-        Integer chunk coordinate ``(cx, cy, cz)`` this job meshes.
+        For ``rank == 0``: the integer chunk coordinate ``(cx, cy, cz)``.  For
+        ``rank > 0``: the integer **node** coordinate ``(nx, ny, nz)`` (the L0
+        chunk coord right-shifted by ``rank`` on every axis — see
+        :class:`~fire_engine.world.terrain.lod.node.LodNode`).
     materials : numpy.ndarray
         ``uint8`` ``(chunk_size,)*3`` — an immutable snapshot COPY of the
-        chunk's materials, indexed ``[x, y, z]``.
+        chunk's materials (``rank == 0``) or the downsampled coarse block
+        (``rank > 0``), indexed ``[x, y, z]``.
     neighbors : dict[tuple[int, int, int], numpy.ndarray | str]
         Neighbour data, dispatched by ``mesh_style``:
 
@@ -74,6 +95,10 @@ class LodJob:
         unchanged into :class:`LodResult` so the consumer can drop results for
         a coord whose chunk was re-submitted with a newer ``seq`` while this one
         was in flight (mirrors ``VenturiWorker`` / ``CascadeAssemblyWorker``).
+    rank : int
+        Coarse LOD rank ``L`` (``0`` = native ``L0`` chunk — the P1 default;
+        ``1/2/3`` = 2×/4×/8× coarse node).  Defaults to ``0`` so every existing
+        construction site stays byte-identical.
 
     Docs: docs/systems/world.terrain.lod.md
     """
@@ -86,6 +111,7 @@ class LodJob:
     shade_strength: float
     mesh_style: str
     seq: int
+    rank: int = 0
 
 
 @dataclass(frozen=True)
@@ -96,12 +122,17 @@ class LodResult:
     Attributes
     ----------
     coord : tuple[int, int, int]
-        Chunk coordinate this mesh belongs to (echoes :attr:`LodJob.coord`).
+        Chunk coordinate (``rank == 0``) or node coordinate (``rank > 0``) this
+        mesh belongs to (echoes :attr:`LodJob.coord`).
     mesh : MeshArrays
         The produced mesh (possibly empty — see
         :class:`~fire_engine.world.terrain.meshing.MeshArrays.is_empty`).
     seq : int
         The originating :attr:`LodJob.seq`, for per-coord staleness checks.
+    rank : int
+        The originating :attr:`LodJob.rank` (``0`` = native L0, ``>0`` = coarse).
+        Lets the consumer route the result to the right pending channel and key
+        coarse results by ``(rank, *coord)``.  Defaults to ``0``.
 
     Docs: docs/systems/world.terrain.lod.md
     """
@@ -109,3 +140,4 @@ class LodResult:
     coord: tuple[int, int, int]
     mesh: MeshArrays
     seq: int
+    rank: int = 0

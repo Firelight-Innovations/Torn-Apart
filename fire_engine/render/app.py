@@ -156,10 +156,13 @@ class App(ShowBase):  # type: ignore[misc]  # panda3d ShowBase has no stubs; Any
     light_sampler: Any
     lod_streamer: Any
     lod_pool: Any
+    coarse_streamer: Any
+    coarse_pool: Any
     lighting_pipeline: Any
     sky_system: Any
     post_process: Any
     _chunk_nodes: dict[tuple[int, int, int], NodePath]
+    _coarse_nodes: dict[tuple[int, int, int, int], NodePath]
     _key_state: dict[str, bool]
     terrain_root: NodePath
     material_textures: Any
@@ -231,22 +234,21 @@ class App(ShowBase):  # type: ignore[misc]  # panda3d ShowBase has no stubs; Any
         # Left None so the engine shell can run without terrain (tooling).
         self.chunk_manager = None  # ChunkManager | None
         self.light_sampler = None  # Callable | None
-        # Threaded terrain LOD (Rule 12): when set by main.py, the terrain
-        # upload step drives this off-thread streamer instead of the
-        # synchronous chunk_manager.stream_frame.  None keeps the sync path.
+        # Threaded terrain LOD (Rule 12): set by main.py to drive the off-thread
+        # near + P2 coarse-horizon streamers (else the sync / near-only path).
         self.lod_streamer = None  # LodStreamer | None
         self.lod_pool = None  # TerrainLodPool | None
-        # GPU volumetric lighting (Phase 4 GPU backend) — set by main.py when
-        # config.lighting_backend == "gpu".  Driven in step 6 of the frame
-        # task; None keeps the legacy baked-vertex-light path.
+        self.coarse_streamer = None  # CoarseLodStreamer | None (P2)
+        self.coarse_pool = None  # TerrainLodPool | None (P2; separate near pool)
+        # GPU volumetric lighting (Phase 4) — set by main.py when
+        # config.lighting_backend == "gpu"; None keeps the baked-vertex path.
         self.lighting_pipeline = None  # GpuLightingPipeline | None
         self.sky_system = None  # SkySystem | None (set by main.py)
-        # HDR post-processing pipeline (set by main.py after sky/grass exist;
-        # None keeps the legacy in-shader-tonemap path).  Driven in step 6b of
-        # the frame task.
+        # HDR post-processing (main.py after sky/grass; None = in-shader tonemap).
         self.post_process = None  # PostProcessPipeline | None
-        # Per-chunk NodePath bookkeeping: coord -> NodePath under terrain_root.
+        # NodePath bookkeeping under terrain_root (near coord; (P2) coarse key).
         self._chunk_nodes: dict[tuple[int, int, int], NodePath] = {}
+        self._coarse_nodes: dict[tuple[int, int, int, int], NodePath] = {}
 
         # Window setup.  Skipped when headless: the offscreen buffer's size comes
         # from the ``win-size`` PRC the caller set before ShowBase init, and an

@@ -126,6 +126,76 @@ class TestEquivalenceBlocky:
         assert result.seq == 42
 
 
+class TestCoarseRank:
+    """build_lod_mesh(rank > 0) meshes a _CoarseChunk; rank 0 stays native L0."""
+
+    def test_rank1_meshes_coarse_node(self):
+        import numpy as np
+
+        from fire_engine.world.terrain.lod.coarse_chunk import _CoarseChunk
+        from fire_engine.world.terrain.lod.node import LodNode
+        from fire_engine.world.terrain.surface_nets import build_mesh_faceted
+
+        config = load_config()
+        base_vs = float(config.voxel_size)
+        rank = 1
+        node = LodNode(rank, 2, -1, 0)
+
+        # A downsampled coarse block (already 32³): flat grass floor.
+        coarse_mats = np.zeros((32, 32, 32), dtype=np.uint8)
+        coarse_mats[:, :, 0:3] = 2
+
+        job = LodJob(
+            coord=(node.nx, node.ny, node.nz),
+            materials=coarse_mats.copy(),
+            neighbors={},
+            chunk_size=int(config.chunk_size),
+            voxel_size=base_vs * (1 << rank),  # scaled coarse voxel edge
+            shade_strength=float(config.facet_shade_strength),
+            mesh_style="faceted",
+            seq=4,
+            rank=rank,
+        )
+        result = build_lod_mesh(job)
+        assert result.rank == rank
+        assert result.coord == (node.nx, node.ny, node.nz)
+        assert not result.mesh.is_empty
+
+        # Equals meshing a _CoarseChunk at the node coord + scaled voxel size.
+        shim = _CoarseChunk(node, coarse_mats.copy(), base_voxel_size=base_vs)
+        ref = build_mesh_faceted(shim, {}, None, shade_strength=float(config.facet_shade_strength))
+        _assert_mesh_equal(result.mesh, ref)
+
+        # The coarse voxel edge is reflected in world positions (2× a native L0).
+        l0_job = dataclasses.replace(job, voxel_size=base_vs, rank=0, coord=(0, 0, 0))
+        l0 = build_lod_mesh(l0_job).mesh
+        # Same topology, but the coarse mesh's positions span 2× the metres.
+        assert l0.face_count == result.mesh.face_count
+        coarse_extent = result.mesh.positions.max(axis=0) - result.mesh.positions.min(axis=0)
+        l0_extent = l0.positions.max(axis=0) - l0.positions.min(axis=0)
+        assert np.allclose(coarse_extent[:2], l0_extent[:2] * 2)
+
+    def test_rank0_still_native(self):
+        config = load_config()
+        cm = _make_manager(config)
+        coord = (0, 0, 0)
+        cm.get_or_create(coord)
+        job = LodJob(
+            coord=coord,
+            materials=cm.chunks[coord].materials.copy(),
+            neighbors=_copy_neighbors(cm._neighbor_materials(coord)),
+            chunk_size=int(config.chunk_size),
+            voxel_size=float(config.voxel_size),
+            shade_strength=float(config.facet_shade_strength),
+            mesh_style="faceted",
+            seq=1,
+            rank=0,
+        )
+        result = build_lod_mesh(job)
+        assert result.rank == 0
+        _assert_mesh_equal(result.mesh, cm.mesh_chunk(coord))
+
+
 class TestDeterminism:
     def test_twice_same_job_byte_identical(self):
         config = load_config()

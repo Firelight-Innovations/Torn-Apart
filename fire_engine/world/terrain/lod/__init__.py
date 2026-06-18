@@ -23,6 +23,23 @@ meshing runs on a worker pool).  It owns:
   nearest missing), owning the per-coord ``seq`` staleness authority.  It is the
   off-thread counterpart of ``ChunkManager.stream_frame``.
 
+Coarse ranks (P2) add the distant horizon:
+
+- :class:`LodNode` / :func:`rank_factor` — coarse-node addressing (chunk ``>> L``).
+- :func:`downsample_block` — whole-array reduce of a tiled chunk block to a 32³ node.
+- :func:`assemble_coarse_materials` — gather a node's ``(2**L)³`` chunk block and
+  downsample it (loaded-or-generated, deterministic).
+- :class:`~fire_engine.world.terrain.lod.coarse_chunk._CoarseChunk` — the
+  duck-typed ``Chunk`` shim that lets the unchanged mesher run on a coarse node.
+- :func:`desired_node_set` / :class:`NodePlan` — the vectorised planner that
+  partitions the camera window into near (L0) chunks + per-rank coarse nodes.
+- :class:`CoarseLodStreamer` — the async coarse-node streaming driver: plans the
+  desired nodes, submits ``rank > 0`` :class:`LodJob`\\ s to a separate
+  :class:`TerrainLodPool`, and drains finished coarse meshes into the
+  ``ChunkManager``'s ``pending_coarse_meshes`` (with ``unloaded_coarse_this_frame``
+  for the hard band cut).  ``build_lod_mesh`` is rank-aware: ``rank == 0`` meshes a
+  native chunk (byte-identical to P1), ``rank > 0`` meshes a ``_CoarseChunk``.
+
 The neighbour-snapshotting still lives in ``chunk_manager.py``
 (``_neighbor_materials`` / ``_neighbor_solids``); :class:`LodStreamer` copies what
 those return and assigns the ``seq``.  ``build_lod_mesh`` + the pool remain the
@@ -33,9 +50,27 @@ Docs: docs/systems/world.terrain.lod.md
 
 from __future__ import annotations
 
+from fire_engine.world.terrain.lod.coarse_assembly import assemble_coarse_materials
+from fire_engine.world.terrain.lod.coarse_streamer import CoarseLodStreamer
+from fire_engine.world.terrain.lod.desired import NodePlan, desired_node_set
+from fire_engine.world.terrain.lod.downsample import downsample_block
 from fire_engine.world.terrain.lod.job import build_lod_mesh
+from fire_engine.world.terrain.lod.node import LodNode, rank_factor
 from fire_engine.world.terrain.lod.pool import TerrainLodPool
 from fire_engine.world.terrain.lod.streamer import LodStreamer
 from fire_engine.world.terrain.lod.types import LodJob, LodResult
 
-__all__ = ["LodJob", "LodResult", "LodStreamer", "TerrainLodPool", "build_lod_mesh"]
+__all__ = [
+    "CoarseLodStreamer",
+    "LodJob",
+    "LodNode",
+    "LodResult",
+    "LodStreamer",
+    "NodePlan",
+    "TerrainLodPool",
+    "assemble_coarse_materials",
+    "build_lod_mesh",
+    "desired_node_set",
+    "downsample_block",
+    "rank_factor",
+]

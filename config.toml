@@ -28,6 +28,19 @@ lod_streaming_enabled = true   # use the off-thread LodStreamer path (false = sy
 lod_worker_threads = 4         # TerrainLodPool worker thread count
 lod_submit_per_frame = 16      # max chunk mesh jobs submitted per stream_frame
 lod_max_uploads_per_frame = 8  # max finished meshes uploaded to the scene graph per frame (nearest-first)
+# Coarse LOD ranks (P2): the distant horizon of downsampled coarse nodes drawn
+# beyond the near editable radius. Scheduling/extents only — the downsample is
+# deterministic, so these never change mesh output. Hard band cuts (pop at the
+# boundary in P2; crossfade is P3).
+lod_max_rank = 3                 # highest coarse rank generated (L3 = 8x downsample); 0 = near-only (P1)
+lod_near_radius_chunks = 6       # L0 editable/lit/saved radius (chunks; == view_distance_chunks)
+lod_far_radius_chunks = 32       # outer XY radius (chunks) of the coarse desired window (32 chunks = 512 m horizon)
+lod_band_l1_m = 32.0             # distance (m) at/above which a column drops to L1 (2x)
+lod_band_l2_m = 96.0             # distance (m) for L1 -> L2 (4x)
+lod_band_l3_m = 192.0            # distance (m) for L2 -> L3 (8x)
+lod_downsample_mode = "any"      # material reduce of coarse cells: "any" = max-id (grass beats dirt), "majority" = vectorized mode
+lod_coarse_submit_per_frame = 4  # max coarse mesh jobs submitted per frame (separate budget so near streaming isn't starved)
+lod_coarse_uploads_per_frame = 4 # max coarse node Geoms uploaded to the scene graph per frame (nearest-first)
 
 [lighting]
 lighting_backend = "gpu"       # "gpu" = volumetric radiance cascades (GLSL compute); "cpu" = legacy baked vertex sunlight

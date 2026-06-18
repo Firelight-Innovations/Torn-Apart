@@ -804,12 +804,24 @@ def build_demo(
     #     (the worker bakes no light).  app_terrain drives app.lod_streamer when
     #     present; the pool is stopped on exit (mirrors the wind worker).
     if cfg.lod_streaming_enabled and light_sampler is None:
-        from fire_engine.world.terrain.lod import LodStreamer, TerrainLodPool
+        from fire_engine.world.terrain.lod import (
+            CoarseLodStreamer,
+            LodStreamer,
+            TerrainLodPool,
+        )
 
         lod_pool = TerrainLodPool(cfg.lod_worker_threads)
         lod_pool.start()
         app.lod_pool = lod_pool
         app.lod_streamer = LodStreamer(chunk_manager, lod_pool, cfg)
+        # Coarse LOD horizon (P2): a SEPARATE pool so heavy coarse-node jobs
+        # never steal near results.  Streams ranks 1..lod_max_rank of
+        # downsampled coarse nodes into the distant horizon (hard band cuts).
+        if int(getattr(cfg, "lod_max_rank", 0)) > 0:
+            coarse_pool = TerrainLodPool(cfg.lod_worker_threads)
+            coarse_pool.start()
+            app.coarse_pool = coarse_pool
+            app.coarse_streamer = CoarseLodStreamer(chunk_manager, coarse_pool, cfg)
 
     # 9b. GPU volumetric lighting pipeline + terrain surface shader.  The
     #     palette is the default (texture-derived) one plus the GI test-room
@@ -1366,10 +1378,13 @@ def main() -> None:
         wind_worker = getattr(app, "wind_worker", None)
         if wind_worker is not None:
             wind_worker.stop(join=True)
-        # Stop the terrain LOD worker pool (daemon threads; belt-and-suspenders).
+        # Stop the terrain LOD worker pools (daemon threads; belt-and-suspenders).
         lod_pool = getattr(app, "lod_pool", None)
         if lod_pool is not None:
             lod_pool.stop(join=True)
+        coarse_pool = getattr(app, "coarse_pool", None)
+        if coarse_pool is not None:
+            coarse_pool.stop(join=True)
 
 
 def _to_ground_texture() -> Any:

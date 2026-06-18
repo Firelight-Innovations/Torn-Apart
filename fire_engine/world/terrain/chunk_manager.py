@@ -13,8 +13,8 @@ Responsibilities
   testable, no side effects.
 - ``stream_frame(camera_pos)`` — load/generate/mesh **at most 2 chunks per
   frame** (nearest-first), unload beyond ``radius + 1`` (hysteresis) via
-  ``_unload_far``.  Publishes ``ChunkLoadedEvent`` / ``ChunkUnloadedEvent``.
-  Stores produced ``MeshArrays`` in ``pending_meshes`` for the World layer.
+  ``_unload_far``; publishes load/unload events and stores produced
+  ``MeshArrays`` in ``pending_meshes`` for the render layer.
 - ``get_or_create(coord)`` — the provider used by brush/raycast.
 - ``Saveable`` — ``get_delta()`` returns ``{coord: materials}`` for edited
   chunks only; ``apply_delta(delta)`` overlays saved materials onto freshly
@@ -22,11 +22,10 @@ Responsibilities
 
 Handoff to world/
 -----------------
-The manager produces ``MeshArrays`` (pure numpy) and records them in
-``pending_meshes`` / ``unloaded_this_frame``.  It NEVER imports panda3d or
-touches the scene graph.  The World layer drains ``pending_meshes`` each frame,
-calls ``world/geometry_bridge.to_geom`` on each, and uploads the Geom.  This
-keeps terrain fully headless-testable (Hard Rule 1).
+The manager produces ``MeshArrays`` (pure numpy) into ``pending_meshes`` /
+``unloaded_this_frame``; it NEVER imports panda3d or touches the scene graph.
+The render layer drains those each frame and uploads the Geoms — terrain stays
+headless-testable (Hard Rule 1).
 Docs: docs/systems/world.terrain.md
 """
 
@@ -48,6 +47,7 @@ from fire_engine.core import (
 from fire_engine.core.math3d import Vec3
 from fire_engine.world.terrain.chunk import Chunk
 from fire_engine.world.terrain.generation import generate_chunk
+from fire_engine.world.terrain.lod.desired import desired_node_set
 from fire_engine.world.terrain.meshing import (
     WORLD_FLOOR_SOLID,
     MeshArrays,
@@ -121,6 +121,10 @@ class ChunkManager:
         self.chunks: dict[tuple[int, int, int], Chunk] = {}
         self.pending_meshes: dict[tuple[int, int, int], MeshArrays] = {}
         self.unloaded_this_frame: list[tuple[int, int, int]] = []
+        # Coarse LOD horizon channels (P2): written by CoarseLodStreamer, drained
+        # by render; keyed by node key (rank, nx, ny, nz). See coarse_streamer.py.
+        self.pending_coarse_meshes: dict[tuple[int, int, int, int], MeshArrays] = {}
+        self.unloaded_coarse_this_frame: list[tuple[int, int, int, int]] = []
         self._chunk_m = config.chunk_meters
         self._n = int(config.chunk_size)
         self._vs = float(config.voxel_size)
@@ -140,26 +144,30 @@ class ChunkManager:
 
     def desired_set(self, camera_pos: Vec3) -> set[tuple[int, int, int]]:
         """
-        PURE FUNCTION: chunk coords that should be loaded for ``camera_pos``.
+        PURE FUNCTION: the near (``L0``) chunk coords to load for ``camera_pos``.
 
         Chunks within ``view_distance_chunks`` in the XY plane (Chebyshev/square
-        radius about the camera chunk) and Z in ``[-2, +4]`` relative to the
-        camera chunk.  No side effects, deterministic.
+        radius about the camera chunk) and Z in ``[-2, +4]``.  Deterministic, no
+        side effects.  Delegates to
+        :func:`~fire_engine.world.terrain.lod.desired.desired_node_set` at
+        ``max_rank=0`` (the vectorised meshgrid near-only path — no ``O(r³)``
+        loop), which returns this exact square set.  Coarse ranks are driven
+        separately by ``CoarseLodStreamer``; this stays the L0 authority.
 
         Returns
         -------
         set[tuple[int,int,int]]
-            The desired-loaded chunk coordinate set.
+            The desired-loaded ``L0`` chunk coordinate set.
         Docs: docs/systems/world.terrain.md
         """
         ccx, ccy, ccz = self.camera_chunk(camera_pos)
-        r = int(self.config.view_distance_chunks)
-        out: set[tuple[int, int, int]] = set()
-        for dx in range(-r, r + 1):
-            for dy in range(-r, r + 1):
-                for dz in range(_Z_MIN, _Z_MAX + 1):
-                    out.add((ccx + dx, ccy + dy, ccz + dz))
-        return out
+        return desired_node_set(
+            (ccx, ccy, ccz),
+            self.config,
+            (_Z_MIN, _Z_MAX),
+            max_rank=0,
+            near_radius_chunks=int(self.config.view_distance_chunks),
+        ).near_chunks
 
     # Provider (for brush / raycast)
 
@@ -281,14 +289,13 @@ class ChunkManager:
         """
         Remesh brush-edited chunks NOW, bypassing the streaming budget.
 
-        ``stream_frame``'s 2-chunk budget is sized for background world
-        loading; a brush edit (explosion crater) routed through it appears
-        over several frames — and until a border neighbour remeshes, the
-        newly-exposed faces in it don't exist yet, so the player sees a hole
-        through the world.  Call this right after ``apply_brush`` with its
-        returned coord set to make the whole edit appear the same
-        frame (typical cost: 1–4 chunks ≈ 10–30 ms, an acceptable one-frame
-        hitch for a discrete edit).
+        ``stream_frame``'s 2-chunk budget is sized for background world loading;
+        a brush edit (explosion crater) routed through it appears over several
+        frames — and until a border neighbour remeshes, its newly-exposed faces
+        don't exist yet, so the player sees a hole through the world.  Call this
+        right after ``apply_brush`` with its returned coord set so the whole edit
+        appears the same frame (typical cost 1–4 chunks ≈ 10–30 ms — an
+        acceptable one-frame hitch for a discrete edit).
 
         Remeshes every still-``dirty`` loaded chunk in ``coords`` plus their
         26-neighbourhood.  Untouched dirty chunks elsewhere (e.g. an F9 load)
@@ -418,25 +425,17 @@ class ChunkManager:
 
         Why this exists
         ---------------
-        ``apply_delta`` only touches chunks present in the saved delta.  After a
-        save, the player may dig *more* craters; loading the save must undo those
-        extra craters too.  ``reset_to_baseline()`` wipes ALL edits back to the
-        deterministic baseline first, then ``SaveManager.load`` re-applies only
-        the saved craters via ``apply_delta``.  The canonical F9 flow is therefore:
+        ``apply_delta`` only touches chunks in the saved delta.  After a save the
+        player may dig *more* craters; loading must undo those too.  The
+        canonical F9 flow wipes ALL edits to baseline first, then re-applies only
+        the saved craters via ``apply_delta``::
 
             cm.reset_to_baseline()
             sm.load("saves/quick.ta")   # apply_delta re-adds saved craters
 
-        Both passes mark touched chunks ``dirty``; subsequent ``stream_frame``
-        calls remesh them (light recomputes via the SunlightComputer's event
-        subscriptions) and the App re-uploads their Geoms.
-
-        Notes
-        -----
-        Only *loaded* chunks are reset.  Unloaded chunks hold no edits in RAM —
-        they regenerate from seed on their next ``get_or_create`` (no reset).
-
-        No window / GPU required; headless-testable.
+        Both passes mark touched chunks ``dirty`` so the next ``stream_frame``
+        remeshes them.  Only *loaded* chunks are reset (unloaded ones hold no
+        edits; they regenerate from seed on ``get_or_create``).  Headless.
         Docs: docs/systems/world.terrain.md
         """
         for coord, chunk in self.chunks.items():

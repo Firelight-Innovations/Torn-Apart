@@ -54,6 +54,25 @@ class TestLodJob:
         with pytest.raises(dataclasses.FrozenInstanceError):
             job.seq = 1  # type: ignore[misc]
 
+    def test_rank_defaults_to_zero(self):
+        # Every existing P1 construction site omits rank → native L0 (rank 0).
+        job = LodJob((0, 0, 0), np.zeros((1,), np.uint8), {}, 32, 0.5, 0.25, "faceted", 0)
+        assert job.rank == 0
+
+    def test_rank_round_trips(self):
+        job = LodJob(
+            coord=(2, -1, 0),
+            materials=np.zeros((32, 32, 32), np.uint8),
+            neighbors={},
+            chunk_size=32,
+            voxel_size=2.0,
+            shade_strength=0.25,
+            mesh_style="faceted",
+            seq=3,
+            rank=2,
+        )
+        assert job.rank == 2
+
 
 class TestLodResult:
     def test_fields_round_trip(self):
@@ -67,3 +86,7 @@ class TestLodResult:
         res = LodResult((0, 0, 0), _empty_mesh(), 0)
         with pytest.raises(dataclasses.FrozenInstanceError):
             res.seq = 2  # type: ignore[misc]
+
+    def test_rank_defaults_to_zero_and_round_trips(self):
+        assert LodResult((0, 0, 0), _empty_mesh(), 0).rank == 0
+        assert LodResult((1, 2, 3), _empty_mesh(), 5, rank=3).rank == 3

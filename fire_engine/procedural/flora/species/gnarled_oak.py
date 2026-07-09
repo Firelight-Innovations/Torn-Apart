@@ -60,7 +60,7 @@ class GnarledOakDef(TreeSpeciesDef):
     LEAF_PALETTE = np.array(
         [(30, 44, 26), (44, 62, 34), (60, 80, 42), (80, 98, 52), (104, 116, 64)], dtype=np.uint8
     )
-    LEAF_HOLE_THRESH = 0.16
+    LEAF_HOLE_THRESH = 0.10
 
     def grow(self, rng: np.random.Generator, variant: int) -> tuple[TreeSkeleton, Leaves]:
         """Crooked trunk → near-90° limbs (shorter near the crown) → twigs →
@@ -121,8 +121,9 @@ class GnarledOakDef(TreeSpeciesDef):
             np.concatenate([limbs, twigs, twiglets]),
             rng,
             density=0.85,
-            leaf_size_m=(0.12, 0.18),
-            leaves_per_m=90.0,
-            max_leaves=1200,
+            leaf_size_m=(0.15, 0.22),
+            leaves_per_m=200.0,
+            max_leaves=2400,
+            leaf_fill=4.0,
         )
         return sk, leaves

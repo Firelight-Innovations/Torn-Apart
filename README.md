@@ -1,17 +1,48 @@
-# Torn Apart
+# Torn Apart · FireEngine
 
-A fantasy post-apocalyptic sandbox RPG built on a custom, numpy-first engine that uses
-**Panda3D as a rendering SDK only**. You fly over hard-edged voxel terrain with procedural
-textures and baked sunlight, blow craters in it, and save/load the world as compact deltas.
+A fantasy post-apocalyptic sandbox RPG on a **custom, numpy-first engine** that uses Panda3D
+as a rendering SDK only. Deterministic voxel terrain, GPU radiance-cascade global
+illumination, a physically-based sky, volumetric weather, a living wind field, and
+procedurally *grown* forests — every texture, tree, cloud, and blade of grass generated from
+a single world seed. No hand-made environment art.
 
-This repo is the **Session 1 vertical slice**: a deterministic, explorable procedural voxel
-world with brush-based terrain editing and delta saves. The simulation layers (AI, economy,
-politics, buildings) are stubs for now — see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+**Built almost entirely by AI coding agents in eight days** (June 9–16, 2026, ~130 commits),
+directed by a human. The visual build log — with the development screenshots the agents took
+to check their own work — is in **[docs/progression/](docs/progression/README.md)**. Start
+there if you want the story; stay here if you want to run it.
 
-![Spawn screenshot — voxel terrain with the wasteland_ground texture and baked sunlight: lit tops, dark undersides](tools/out/spawn.png)
+![A procedural forest in the FireEngine — grown trees, dead snags, scrub bushes, wildflower meadow, and volumetric clouds](tools/out/trees/iter4_after_fulltree.png)
 
-*Spawn view: hard-edged voxel terrain textured with the procedural `wasteland_ground` material,
-lit by a CPU sunlight pass baked into vertex colours (note the lit tops and shadowed undersides).*
+*Everything in this frame is procedural: trees grown per-species from Python scripts, leaves
+placed by cellular automaton, instanced grass and flowers in tagged zones, ray-marched clouds
+— all lit by GPU radiance cascades and swaying in a simulated wind field.*
+
+## What the engine does today
+
+- **Deterministic voxel world** — 0.5 m voxels in 32³ chunks, streamed and meshed around the
+  camera; brush edits (left-click explosions) remesh and relight within a frame or two.
+- **Delta saves** — a save is the world seed plus per-system diffs. No pickles, ever.
+- **GPU volumetric lighting** — three nested radiance cascades, ray-marched voxel shadows,
+  bounced global illumination, froxel fog, dynamic point/spot lights (torches, flashlight,
+  explosion flashes).
+- **Physical HDR sky** — Rayleigh/Mie atmosphere feeding the light grid, volumetric
+  ray-marched clouds, bloom, lens flare, god rays, FXAA.
+- **Spatial weather** — storm cells that drift across the map, humidity-driven fog,
+  volumetric rain that respects roofs and canopy, procedural lightning and thunder.
+- **Wind field** — a travelling, spatially-varying gust field driving grass, tree sway, dust
+  motes, and leaf litter. Costs zero bytes in a save.
+- **Procedural vegetation** — GPU-instanced grass and wildflowers in tagged zone volumes;
+  3-D trees and bushes grown per-species from Python scripts with impostor LODs and
+  per-meter canopy light extinction.
+- **Buildings** — free-form floorplan authoring (walls, arcs, openings, auto-detected rooms,
+  slabs), meshed headlessly in numpy.
+- **Unity-style object model** — GameObjects, components, and lifecycle in snake_case;
+  quaternions only.
+- **Fire Editor** — a VS Code extension driving the live engine: scene tree, component
+  inspector, gizmos, scene save, screenshot RPC.
+- **Frame profiler** — headless core, in-game F3 overlay, scripted benchmark harness.
+
+The deep simulation layers (AI, economy, politics) are still stubs — that's the next arc.
 
 ## Setup
 
@@ -19,13 +50,8 @@ Python 3.11+ required.
 
 ```bash
 python -m venv .venv
-.venv\Scripts\activate            # Windows  (use: source .venv/bin/activate on POSIX)
+.venv\Scripts\activate            # Windows  (source .venv/bin/activate on POSIX)
 pip install -r requirements.txt
-```
-
-## Run
-
-```bash
 python main.py
 ```
 
@@ -33,94 +59,83 @@ python main.py
 
 | Input | Action |
 |---|---|
-| `W` `A` `S` `D` | Move (horizontal, relative to facing) |
-| `Space` / `Ctrl` (or `E` / `Q`) | Move up / down (world Z) |
-| `Shift` | Sprint (5× move speed) |
-| Mouse move | Look around (yaw + pitch) when the mouse is captured |
+| `W` `A` `S` `D` + mouse | Free-fly camera (`Shift` sprints, `Space`/`Ctrl` up/down) |
 | `ESC` | Toggle mouse capture |
-| **Left-click** | **Fire an explosion** — raycasts the voxel field and carves a `SphereBrush(REMOVE)` crater |
-| **F5** | **Quick save** to `saves/quick.ta` (delta = edited chunks only) |
-| **F6** | **Cycle forced weather** — CLEAR → CLOUDY → OVERCAST → FOG → RAIN → STORM → natural schedule (`force_weather(None)`) |
-| **F7** | **Toggle time scale** — `clock.game_time_scale` 60 ↔ 1800 (fast-forward to watch the day cycle) |
-| **F8** | **Jump game clock +6 hours** (snap to dawn/noon/dusk/night skies quickly) |
-| **F9** | **Quick load** — reverts all edits to baseline, then re-applies the saved craters |
-
-The crater appears and relights within a frame or two: the brush marks chunks dirty + edited and
-publishes a `TerrainEditedEvent`; the sunlight computer (subscribed to the bus) recomputes the
-affected light column; the next streaming pass remeshes those chunks with fresh baked light.
+| **Left-click** | Fire an explosion — carves a crater and flashes a point light |
+| `F` | Toggle camera flashlight |
+| `L` / `K` | Drop a torch / clear dynamic lights |
+| `G` | Build a Cornell-style GI test room ahead of the camera |
+| `F1` | Developer overlay |
+| `F5` / `F9` | Quick save / quick load (delta saves to `saves/quick.ta`) |
+| `F6` | Cycle forced weather (clear → cloudy → overcast → fog → rain → storm → natural) |
+| `F7` / `F8` | Fast-forward time scale / jump the clock +6 hours |
 
 ## Testing
 
 ```bash
-pytest -q                 # full headless suite (no window / GPU)
-pytest -m window          # the one GPU-required test: the real-.egg ResourceManager loader
+pytest -q                 # full headless suite (no window / GPU required)
+pytest -m window          # tests that need a real Panda3D window
+pytest -q tests/standards/  # the machine-enforced standards gate
 ```
 
-The headless suite runs without a window because **only `world/` and `lighting/` may import
-panda3d** — every other package is pure Python/numpy and fully testable headless.
-
-### Standards gate
-
-A machine-enforced code-quality, structure, docs & testing gate keeps the repo clean as it
-scales (it is built to survive many AI agents working in parallel). A standards violation fails
-the build exactly like a failing test, and each failure delegates the fix to a scoped sub-agent.
-
-```bash
-pip install -r requirements-dev.txt   # gate toolchain (ruff, mypy, pylint, vulture, mkdocs, …)
-pre-commit install                    # run the gate on every commit
-pytest -q tests/standards/            # lint + types + structure + docs gates
-pytest -m coverage                    # branch-coverage ratchet (CI/nightly; heavy)
-```
-
-The full rule set, toolchain, and limits live in [docs/systems/standards.md](docs/systems/standards.md)
-(limits in `pyproject.toml [tool.firelight]`).
+The headless suite (236 test files) runs without a GPU because **only `render/` and
+`lighting/` may import panda3d** — everything else is pure Python/numpy. The standards gate
+enforces structure limits, lint, strict types, docs-link resolution, and per-module test
+presence; a violation fails the build like any failing test
+([docs/systems/standards.md](docs/systems/standards.md)).
 
 ### Offscreen tools (no window needed)
 
 ```bash
-python tools/preview_texture.py wasteland_ground   # render a ProceduralTextureDef → tools/out/<name>.png
-python tools/screenshot.py --out spawn.png         # offscreen-buffer screenshot of the spawn view
-python tools/screenshot.py --explode               # carve a crater first (the light-shaft "money shot")
-python tools/dump_save.py saves/quick.ta           # inspect a save file's header + per-system deltas
+python tools/screenshot.py --out shot.png          # offscreen screenshot of the demo world
+python tools/preview_texture.py wasteland_ground   # render a ProceduralTextureDef → PNG
+python tools/preview_tree.py                       # preview a tree species' variants
+python tools/verify_weather.py                     # summon a thunderstorm overhead
+python tools/profile_run.py                        # scripted performance benchmark
+python tools/dump_save.py saves/quick.ta           # inspect a save's per-system deltas
 ```
+
+These tools are how the AI agents verified their own visual work — the screenshots they
+saved along the way became the [progression docs](docs/progression/README.md).
 
 ## Architecture at a glance
 
-The engine is layered; downward calls are direct, upward/sideways notifications go through the
-Event Bus. The full design authority is [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+The engine is layered: downward calls are direct imports, upward/sideways notifications go
+through an event bus, and only the render bridge touches the rendering SDK. Full design
+authority: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ```
-Player ──► World ──► Terrain ──► Lighting / Resources ──► Procedural / Core / Save
-            (sole render caller; Lighting is the one GPU-upload exception)
+simulation/ (player, ai*, economy*, politics*)          * = stubs
+    │
+world/ (terrain, weather, wind, sky)   buildings/  zones/  scene/
+    │
+lighting/ ── render/            ← the only packages that may import panda3d
+    │
+core/  procedural/  resources/  save/   ← pure Python/numpy foundation
 ```
 
-- **`docs/` is grep-first** — it is the AI search index. Before exploring code, grep `docs/`:
-  every `docs/systems/<package>.md` documents exactly one package (filename == package name) using
-  an identical set of H2 headings (Role / Public API / Imports Allowed / Events / Units & Invariants
-  / Examples / Gotchas), so structured queries work. Start at
-  [`docs/systems/`](docs/systems/) and the `keywords:` line atop each doc.
-- **The layer / import rule:** only `world/` and `lighting/` may import `panda3d`. Everything else
-  stays engine-agnostic so the simulation is headless-testable. The bridges
-  (`world/texture_bridge.py`, `world/geometry_bridge.py`, `world/resource_adapter.py`) are the
-  panda3d boundary.
-- **Determinism:** the entire world is a pure function of `world_seed` (set in
-  [`config.toml`](config.toml)). The same seed always produces byte-identical terrain and textures
-  — that is what makes delta saves and reproducible bug repro possible. All randomness flows through
-  `core.rng.for_domain(*keys)` (never `random.*`, never unseeded `np.random.*`).
+- **`docs/` is grep-first** — it's the AI search index. Every package has a doc in
+  [`docs/systems/`](docs/systems/) with identical headings, so agents grep docs before
+  reading code. Stale docs fail the build.
+- **Determinism:** the world is a pure function of `world_seed`
+  ([`config.toml`](config.toml)). All randomness flows through `core.rng.for_domain(*keys)`.
+  Same seed → byte-identical world; that's what makes delta saves and bug repro possible.
 
 ## Repo layout
 
 ```
-main.py            # vertical-slice demo entry point
-config.toml        # world_seed + sizes/distances (no magic numbers in code)
-fire_engine/        # the engine package (core, world, player, procedural, resources,
-                   #   terrain, lighting, save; buildings/ai/economy/politics are stubs)
-docs/              # grep-first knowledge base (ARCHITECTURE, DEVELOPMENT_PLAN, systems/, sessions/)
-tests/             # headless suite (+ one @pytest.mark.window test)
-tools/             # preview_texture.py, screenshot.py, dump_save.py
-assets/            # hand-crafted only (env textures are procedural — never here)
-saves/             # gitignored
+main.py            # demo entry point (python main.py [--load save.ta])
+config.toml        # world_seed + all sizes/distances (no magic numbers in code)
+fire_engine/       # the engine: core/ procedural/ resources/ save/ lighting/ render/
+                   #   world/ simulation/ buildings/ zones/ scene/ devtools/
+editor/            # Fire Editor VS Code extension + Python daemon
+docs/              # grep-first knowledge base: ARCHITECTURE, systems/, sessions/,
+                   #   content/, progression/  ← the visual build log
+tests/             # headless suite + standards gate (tests/standards/)
+tools/             # screenshot / preview / profiling / save-inspection utilities
+assets/            # hand-crafted files only (env textures are procedural — never here)
 ```
 
-See [DECISIONS.md](DECISIONS.md) for the dated decision log and
-[docs/sessions/session-01.md](docs/sessions/session-01.md) for the Session 1 handoff note.
+See [DECISIONS.md](DECISIONS.md) for the dated decision log,
+[docs/sessions/](docs/sessions/) for per-session handoff notes, and
+[docs/progression/](docs/progression/README.md) for the illustrated eight-day build story.

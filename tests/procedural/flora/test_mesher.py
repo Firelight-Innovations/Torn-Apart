@@ -378,13 +378,13 @@ class TestMeshLeavesDeterminism:
         assert np.allclose(norms, 1.0, atol=1e-4)
 
     def test_leaf_normals_positive_z(self):
-        # Default tilt_range_rad=(0.26, 1.22) — max tilt is ~70° from +Z.
-        # The Z component of a unit vector at 70° off +Z is cos(70°)≈0.34 > 0.
+        # mesh_leaves flips each leaf normal into the upper hemisphere so
+        # foliage catches the overhead light, so every normal has z >= 0.
         leaves, _ = self._make_leaves_and_rng(77)
         set_world_seed(207)
         rng = for_domain("test", "lnz")
         m = mesh_leaves(leaves, rng)
-        assert (m.normals[:, 2] > 0.0).all()
+        assert (m.normals[:, 2] >= -1e-6).all()
 
     def test_leaf_uv_in_right_half(self):
         # Default uv_rect=(0.5, 0.0, 1.0, 1.0): u in [0.5, 1.0].
@@ -395,14 +395,16 @@ class TestMeshLeavesDeterminism:
         assert (m.uvs[:, 0] >= 0.5 - 1e-6).all()
         assert (m.uvs[:, 0] <= 1.0 + 1e-6).all()
 
-    def test_leaf_sway_high(self):
-        # The CA sets sway_min=0.85; all leaf sway weights must be >= 0.85.
+    def test_leaf_sway_tracks_branch(self):
+        # Leaf sway now tracks the host branch (no 0.85 floor) and stays in
+        # [0, 1]; inner leaves sway less than tip leaves.
         leaves, _ = self._make_leaves_and_rng(77)
         set_world_seed(209)
         rng = for_domain("test", "lsway")
         m = mesh_leaves(leaves, rng)
-        assert (m.colors[:, 3] >= 0.85).all()
+        assert (m.colors[:, 3] >= 0.0).all()
         assert (m.colors[:, 3] <= 1.0).all()
+        assert m.colors[:, 3].min() < 0.85
 
     def test_empty_leaves_returns_empty_mesh(self):
         set_world_seed(99)

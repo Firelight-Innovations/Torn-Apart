@@ -284,19 +284,22 @@ def mesh_branches(
         + fv[:, None, :] * np.sin(theta)[None, :, None]
     )
 
-    # Ring centers: forks pull the start-ring back INTO the parent so the
-    # branch base overlaps the trunk surface (no floating stub).  A "fork"
-    # is a child whose start is NOT at its parent's end (np.allclose fails).
+    # Ring centers.  A fork's start is constructed ON its parent's CENTRE
+    # axis (skeleton.branches), so the base ring already sits ~the parent
+    # radius deep inside the wood — it sockets cleanly with zero extra work.
+    # The previous code pushed the base back along -axis by the parent's
+    # radius "to bury it", but that shoved the ring PAST the centre and out
+    # the FAR wall: the branch's back end protruded from the opposite side of
+    # the trunk (the "branches poke through the trunk" bug, worst at the thick
+    # trunk→limb joints).  The centre-line position is provably optimal —
+    # maximally buried (parent_radius from the near wall) yet never crossing
+    # to the far side — so we leave the start ring exactly at the attachment
+    # point.  A "fork" is a child whose start is NOT at its parent's end.
     start_ctr = sk.start.copy()
     parent = sk.parent
     has_parent = parent >= 0
     p_safe = np.maximum(parent, 0)
     is_continuation = has_parent & np.all(np.abs(sk.start - sk.end[p_safe]) <= weld_tol_m, axis=1)
-    is_fork = has_parent & ~is_continuation
-    if is_fork.any():
-        # Push the fork base back along its own axis by ~the parent's radius
-        # so the square base buries into the trunk instead of floating.
-        start_ctr[is_fork] -= axis[is_fork] * sk.radius_start[p_safe][is_fork, None]
 
     ring0 = start_ctr[:, None, :] + cd * (sk.radius_start * corner_mult)[:, None, None]
     ring1 = sk.end[:, None, :] + cd * (sk.radius_end * corner_mult)[:, None, None]
@@ -377,34 +380,38 @@ def mesh_leaves(
     rng: np.random.Generator,
     *,
     uv_rect: tuple[float, float, float, float] = (0.5, 0.0, 1.0, 1.0),
-    tilt_range_rad: tuple[float, float] = (0.26, 1.22),
+    yaw_jitter_rad: float = 0.4,
     size_jitter: tuple[float, float] = (0.85, 1.2),
     tint: tuple[float, float, float] = (1.0, 1.0, 1.0),
 ) -> TreeMesh:
     """
-    Mesh individual leaves as one small oriented quad each.
+    Mesh individual leaves as one small quad each, **rooted at the base**.
 
-    Every leaf card gets its OWN orientation: a normal tilted off vertical
-    by a uniform draw from *tilt_range_rad* at a random yaw — mostly
-    sky-facing (canopies light from above) but scattered enough that
-    Lambert shades each leaf differently, the dappled read a single blob
-    billboard can't give.  The card's "up" edge points away from the
-    canopy-local vertical, so the leaf texture's stem-to-tip axis follows
-    the tilt.  All cards UV-map the full single-leaf rect of the species
-    atlas.  4 verts / 2 tris per leaf; the whole canopy merges into the
-    variant mesh — one draw, fully GPU-batched.
+    A leaf is built like a real one: the card's base edge sits on the leaf's
+    anchor (``leaves.center - out_dir·radius``, a point ON the bark) and the
+    blade extends OUTWARD along ``leaves.out_dir`` (outward off the branch
+    with an upward reach).  So every leaf visibly grows from its branch in a
+    sensible direction instead of being a centre-pinned card facing a random
+    way.  A small per-leaf yaw twist about the growth axis (*yaw_jitter_rad*)
+    plus the varied growth directions give the canopy its dappled Lambert
+    read.  The card normal is pushed into the upper hemisphere so foliage
+    catches the overhead light consistently (richer leaf shading — proper
+    subsurface scattering — is iteration 5).  All cards UV-map the full
+    single-leaf rect of the species atlas; 4 verts / 2 tris per leaf, merged
+    into the variant mesh (one draw, fully GPU-batched).
 
     Parameters
     ----------
     leaves : Leaves
         From ``leaves.leaves_at_tips`` (may be empty).
     rng : numpy.random.Generator
-        Deterministic generator (per-leaf yaw, tilt, size jitter).
+        Deterministic generator (per-leaf yaw twist, size jitter).
     uv_rect : tuple
         ``(u0, v0, u1, v1)`` leaf sub-rect of the atlas (right half by
-        default, per ``atlas.AtlasLayout``).
-    tilt_range_rad : tuple[float, float]
-        Normal tilt off +Z, uniform (radians).  Default (15°, 70°).
+        default, per ``atlas.AtlasLayout``).  ``v0`` is the stem edge.
+    yaw_jitter_rad : float
+        Max per-leaf twist of the card about its growth axis (radians) — a
+        little so neighbouring leaves don't all lie in one plane.  Default 0.4.
     size_jitter : tuple[float, float]
         Uniform per-leaf size multiplier on ``leaves.radius``.
     tint : tuple[float, float, float]
@@ -422,24 +429,35 @@ def mesh_leaves(
         return TreeMesh.empty()
     u0, v0, u1, v1 = (float(c) for c in uv_rect)
 
-    half = (leaves.radius * rng.uniform(size_jitter[0], size_jitter[1], L)).astype(
-        np.float32
-    )  # (L,)
+    half = (leaves.radius * rng.uniform(size_jitter[0], size_jitter[1], L)).astype(np.float32)
 
-    # Per-leaf normal: tilt off +Z at a random yaw.
-    yaw = rng.uniform(0.0, 2.0 * math.pi, L).astype(np.float32)
-    tilt = rng.uniform(tilt_range_rad[0], tilt_range_rad[1], L).astype(np.float32)
-    st, ct = np.sin(tilt), np.cos(tilt)
-    n = np.stack([st * np.cos(yaw), st * np.sin(yaw), ct], axis=1).astype(np.float32)  # (L, 3)
-    fu, fv = _frames(n)  # card axes
+    # Growth (stem→tip) axis and a width axis perpendicular to it.  The width
+    # axis starts horizontal (cross with world up) so the leaf blade isn't
+    # edge-on to the camera, then gets a small per-leaf twist about the growth
+    # axis for variety.
+    g = _normalize(leaves.out_dir.astype(np.float32))  # (L, 3)
+    up = np.array([0.0, 0.0, 1.0], dtype=np.float32)
+    right = np.cross(g, up[None, :])
+    rn = np.linalg.norm(right, axis=1, keepdims=True)
+    fallback = np.array([[1.0, 0.0, 0.0]], np.float32)
+    right = np.where(rn > 1e-6, right / np.maximum(rn, 1e-9), fallback)
+    ang = rng.uniform(-yaw_jitter_rad, yaw_jitter_rad, L).astype(np.float32)[:, None]
+    ca, sa = np.cos(ang), np.sin(ang)  # Rodrigues twist of `right` about unit `g`
+    twist = np.sum(g * right, axis=1, keepdims=True) * (1.0 - ca)
+    right = _normalize(right * ca + np.cross(g, right) * sa + g * twist)
+    # Card normal ⟂ blade; flip into the upper hemisphere so leaves face the
+    # sky-ish light (iteration-5 shading will supersede this).
+    n = _normalize(np.cross(g, right))
+    n = np.where(n[:, 2:3] < 0.0, -n, n).astype(np.float32)
 
-    ctr = leaves.center
     hw = half[:, None]
-    # Corners CCW around the normal; fv is the stem→tip texture axis (v).
-    p0 = ctr - fu * hw - fv * hw
-    p1 = ctr + fu * hw - fv * hw
-    p2 = ctr + fu * hw + fv * hw
-    p3 = ctr - fu * hw + fv * hw
+    base = leaves.center.astype(np.float32) - g * hw  # base edge ≈ the bark anchor
+    length = (2.0 * half)[:, None]
+    # Base edge (p0,p1) on the anchor; tip edge (p2,p3) one leaf-length out.
+    p0 = base - right * hw
+    p1 = base + right * hw
+    p2 = base + right * hw + g * length
+    p3 = base - right * hw + g * length
     positions = np.stack([p0, p1, p2, p3], axis=1).reshape(-1, 3).astype(np.float32)
     normals = np.repeat(n, 4, axis=0)
 

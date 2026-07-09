@@ -11,6 +11,10 @@ docs/            # grep-first knowledge base — search HERE before reading code
   systems/       # one doc per code package, filename == full package path with dots (e.g. world.terrain.md) (_TEMPLATE.md defines the format)
   content/       # authoring guides for AI content agents (textures, biomes, buildings...)
   sessions/      # per-session handoff notes (session-01.md, ...)
+  progression/   # public-facing illustrated build log (renders on GitHub). Embeds committed
+                 #   screenshots from tools/out/, docs/pictures/, docs/sessions/assets/ by
+                 #   relative path — never delete/rename/overwrite a referenced PNG; when a
+                 #   milestone ships, add its best screenshots here (commit the PNGs too).
 fire_engine/      # the code package. Foundation+services: core/ procedural/ save/ resources/ lighting/.
                   #   render/ = sole panda3d render bridge (was world/). Grouping packages:
                   #   world/ (terrain/ weather/ wind/ sky/), simulation/ (ai/ economy/ politics/ player/).

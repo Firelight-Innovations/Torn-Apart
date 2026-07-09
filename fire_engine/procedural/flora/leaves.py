@@ -39,10 +39,65 @@ from fire_engine.procedural.flora.skeleton import TreeSkeleton
 
 __all__ = ["Leaves", "leaves_at_tips"]
 
+_UP = np.array([0.0, 0.0, 1.0], dtype=np.float64)
+
 # Practical ceiling on the leaf count we will materialize before thinning, so
 # a runaway density × length never blows memory.  Species may request up to a
 # few thousand leaves; this guards only against absurd inputs.
 _MAX_RAW_LEAVES = 200_000
+
+# Leaf growth direction = radial (off the branch) + an upward reach toward the
+# light + a little of the branch's own forward direction (leaves trail along
+# the twig).  Tuned for the recovering-wasteland canopy look.
+_LEAF_UP_REACH = 0.55
+_LEAF_FORWARD = 0.20
+# Leaves ride the wind a touch harder than the wood they grow on (softer,
+# more fluid), but track it closely so they stay attached — NOT a flat floor.
+_LEAF_SWAY_BOOST = 1.15
+
+
+def _grid_thin(
+    points: np.ndarray, leaf_r: np.ndarray, rng: np.random.Generator, *, fill: float
+) -> np.ndarray:
+    """
+    Boolean keep-mask that caps local leaf density (vectorized, deterministic).
+
+    Snap every point to a cubic grid whose cell edge is ``leaf_diameter /
+    fill`` and keep ONE point per occupied cell, chosen by a seeded shuffle so
+    the survivor isn't a spatial-corner bias.  This turns an overlapping
+    point-pile into an evenly-spread shell: the canopy stays dense (small
+    cells ⇒ many cells) without leaves stacking on top of each other.
+
+    Parameters
+    ----------
+    points : numpy.ndarray
+        ``(N, 3)`` leaf anchor positions (m).
+    leaf_r : numpy.ndarray
+        ``(N,)`` per-leaf half-size (m); the median sets the cell edge.
+    rng : numpy.random.Generator
+        Deterministic generator (the per-cell survivor shuffle).
+    fill : float
+        Density knob: cell edge = ``median(2·leaf_r) / fill``.  Higher ⇒
+        smaller cells ⇒ denser canopy (less thinning).
+
+    Returns
+    -------
+    numpy.ndarray
+        ``(N,)`` bool — True for kept leaves.
+    """
+    n = points.shape[0]
+    if n == 0:
+        return np.zeros(0, dtype=bool)
+    cell = max(float(np.median(leaf_r)) * 2.0 / max(float(fill), 1e-3), 1e-3)
+    keys = np.floor(points / cell).astype(np.int64)  # (N, 3) cell coords
+    keys -= keys.min(axis=0)  # shift non-negative for a collision-free linear id
+    span = keys.max(axis=0) + 1
+    lin = (keys[:, 0] * span[1] + keys[:, 1]) * span[2] + keys[:, 2]  # unique per cell
+    order = rng.permutation(n)  # shuffle so the kept leaf per cell is unbiased
+    _, first = np.unique(lin[order], return_index=True)  # one index per cell
+    keep = np.zeros(n, dtype=bool)
+    keep[order[first]] = True
+    return keep
 
 
 @dataclass
@@ -51,23 +106,36 @@ class Leaves:
     Individual leaves attached to a skeleton — struct-of-arrays, one row
     per leaf card.
 
+    A leaf is modeled like a real one: it hinges from a **base point** (the
+    petiole) that sits ON the bark and the blade grows OUTWARD from there
+    along :attr:`out_dir`.  ``center`` is the blade's mid-point (half a leaf
+    out from the base); ``center - out_dir * radius`` recovers the base.  The
+    mesher (:func:`~fire_engine.procedural.flora.mesher.mesh_leaves`) builds
+    the card so its base edge lands on that anchor, so a leaf is visibly
+    rooted to its branch rather than floating or facing a random way.
+
     Attributes
     ----------
     center : numpy.ndarray
-        ``float32 (L, 3)`` — leaf centers, tree-local meters.  Every center
-        sits just off the surface of a real branch segment (see
-        :func:`leaves_at_tips`).
+        ``float32 (L, 3)`` — leaf blade centers, tree-local meters, half a
+        leaf-length out from the base anchor along :attr:`out_dir`.
+    out_dir : numpy.ndarray
+        ``float32 (L, 3)`` — unit growth direction (base → tip): outward off
+        the branch with an upward reach toward the light.  The card's
+        stem→tip axis.
     radius : numpy.ndarray
         ``float32 (L,)`` — leaf half-size (m); the mesher's card is
         ``2 × radius`` across.
     sway : numpy.ndarray
-        ``float32 (L,)`` — wind-sway weight in ``[0, 1]`` (≈0.85–1.0:
-        leaves ride gusts harder than the wood they grow on).
+        ``float32 (L,)`` — wind-sway weight in ``[0, 1]``.  Tracks the host
+        branch's sway (plus a small boost) so a leaf rides the wind WITH the
+        wood it grows on and stays attached, rather than swinging on its own.
 
     Docs: docs/systems/procedural.flora.md
     """
 
     center: np.ndarray
+    out_dir: np.ndarray
     radius: np.ndarray
     sway: np.ndarray
 
@@ -87,6 +155,7 @@ class Leaves:
         """
         return Leaves(
             center=np.empty((0, 3), dtype=np.float32),
+            out_dir=np.empty((0, 3), dtype=np.float32),
             radius=np.empty(0, dtype=np.float32),
             sway=np.empty(0, dtype=np.float32),
         )
@@ -123,10 +192,11 @@ def leaves_at_tips(
     density: float = 0.6,
     per_cell: tuple[int, int] = (1, 2),  # kept for compatibility (now unused)
     leaf_size_m: tuple[float, float] = (0.09, 0.14),
-    sway_min: float = 0.85,
+    sway_min: float = 0.85,  # deprecated: leaf sway now tracks the host branch
     max_leaves: int = 600,
     leaves_per_m: float | None = None,
-    max_offset_m: float | None = None,
+    max_offset_m: float | None = None,  # deprecated: leaves anchor ON the bark
+    leaf_fill: float = 1.6,
 ) -> Leaves:
     """
     Grow individual leaves **along the wood** of the leaf-bearing segments
@@ -134,16 +204,21 @@ def leaves_at_tips(
 
     For each leaf a host segment is chosen (biased toward thinner / outer
     twigs), a parameter ``t`` is drawn along it (biased toward the segment
-    end so the silhouette stays leafy at the rim), the point on the segment
-    axis at ``t`` is computed, and the leaf center is offset RADIALLY off
-    the wood by ``segment_radius(t) + a small fraction of a leaf size`` in a
-    deterministic pseudo-random perpendicular direction.  The offset is
-    bounded (``max_offset_m``) so leaves hug the branch — they never float.
+    end so the silhouette stays leafy at the rim) and a random radial
+    direction is picked.  The leaf's **base anchor** is placed EXACTLY on the
+    bark surface there (axis point + ``segment_radius(t)`` along the radial),
+    and its growth direction (:attr:`Leaves.out_dir`) points outward off the
+    branch with an upward reach toward the light.  Because the base is on the
+    wood, leaves can never float — the anti-floating guarantee is structural.
+
+    The raw leaves are then **grid-thinned** (``leaf_fill``) so local density
+    is bounded: the canopy stays dense without leaves piling into overlapping
+    clumps.
 
     Leaf *count* scales with the branch structure: it is
     ``density × leaves_per_m × Σ segment_length`` over the leaf-bearing
-    segments (so more / finer twigs ⇒ denser canopy), then capped at
-    ``max_leaves``.
+    segments (so more / finer twigs ⇒ denser canopy), thinned by the grid,
+    then capped at ``max_leaves``.
 
     Parameters
     ----------
@@ -170,8 +245,9 @@ def leaves_at_tips(
     leaf_size_m : tuple[float, float]
         Per-leaf half-size range (m), uniform.  Default (0.09, 0.14).
     sway_min : float
-        Floor for the leaf sway weight; actual sway is
-        ``max(host-segment sway at t, uniform(sway_min, 1))``.  Default 0.85.
+        Deprecated.  Leaf sway now tracks the host branch's sway (× a small
+        boost) so leaves stay attached to the wood as it bends; accepted for
+        call-site compatibility and ignored.
     max_leaves : int
         Deterministic thinning cap (vertex budget: 4 verts/leaf).  May be a
         few thousand.  Default 600.
@@ -180,10 +256,13 @@ def leaves_at_tips(
         multiplier).  ``None`` → a default of 60/m, tuned so the default oak
         call yields a full canopy.  Raise it for denser foliage.
     max_offset_m : float | None
-        Hard cap on how far a leaf center sits off the wood axis (m).
-        ``None`` → ``segment_radius(t) + 1.5 × max(leaf_size_m)`` per leaf,
-        which keeps leaves visually attached.  This is the anti-floating
-        guarantee: every leaf is within ``max_offset_m`` of its host segment.
+        Deprecated.  Leaves now anchor their base EXACTLY on the bark
+        surface, so the anti-floating guarantee is structural; accepted for
+        call-site compatibility and ignored.
+    leaf_fill : float
+        Canopy density knob for the overlap-thinning grid (cell edge =
+        ``median(2·leaf_r) / leaf_fill``).  Higher ⇒ smaller cells ⇒ denser,
+        more overlapping foliage; lower ⇒ airier.  Default 1.6.
 
     Returns
     -------
@@ -200,7 +279,7 @@ def leaves_at_tips(
 
     Docs: docs/systems/procedural.flora.md
     """
-    del cell_m, per_cell  # deprecated CA knobs — kept only for call sites
+    del cell_m, per_cell, sway_min, max_offset_m  # deprecated — kept for call sites
     seg = np.asarray(ids, dtype=np.int64).ravel()
     seg = np.unique(seg)  # de-dup limbs/twigs overlap; keeps determinism
     if seg.size == 0 or rounds <= 0 or density <= 0.0:
@@ -259,29 +338,43 @@ def leaves_at_tips(
     r_t = r0[host] + (r1[host] - r0[host]) * t
     sway_t = sway0[host] + (sway1[host] - sway0[host]) * t
 
-    # --- radial offset off the wood, bounded so leaves stay attached ------
+    # --- radial direction off the wood (varies per leaf so the canopy is a
+    #     shell around the twig, not a line) -------------------------------
     u, v = _perp_frame(axis_hat)
     phi = rng.uniform(0.0, 2.0 * np.pi, raw)
     radial = u * np.cos(phi)[:, None] + v * np.sin(phi)[:, None]
 
     leaf_r = rng.uniform(leaf_size_m[0], leaf_size_m[1], raw)
-    big_leaf = float(max(leaf_size_m))
-    # Nominal: sit on the bark surface plus ~0.6 leaf so the card peeks out.
-    offset = r_t + 0.6 * leaf_r + rng.uniform(0.0, 0.4 * big_leaf, raw)
-    cap = (r_t + 1.5 * big_leaf) if max_offset_m is None else float(max_offset_m)
-    offset = np.minimum(offset, cap)
 
-    centers = (p_axis + radial * offset[:, None]).astype(np.float32)
+    # --- base anchor: the petiole, sitting exactly ON the bark surface -----
+    # ``r_t`` is the branch radius at the host point, so a leaf is literally
+    # rooted to the wood and can never float (the anti-floating guarantee is
+    # now structural, not a bounded offset).
+    anchor = (p_axis + radial * r_t[:, None]).astype(np.float64)
 
-    sway = np.maximum(sway_t, rng.uniform(sway_min, 1.0, raw)).astype(np.float32)
-    radius = leaf_r.astype(np.float32)
+    # --- growth direction: outward + upward reach + a little along-twig ----
+    out_dir = radial + _LEAF_UP_REACH * _UP[None, :] + _LEAF_FORWARD * axis_hat
+    out_dir = out_dir / np.maximum(np.linalg.norm(out_dir, axis=1, keepdims=True), 1e-9)
 
-    if centers.shape[0] > max_leaves:  # deterministic unbiased thinning
+    # Blade centre is half a leaf out along the growth dir, so the card's BASE
+    # edge lands back on the anchor (mesh_leaves rebuilds it there).
+    centers = anchor + out_dir * leaf_r[:, None]
+
+    # --- sway tracks the host branch (+ a small boost) so leaves stay glued
+    #     to the wood as it bends, instead of swinging on a separate anchor --
+    sway = np.clip(sway_t * _LEAF_SWAY_BOOST + rng.uniform(-0.03, 0.03, raw), 0.0, 1.0)
+
+    # --- thin overlapping leaves so the canopy is dense but not a clump -----
+    keep = _grid_thin(anchor, leaf_r, rng, fill=leaf_fill)
+    centers, out_dir, leaf_r, sway = centers[keep], out_dir[keep], leaf_r[keep], sway[keep]
+
+    if centers.shape[0] > max_leaves:  # deterministic unbiased cap
         pick = np.sort(rng.permutation(centers.shape[0])[:max_leaves])
-        centers, radius, sway = centers[pick], radius[pick], sway[pick]
+        centers, out_dir, leaf_r, sway = centers[pick], out_dir[pick], leaf_r[pick], sway[pick]
 
     return Leaves(
         center=np.ascontiguousarray(centers, np.float32),
-        radius=np.ascontiguousarray(radius, np.float32),
-        sway=np.clip(sway, 0.0, 1.0),
+        out_dir=np.ascontiguousarray(out_dir, np.float32),
+        radius=np.ascontiguousarray(leaf_r, np.float32),
+        sway=np.ascontiguousarray(sway, np.float32),
     )
